@@ -8,7 +8,7 @@
 - Bun 1.4 or newer on the hook's `PATH`, including when the runtime starts outside your interactive shell. Check with `bun --version`.
 - Permission to edit the configuration for the runtime you choose. Codex's managed configuration uses the system `/etc/codex/requirements.toml` and may require an administrator.
 
-The executable is a Bun-backed package entry, even when npm or Homebrew installs the package. After installation, run `command -v agent-guard`, confirm it prints an absolute path, and substitute that path for `/absolute/path/to/agent-guard` below. For Codex, use the path's containing directory for `/absolute/path/to`.
+Bun is required at runtime even if you install with npm or Homebrew. After installation, run `command -v agent-guard`, confirm it prints an absolute path, and substitute that path for `/absolute/path/to/agent-guard` below. For Codex, use the path's containing directory for `/absolute/path/to`.
 
 ## Install
 
@@ -25,8 +25,8 @@ bun add --global @loophubs/agent-guard
 For the LoopHubs Homebrew tap, add the tap and install its formula:
 
 ```sh
-brew tap LoopHubs/tap
-brew install LoopHubs/tap/agent-guard
+brew tap loophubs/tap
+brew install loophubs/tap/agent-guard
 ```
 
 Confirm that the executable is available:
@@ -102,7 +102,7 @@ export default function (pi: ExtensionAPI) {
 }
 ```
 
-Pi supplies `path` for its file tools; the adapter maps it to the `file_path` field the guard reads. A failed, missing, or timed-out guard call blocks the Pi tool call.
+A failed, missing, or timed-out guard check blocks the Pi tool call.
 
 ## Verify
 
@@ -129,11 +129,11 @@ bun remove --global @loophubs/agent-guard
 ```
 
 ```sh
-brew uninstall LoopHubs/tap/agent-guard
+brew uninstall loophubs/tap/agent-guard
 ```
 
 ## Safety model and limits
 
-The entry script treats a guard failure or deadline overrun as a denial because a failed check cannot establish that a tool call is safe. Exit code `0` means the guard found no objection; it does not override the runtime's own permission rules.
+The guard denies a call when its check fails or times out because it cannot establish that the call is safe. Exit code `0` means the guard found no objection; it does not override the runtime's own permission rules.
 
 The guard checks supported tool calls and recognizable shell commands, not every way an agent can access a file. A disabled, skipped, or unregistered hook cannot inspect a call; dynamic shell expansion, custom tools, and processes outside the registered runtime are also outside this coverage. Codex's example checks Bash calls, while the Pi adapter checks the five named tools. This is a guardrail, not an operating-system sandbox.
