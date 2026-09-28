@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", "schedule:weekly"],
+  "timezone": "Asia/Singapore",
+  "description": [
+    "main has no required status checks, so platformAutomerge stays false and Renovate waits for PR checks before merging.",
+    "This repository does not use semantic commit prefixes, so disable Renovate's history-based autodetection."
+  ],
+  "semanticCommits": "disabled",
+  "updateNotScheduled": false,
+  "platformAutomerge": false,
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Group and automerge non-major dependency updates after checks pass.",
+      "matchUpdateTypes": ["minor", "patch", "pin", "pinDigest", "digest"],
+      "groupName": "Routine dependencies",
+      "automerge": true
+    },
+    {
+      "description": "Keep the formatter and linter in their own update group.",
+      "matchPackageNames": ["oxlint", "oxfmt"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "pinDigest", "digest"],
+      "groupName": "Oxc tools"
+    }
+  ]
+}

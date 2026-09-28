@@ -1,0 +1,5 @@
+{
+  "ignorePatterns": [".git/**", "node_modules/**", "bun.lock", "**/*.md", "**/.env*", "**/.npmrc", "**/*.pem", "**/*.key"],
+  "printWidth": 200,
+  "sortImports": true
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [".git/**", "node_modules/**", "bun.lock", "**/.env*", "**/.npmrc", "**/*.pem", "**/*.key"],
+  "plugins": ["eslint", "typescript", "import"],
+  "rules": {
+    "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }],
+    "no-unused-vars": "error",
+    "typescript/no-explicit-any": "error",
+    "import/no-duplicates": "error",
+    "import/default": "error",
+    "import/named": "error"
+  }
+}
