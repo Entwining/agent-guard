@@ -1,7 +1,7 @@
 // A search option's value keeps the option's word as option:ROLE.
 export type ValueRole = "pattern" | "patfile" | "glob" | "nglob" | "optarg";
 export type Role = "arg" | "assign" | "precommand" | "namespace" | "program" | "code" | "option" | "path" | ValueRole | `option:${ValueRole}`;
-export type Flag = "explicit" | "files" | "help" | "noignore" | "fixed" | "recursive" | "include" | "replace";
+export type Flag = "explicit" | "files" | "help" | "fixed" | "recursive" | "include" | "replace" | "hidden";
 
 export interface Word {
   text: string; // quotes removed; ~, $HOME and ${HOME} expanded
@@ -32,6 +32,7 @@ export interface Command {
 export interface Script {
   commands: Command[];
   uninspectable: string[];
+  parseFailed: boolean;
 }
 
 export type Runtime = "claude" | "codex" | "pi";
@@ -42,10 +43,13 @@ export interface Request {
   tool: Tool;
   home: string;
   cwd: string;
+  inputCwd: string;
+  pathInput: string;
   operation: "" | "read" | "write" | "search";
   target: string;
   searchRoot: string;
   glob: string;
   commands: Command[];
   uninspectable: string[];
+  parseFailed: boolean;
 }

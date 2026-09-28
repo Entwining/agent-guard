@@ -1,7 +1,10 @@
 export const reasons = {
-  appdata: "This reads a protected macOS app-data directory. Name a specific non-sensitive file under ~/Library/Application Support instead, or ask the user to inspect the protected file and share the needed fact.",
+  syntax: "The agent guard cannot inspect this shell syntax. Rewrite it as a Bash-compatible command with explicit paths, or run a narrower command that the guard can inspect.",
+  appdata:
+    "This reads a protected macOS app-data directory. Name a specific non-sensitive file under ~/Library/Application Support instead, or ask the user to inspect the protected file and share the needed fact.",
   broad: "A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path.",
   file: "This reads a credential or environment file. Read a non-sensitive config file instead; if a fact from this file is needed, ask the user to inspect it and share only that fact.",
+  hiddenSearch: "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
   dump: "This dumps environment or shell variables, including secrets. Name the non-sensitive variable needed and read only that variable.",
   variable: "This prints the value of a credential variable. Ask the user for the specific non-sensitive fact needed, or let the authorized client consume the credential without printing it.",
   token: "This prints a Git hosting token. Use auth status without token-display flags; if authentication needs repair, ask the user to update the credential in their terminal.",
@@ -11,9 +14,7 @@ export const reasons = {
   ssh: "This reads private material under ~/.ssh. Search public material in the project or request the exact public key or client-config path; ask the user to inspect private material locally if a specific non-sensitive fact is needed.",
   grepSsh: "Grep would search private ~/.ssh material. Narrow the search to a project directory or an exact public key, client config, allowed_signers, or known_hosts file.",
   symlink: "The agent guard could not complete its symlink check. Name the direct non-sensitive file outside protected trees, or ask the user to inspect the target locally.",
-  find: "find is harder to scope for this repository's searches. Use fd with a project-root path instead.",
   replace: "rg -r means --replace. Drop -r; use -n for line numbers, or spell --replace VALUE for an intentional replacement.",
   include: "rg has no --include flag. Filter files with -g GLOB (for example -g '*.ts') or a type filter such as -t ts.",
   bre: "rg regex is not grep BRE: a\\|b matches a literal pipe. Write alternation as a|b; for a literal pipe, use [|] or -F.",
-  launcher: "An explicit path or wrapper bypasses the provider-aware Claude launcher. Run Claude as `claude ...` to use the persisted mode.",
 } as const;

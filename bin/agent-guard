@@ -1,7 +1,7 @@
 #!/bin/zsh -f
 # PreToolUse entry for the agent guard:
 #   agent-guard --runtime claude|codex|pi < event.json
-# Runs src/guard.ts from the package directory and passes its denial through
+# Runs the Bun supervisor from the package directory and passes denials through
 # with exit 2. Exit 0 only means no objection; it never approves a call. Every
 # other outcome denies too, because Claude lets a hook's other failures and
 # timeouts through, Codex is assumed to, and nothing else stands between an
@@ -15,24 +15,28 @@ fail() {
     exit 2
 }
 
+[[ $HOME == /* ]] || fail 'HOME is not an absolute path'
 pkg=${0:A:h:h}
 bun=$(command -v bun) || fail 'bun missing'
 guard=$pkg/src/guard.ts
 [[ -r $guard ]] || fail 'guard.ts missing'
+runner=$pkg/src/runner.ts
+[[ -r $runner ]] || fail 'runner.ts missing'
+[[ -r $pkg/tsconfig.json ]] || fail 'tsconfig.json missing'
 event=$(/bin/cat)
-# bun reads bunfig.toml, tsconfig.json and .env from its working directory,
-# which is the agent's project, so a project file could preload code into the
-# guard or remap its parser. The guard runs from the package directory, with
-# the hook's directory passed as --cwd.
+# Bun reads bunfig.toml and environment files from its working directory;
+# the package config owns TypeScript paths. Pass the hook's directory as --cwd.
 hook_cwd=$PWD
 cd -q $pkg || fail 'package directory unreadable'
 
-# The deadline sits below every runtime's hook timeout, so an overrun denies
-# here instead of timing out as a pass. Reading the coprocess under the same
-# deadline keeps anything the guard started from holding this hook open.
-coproc { print -r -- "$event" | exec $bun $guard "$@" --cwd $hook_cwd 2>&1 }
+# The runner kills the guard's process group. This outer deadline still denies
+# if the runner itself does not return before the hook timeout.
+coproc { print -r -- "$event" | exec $bun $runner "$@" --cwd $hook_cwd 2>&1 }
 pid=$!
-{ zselect -t 300; kill -KILL $pid } >/dev/null 2>&1 &!
+read -r -t 1 -p group || { kill -KILL $pid 2>/dev/null; fail 'supervisor did not report its process group' }
+[[ $group == AGENT_GUARD_PGID=<-> ]] || { kill -KILL $pid 2>/dev/null; fail 'invalid supervisor process group' }
+pgid=${group#AGENT_GUARD_PGID=}
+{ zselect -t 300; kill -KILL -- -$pgid; kill -KILL $pid } >/dev/null 2>&1 &!
 watchdog=$!
 read -r -t 3 -p reason
 wait $pid

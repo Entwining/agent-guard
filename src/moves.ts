@@ -1,5 +1,5 @@
-import sh from "mvdan-sh";
 import type { BinaryCmd, CallExpr, Lit, Stmt } from "mvdan-sh";
+import sh from "mvdan-sh";
 
 // Discard the prior cwd only when every move in an && chain has a literal destination.
 export function movedOnSuccess(stmt: Stmt, slice: (start: number, end: number) => string): boolean {
@@ -20,8 +20,8 @@ export function movedOnSuccess(stmt: Stmt, slice: (start: number, end: number) =
     if (type(node) !== "BinaryCmd") return "uncertain";
     const chain = node as BinaryCmd;
     if (slice(chain.OpPos.Offset(), chain.OpPos.Offset() + 2) !== "&&") return "uncertain";
-    const left = state(chain.X);
-    const right = state(chain.Y);
+    const left = state(chain.X!);
+    const right = state(chain.Y!);
     return left === "uncertain" || right === "uncertain" ? "uncertain" : left === "moved" || right === "moved" ? "moved" : "unchanged";
   };
   return state(stmt) === "moved";

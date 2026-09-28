@@ -10,6 +10,8 @@
 
 Bun is required at runtime even if you install with npm or Homebrew. After installation, run `command -v agent-guard`, confirm it prints an absolute path, and substitute that path for `/absolute/path/to/agent-guard` below. For Codex, use the path's containing directory for `/absolute/path/to`.
 
+The package denies unscoped `rg` and `fd` searches from the home directory itself. No `~/.ignore` file or other dotfiles setup is required for that protection; give an explicit project path to search from home.
+
 ## Install
 
 Choose one package manager:
@@ -132,8 +134,35 @@ bun remove --global @loophubs/agent-guard
 brew uninstall loophubs/tap/agent-guard
 ```
 
+## Release
+
+From a clean checkout of the default branch, choose the next `patch`, `minor`, or `major` version. Configure npm trusted publishing for this repository and `publish.yml` with direct `npm publish` allowed.
+
+For a patch release (substitute `minor` or `major` when appropriate):
+
+```sh
+npm version patch --no-git-tag-version
+version=$(node -p 'require("./package.json").version')
+mkdir -p docs/releases
+```
+
+Write `docs/releases/<version>.md` for this version only, using the value of `version` in its filename. Name what the guard newly blocks or allows and what existing checks became stricter or looser; include dependency changes only if useful. Review the file before committing it with the version bump. These files are individual Release bodies, not an accumulated `CHANGELOG.md`, and the npm package excludes `docs/`.
+
+Commit the version and its notes together, then push the annotated tag:
+
+```sh
+git add package.json "docs/releases/$version.md"
+git commit -m "release: prepare v$version"
+git tag -a "v$version" -m "v$version"
+git push --follow-tags
+```
+
+`--no-git-tag-version` leaves the version change uncommitted so the notes file can enter the same bump commit. `bun.lock` contains dependency versions but no root package version, so the version bump does not require a lockfile edit. Pushing the tag triggers the publish workflow, which checks it against `package.json` and requires a nonempty `docs/releases/<version>.md` before publishing to npm with OIDC. The Release job reads that file from the tagged commit and creates the GitHub Release only after publishing succeeds; its step summary then records the package version and Release URL.
+
+For a transient job failure, use **Re-run failed jobs** in GitHub Actions for the same tag ref. If npm publishing succeeded and Release creation failed, rerun only the Release job; a successful npm publish cannot be repeated for the same package version. If the tagged commit lacks its notes file, re-running cannot add it: prepare a new version commit and tag with the notes included.
+
 ## Safety model and limits
 
 The guard denies a call when its check fails or times out because it cannot establish that the call is safe. Exit code `0` means the guard found no objection; it does not override the runtime's own permission rules.
 
-The guard checks supported tool calls and recognizable shell commands, not every way an agent can access a file. A disabled, skipped, or unregistered hook cannot inspect a call; dynamic shell expansion, custom tools, and processes outside the registered runtime are also outside this coverage. Codex's example checks Bash calls, while the Pi adapter checks the five named tools. This is a guardrail, not an operating-system sandbox.
+The guard checks supported tool calls and recognizable shell commands, not every way an agent can access a file. A disabled, skipped, or unregistered hook cannot inspect a call; dynamic shell expansion, custom tools, and processes outside the registered runtime are also outside this coverage. `Glob` is not covered by the matchers or guard input handlers. Codex's example checks Bash calls, while the Pi adapter checks the five named tools. This is a guardrail, not an operating-system sandbox.

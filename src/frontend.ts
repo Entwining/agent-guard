@@ -1,22 +1,39 @@
-// Parse shell structure into command records; rejected syntax remains
-// available to the signature rules.
-import sh from "mvdan-sh";
+// Parse shell structure into command records. Failed syntax blocks the call;
+// interpreter code still reaches the signature rules.
+
+import { existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
 import type { Assign, BinaryCmd, CallExpr, CmdSubst, DeclClause, IfClause, Lit, Node, ParamExp, Redirect as RedirectNode, Stmt, Subshell, Word as WordNode } from "mvdan-sh";
-import { resolve } from "node:path";
-import { resolveCommand, stdinKind } from "./argv.ts";
-import { misreadComment } from "./comments.ts";
-import { boundedDirectories } from "./cwd.ts";
-import { movedOnSuccess } from "./moves.ts";
-import { expandHome } from "./paths.ts";
-import { xargsReplacements } from "./pipeline.ts";
-import type { Command, Redirect, Script, Word } from "./record.ts";
-import { readWord } from "./words.ts";
+import sh from "mvdan-sh";
+
+import { resolveCommand, stdinKind } from "./argv";
+import { misreadComment } from "./comments";
+import { boundedDirectories } from "./cwd";
+import { movedOnSuccess } from "./moves";
+import { expandHome } from "./paths";
+import { xargsReplacements } from "./pipeline";
+import type { Command, Redirect, Script, Word } from "./record";
+import { readWord } from "./words";
 
 const { syntax } = sh;
+let packageDir = import.meta.dir;
+let parserPath = "";
+while (!parserPath) {
+  const candidate = join(packageDir, "node_modules/mvdan-sh/index.js");
+  if (existsSync(candidate)) parserPath = candidate;
+  else {
+    const parent = dirname(packageDir);
+    if (parent === packageDir) throw new Error("mvdan-sh dependency is missing");
+    packageDir = parent;
+  }
+}
+if (sh !== (await import(pathToFileURL(parserPath).href)).default) throw new Error("mvdan-sh resolved outside its dependency package");
 const parser = syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash));
 
 interface Scope {
-  readonly dir: { cwd: string; previous?: string; alternatives?: string[] }; // shared by the commands a cd in this scope moves
+  readonly dir: { cwd: string; alternatives?: string[] | undefined }; // shared by the commands a cd in this scope moves
   readonly vars: Map<string, string>;
   readonly slice: (start: number, end: number) => string;
 }
@@ -24,7 +41,7 @@ interface Scope {
 const type = (node: Node) => syntax.NodeType(node);
 
 export function parseScript(source: string, cwd: string, home: string): Script {
-  const script: Script = { commands: [], uninspectable: [] };
+  const script: Script = { commands: [], uninspectable: [], parseFailed: false };
 
   function parse(src: string, cwd: string) {
     const bytes = Buffer.from(src);
@@ -35,12 +52,12 @@ export function parseScript(source: string, cwd: string, home: string): Script {
       file = undefined;
     }
     if (!file || misreadComment(file, bytes)) {
-      script.uninspectable.push(src);
+      script.parseFailed = true;
       return;
     }
     const slice = (start: number, end: number) => bytes.subarray(start, end).toString();
     const scope: Scope = { dir: { cwd }, vars: new Map(), slice };
-    for (const stmt of file.Stmts) statement(stmt, scope);
+    for (const stmt of file.Stmts) statement(stmt!, scope);
   }
 
   const text = (node: Node, scope: Scope) => scope.slice(node.Pos().Offset(), node.End().Offset());
@@ -59,7 +76,7 @@ export function parseScript(source: string, cwd: string, home: string): Script {
     if (kind === "BinaryCmd") return binary(cmd as BinaryCmd, scope);
     if (kind === "Subshell") {
       const inner = isolated(scope);
-      for (const s of (cmd as Subshell).Stmts) statement(s, inner);
+      for (const s of (cmd as Subshell).Stmts) statement(s!, inner);
       return;
     }
     children(cmd, scope);
@@ -70,17 +87,17 @@ export function parseScript(source: string, cwd: string, home: string): Script {
     const op = scope.slice(cmd.OpPos.Offset(), cmd.OpPos.Offset() + 2).trim();
     const failed = isolated(scope);
     const start = script.commands.length;
-    statement(cmd.X, op === "&&" || op === "||" ? scope : isolated(scope));
+    statement(cmd.X!, op === "&&" || op === "||" ? scope : isolated(scope));
     const middle = script.commands.length;
-    const directCd = op === "&&" && movedOnSuccess(cmd.X, scope.slice);
+    const directCd = op === "&&" && movedOnSuccess(cmd.X!, scope.slice);
     if (directCd) {
       const old = [failed.dir.cwd, ...(failed.dir.alternatives ?? [])];
       scope.dir.alternatives = scope.dir.alternatives?.filter((cwd) => !old.includes(cwd));
-      statement(cmd.Y, scope);
+      statement(cmd.Y!, scope);
       scope.dir.alternatives = boundedDirectories(scope.dir.cwd, [...(scope.dir.alternatives ?? []), ...old], home);
       return;
     }
-    statement(cmd.Y, op === "||" ? failed : op === "&&" ? scope : isolated(scope));
+    statement(cmd.Y!, op === "||" ? failed : op === "&&" ? scope : isolated(scope));
     if (op === "|") for (const item of xargsReplacements(script.commands.slice(start, middle), script.commands.slice(middle))) parse(item.source, item.cwd);
     if (op === "||") {
       scope.dir.alternatives = boundedDirectories(scope.dir.cwd, [...(scope.dir.alternatives ?? []), failed.dir.cwd, ...(failed.dir.alternatives ?? [])], home);
@@ -103,8 +120,7 @@ export function parseScript(source: string, cwd: string, home: string): Script {
         for (const cwd of [scope.dir.cwd, ...(scope.dir.alternatives ?? [])]) {
           script.commands.push({ argv: [value], redirects: [], cwd, program: -1, wrappers: [], shell: true, flags: new Set() });
         }
-      }
-      else return true;
+      } else return true;
       return false;
     });
     if (loop) outer.dir.alternatives = boundedDirectories(outer.dir.cwd, [...(outer.dir.alternatives ?? []), scope.dir.cwd, ...(scope.dir.alternatives ?? [])], home);
@@ -112,26 +128,30 @@ export function parseScript(source: string, cwd: string, home: string): Script {
 
   function conditional(node: IfClause, scope: Scope) {
     const condition = isolated(scope);
-    for (const stmt of node.Cond) statement(stmt, condition);
+    for (const stmt of node.Cond) statement(stmt!, condition);
     const then = isolated(condition);
-    for (const stmt of node.Then) statement(stmt, then);
+    for (const stmt of node.Then) statement(stmt!, then);
     const branches = [scope, condition, then];
     if (node.Else) {
       const otherwise = isolated(condition);
       conditional(node.Else, otherwise);
       branches.push(otherwise);
     }
-    scope.dir.alternatives = boundedDirectories(scope.dir.cwd, branches.flatMap((branch) => [branch.dir.cwd, ...(branch.dir.alternatives ?? [])]), home);
+    scope.dir.alternatives = boundedDirectories(
+      scope.dir.cwd,
+      branches.flatMap((branch) => [branch.dir.cwd, ...(branch.dir.alternatives ?? [])]),
+      home,
+    );
   }
 
   function expansions(node: Node, scope: Scope, vars: string[]) {
     syntax.Walk(node, (child) => {
       if (!child) return true;
       const kind = type(child);
-      if (kind === "ParamExp") vars.push((child as ParamExp).Param.Value);
+      if (kind === "ParamExp") vars.push((child as ParamExp).Param!.Value);
       if (kind !== "CmdSubst" && kind !== "ProcSubst") return true;
       const inner = isolated(scope);
-      for (const s of (child as CmdSubst).Stmts) statement(s, inner);
+      for (const s of (child as CmdSubst).Stmts) statement(s!, inner);
       return false;
     });
   }
@@ -163,20 +183,20 @@ export function parseScript(source: string, cwd: string, home: string): Script {
     return { text: value, raw: value, expands: false, globs: false, vars: [], role: "arg", value };
   }
 
-  function simple(cmd: Node | null, redirs: RedirectNode[], scope: Scope) {
+  function simple(cmd: Node | null, redirs: (RedirectNode | null)[], scope: Scope) {
     const argv: Word[] = [];
     if (cmd && type(cmd) === "CallExpr") {
-      for (const a of (cmd as CallExpr).Assigns) argv.push(assign(a, scope, "assign"));
-      for (const w of (cmd as CallExpr).Args) argv.push(word(w, scope));
+      for (const a of (cmd as CallExpr).Assigns) argv.push(assign(a!, scope, "assign"));
+      for (const w of (cmd as CallExpr).Args) argv.push(word(w!, scope));
     } else if (cmd) {
       const decl = cmd as DeclClause;
-      argv.push(literal(decl.Variant.Value));
+      argv.push(literal(decl.Variant!.Value));
       for (const a of decl.Args) {
-        if (!a.Naked) argv.push(assign(a, scope, "arg"));
-        else argv.push(a.Value ? word(a.Value, scope) : literal(a.Name?.Value ?? ""));
+        if (!a!.Naked) argv.push(assign(a!, scope, "arg"));
+        else argv.push(a!.Value ? word(a!.Value, scope) : literal(a!.Name?.Value ?? ""));
       }
     }
-    const redirects = redirs.map((r) => redirect(r, scope)).filter((r) => r !== undefined);
+    const redirects = redirs.map((r) => redirect(r!, scope)).filter((r) => r !== undefined);
     const command: Command = {
       argv,
       redirects,
@@ -201,14 +221,14 @@ export function parseScript(source: string, cwd: string, home: string): Script {
   }
 
   function redirect(node: RedirectNode, scope: Scope): Redirect | undefined {
-    const op = scope.slice(node.OpPos.Offset(), node.Word.Pos().Offset()).trim();
+    const op = scope.slice(node.OpPos.Offset(), node.Word!.Pos().Offset()).trim();
     if (op === "<<" || op === "<<-") {
-      const quoted = node.Word.Parts.some((p) => type(p) !== "Lit" || (p as Lit).Value.includes("\\"));
+      const quoted = node.Word!.Parts.some((p) => type(p) !== "Lit" || (p as Lit).Value.includes("\\"));
       const vars: string[] = [];
       if (node.Hdoc && !quoted) expansions(node.Hdoc, scope, vars);
       return { direction: "heredoc", target: node.Hdoc ? text(node.Hdoc, scope) : "", vars };
     }
-    const target = word(node.Word, scope);
+    const target = word(node.Word!, scope);
     if (op === "<<<") return { direction: "herestring", target: target.text, vars: target.vars };
     if ((op === "<&" || op === ">&") && /^(\d+|-)$/.test(target.text)) return undefined;
     const direction = op === "<" || op === "<>" ? "in" : "out";
@@ -223,14 +243,15 @@ export function parseScript(source: string, cwd: string, home: string): Script {
       if (!word.expands) scope.vars.set(word.text.slice(0, at), expandHome(word.text.slice(at + 1), home));
     }
     if (!program || !command.shell || !["cd", "pushd"].includes(program.text)) return;
-    let target = command.argv.slice(command.program + 1).find((w) => !w.text.startsWith("-"))?.text;
-    const previous = command.argv.slice(command.program + 1).some((w) => w.text === "-");
-    if (previous) target = scope.dir.previous;
-    if (previous && target === undefined) return;
-    if (target === undefined && program.text === "cd") target = home;
+    const args = command.argv.slice(command.program + 1);
+    let target = args.find((w) => !w.text.startsWith("-"))?.text;
+    if (target === undefined && (!args.length || (args.length === 1 && args[0]?.text === "--")) && program.text === "cd") target = home;
     if (target !== undefined) {
-      scope.dir.alternatives = boundedDirectories(resolve(scope.dir.cwd, target), [scope.dir.cwd, ...(scope.dir.alternatives ?? []), ...(scope.dir.alternatives ?? []).map((cwd) => resolve(cwd, target))], home);
-      scope.dir.previous = scope.dir.cwd;
+      scope.dir.alternatives = boundedDirectories(
+        resolve(scope.dir.cwd, target),
+        [scope.dir.cwd, ...(scope.dir.alternatives ?? []), ...(scope.dir.alternatives ?? []).map((cwd) => resolve(cwd, target))],
+        home,
+      );
       scope.dir.cwd = resolve(scope.dir.cwd, target);
     }
   }

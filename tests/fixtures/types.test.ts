@@ -1,4 +1,5 @@
-import type { Tool } from "../../record.ts";
+import type { reasons } from "../../src/reasons";
+import type { Tool } from "../../src/record";
 
 export interface BehaviorRow {
   tool: Capitalize<Tool>;
@@ -8,5 +9,7 @@ export interface BehaviorRow {
   claude: 0 | 2;
   codex?: 0 | 2;
   codex_reason?: string;
+  reason?: keyof typeof reasons;
+  claude_suggestions?: (keyof typeof reasons)[];
   note?: string;
 }

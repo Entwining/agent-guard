@@ -2,9 +2,10 @@
 // process reads or enumerates another app's ~/Library data tree, so these deny
 // those reads and the broad walks that reach them.
 import { basename } from "node:path";
-import { absPath, appdataTrees, isAppdata, isBroad, isLibrary } from "../paths.ts";
-import { reasons } from "../reasons.ts";
-import type { Command, Request } from "../record.ts";
+
+import { absPath, appdataTrees, isAppdata, isBroad, isLibrary } from "../paths";
+import { reasons } from "../reasons";
+import type { Command, Request } from "../record";
 
 const { appdata: appdataReason, broad: broadReason } = reasons;
 
@@ -26,18 +27,17 @@ export function appdataRules(req: Request): string[] {
     if (reason) denials.push(reason);
   }
   const home = req.home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const signature = new RegExp(`(~|\\$HOME|\\$\\{HOME\\}|${home})/Library/(${trees})`);
+  const signature = new RegExp(`(~|\\$HOME|\\$\\{HOME\\}|${home})/Library/(${trees})`, "i");
   for (const fragment of req.uninspectable) if (signature.test(fragment)) denials.push(appdataReason);
   return denials;
 }
 
 function appdataCommand(cmd: Command, home: string): string | undefined {
   const cwd = cmd.cwd;
-  const prog = cmd.program >= 0 ? basename(cmd.argv[cmd.program].text) : "";
+  const prog = cmd.program >= 0 ? basename(cmd.argv[cmd.program]!.text) : "";
   const data = dataPrograms.has(prog);
   // cd reads its target but walks nothing.
-  const recursive = cmd.argv.slice(cmd.program + 1).some((word) =>
-    (prog === "ls" ? /^(--recursive$|-[^-]*R)/ : /^(--recursive$|-[^-]*[rR])/).test(word.text));
+  const recursive = cmd.argv.slice(cmd.program + 1).some((word) => (prog === "ls" ? /^(--recursive$|-[^-]*R)/ : /^(--recursive$|-[^-]*[rR])/).test(word.text));
   const gitConfig = prog === "git" && cmd.argv.slice(cmd.program + 1).some((word) => word.text === "config");
   const walk = !data && !gitConfig && !["cd", "pushd", "popd"].includes(prog) && !noWalkPrograms.has(prog) && !(["ls", "cp"].includes(prog) && !recursive);
   const paths: { path: string; glob: boolean }[] = [];
@@ -46,7 +46,7 @@ function appdataCommand(cmd: Command, home: string): string | undefined {
     if (word.role === "program" && !word.value.includes("/")) continue;
     if (data && !word.globs && i > cmd.program) continue;
     // An expansion the front end cannot resolve may well be $HOME.
-    if (word.expands && new RegExp(`/Library/(${trees})(/.*)?$`, "s").test(word.value)) return appdataReason;
+    if (word.expands && new RegExp(`/Library/(${trees})(/.*)?$`, "is").test(word.value)) return appdataReason;
     paths.push({ path: absPath(word.value, cwd, home, /^['"]/.test(word.raw)), glob: word.globs });
   }
   for (const r of cmd.redirects) {
@@ -60,23 +60,15 @@ function appdataCommand(cmd: Command, home: string): string | undefined {
   // Path operands scope a walk away from the current directory; a search
   // tool's pattern is not one of them.
   let scoped = false;
-  let noignore = cmd.flags.has("noignore");
   for (const word of cmd.argv.slice(cmd.program + 1)) {
     const text = word.text;
     if ((word.role === "arg" || word.role === "path") && !text.startsWith("-")) scoped = true;
-    if (/^--(unrestricted|no-ignore)/.test(text)) noignore = true;
-    if (prog === "fd" && /^-[^-]*[uI]/.test(text)) noignore = true;
-    // A positive glob reaching Library overrides the ignore filter.
-    if (word.role === "glob" || word.role === "option:glob") {
-      const glob = new Bun.Glob(word.value.toLowerCase());
-      if (["library", ...appdataTrees.map((tree) => `library/${tree.toLowerCase()}/x`)].some((path) => glob.match(path))) noignore = true;
-    }
   }
   if (prog === "ls" && !scoped && isAppdata(cwd, home)) return appdataReason;
   // rg and fd also read ignore files from cwd when given a path operand.
   let denied = false;
-  if (prog === "find" || prog === "du") denied = !scoped && (isBroad(cwd, home) || isAppdata(cwd, home));
+  if (["find", "du", "tree"].includes(prog)) denied = !scoped && (isBroad(cwd, home) || isAppdata(cwd, home));
   else if (prog === "ls" || prog === "grep") denied = !scoped && recursive && isBroad(cwd, home);
-  else if (prog === "rg" || prog === "fd") denied = !scoped && (noignore ? isBroad(cwd, home) : isLibrary(cwd, home));
+  else if (["rg", "fd", "ag", "ack"].includes(prog)) denied = !scoped && (isBroad(cwd, home) || isLibrary(cwd, home));
   return denied ? broadReason : undefined;
 }
