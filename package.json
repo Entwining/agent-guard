@@ -1,0 +1,26 @@
+{
+  "name": "@loophubs/agent-guard",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Blocks filesystem scans and credential reads that macOS records as TCC App Data access, and points the agent at a safe alternative.",
+  "license": "MIT",
+  "engines": {
+    "bun": ">=1.4"
+  },
+  "bin": {
+    "agent-guard": "bin/agent-guard"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "dependencies": {
+    "mvdan-sh": "0.10.1"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  },
+  "scripts": {
+    "test": "bunx tsc --noEmit --strict --target es2022 --module esnext --moduleResolution bundler --allowImportingTsExtensions tests/*.ts tests/fixtures/*.ts && bun test tests/"
+  }
+}

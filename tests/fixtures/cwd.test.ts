@@ -1,0 +1,28 @@
+import type { BehaviorRow } from "./types.test.ts";
+
+export default [
+  {"tool": "Bash", "input": "cd ~/Library && du -sh", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "cd ~/Library && rg foo", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "cd /tmp & ls -R", "cwd": "$H/Library", "claude": 2, "codex": 2, "note": "a background cd does not move this shell"},
+  {"tool": "Bash", "input": "cd /nope || ls -R", "cwd": "$H/Library", "claude": 2, "codex": 2, "note": "the right side of || runs only when cd failed"},
+  {"tool": "Bash", "input": "cd project |& ls -R", "cwd": "$H", "claude": 2, "codex": 2, "note": "a cd inside a pipeline does not move the next element"},
+  {"tool": "Bash", "input": "cd ~/Library || exit 1; ls -R", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "cd ~/Library || true; ls -R", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "cd ~/Library; f() { cd /tmp; }; ls -R", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "cd ~/Library; cd /tmp; cd -; ls -R", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "cd /nope || true; ls -R", "cwd": "$H/Library", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "D=/tmp; ls \"${D:+~/Library/Containers/x}\"", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "cd ~/Library; if false; then cd /tmp; fi; ls -R", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "cd ~/Library; if true; then cd /tmp; else ls -R; fi", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "cd /definitely-no-such-dir; ls -R", "cwd": "$H/Library", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "cd ~/Library; while false; do cd /tmp; done; ls -R", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "cd ~/project && du -sh", "cwd": "$H", "claude": 0, "codex": 0},
+  {"tool": "Bash", "input": "cd Code && rg --no-ignore foo", "cwd": "$H", "claude": 0, "codex": 0},
+  {"tool": "Bash", "input": "cd ~/project && npm test && du -sh", "cwd": "$H", "claude": 0, "codex": 0},
+  {"tool": "Bash", "input": "pushd ~/project && du -sh", "cwd": "$H", "claude": 0, "codex": 0},
+  {"tool": "Bash", "input": "cd ~/project; du -sh", "cwd": "$H", "claude": 2, "codex": 2, "note": "A semicolon does not prove cd succeeded; the old broad cwd remains possible."},
+  {"tool": "Bash", "input": "cd a; cd b; cd c; cd d; cd e; cd f; cd g; cd h; cd i; cd j; cd k; cd l; cd m; cd n; cd o; cd p; cd q; cd r; cd s; cd t; cd u; cd v; cat Library/Containers/x", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "pushd ~/project && popd && du -sh", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "pushd ~/project && pushd && du -sh", "cwd": "$H", "claude": 2, "codex": 2},
+  {"tool": "Bash", "input": "cd ~/project && cd \"$OLDPWD\" && du -sh", "cwd": "$H", "claude": 2, "codex": 2},
+] satisfies BehaviorRow[];

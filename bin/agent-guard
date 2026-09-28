@@ -1,0 +1,48 @@
+#!/bin/zsh -f
+# PreToolUse entry for the agent guard:
+#   agent-guard --runtime claude|codex|pi < event.json
+# Runs src/guard.ts from the package directory and passes its denial through
+# with exit 2. Exit 0 only means no objection; it never approves a call. Every
+# other outcome denies too, because Claude lets a hook's other failures and
+# timeouts through, Codex is assumed to, and nothing else stands between an
+# agent and ~/Library.
+emulate zsh
+setopt no_bg_nice
+zmodload zsh/zselect
+
+fail() {
+    print -u2 -- "The agent guard could not complete its check ($1), so this call is blocked. Inspect the guard installation, repair the reported failure, then retry the call."
+    exit 2
+}
+
+pkg=${0:A:h:h}
+bun=$(command -v bun) || fail 'bun missing'
+guard=$pkg/src/guard.ts
+[[ -r $guard ]] || fail 'guard.ts missing'
+event=$(/bin/cat)
+# bun reads bunfig.toml, tsconfig.json and .env from its working directory,
+# which is the agent's project, so a project file could preload code into the
+# guard or remap its parser. The guard runs from the package directory, with
+# the hook's directory passed as --cwd.
+hook_cwd=$PWD
+cd -q $pkg || fail 'package directory unreadable'
+
+# The deadline sits below every runtime's hook timeout, so an overrun denies
+# here instead of timing out as a pass. Reading the coprocess under the same
+# deadline keeps anything the guard started from holding this hook open.
+coproc { print -r -- "$event" | exec $bun $guard "$@" --cwd $hook_cwd 2>&1 }
+pid=$!
+{ zselect -t 300; kill -KILL $pid } >/dev/null 2>&1 &!
+watchdog=$!
+read -r -t 3 -p reason
+wait $pid
+rc=$?
+kill -KILL $watchdog 2>/dev/null
+case $rc in
+    (0) [[ -n $reason ]] && print -r -- "$reason"; exit 0 ;;
+    (2) ;;
+    (*) fail 'guard failed' ;;
+esac
+[[ -n $reason ]] || fail 'guard gave no reason'
+print -u2 -r -- "$reason"
+exit 2
