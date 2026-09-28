@@ -1,27 +1,61 @@
 name: Publish
 
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  id-token: write
+  push:
+    tags: ["v*"]
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify tag and release notes
+        run: |
+          package_tag="v$(node -p 'require("./package.json").version')"
+          if [[ "$GITHUB_REF_NAME" != "$package_tag" ]]; then
+            printf 'Tag %s does not match package version %s\n' "$GITHUB_REF_NAME" "$package_tag" >&2
+            exit 1
+          fi
+          notes="docs/releases/${GITHUB_REF_NAME#v}.md"
+          if [[ ! -s "$notes" ]]; then
+            printf 'Release notes are missing or empty: %s\n' "$notes" >&2
+            exit 1
+          fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
+          # Node 24 meets npm trusted publishing's Node >=22.14 requirement.
           node-version: 24
           registry-url: https://registry.npmjs.org
       - run: npm install -g npm@latest
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - run: bun install --frozen-lockfile
-      - run: bun test tests/
-      # Trusted publishing: npm exchanges this workflow's OIDC token for a
-      # short-lived publish credential, so no NPM_TOKEN secret exists here.
+      - run: bun run check
+      # Trusted publishing exchanges OIDC for a short-lived credential and
+      # automatically generates provenance for this public package and repo.
       - run: npm publish --access public
+
+  release:
+    needs: publish
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Create GitHub Release and summarize
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="docs/releases/${GITHUB_REF_NAME#v}.md"
+          if [[ ! -s "$notes" ]]; then
+            printf 'Release notes are missing or empty: %s\n' "$notes" >&2
+            exit 1
+          fi
+          release_url=$(gh release create "$GITHUB_REF_NAME" --notes-file "$notes" --verify-tag --repo "$GITHUB_REPOSITORY")
+          {
+            printf '### %s\n' "$GITHUB_REF_NAME"
+            printf -- '- npm: published `@loophubs/agent-guard@%s`\n' "${GITHUB_REF_NAME#v}"
+            printf -- '- GitHub Release: %s\n' "$release_url"
+          } >> "$GITHUB_STEP_SUMMARY"
