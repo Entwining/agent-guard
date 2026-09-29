@@ -6,13 +6,16 @@ import type { Word } from "./record";
 
 const type = sh.syntax.NodeType;
 
-export function readWord(node: WordNode, slice: (start: number, end: number) => string, vars: Map<string, string>, home: string, visit: (part: Node, names: string[]) => void): Word {
+export function readWord(node: WordNode, slice: (start: number, end: number) => string, vars: Map<string, string>, home: string, pwd: string, visit: (part: Node, names: string[]) => void): Word {
   const text = (part: Node) => slice(part.Pos().Offset(), part.End().Offset());
-  const out: Word = { text: "", raw: text(node), expands: false, globs: false, vars: [], role: "arg", value: "" };
+  const out: Word = { text: "", raw: text(node), expands: false, globs: false, vars: [], role: "arg", value: "", pwd: false };
   const expansion = (part: Node) => {
     const param = part as ParamExp;
     const plain = type(part) === "ParamExp" && !(param.Excl || param.Length || param.Width || param.Index || param.Slice || param.Repl || param.Exp);
-    const known = plain ? (param.Param!.Value === "HOME" ? home : vars.get(param.Param!.Value)) : undefined;
+    const name = plain ? param.Param!.Value : "";
+    const printsPwd = name === "PWD" || (type(part) === "CmdSubst" && /^(\$\(|`)\s*pwd(\s+-[LP])?\s*(\)|`)$/.test(text(part)));
+    const known = printsPwd ? pwd : name === "HOME" ? home : plain ? vars.get(name) : undefined;
+    out.pwd ||= printsPwd;
     out.text += known ?? text(part);
     out.expands ||= known === undefined;
     visit(part, out.vars);
@@ -21,7 +24,16 @@ export function readWord(node: WordNode, slice: (start: number, end: number) => 
     const kind = type(part);
     if (kind === "Lit") {
       let value = (part as Lit).Value;
-      if (index === 0) value = expandHome(value, home);
+      if (index === 0 && /^~\+(\/|$)/.test(value)) {
+        value = pwd + value.slice(2);
+        out.pwd = true;
+      } else if (index === 0) value = expandHome(value, home);
+      // Bun expands {a,b} but not the sequence {a..z}, so read a sequence as a wildcard.
+      const sequence = /(?<!\\)\{(?:-?\d+|[A-Za-z])\.\.(?:-?\d+|[A-Za-z])(?:\.\.-?\d+)?\}/g;
+      if (sequence.test(value)) {
+        value = value.replace(sequence, "*");
+        out.globs = true;
+      }
       if (Bun.$.braces(value).length > 1) out.globs = true;
       for (let i = 0; i < value.length; i++) {
         if (value[i] === "\\") {

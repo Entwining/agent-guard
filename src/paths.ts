@@ -17,6 +17,14 @@ export const sensitivePaths = [
   "**/auth.json*",
   "**/.credentials.json*",
   "**/.aws/credentials*",
+  "**/.netrc",
+  "**/.git-credentials",
+  "**/.docker/config.json",
+  "**/.kube/config",
+  "**/.pypirc",
+  "**/.pgpass",
+  "**/.cargo/credentials*",
+  "**/.config/gh/hosts.yml",
   "**/private-keys-v1.d",
   "**/private-keys-v1.d/**",
 ];
@@ -27,6 +35,11 @@ const sensitiveGlobs = sensitivePaths.map((path) => new Bun.Glob(path));
 // ~/.ssh has its own inode-based check and reason.
 const credentialRoots = [".aws", ".gnupg"];
 const credentialDirectories = [".ssh", ...credentialRoots];
+// The directory part of each listed file that sits in a named directory, such as .kube for .kube/config.
+const listedDirectories = sensitivePaths.flatMap((listed) => {
+  const tail = listed.replace(/^\*\*\//, "").split("/");
+  return tail.length > 1 && !tail.slice(0, -1).some((part) => part.includes("*")) ? [tail.slice(0, -1).join("/")] : [];
+});
 
 export function expandHome(path: string, home: string): string {
   for (const prefix of ["~", `~${userInfo().username}`]) {
@@ -112,12 +125,64 @@ export function isSensitive(path: string, glob = false): boolean {
   if (!glob) return false;
   if (globDirectory(path)) return true;
   const base = basename(lower);
-  if (/^[*?]*$/.test(base)) return credentialDirectories.includes(basename(dirname(lower)));
-  const pattern = new Bun.Glob(base);
+  // A bare wildcard reaches every file in the directory, so a directory that holds a listed file counts.
+  if (/^[*?]*$/.test(base)) return credentialDirectories.includes(basename(dirname(lower))) || listedDirectories.some((dir) => dirname(lower).endsWith(`/${dir}`));
+  // A listed file inside a named directory needs the glob's directory to match too.
+  const segments = lower.split("/");
   return sensitivePaths.some((listed) => {
-    const name = basename(listed).replaceAll("*", "x");
-    return !/^x*$/.test(name) && pattern.match(name);
+    const tail = listed.replace(/^\*\*\//, "").split("/");
+    if (tail.length > segments.length) return false;
+    if (/^\**$/.test(tail.at(-1)!)) return false;
+    const names = tail.map((part) => part.replaceAll("*", "x"));
+    const offset = segments.length - tail.length;
+    if (!names.slice(0, -1).every((name, i) => new Bun.Glob(segments[offset + i]!).match(name))) return false;
+    // A named directory already narrows the match, so a glob that could reach any listed name in it counts.
+    return tail.length > 1 ? globsIntersect(segments.at(-1)!, tail.at(-1)!) : new Bun.Glob(segments.at(-1)!).match(names.at(-1)!);
   });
+}
+
+type GlobToken = "*" | ((char: string) => boolean);
+
+// Reads `*`, `?`, `[set]` and literal characters; a backslash escapes the next one.
+function globTokens(glob: string): GlobToken[] {
+  const tokens: GlobToken[] = [];
+  for (let i = 0; i < glob.length; i++) {
+    const char = glob[i]!;
+    const close = char === "[" ? glob.indexOf("]", i + 2) : -1;
+    if (char === "*") tokens.push("*");
+    else if (char === "?") tokens.push(() => true);
+    else if (close > 0) {
+      const matcher = new Bun.Glob(glob.slice(i, close + 1));
+      tokens.push((c) => matcher.match(c));
+      i = close;
+    } else {
+      const literal = char === "\\" ? (glob[++i] ?? char) : char;
+      tokens.push((c) => c === literal);
+    }
+  }
+  return tokens;
+}
+
+// Whether some file name matches both wildcard patterns.
+function globsIntersect(a: string, b: string): boolean {
+  const [left, right] = [globTokens(a), globTokens(b)];
+  const probes = Array.from({ length: 94 }, (_, i) => String.fromCharCode(33 + i));
+  const seen = new Set<string>();
+  const walk = (i: number, j: number): boolean => {
+    const key = `${i},${j}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    const [x, y] = [left[i], right[j]];
+    if (x === undefined && y === undefined) return true;
+    if (x === "*" && walk(i + 1, j)) return true;
+    if (y === "*" && walk(i, j + 1)) return true;
+    if (x === "*" && y === "*") return false;
+    if (x === "*") return y !== undefined && walk(i, j + 1);
+    if (y === "*") return x !== undefined && walk(i + 1, j);
+    if (x === undefined || y === undefined) return false;
+    return probes.some((c) => x(c) && y(c)) && walk(i + 1, j + 1);
+  };
+  return walk(0, 0);
 }
 
 // A wildcard directory segment such as `.s*` may expand to a credential
@@ -134,8 +199,16 @@ function globDirectory(path: string): boolean {
 
 // A search reads everything under its root, so a credential directory counts as
 // its listed files do.
-export function isSensitiveRoot(path: string): boolean {
-  return isSensitive(path) || credentialRoots.includes(basename(path.toLowerCase()));
+export function isSensitiveRoot(path: string, home: string): boolean {
+  const lower = path.toLowerCase();
+  // A search from the home directory's .config reaches .config/gh because gh is not hidden.
+  const ancestors = listedDirectories.flatMap((dir) =>
+    dir
+      .split("/")
+      .slice(0, -1)
+      .map((_, i, parts) => `${home.toLowerCase()}/${parts.slice(0, i + 1).join("/")}`),
+  );
+  return isSensitive(path) || credentialRoots.includes(basename(lower)) || listedDirectories.some((dir) => lower.endsWith(`/${dir}`)) || ancestors.includes(lower);
 }
 
 // A path that does not exist or cannot be searched has no inode to compare.

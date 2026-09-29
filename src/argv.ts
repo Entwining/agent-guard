@@ -4,10 +4,17 @@ import { expandHome } from "./paths";
 import type { Command, Word } from "./record";
 import { searchRoles } from "./search-roles";
 
-const shellPrograms = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
+const shellPrograms = new Set(["sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh"]);
 const codePrograms = new Set(["python", "python3", "node", "bun", "deno", "ruby", "perl", "php", "osascript", "lua"]);
 const zshBuiltins = new Set(["echo", "printf", "print", "export", "typeset", "declare", "set", "command", "eval", "source", "."]);
 const shellCodeFlag = /^-[a-z]*c[a-z]*$/;
+const sudoValueOption = /^(-[A-Za-z]*[ughpCDRTrtU]|--(user|group|host|prompt|chdir|chroot|role|type|other-user|close-from|command-timeout))$/;
+
+// egrep and fgrep are grep with a fixed matcher.
+export function programName(text: string): string {
+  const name = basename(text);
+  return name === "egrep" || name === "fgrep" ? "grep" : name;
+}
 
 export function resolveCommand(cmd: Command, home: string): { children: string[]; code: string[] } {
   const w = cmd.argv;
@@ -57,6 +64,31 @@ export function resolveCommand(cmd: Command, home: string): { children: string[]
         w[i++]!.role = "precommand";
         if (w[i]?.text === "-n" || w[i]?.text === "--adjustment") i += 2;
         else if (/^(-n|--adjustment=|-\d)/.test(w[i]?.text ?? "")) i++;
+        break;
+      case "sudo":
+      case "doas":
+        w[i++]!.role = "precommand";
+        while (i < w.length && w[i]!.text !== "--" && (w[i]!.text.startsWith("-") || /^[A-Za-z_][A-Za-z0-9_]*=/.test(w[i]!.text))) {
+          if (sudoValueOption.test(w[i]!.text)) w[++i]!.role = "precommand";
+          w[i++]!.role = "precommand";
+        }
+        if (w[i]?.text === "--") w[i++]!.role = "precommand";
+        break;
+      case "script":
+        // script [-adkpqr] [-F pipe] [-t time] [file [command ...]]
+        w[i++]!.role = "precommand";
+        while (w[i]?.text?.startsWith("-")) {
+          if (["-F", "-t"].includes(w[i]!.text)) i++;
+          i++;
+        }
+        if (w[i]) w[i++]!.role = "precommand";
+        break;
+      case "arch":
+        w[i++]!.role = "precommand";
+        while (w[i]?.text?.startsWith("-")) {
+          if (["-e", "-d", "-arch"].includes(w[i]!.text)) i++;
+          i++;
+        }
         break;
       case "stdbuf":
         w[i++]!.role = "precommand";
@@ -130,7 +162,7 @@ export function resolveCommand(cmd: Command, home: string): { children: string[]
   cmd.program = i;
   w[i]!.role = "program";
   if (w[i]!.text.startsWith("=") && w[i]!.text.length > 1) w[i]!.text = w[i]!.text.slice(1);
-  const name = basename(w[i]!.text);
+  const name = programName(w[i]!.text);
   const rest = w.slice(i + 1);
   if (["rg", "grep", "ag", "ack"].includes(name)) {
     searchRoles(cmd, rest, name);

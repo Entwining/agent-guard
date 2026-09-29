@@ -1,5 +1,7 @@
 import type { BehaviorRow } from "./types.test";
 
+const functionChain = `f0() { f1; f1; }; f1() { f2; f2; }; f2() { f3; f3; }; f3() { f4; f4; }; f4() { f5; f5; }; f5() { f6; f6; }; f6() { f7; f7; }; f7() { f8; f8; }; f8() { f9; f9; }; f9() { true; }; f0`;
+
 export default [
   { tool: "Bash", input: "grep foo log; rm .env", cwd: "$H/project", claude: 0, codex: 0 },
   { tool: "Bash", input: "cd foo && cat .env", cwd: "$H/project", claude: 2, codex: 2 },
@@ -202,5 +204,15 @@ export default [
     codex: 0,
   },
   { tool: "Bash", input: "cat file.txt/x", cwd: "$H/project", claude: 0, codex: 0 },
-  { tool: "Bash", input: "printf '%s\\n' ~/.npmrc | xargs cat", cwd: "$H/project", claude: 0, codex: 0, note: "Dynamic xargs stdin without -I replacement is not modeled." },
+  {
+    tool: "Bash",
+    input: "printf '%s\\n' ~/.npmrc | xargs cat",
+    cwd: "$H/project",
+    claude: 2,
+    codex: 2,
+    note: "A literal printf value reaches xargs as a trailing argument when no -I marker is given.",
+  },
+  { tool: "Bash", input: "git ls-files | xargs cat", cwd: "$H/project", claude: 0, codex: 0, note: "Dynamic xargs stdin is not modeled." },
+  { tool: "Bash", input: functionChain, cwd: "$H/project", claude: 2, codex: 2, reason: "syntax", note: "calls that multiply past the inspection budget fail closed" },
+  { tool: "Bash", input: "a() { b; b; }; b() { true; }; a", cwd: "$H/project", claude: 0, codex: 0 },
 ] satisfies BehaviorRow[];

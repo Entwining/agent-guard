@@ -131,4 +131,7 @@ export default [
   { tool: "Bash", input: "tree", cwd: "$H", claude: 2, codex: 2, reason: "broad" },
   { tool: "Bash", input: "ag needle", cwd: "$H/project", claude: 0, codex: 0 },
   { tool: "Bash", input: "tree", cwd: "$H/project", claude: 0, codex: 0 },
+  { tool: "Bash", input: "cat < ~/Library/Cont*/x", cwd: "$H", claude: 2, codex: 2, reason: "appdata", note: "the shell expands a redirect target glob" },
+  { tool: "Bash", input: "wc -c < Library/Cont*/x", cwd: "$H", claude: 2, codex: 2, reason: "appdata" },
+  { tool: "Bash", input: "cat < README*", cwd: "$H/project", claude: 0, codex: 0 },
 ] satisfies BehaviorRow[];

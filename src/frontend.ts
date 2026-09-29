@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import type { Assign, BinaryCmd, CallExpr, CmdSubst, DeclClause, IfClause, Lit, Node, ParamExp, Redirect as RedirectNode, Stmt, Subshell, Word as WordNode } from "mvdan-sh";
+import type { Assign, BinaryCmd, CallExpr, CmdSubst, DeclClause, FuncDecl, IfClause, Lit, Node, ParamExp, Redirect as RedirectNode, Stmt, Subshell, Word as WordNode } from "mvdan-sh";
 import sh from "mvdan-sh";
 
 import { resolveCommand, stdinKind } from "./argv";
@@ -13,7 +13,7 @@ import { misreadComment } from "./comments";
 import { boundedDirectories } from "./cwd";
 import { movedOnSuccess } from "./moves";
 import { expandHome } from "./paths";
-import { xargsReplacements } from "./pipeline";
+import { markWalkedInput, shellInput, xargsHereInput, xargsReplacements } from "./pipeline";
 import type { Command, Redirect, Script, Word } from "./record";
 import { readWord } from "./words";
 
@@ -40,6 +40,10 @@ interface Scope {
 
 const type = (node: Node) => syntax.NodeType(node);
 
+// A function call runs the body in the caller's shell; bound the work a chain of
+// calls can multiply.
+const maxFunctionRuns = 256;
+
 export function parseScript(source: string, cwd: string, home: string): Script {
   const script: Script = { commands: [], uninspectable: [], parseFailed: false };
 
@@ -59,6 +63,10 @@ export function parseScript(source: string, cwd: string, home: string): Script {
     const scope: Scope = { dir: { cwd }, vars: new Map(), slice };
     for (const stmt of file.Stmts) statement(stmt!, scope);
   }
+
+  const functions = new Map<string, { body: Stmt; slice: Scope["slice"] }>();
+  const running = new Set<string>();
+  let functionRuns = 0;
 
   const text = (node: Node, scope: Scope) => scope.slice(node.Pos().Offset(), node.End().Offset());
   // A cd inside runs in a separate shell and leaves this scope's cwd alone.
@@ -97,16 +105,26 @@ export function parseScript(source: string, cwd: string, home: string): Script {
       scope.dir.alternatives = boundedDirectories(scope.dir.cwd, [...(scope.dir.alternatives ?? []), ...old], home);
       return;
     }
-    statement(cmd.Y!, op === "||" ? failed : op === "&&" ? scope : isolated(scope));
-    if (op === "|") for (const item of xargsReplacements(script.commands.slice(start, middle), script.commands.slice(middle))) parse(item.source, item.cwd);
-    if (op === "||") {
-      scope.dir.alternatives = boundedDirectories(scope.dir.cwd, [...(scope.dir.alternatives ?? []), failed.dir.cwd, ...(failed.dir.alternatives ?? [])], home);
+    // zsh runs the last element of a pipeline in this shell and bash forks it,
+    // so a cd there may or may not move the commands after it.
+    const right = op === "||" ? failed : op === "&&" ? scope : isolated(scope);
+    statement(cmd.Y!, right);
+    if (op === "|" || op === "|&") {
+      const left = script.commands.slice(start, middle);
+      const rest = script.commands.slice(middle);
+      markWalkedInput(left, rest);
+      for (const item of [...xargsReplacements(left, rest), ...shellInput(left, rest)]) parse(item.source, item.cwd);
     }
+    if (op !== "&&") scope.dir.alternatives = boundedDirectories(scope.dir.cwd, [...(scope.dir.alternatives ?? []), right.dir.cwd, ...(right.dir.alternatives ?? [])], home);
   }
 
   // Compound words may hold substitutions; branch bodies may not run.
   function children(node: Node, scope: Scope) {
-    if (type(node) === "FuncDecl") scope = isolated(scope);
+    if (type(node) === "FuncDecl") {
+      const func = node as FuncDecl;
+      if (func.Name && func.Body) functions.set(func.Name.Value, { body: func.Body, slice: scope.slice });
+      scope = isolated(scope);
+    }
     if (type(node) === "IfClause") return conditional(node as IfClause, scope);
     const outer = scope;
     const loop = type(node) === "WhileClause" || type(node) === "ForClause";
@@ -157,7 +175,7 @@ export function parseScript(source: string, cwd: string, home: string): Script {
   }
 
   function word(node: WordNode, scope: Scope): Word {
-    return readWord(node, scope.slice, scope.vars, home, (part, names) => expansions(part, scope, names));
+    return readWord(node, scope.slice, scope.vars, home, scope.dir.cwd, (part, names) => expansions(part, scope, names));
   }
 
   function assign(node: Assign, scope: Scope, role: "assign" | "arg"): Word {
@@ -171,7 +189,7 @@ export function parseScript(source: string, cwd: string, home: string): Script {
       return type(child) !== "Word";
     });
     return {
-      ...(value ?? { expands: false, globs: false, vars: [] }),
+      ...(value ?? { expands: false, globs: false, vars: [], pwd: false }),
       text: `${name}=${value?.text ?? ""}`,
       raw: text(node, scope),
       role,
@@ -180,7 +198,7 @@ export function parseScript(source: string, cwd: string, home: string): Script {
   }
 
   function literal(value: string): Word {
-    return { text: value, raw: value, expands: false, globs: false, vars: [], role: "arg", value };
+    return { text: value, raw: value, expands: false, globs: false, vars: [], role: "arg", value, pwd: false };
   }
 
   function simple(cmd: Node | null, redirs: (RedirectNode | null)[], scope: Scope) {
@@ -208,7 +226,8 @@ export function parseScript(source: string, cwd: string, home: string): Script {
     };
     script.commands.push(command);
     const { children: sources, code } = resolveCommand(command, home);
-    for (const cwd of scope.dir.alternatives ?? []) script.commands.push({ ...command, cwd });
+    const moved = (cwd: string) => command.argv.map((w) => (w.pwd ? { ...w, text: w.text.replaceAll(scope.dir.cwd, cwd), value: w.value.replaceAll(scope.dir.cwd, cwd) } : w));
+    for (const cwd of scope.dir.alternatives ?? []) script.commands.push({ ...command, cwd, argv: moved(cwd) });
     for (const src of sources) for (const cwd of [command.cwd, ...(scope.dir.alternatives ?? [])]) parse(src, cwd);
     script.uninspectable.push(...code);
     for (const r of redirects) {
@@ -216,6 +235,17 @@ export function parseScript(source: string, cwd: string, home: string): Script {
       const stdin = stdinKind(command);
       if (stdin === "shell") parse(r.target, command.cwd);
       if (stdin === "code") script.uninspectable.push(r.target);
+      if (command.wrappers.includes("xargs")) for (const item of xargsHereInput(command, r.target)) parse(item.source, item.cwd);
+    }
+    const called = command.wrappers.every((w) => w === "time") ? command.argv[command.program]?.text : undefined;
+    const func = called === undefined ? undefined : functions.get(called);
+    if (func && !running.has(called!)) {
+      if (++functionRuns > maxFunctionRuns) script.parseFailed = true;
+      else {
+        running.add(called!);
+        statement(func.body, { ...scope, slice: func.slice });
+        running.delete(called!);
+      }
     }
     track(command, scope);
   }
@@ -226,13 +256,13 @@ export function parseScript(source: string, cwd: string, home: string): Script {
       const quoted = node.Word!.Parts.some((p) => type(p) !== "Lit" || (p as Lit).Value.includes("\\"));
       const vars: string[] = [];
       if (node.Hdoc && !quoted) expansions(node.Hdoc, scope, vars);
-      return { direction: "heredoc", target: node.Hdoc ? text(node.Hdoc, scope) : "", vars };
+      return { direction: "heredoc", target: node.Hdoc ? text(node.Hdoc, scope) : "", globs: false, vars };
     }
     const target = word(node.Word!, scope);
-    if (op === "<<<") return { direction: "herestring", target: target.text, vars: target.vars };
+    if (op === "<<<") return { direction: "herestring", target: target.text, globs: false, vars: target.vars };
     if ((op === "<&" || op === ">&") && /^(\d+|-)$/.test(target.text)) return undefined;
     const direction = op === "<" || op === "<>" ? "in" : "out";
-    return { direction, target: target.text, vars: [] };
+    return { direction, target: target.text, globs: target.globs, vars: [] };
   }
 
   function track(command: Command, scope: Scope) {
@@ -245,7 +275,7 @@ export function parseScript(source: string, cwd: string, home: string): Script {
     if (!program || !command.shell || !["cd", "pushd"].includes(program.text)) return;
     const args = command.argv.slice(command.program + 1);
     let target = args.find((w) => !w.text.startsWith("-"))?.text;
-    if (target === undefined && (!args.length || (args.length === 1 && args[0]?.text === "--")) && program.text === "cd") target = home;
+    if (target === undefined && args.every((w) => /^(--|-[PLqs]+)$/.test(w.text)) && program.text === "cd") target = home;
     if (target !== undefined) {
       scope.dir.alternatives = boundedDirectories(
         resolve(scope.dir.cwd, target),

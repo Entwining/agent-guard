@@ -1,7 +1,7 @@
 // A search option's value keeps the option's word as option:ROLE.
 export type ValueRole = "pattern" | "patfile" | "glob" | "nglob" | "optarg";
 export type Role = "arg" | "assign" | "precommand" | "namespace" | "program" | "code" | "option" | "path" | ValueRole | `option:${ValueRole}`;
-export type Flag = "explicit" | "files" | "help" | "fixed" | "recursive" | "include" | "replace" | "hidden";
+export type Flag = "explicit" | "files" | "help" | "fixed" | "recursive" | "include" | "replace" | "hidden" | "walked";
 
 export interface Word {
   text: string; // quotes removed; ~, $HOME and ${HOME} expanded
@@ -11,11 +11,13 @@ export interface Word {
   vars: string[]; // parameter names the shell expands
   role: Role; // set by argv.ts
   value: string; // an option's value without its flag, set by argv.ts
+  pwd: boolean; // holds $PWD, $(pwd) or ~+, expanded to the directory the command was read in
 }
 
 export interface Redirect {
   direction: "in" | "out" | "herestring" | "heredoc";
   target: string; // file, word, or heredoc body
+  globs: boolean; // the target holds an unquoted glob character
   vars: string[]; // parameters the shell expands in the target or body
 }
 

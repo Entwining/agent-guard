@@ -1,8 +1,7 @@
 // App Data rules. macOS records a Files & Folders App Data entry whenever a
 // process reads or enumerates another app's ~/Library data tree, so these deny
 // those reads and the broad walks that reach them.
-import { basename } from "node:path";
-
+import { programName } from "../argv";
 import { absPath, appdataTrees, isAppdata, isBroad, isLibrary } from "../paths";
 import { reasons } from "../reasons";
 import type { Command, Request } from "../record";
@@ -34,7 +33,7 @@ export function appdataRules(req: Request): string[] {
 
 function appdataCommand(cmd: Command, home: string): string | undefined {
   const cwd = cmd.cwd;
-  const prog = cmd.program >= 0 ? basename(cmd.argv[cmd.program]!.text) : "";
+  const prog = cmd.program >= 0 ? programName(cmd.argv[cmd.program]!.text) : "";
   const data = dataPrograms.has(prog);
   // cd reads its target but walks nothing.
   const recursive = cmd.argv.slice(cmd.program + 1).some((word) => (prog === "ls" ? /^(--recursive$|-[^-]*R)/ : /^(--recursive$|-[^-]*[rR])/).test(word.text));
@@ -42,15 +41,19 @@ function appdataCommand(cmd: Command, home: string): string | undefined {
   const walk = !data && !gitConfig && !["cd", "pushd", "popd"].includes(prog) && !noWalkPrograms.has(prog) && !(["ls", "cp"].includes(prog) && !recursive);
   const paths: { path: string; glob: boolean }[] = [];
   for (const [i, word] of cmd.argv.entries()) {
-    if (!word.value || ["pattern", "code", "option:pattern", "optarg"].includes(word.role)) continue;
+    if (!word.value || ["pattern", "code", "option:pattern"].includes(word.role)) continue;
     if (word.role === "program" && !word.value.includes("/")) continue;
     if (data && !word.globs && i > cmd.program) continue;
-    // An expansion the front end cannot resolve may well be $HOME.
-    if (word.expands && new RegExp(`/Library/(${trees})(/.*)?$`, "is").test(word.value)) return appdataReason;
-    paths.push({ path: absPath(word.value, cwd, home, /^['"]/.test(word.raw)), glob: word.globs });
+    // A value glued to its option, as in --env-file=PATH, is a path too.
+    const values = word.value.startsWith("-") && word.value.includes("=") ? [word.value, word.value.slice(word.value.indexOf("=") + 1)] : [word.value];
+    for (const value of values) {
+      // An expansion the front end cannot resolve may well be $HOME.
+      if (word.expands && new RegExp(`/Library/(${trees})(/.*)?$`, "is").test(value)) return appdataReason;
+      paths.push({ path: absPath(value, cwd, home, /^['"]/.test(word.raw)), glob: word.globs });
+    }
   }
   for (const r of cmd.redirects) {
-    if ((r.direction === "in" || r.direction === "out") && r.target) paths.push({ path: absPath(r.target, cwd, home), glob: false });
+    if ((r.direction === "in" || r.direction === "out") && r.target) paths.push({ path: absPath(r.target, cwd, home), glob: r.globs });
   }
   if (paths.some(({ path, glob }) => isAppdata(path, home, glob))) return appdataReason;
   // Shell glob expansion touches directories even when the command does not walk them.

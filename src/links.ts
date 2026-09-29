@@ -1,6 +1,7 @@
 import { readlinkSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 
+import { programName } from "./argv";
 import { absPath, expandHome, isAppdata, isSensitive } from "./paths";
 import type { Request, Word } from "./record";
 import { dataPrograms } from "./rules/appdata";
@@ -45,14 +46,26 @@ export function linkedRequest(req: Request): Request | undefined {
     const value = linked(w.value, cwd, /^['"]/.test(w.raw));
     return value === w.value ? w : { ...w, value, text: w.role.startsWith("option:") ? w.text : value };
   };
+  // curl reads the file after @ or < in a data or form value, or one glued to -T, -K, --upload-file or --config.
+  const curlOperand = /^((?:-[A-Za-z]|--[a-z-]+=|[^=@<-][^=@<]*=)?[@<])([^;]+)(.*)$/s;
+  const curlFile = /^(-[TK]|--(?:upload-file|config)=)([^;]+)()$/s;
+  const curlWord = (w: Word, cwd: string): Word | undefined => {
+    const operand = curlOperand.exec(w.text) ?? curlFile.exec(w.text);
+    if (!operand || w.expands) return undefined;
+    const value = linked(operand[2]!, cwd);
+    return value === operand[2] ? w : { ...w, text: `${operand[1]}${value}${operand[3]}` };
+  };
   const commands = req.commands.map((cmd) => {
+    const curl = cmd.program >= 0 && programName(cmd.argv[cmd.program]!.text) === "curl";
     const checkedCwd = linked(cmd.cwd, "/");
     const cwd = checkedCwd === cmd.cwd ? absPath(cmd.cwd, "/", req.home) : checkedCwd;
     if (cwd !== cmd.cwd) changed = true;
     return {
       ...cmd,
       cwd,
-      argv: cmd.argv.map((w, i) => (dataPrograms.has(basename(cmd.argv[cmd.program]?.text ?? "")) && i > cmd.program ? w : word(w, cmd.cwd))),
+      argv: cmd.argv.map((w, i) =>
+        dataPrograms.has(basename(cmd.argv[cmd.program]?.text ?? "")) && i > cmd.program ? w : curl && i > cmd.program ? (curlWord(w, cmd.cwd) ?? word(w, cmd.cwd)) : word(w, cmd.cwd),
+      ),
       redirects: cmd.redirects.map((r) => ((r.direction === "in" || r.direction === "out") && r.target ? { ...r, target: linked(r.target, cmd.cwd) } : r)),
     };
   });
