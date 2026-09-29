@@ -136,7 +136,7 @@ brew uninstall loophubs/tap/agent-guard
 
 ## Release
 
-From a clean checkout of the default branch, choose the next `patch`, `minor`, or `major` version. Configure npm trusted publishing for this repository and `publish.yml` with direct `npm publish` allowed.
+From a clean checkout of the default branch, choose the next `patch`, `minor`, or `major` version. A change to what the guard denies or allows, whether stricter or looser, is a `minor` release; a fix that leaves both unchanged is a `patch`. A commit's type prefix does not decide the level: a `fix:` commit that widens denials still needs `minor`, and a dependency update that Renovate prefixes with `fix` stays a `patch` while parsing behavior is unchanged. Configure npm trusted publishing for this repository and `publish.yml` with direct `npm publish` allowed.
 
 For a patch release (substitute `minor` or `major` when appropriate):
 

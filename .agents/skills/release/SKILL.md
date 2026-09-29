@@ -1,9 +1,13 @@
 ---
 name: release
-description: Release a new version of a versioned project by choosing the bump level, tagging it, creating the hosted release, and running the repository's publish path. Use when the user asks to release, publish, cut, tag, or bump a version, or asks whether a completed change should become one. Not for committing changes, creating branches, or publishing an artifact outside a versioned release.
+description: Release a new version of a versioned project by choosing the bump level, tagging it, creating the hosted release, and running the repository's publish path. Use when the user asks to release, publish, cut, or tag a version, or asks whether a completed change should become one. Not for committing changes, creating branches, or publishing an artifact outside a versioned release.
 argument-hint: "[patch|minor|major] [context]"
 allowed-tools:
-  - Bash(git:*)
+  - Bash(git status:*)
+  - Bash(git log:*)
+  - Bash(git diff:*)
+  - Bash(git show:*)
+  - Bash(git ls-remote:*)
   - Read
 ---
 
@@ -11,12 +15,12 @@ Turn the current state of a repository into one published version, or report why
 
 ## Gate
 
-Tagging, pushing and publishing are outward and hard to reverse: a registry version cannot be overwritten, and a pushed tag is the only record of which commit produced a published artifact. The first pass therefore ends with a proposal, never with a release action.
+Tagging, pushing and publishing are outward and hard to reverse: a registry version cannot be overwritten. The first pass therefore ends with a proposal, never with a release action.
 
 - Release only when the user asked for this release, or answered a proposal about this exact version. A request to commit, push, merge, or finish a change is not a request to release it.
 - Confirm the proposed version does not already exist at the destination before proposing it; never republish a version that exists.
-- Publishing stays outside preapproved tooling, so it runs only after the direction above. Do not fold publishing into a commit, push, or release-creation step the user authorized separately.
-- When the repository publishes from a tag or a release event, the push carrying that ref is the release action. It needs the same direction as publishing, and it is the point of no return, so push that ref only as the last step of an authorized release and never as part of finishing other work.
+- Do not fold publishing into a commit, push, or release-creation step the user authorized separately.
+- When the repository publishes from a tag or a release event, the push carrying that ref is the release action. It needs the same direction as publishing, and it is the point of no return, so push that ref only as the last step of an authorized release.
 - When a completed change is one the repository habitually releases, offer the release in one line with the proposed level. Offer, then wait; do not open a release because a change is finished.
 
 ## Establish the repository's release contract before proposing
@@ -35,6 +39,7 @@ Derive the level from the range that this release would include, not from the re
 - Major: a caller or user of the released interface must change something, or a documented guarantee is removed.
 - Minor: a new capability, or a behavior change users must act on, including a widened or narrowed scope of what the artifact blocks, allows, or handles.
 - Patch: fixes, internal change, dependency or documentation updates that leave user-visible behavior unchanged.
+- The range starts at the last version that was both tagged and published. A prepared version whose commit and tag were never pushed, and that nobody consumed, is not a released version: rewrite its release commit into the next intended version instead of releasing it, re-derive the level from the whole range, leave no file, note, or commit subject that names the abandoned number, and check the remote refs immediately before rewriting.
 - Follow the repository's documented policy when it has one, including how it treats pre-1.0 versions; otherwise apply the rules above.
 - When the range mixes levels, the highest level wins. When it is ambiguous between two levels, say so and recommend one.
 
@@ -47,14 +52,14 @@ Send one message that ends the first pass: the proposed version, the level with 
 After direction for that exact version, follow the repository's own path. When the repository publishes from a tag or a release event, the agent's last action is the push: write the version into its owning file, commit that bump with the repository's message conventions, create the tag, then push the commit and the tag, and leave publishing and the release record to the automation. Otherwise run the remaining steps yourself, in the repository's order, with the hosted release before the publish step.
 
 - Use the repository's tag and release conventions; when it has none, use `v<version>` for the tag.
-- Order the steps so a failure leaves nothing published, and keep the push last among the agent's own actions.
+- Order the steps so a failure leaves nothing published.
 - Verify each step before the next: the owning file holds the new version, the tag names that version, and the run that the push started appears. Then follow that run to a terminal state within a bounded wait, check its result, and confirm at the destination that the artifact exists, that its contents match the repository's include list, and that the attestation or provenance the destination offers is present.
 - When release notes are the only durable record of a version, make them name the behavior changes a user must know, not only dependency updates.
 
 ## When it fails
 
 - Query the destination before any retry: when the version is absent there, the publish can be retried after the cause is fixed; when it is present, the release exists and only the next version can correct it.
-- A failed automation run takes the same check before a re-run, because a re-run publishes the same version again. Re-run the same ref only while the destination does not hold that version, and fix the cause before re-running rather than re-running repeatedly.
+- A failed automation run takes the same check before a re-run, because a re-run publishes the same version again. Re-run the same ref only while the destination does not hold that version, unless the repository documents a partial re-run, such as rerunning only the hosted-release job after the publish step succeeded; fix the cause before re-running rather than re-running repeatedly.
 - A tag that someone consumed is not moved. Correct a wrong or incomplete release by publishing the next version.
 - Report a downstream copy that the release did not update as an open gap, with the steps it needs.
 
