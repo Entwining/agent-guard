@@ -35,7 +35,17 @@ jobs:
       - run: bun run check
       # Trusted publishing exchanges OIDC for a short-lived credential and
       # automatically generates provenance for this public package and repo.
-      - run: npm publish --access public
+      - name: Publish unless the registry already has this version
+        run: |
+          # The tag was asserted to name this version above, and a published
+          # version is immutable, so a re-run that finds it has nothing to
+          # publish and must still reach the release and tap steps.
+          published=$(npm view "@loophubs/agent-guard@${GITHUB_REF_NAME#v}" version 2>/dev/null || true)
+          if [[ -n "$published" ]]; then
+            printf 'Version %s is already on the registry; skipping publish\n' "$published"
+            exit 0
+          fi
+          npm publish --access public
 
   release:
     needs: publish
@@ -53,9 +63,25 @@ jobs:
             printf 'Release notes are missing or empty: %s\n' "$notes" >&2
             exit 1
           fi
-          release_url=$(gh release create "$GITHUB_REF_NAME" --notes-file "$notes" --verify-tag --repo "$GITHUB_REPOSITORY")
+          # A re-run after a later step failed finds the release already created.
+          if release_url=$(gh release view "$GITHUB_REF_NAME" --json url --jq .url --repo "$GITHUB_REPOSITORY" 2>/dev/null); then
+            printf 'Release %s already exists\n' "$GITHUB_REF_NAME"
+          else
+            release_url=$(gh release create "$GITHUB_REF_NAME" --notes-file "$notes" --verify-tag --repo "$GITHUB_REPOSITORY")
+          fi
           {
             printf '### %s\n' "$GITHUB_REF_NAME"
             printf -- '- npm: published `@loophubs/agent-guard@%s`\n' "${GITHUB_REF_NAME#v}"
             printf -- '- GitHub Release: %s\n' "$release_url"
           } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: tap-token
+        with:
+          app-id: ${{ secrets.TAP_APP_ID }}
+          private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
+          owner: LoopHubs
+          repositories: homebrew-tap
+      - name: Ask the tap to pick up this version
+        env:
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
+        run: gh api repos/LoopHubs/homebrew-tap/dispatches -f event_type=npm-release
