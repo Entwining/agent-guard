@@ -39,6 +39,6 @@ export function appdataRules(req: Request, targets: Target[]): string[] {
   }
   const home = req.home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const signature = new RegExp(`(~|\\$HOME|\\$\\{HOME\\}|${home})/Library/(${trees})`, "i");
-  for (const fragment of req.uninspectable) if (signature.test(fragment)) denials.push(appdataReason);
+  for (const fragment of req.uninspectable) if (signature.test(fragment.text)) denials.push(appdataReason);
   return denials;
 }

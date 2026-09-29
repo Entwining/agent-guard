@@ -90,11 +90,11 @@ function commandTargets(cmd: Command, command: number, home: string): Target[] {
 
 export function extractTargets(req: Request): Target[] {
   const targets: Target[] = [];
-  const tool = (path: string, effect: Effect, options: Partial<Target> = {}) => {
+  const add = (path: string, cwd: string, inputCwd: string, effect: Effect, options: Partial<Target>) => {
     const input = expandHome(path, req.home);
     targets.push({
-      path: absPath(path, req.cwd, req.home),
-      unresolved: input.startsWith("/") ? input : `${req.inputCwd}/${input}`,
+      path: absPath(path, cwd, req.home),
+      unresolved: input.startsWith("/") ? input : `${inputCwd}/${input}`,
       glob: false,
       effect,
       walk: "none",
@@ -106,11 +106,14 @@ export function extractTargets(req: Request): Target[] {
       ...options,
     });
   };
+  const tool = (path: string, effect: Effect, options: Partial<Target> = {}) => add(path, req.cwd, req.inputCwd, effect, options);
   if (req.operation === "read" || req.operation === "write") tool(req.pathInput, req.operation === "read" ? "read" : "write");
   if (req.operation === "search") {
     tool(req.pathInput || req.inputCwd, "read", { walk: "visible", search: true });
     if (req.glob && !req.glob.startsWith("!")) tool(`${req.searchRoot}/${basename(req.glob)}`, "read", { glob: true });
   }
   req.commands.forEach((cmd, command) => targets.push(...commandTargets(cmd, command, req.home)));
+  // Inline code opens files the guard cannot trace, so each token that names a path counts as a read.
+  for (const { text, cwd } of req.uninspectable) for (const token of text.split(/[^\w.\/~-]+/).filter(Boolean)) add(token, cwd, cwd, "read", { via: "code" });
   return targets;
 }

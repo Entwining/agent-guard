@@ -2,15 +2,14 @@
 // model reads. Clients that consume a credential file themselves (dotenvx, node
 // --env-file, ssh -i) are not readers and stay allowed.
 import { isSensitive, isSensitiveRoot, sshPrivate, sshScopeDenied } from "../paths";
-import { readers } from "../programs";
 import { reasons } from "../reasons";
 import type { Request, Target } from "../record";
 import { secretReasons, secretSignatures } from "./secrets";
 
-const { file: fileReason, upload: uploadReason, ssh: sshReason, grepSsh: grepSshReason, hiddenSearch: hiddenSearchReason } = reasons;
+const { file: fileReason, codeFile: codeFileReason, upload: uploadReason, ssh: sshReason, grepSsh: grepSshReason, hiddenSearch: hiddenSearchReason } = reasons;
 
 function targetReason(target: Target, home: string): string | undefined {
-  const reason = target.sends ? uploadReason : fileReason;
+  const reason = target.via === "code" ? codeFileReason : target.sends ? uploadReason : fileReason;
   if (target.effect === "write") return sshPrivate(target.path) ? sshReason : undefined;
   if (target.effect !== "read") return undefined;
   if (target.walk === "hidden") return hiddenSearchReason;
@@ -32,7 +31,7 @@ export function credentialRules(req: Request, targets: Target[]): string[] {
     judge(i);
     denials.push(...secretReasons(cmd));
   }
-  for (const fragment of req.uninspectable) denials.push(...secretSignatures(fragment), ...readerSignatures(fragment));
+  for (const fragment of req.uninspectable) denials.push(...secretSignatures(fragment.text));
   return denials;
 }
 
@@ -45,17 +44,4 @@ export function credentialFilesystemRules(req: Request, targets: Target[]): stri
     if (sshScopeDenied(target.path, req.home, target.search)) return [target.search ? grepSshReason : sshReason];
   }
   return [];
-}
-
-const names = "\\.env(?:\\.[A-Za-z0-9_.-]+)?|\\.npmrc|\\.zsh_history|\\.zprofile|private-keys-v1\\.d|\\S*\\.(pem|key)|auth\\.json|\\.credentials\\.json|\\.aws/credentials|\\.ssh/\\S*";
-const readerSignature = new RegExp(`(^|[^A-Za-z0-9_])(${readers.filter((p) => p !== ".").join("|")})([^A-Za-z0-9_-].*)?[\\s/"'=](${names})($|[\\s/"'>|&)\`])`, "s");
-
-// Interpreter code, case bodies, or source the parser rejects: a reader
-// command that stands next to a credential path.
-function readerSignatures(fragment: string): string[] {
-  return fragment
-    .replace(/&&|\|\||\n/g, ";")
-    .split(";")
-    .filter((segment) => readerSignature.test(segment))
-    .map(() => fileReason);
 }

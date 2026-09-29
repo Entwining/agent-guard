@@ -38,7 +38,7 @@ export interface Target {
   walk: "none" | "visible" | "hidden"; // a read or list of a directory reaches what is under it; hidden includes dotfiles
   sends: boolean; // the program transmits what it reads
   expands: boolean; // the word held an expansion the front end could not resolve
-  via: "tool" | "operand" | "option" | "redirect" | "items" | "cwd" | "scan";
+  via: "tool" | "operand" | "option" | "redirect" | "items" | "cwd" | "scan" | "code";
   search: boolean; // root of a content search
   command: number; // index of the command in Request.commands, -1 for a tool request
 }
@@ -54,9 +54,15 @@ export interface Command {
   items?: Items;
 }
 
+// Text the front end cannot structure into commands, such as the code an interpreter runs.
+export interface Fragment {
+  text: string;
+  cwd: string;
+}
+
 export interface Script {
   commands: Command[];
-  uninspectable: string[];
+  uninspectable: Fragment[];
   parseFailed: boolean;
 }
 
@@ -75,6 +81,6 @@ export interface Request {
   searchRoot: string;
   glob: string;
   commands: Command[];
-  uninspectable: string[];
+  uninspectable: Fragment[];
   parseFailed: boolean;
 }

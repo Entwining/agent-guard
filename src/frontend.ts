@@ -235,12 +235,12 @@ export function parseScript(source: string, cwd: string, home: string): Script {
         if (items) for (const child of script.commands.slice(start)) child.items ??= items;
       }
     }
-    script.uninspectable.push(...code);
+    for (const text of code) script.uninspectable.push({ text, cwd: command.cwd });
     for (const r of redirects) {
       if (r.direction !== "heredoc" && r.direction !== "herestring") continue;
       const stdin = stdinKind(command);
       if (stdin === "shell") parse(r.target, command.cwd);
-      if (stdin === "code") script.uninspectable.push(r.target);
+      if (stdin === "code") script.uninspectable.push({ text: r.target, cwd: command.cwd });
       if (command.wrappers.includes("xargs")) for (const item of xargsHereInput(command, r.target)) parse(item.source, item.cwd);
     }
     const called = command.wrappers.every((w) => w === "time") ? command.argv[command.program]?.text : undefined;

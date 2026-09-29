@@ -4,6 +4,8 @@ export const reasons = {
     "This reads a protected macOS app-data directory. Name a specific non-sensitive file under ~/Library/Application Support instead, or ask the user to inspect the protected file and share the needed fact.",
   broad: "A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path.",
   file: "This reads a credential or environment file. If a program only needs to use the file, pass it through the program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+  codeFile:
+    "This inline code names a credential or environment file. To write text that mentions the file, use the Write or Edit tool; to run code that needs its values, pass the file through the runtime's option, such as `node --env-file=.env`; otherwise ask the user to inspect the file and share only the fact needed.",
   hiddenSearch: "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
   dump: "This dumps environment or shell variables, including secrets. Name the non-sensitive variable needed and read only that variable.",
   variable: "This prints the value of a credential variable. Ask the user for the specific non-sensitive fact needed, or let the authorized client consume the credential without printing it.",
