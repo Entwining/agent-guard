@@ -70,7 +70,9 @@ export function credentialFilesystemRules(req: Request): string[] {
     for (const word of words) {
       if (word === filter) continue;
       if (!["arg", "path", "patfile", "option:patfile"].includes(word.role) || word.value.startsWith("-")) continue;
-      if (sshScopeDenied(absPath(word.value, cmd.cwd, req.home, /^['"]/.test(word.raw)), req.home, false)) return [sshReason];
+      const output = name === "dd" && word.value.startsWith("of=");
+      const path = absPath(name === "dd" ? word.value.replace(/^(if|of)=/, "") : word.value, cmd.cwd, req.home, /^['"]/.test(word.raw));
+      if (output ? sshPrivate(path) : sshScopeDenied(path, req.home, false)) return [sshReason];
     }
   }
   return [];

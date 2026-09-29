@@ -12,7 +12,7 @@ const trees = appdataTrees.join("|");
 // These print or assign their arguments; only a glob the shell expands before
 // they run reads a directory.
 export const dataPrograms = new Set(["echo", "printf", "print", ":", "true", "false", "export", "set", "unset", "typeset", "declare", "local"]);
-const noWalkPrograms = new Set(["mv", "stat", "test", "[", "mkdir"]);
+const noWalkPrograms = new Set(["mv", "stat", "test", "[", "mkdir", "dd"]);
 
 export function appdataRules(req: Request): string[] {
   const denials: string[] = [];
@@ -45,7 +45,8 @@ function appdataCommand(cmd: Command, home: string): string | undefined {
     if (word.role === "program" && !word.value.includes("/")) continue;
     if (data && !word.globs && i > cmd.program) continue;
     // A value glued to its option, as in --env-file=PATH, is a path too.
-    const values = word.value.startsWith("-") && word.value.includes("=") ? [word.value, word.value.slice(word.value.indexOf("=") + 1)] : [word.value];
+    const text = prog === "dd" && i > cmd.program ? word.value.replace(/^(if|of)=/, "") : word.value;
+    const values = text.startsWith("-") && text.includes("=") ? [text, text.slice(text.indexOf("=") + 1)] : [text];
     for (const value of values) {
       // An expansion the front end cannot resolve may well be $HOME.
       if (word.expands && new RegExp(`/Library/(${trees})(/.*)?$`, "is").test(value)) return appdataReason;
