@@ -27,9 +27,23 @@ const names = new Set([
   "submodule",
   "worktree",
   "config",
+  "lfs",
+  "sparse-checkout",
 ]);
 // Options whose value is a file git reads.
-const fileOptions: Record<string, string[]> = { config: ["-f", "--file", "--blob"], commit: ["-F", "--file"] };
+const pathspecFile = ["--pathspec-from-file"];
+const fileOptions: Record<string, string[]> = {
+  config: ["-f", "--file", "--blob"],
+  commit: ["-F", "--file", ...pathspecFile],
+  tag: ["-F", "--file"],
+  merge: ["-F", "--file"],
+  add: pathspecFile,
+  rm: pathspecFile,
+  restore: pathspecFile,
+  reset: pathspecFile,
+  checkout: pathspecFile,
+  stash: pathspecFile,
+};
 const valueOptions = ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"];
 
 // git grep takes its pattern from -e, or from the first operand; the pattern is text, not a path.
@@ -59,19 +73,24 @@ function grepOperands(operands: Word[], patterns: Word[]): Word[] {
 export function gitTargets({ words, make, claimed }: Context): Target[] {
   const targets: Target[] = [];
   let i = 0;
+  // Operands are relative to the directory the last -C or --work-tree names.
+  let base: string | undefined;
   while (i < words.length && words[i]!.text.startsWith("-")) {
-    const takesValue = valueOptions.includes(words[i]!.text);
-    const value = words[i + 1];
-    if (takesValue && value && ["-C", "--work-tree"].includes(words[i]!.text)) {
+    const glued = /^--work-tree=(.*)$/s.exec(words[i]!.text);
+    const takesValue = !glued && valueOptions.includes(words[i]!.text);
+    const value = glued ? words[i] : words[i + 1];
+    if ((glued || (takesValue && ["-C", "--work-tree"].includes(words[i]!.text))) && value) {
       claimed.add(value);
-      targets.push(make(value.text, value, "enter", { via: "option" }));
+      const target = make(glued ? glued[1]! : value.text, value, "enter", { via: "option", base });
+      targets.push(target);
+      base = target.path;
     }
     i += takesValue ? 2 : 1;
   }
   const sub = words[i]?.text ?? "";
-  const effect: Effect | undefined = printing.has(sub) ? "read" : metadata.has(sub) ? "meta" : names.has(sub) ? "name" : undefined;
-  // Any other subcommand reads its operands like an unmodelled program.
-  if (!effect) return targets;
+  if (words[i]) claimed.add(words[i]!);
+  // Any subcommand git has no group for reads its operands like an unmodelled program.
+  const effect: Effect = printing.has(sub) ? "read" : metadata.has(sub) ? "meta" : names.has(sub) ? "name" : "read";
   let operands = words.slice(i + 1);
   if (sub === "grep") {
     const patterns: Word[] = [];
@@ -79,22 +98,28 @@ export function gitTargets({ words, make, claimed }: Context): Target[] {
     for (const pattern of patterns) claimed.add(pattern);
   }
   const keys = fileOptions[sub] ?? [];
-  // Pathspecs are globs git expands itself; git grep also reads a directory whole.
-  const glob = effect !== "name" && sub !== "grep";
+  // A pathspec holding a glob character is one git expands itself; git grep also reads a directory whole.
+  const pathspec = effect !== "name" && sub !== "grep";
   const add = (path: string, word: Word, as: Effect, via: "operand" | "option") => {
     claimed.add(word);
-    targets.push(make(path, word, as, { via, glob }));
+    const glob = pathspec && /[*?[]/.test(path);
+    targets.push(make(path, word, as, { via, glob, base }));
     // A rev:path operand names a file in a commit or the index.
-    if (as === "read" && path.includes(":")) targets.push(make(path.slice(path.indexOf(":") + 1), word, as, { via, glob }));
+    if (as === "read" && path.includes(":")) targets.push(make(path.slice(path.indexOf(":") + 1), word, as, { via, glob, base }));
   };
+  // `bundle create FILE` writes FILE; the other bundle subcommands read the bundle they are given.
+  const bundleAction = sub === "bundle" ? operands.find((word) => !word.text.startsWith("-")) : undefined;
+  const bundleFile = bundleAction?.text === "create" ? operands.filter((word) => !word.text.startsWith("-"))[1] : undefined;
   for (let n = 0; n < operands.length; n++) {
     const word = operands[n]!;
-    const glued = keys.find((key) => key.startsWith("--") && word.text.startsWith(`${key}=`));
-    if (glued) add(word.text.slice(glued.length + 1), word, "read", "option");
+    // A value is glued to a long option with = and to a short one directly.
+    const glued = keys.find((key) => (key.startsWith("--") ? word.text.startsWith(`${key}=`) : word.text.length > key.length && word.text.startsWith(key)));
+    if (glued) add(word.text.slice(glued.length + (glued.startsWith("--") ? 1 : 0)), word, "read", "option");
     else if (keys.includes(word.text) && operands[n + 1]) {
       const file = operands[++n]!;
       add(file.text, file, "read", "option");
-    } else if (!word.text.startsWith("-")) add(word.text, word, effect, "operand");
+    } else if (word === bundleAction) claimed.add(word);
+    else if (!word.text.startsWith("-")) add(word.text, word, word === bundleFile ? "write" : effect, "operand");
   }
   return targets;
 }

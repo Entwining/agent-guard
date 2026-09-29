@@ -1,12 +1,12 @@
 import { basename, resolve } from "node:path";
 
+import { interpreterCode, interpreterName } from "./interpreters";
 import { absPath, expandHome } from "./paths";
 import { findRoots } from "./programs";
 import type { Command, Items, Word } from "./record";
 import { searchRoles, showsHidden } from "./search-roles";
 
 const shellPrograms = new Set(["sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh"]);
-const codePrograms = new Set(["python", "python3", "node", "bun", "deno", "ruby", "perl", "php", "osascript", "lua"]);
 const zshBuiltins = new Set(["echo", "printf", "print", "export", "typeset", "declare", "set", "command", "eval", "source", "."]);
 const shellCodeFlag = /^-[a-z]*c[a-z]*$/;
 const sudoValueOption = /^(-[A-Za-z]*[ughpCDRTrtU]|--(user|group|host|prompt|chdir|chroot|role|type|other-user|close-from|command-timeout))$/;
@@ -234,12 +234,8 @@ export function resolveCommand(cmd: Command, home: string): { children: Child[];
     }
   } else if (name === "eval" && (shell || cmd.wrappers.includes("command"))) {
     children.push({ source: rest.map((a) => a.text).join(" ") });
-  } else if (codePrograms.has(name)) {
-    const flag = rest.findIndex((a) => /^(-[ceE]|--eval)$/.test(a.text));
-    if (flag >= 0) {
-      if (rest[flag + 1]) rest[flag + 1]!.role = "code";
-      code.push(rest[flag + 1]?.text ?? "");
-    }
+  } else if (interpreterName(name)) {
+    code.push(...interpreterCode(interpreterName(name)!, rest));
   }
   return { children, code };
 }
@@ -250,6 +246,6 @@ export function stdinKind(cmd: Command): "shell" | "code" | undefined {
   const name = basename(program.text);
   const args = cmd.argv.slice(cmd.program + 1);
   if (shellPrograms.has(name) && !args.some((a) => shellCodeFlag.test(a.text))) return "shell";
-  if (codePrograms.has(name)) return "code";
+  if (interpreterName(name)) return "code";
   return undefined;
 }

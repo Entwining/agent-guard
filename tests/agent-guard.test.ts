@@ -8,6 +8,7 @@ import { probes } from "../src/probes";
 import { reasons } from "../src/reasons";
 import type { Tool } from "../src/record";
 import appdataCases from "./fixtures/appdata.test";
+import clientCases from "./fixtures/clients.test";
 import credentialCases from "./fixtures/credentials.test";
 import cwdCases from "./fixtures/cwd.test";
 import optionCases from "./fixtures/options.test";
@@ -17,7 +18,7 @@ import searchCases from "./fixtures/search.test";
 import shellCases from "./fixtures/shell.test";
 import type { BehaviorRow } from "./fixtures/types.test";
 
-const behaviorCases: BehaviorRow[] = [...appdataCases, ...credentialCases, ...optionCases, ...programCases, ...readerCases, ...searchCases, ...cwdCases, ...shellCases];
+const behaviorCases: BehaviorRow[] = [...appdataCases, ...clientCases, ...credentialCases, ...optionCases, ...programCases, ...readerCases, ...searchCases, ...cwdCases, ...shellCases];
 
 // Resolve the temp root so symlinked prefixes cannot hide paths under test.
 const root = realpathSync(mkdtempSync(join(tmpdir(), "agent-guard-")));

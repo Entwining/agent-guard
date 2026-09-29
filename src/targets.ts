@@ -28,10 +28,12 @@ function maker(home: string, cmd: Command, command: number, walk: Target["walk"]
   };
 }
 
-// A glued `--name=value` is a path in the value; a bare option is not.
+// A glued `--name=value` is a path in the value, and `@path` or an httpie `field=@path` reads the file; a bare option is not a path.
 function operandValue(word: Word): string | undefined {
-  if (!word.value.startsWith("-")) return word.value;
-  return word.value.includes("=") ? word.value.slice(word.value.indexOf("=") + 1) : undefined;
+  const value = word.value.startsWith("-") ? (word.value.includes("=") ? word.value.slice(word.value.indexOf("=") + 1) : undefined) : word.value;
+  if (value === undefined) return undefined;
+  if (value.startsWith("@")) return value.slice(1) || undefined;
+  return /^[^=@\s]+?(?:==?|:)@(.+)$/s.exec(value)?.[1] ?? value;
 }
 
 function commandTargets(cmd: Command, command: number, home: string): Target[] {
@@ -41,8 +43,27 @@ function commandTargets(cmd: Command, command: number, home: string): Target[] {
   // A command with no program, such as a for loop's word list, still names paths.
   const words = cmd.argv.slice(cmd.program + 1);
   const walk = walkOf(spec, name, words);
-  const operandWords = words.filter((word) => !word.text.startsWith("-"));
-  const destination = spec.last ? operandWords.at(-1) : undefined;
+  const options = { ...globalOptions, ...spec.options };
+  // An option's value takes the option's effect, glued with = or in the next word; the last letter of a cluster such as -lf takes the value.
+  const optionEffect = (i: number): Effect | undefined => {
+    const word = words[i]!;
+    const previous = words[i - 1]?.text ?? "";
+    const option = word.value.startsWith("-") ? (word.value.includes("=") ? word.value.slice(0, word.value.indexOf("=")) : "") : /^-[^-]/.test(previous) ? `-${previous.at(-1)}` : previous;
+    return options[option];
+  };
+  // A short option takes the rest of its word as the value: `-idata`, and `-vidata` after flags in a cluster.
+  const glued = (word: Word): { value: string; effect: Effect } | undefined => {
+    if (!/^-[^-]/.test(word.text)) return undefined;
+    const letters = [...word.text.slice(1)];
+    const at = letters.findIndex((letter) => options[`-${letter}`] !== undefined);
+    return at >= 0 && at < letters.length - 1 ? { value: word.text.slice(at + 2), effect: options[`-${letters[at]}`]! } : undefined;
+  };
+  const operandWords = words.filter((word, i) => !word.text.startsWith("-") && optionEffect(i) === undefined);
+  // With `-t DIR`, alone or in a cluster, every operand is a source and the directory is the destination. A glob expands to several words, so it may hide sources.
+  const last = operandWords.at(-1);
+  const intoDirectory =
+    spec.options?.["-t"] === "write" && words.some((word) => /^-[^-]*t/.test(word.text) || (/^--t[a-z-]*(=|$)/.test(word.text) && "--target-directory".startsWith(word.text.split("=")[0]!)));
+  const destination = spec.last && !last?.globs && !intoDirectory ? last : undefined;
   const remote = (word: Word) => spec.remote?.test(word.value) ?? false;
   // A copy sends what it reads only when it names another machine; a local copy keeps its reads on this one.
   const sends = (spec.sends ?? false) && (!spec.remote || operandWords.some(remote));
@@ -68,15 +89,15 @@ function commandTargets(cmd: Command, command: number, home: string): Target[] {
   if (program?.value.includes("/")) targets.push(make(program.value, program, "use", { via: "option" }));
   const start = targets.length;
   targets.push(...(spec.targets?.(ctx) ?? []));
-  const options = { ...globalOptions, ...spec.options };
   for (const [i, word] of words.entries()) {
+    const short = ctx.claimed.has(word) ? undefined : glued(word);
+    if (short) {
+      targets.push(make(short.value, word, short.effect, { via: "option" }));
+      continue;
+    }
     const value = pathRoles.has(word.role) && !ctx.claimed.has(word) ? operandValue(word) : undefined;
     if (!value) continue;
-    // An option's value takes the option's effect, glued with = or in the next word.
-    const previous = words[i - 1]?.text ?? "";
-    // The last letter of a cluster such as -lf takes the value.
-    const option = word.value.startsWith("-") ? word.value.slice(0, word.value.indexOf("=")) : /^-[^-]/.test(previous) ? `-${previous.at(-1)}` : previous;
-    const effect = remote(word) ? "name" : word === destination ? spec.last! : (options[option] ?? (word.role === "optarg" ? "use" : operands));
+    const effect = remote(word) ? "name" : word === destination ? spec.last! : (optionEffect(i) ?? (word.role === "optarg" ? "use" : operands));
     targets.push(make(value, word, effect, { via: word.role === "optarg" ? "option" : "operand" }));
   }
   const lists = spec.cwd && !targets.slice(start).some((target) => target.via === "operand");
@@ -86,6 +107,17 @@ function commandTargets(cmd: Command, command: number, home: string): Target[] {
   const named = targets.some((target) => ["operand", "cwd", "scan"].includes(target.via) && !["enter", "name"].includes(target.effect));
   if (program && !dataPrograms.includes(name) && !["cd", "pushd", "popd"].includes(name) && (!named || !specs.has(name))) targets.push(make(cmd.cwd, undefined, "enter", { via: "cwd", walk: "none" }));
   return targets;
+}
+
+// A word that starts like a path, or touches a quote: `e.key` is a property, `'.key'` and `"cert.pem"` are files. Quotes are not paired
+// across lines, so an apostrophe in a comment does not hide the string literals after it; a string literal is a shell command that can name a file
+// anywhere in it, so its words count wherever they sit.
+function codeTokens(code: string): string[] {
+  const words = (text: string) => [...text.matchAll(/[\w.~/-]+/g)];
+  const strings = [...code.matchAll(/(['"`])((?:(?!\1)[^\n])*)\1/g)].flatMap((match) => words(match[2]!));
+  return [...words(code).filter((match) => /^[.~]|\//.test(match[0]) || /['"`]/.test(code[match.index - 1] ?? "") || /['"`]/.test(code[match.index + match[0].length] ?? "")), ...strings].map(
+    (match) => match[0],
+  );
 }
 
 export function extractTargets(req: Request): Target[] {
@@ -114,6 +146,6 @@ export function extractTargets(req: Request): Target[] {
   }
   req.commands.forEach((cmd, command) => targets.push(...commandTargets(cmd, command, req.home)));
   // Inline code opens files the guard cannot trace, so each token that names a path is inferred to be a read target.
-  for (const { text, cwd } of req.uninspectable) for (const token of text.split(/[^\w.\/~-]+/).filter(Boolean)) add(token, cwd, cwd, "read", { via: "code" });
+  for (const { text, cwd } of req.uninspectable) for (const token of codeTokens(text)) add(token, cwd, cwd, "read", { via: "code" });
   return targets;
 }
