@@ -1,6 +1,7 @@
 // Credential rules: keep credential files and private keys out of what the
-// model reads. Clients that consume a credential file themselves (dotenvx, node
-// --env-file, ssh -i) are not readers and stay allowed.
+// model reads. Clients the program table models as consuming a credential file
+// themselves (dotenvx, node --env-file, ssh -i) are not readers and stay
+// allowed; the guard does not control what they do with the contents.
 import { isSensitive, isSensitiveRoot, sshPrivate } from "../paths";
 import { reasons } from "../reasons";
 import type { Request, Target } from "../record";

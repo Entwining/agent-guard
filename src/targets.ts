@@ -1,4 +1,4 @@
-// Turn a request into the paths it touches, each with what the command does to it.
+// Turn a request into inferred targets under modelled command semantics, each with what the command is modelled to do to it.
 import { basename } from "node:path";
 
 import { programName } from "./argv";
@@ -113,7 +113,7 @@ export function extractTargets(req: Request): Target[] {
     if (req.glob && !req.glob.startsWith("!")) tool(`${req.searchRoot}/${basename(req.glob)}`, "read", { glob: true });
   }
   req.commands.forEach((cmd, command) => targets.push(...commandTargets(cmd, command, req.home)));
-  // Inline code opens files the guard cannot trace, so each token that names a path counts as a read.
+  // Inline code opens files the guard cannot trace, so each token that names a path is inferred to be a read target.
   for (const { text, cwd } of req.uninspectable) for (const token of text.split(/[^\w.\/~-]+/).filter(Boolean)) add(token, cwd, cwd, "read", { via: "code" });
   return targets;
 }
