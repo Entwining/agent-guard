@@ -1,11 +1,12 @@
 import { parseScript } from "./frontend";
-import { linkedRequest } from "./links";
+import { linkedTargets } from "./links";
 import { absPath } from "./paths";
 import { reasons } from "./reasons";
 import type { Request, Runtime, Tool } from "./record";
 import { appdataRules } from "./rules/appdata";
 import { credentialFilesystemRules, credentialRules } from "./rules/credentials";
 import { claudeWorkflowRules } from "./rules/workflow";
+import { extractTargets } from "./targets";
 
 export function buildRequest(runtime: Runtime, tool: Tool, cwd: string, input: string, glob: string, home: string): Request {
   const inputCwd = cwd || "/";
@@ -38,17 +39,18 @@ export function buildRequest(runtime: Runtime, tool: Tool, cwd: string, input: s
 
 export function evaluate(req: Request): string | undefined {
   if (req.parseFailed) return reasons.syntax;
-  const denials = [...appdataRules(req), ...credentialRules(req)];
+  const targets = extractTargets(req);
+  const denials = [...appdataRules(req, targets), ...credentialRules(req, targets)];
   // Deny lexically protected paths before asking the filesystem about links.
   if (!denials.length) {
     try {
-      const linked = linkedRequest(req);
-      if (linked) denials.push(...appdataRules(linked), ...credentialRules(linked));
+      const linked = linkedTargets(targets, req.home);
+      if (linked) denials.push(...appdataRules(req, linked), ...credentialRules(req, linked));
     } catch {
       denials.push(reasons.symlink);
     }
   }
-  if (!denials.length) denials.push(...credentialFilesystemRules(req));
+  if (!denials.length) denials.push(...credentialFilesystemRules(req, targets));
   return denials[0];
 }
 

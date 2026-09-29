@@ -1,8 +1,9 @@
 import { basename, resolve } from "node:path";
 
-import { expandHome } from "./paths";
-import type { Command, Word } from "./record";
-import { searchRoles } from "./search-roles";
+import { absPath, expandHome } from "./paths";
+import { findRoots } from "./programs";
+import type { Command, Items, Word } from "./record";
+import { searchRoles, showsHidden } from "./search-roles";
 
 const shellPrograms = new Set(["sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh"]);
 const codePrograms = new Set(["python", "python3", "node", "bun", "deno", "ruby", "perl", "php", "osascript", "lua"]);
@@ -16,9 +17,14 @@ export function programName(text: string): string {
   return name === "egrep" || name === "fgrep" ? "grep" : name;
 }
 
-export function resolveCommand(cmd: Command, home: string): { children: string[]; code: string[] } {
+export interface Child {
+  source: string;
+  items?: Items;
+}
+
+export function resolveCommand(cmd: Command, home: string): { children: Child[]; code: string[] } {
   const w = cmd.argv;
-  const children: string[] = [];
+  const children: Child[] = [];
   const code: string[] = [];
   let i = 0;
   let shell = true;
@@ -131,7 +137,7 @@ export function resolveCommand(cmd: Command, home: string): { children: string[]
           } else if (["-u", "-P"].includes(arg)) i += 2;
           else if (arg === "-S") {
             // The split string is a command line of its own.
-            children.push(w[i + 1]?.text ?? "");
+            children.push({ source: w[i + 1]?.text ?? "" });
             cmd.wrappers.push("env-S");
             i = w.length;
           } else if (arg.startsWith("-") || arg.includes("=")) i++;
@@ -166,18 +172,28 @@ export function resolveCommand(cmd: Command, home: string): { children: string[]
   const rest = w.slice(i + 1);
   if (["rg", "grep", "ag", "ack"].includes(name)) {
     searchRoles(cmd, rest, name);
+  } else if (name === "find") {
+    for (const [n, word] of rest.entries()) {
+      if (!["-exec", "-execdir", "-ok", "-okdir"].includes(word.text)) continue;
+      const end = rest.findIndex((a, k) => k > n && (a.text === ";" || a.text === "+"));
+      const clause = rest.slice(n + 1, end < 0 ? undefined : end);
+      // find hands the command every name it walks, dotfiles included.
+      children.push({ source: clause.map((a) => a.raw).join(" "), items: { root: absPath(findRoots(rest)[0]?.text ?? ".", cmd.cwd, home), hidden: true } });
+    }
   } else if (name === "fd") {
     let pattern = true;
+    const roots: string[] = [];
     for (let n = 0; n < rest.length; n++) {
       const arg = rest[n]!.text;
       if (["-x", "-X", "--exec", "--exec-batch"].includes(arg)) {
         rest[n]!.role = "option";
-        children.push(
-          rest
+        children.push({
+          source: rest
             .slice(n + 1)
             .map((word) => word.raw)
             .join(" "),
-        );
+          items: { root: absPath(roots[0] ?? ".", cmd.cwd, home), hidden: showsHidden(rest) },
+        });
         break;
       } else if ((/^(--search-path|--base-directory)(=|$)/.test(arg) || arg === "-C") && (arg.includes("=") || rest[n + 1])) {
         const separate = !arg.includes("=");
@@ -197,7 +213,10 @@ export function resolveCommand(cmd: Command, home: string): { children: string[]
       else if (pattern) {
         rest[n]!.role = "pattern";
         pattern = false;
-      } else rest[n]!.role = "path";
+      } else {
+        rest[n]!.role = "path";
+        roots.push(arg);
+      }
     }
   } else if (name === "du") {
     for (let n = 0; n < rest.length; n++) {
@@ -211,10 +230,10 @@ export function resolveCommand(cmd: Command, home: string): { children: string[]
     const flag = rest.findIndex((a) => shellCodeFlag.test(a.text));
     if (flag >= 0) {
       if (rest[flag + 1]) rest[flag + 1]!.role = "code";
-      children.push(rest[flag + 1]?.text ?? "");
+      children.push({ source: rest[flag + 1]?.text ?? "" });
     }
   } else if (name === "eval" && (shell || cmd.wrappers.includes("command"))) {
-    children.push(rest.map((a) => a.text).join(" "));
+    children.push({ source: rest.map((a) => a.text).join(" ") });
   } else if (codePrograms.has(name)) {
     const flag = rest.findIndex((a) => /^(-[ceE]|--eval)$/.test(a.text));
     if (flag >= 0) {

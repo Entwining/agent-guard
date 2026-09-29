@@ -2,18 +2,14 @@ import { basename } from "node:path";
 
 import { stdinKind } from "./argv";
 import type { Command, Word } from "./record";
-
-// fd and ls skip hidden files unless asked; find never does.
-export function showsHidden(words: Word[]): boolean {
-  return words.some((word) => /^(--hidden|--unrestricted)$/.test(word.text) || /^-[A-Za-z]*[Hu][A-Za-z]*$/.test(word.text));
-}
+import { showsHidden } from "./search-roles";
 
 // A dotfile name, or a glob the shell expands to dotfiles; `.` and `..` are directories.
 const hiddenName = (text: string) => /^\.(?!\.?$)/.test(basename(text));
 
 // xargs passes the names a walk printed to its command, so mark that command.
 export function markWalkedInput(left: Command[], right: Command[]) {
-  const walks = left.some((cmd) => {
+  const walker = left.find((cmd) => {
     const name = cmd.program >= 0 ? basename(cmd.argv[cmd.program]!.text) : "";
     const args = cmd.argv.slice(cmd.program + 1);
     const operands = args.filter((word) => !word.text.startsWith("-"));
@@ -21,7 +17,7 @@ export function markWalkedInput(left: Command[], right: Command[]) {
     if (name === "echo" || name === "printf") return operands.some((word) => word.globs && hiddenName(word.text));
     return name === "find" || (name === "fd" && showsHidden(args));
   });
-  if (walks) for (const cmd of right) if (cmd.wrappers.includes("xargs")) cmd.flags.add("walked");
+  if (walker) for (const cmd of right) if (cmd.wrappers.includes("xargs")) cmd.items = { root: walker.cwd, hidden: true };
 }
 
 // printf and zsh's echo decode these escapes and stop at `\c`; a NUL separates xargs -0 items, so it reads as a line break.

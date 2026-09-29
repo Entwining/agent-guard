@@ -1,6 +1,6 @@
 # Agent Guard engineering contract
 
-`agent-guard` is a macOS pre-tool hook for Claude Code, Codex, and Pi, not a sandbox. It checks only calls delivered by a registered hook. Reading another app's data under `~/Library` can be recorded as App Data access (`SystemPolicyAppDataDetailed`). A shell entry starts a Bun runner that supervises the guard process group. The `mvdan-sh` GopherJS port turns shell syntax into command records; App Data and credential rules make denial decisions, and Claude workflow rules provide advice without overriding those decisions. Runtime registration belongs to each consumer, outside this package.
+`agent-guard` is a macOS pre-tool hook for Claude Code, Codex, and Pi, not a sandbox. It checks only calls delivered by a registered hook. Reading another app's data under `~/Library` can be recorded as App Data access (`SystemPolicyAppDataDetailed`). A shell entry starts a Bun runner that supervises the guard process group. The `mvdan-sh` GopherJS port turns shell syntax into command records; `src/targets.ts` resolves them into the paths each command touches and what it does with each, from the program table in `src/programs.ts`; App Data and credential rules decide from those targets, and Claude workflow rules provide advice without overriding those decisions. Runtime registration belongs to each consumer, outside this package.
 
 ## Security boundaries
 

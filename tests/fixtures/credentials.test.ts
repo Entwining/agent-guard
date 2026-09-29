@@ -88,6 +88,7 @@ export default [
   { tool: "Bash", input: "grep 'auth.json.parse' cli.js", cwd: "$H/project", claude: 0, codex: 0 },
   { tool: "Bash", input: "cat ~/.ssh/deploy-key", cwd: "$H/project", claude: 2, codex: 2 },
   { tool: "Bash", input: "ls ~/.ssh", cwd: "$H/project", claude: 2, codex: 2, reason: "ssh" },
+  { tool: "Bash", input: "ls", cwd: "$H/.ssh", claude: 0, codex: 0, note: "only a search reads the working directory's content" },
   { tool: "Bash", input: "cat < ~/.SSH/id_rsa", cwd: "$H/project", claude: 2, codex: 2, reason: "ssh" },
   { tool: "Bash", input: 'head "$HOME/.ssh/server.pem"', cwd: "$H/project", claude: 2, codex: 2 },
   { tool: "Bash", input: "cat ~/.ssh/config ~/.ssh/deploy-key", cwd: "$H/project", claude: 2, codex: 2 },

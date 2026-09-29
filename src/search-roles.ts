@@ -1,5 +1,10 @@
 import type { Command, ValueRole, Word } from "./record";
 
+// fd and ls skip hidden files unless asked; find never does.
+export function showsHidden(words: Word[]): boolean {
+  return words.some((word) => /^(--hidden|--unrestricted)$/.test(word.text) || /^-[A-Za-z]*[Hu][A-Za-z]*$/.test(word.text));
+}
+
 const rgShortValues = "efgtTEABCmMjrd";
 const rgLongValues = new Set(
   (

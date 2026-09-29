@@ -21,7 +21,7 @@ const behaviorCases: BehaviorRow[] = [...appdataCases, ...credentialCases, ...op
 const root = realpathSync(mkdtempSync(join(tmpdir(), "agent-guard-")));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 const home = join(root, "home");
-for (const dir of [".ssh/config.d", ".ssh/directory.pub", ".ssh/keys", ".ssh/known_hosts.backup", "project/nested", "Library/Containers"]) {
+for (const dir of [".ssh/config.d", ".ssh/directory.pub", ".ssh/keys", ".ssh/known_hosts.backup", "project/nested", "Library/Containers/com.x"]) {
   mkdirSync(join(home, dir), { recursive: true });
 }
 for (const file of [

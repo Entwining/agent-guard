@@ -85,6 +85,7 @@ export default [
   { tool: "Bash", input: "cat <<EOF | rg -rn pattern README.md\nbody\nEOF", cwd: "$H/project", claude: 0, codex: 0 },
   { tool: "Bash", input: "rg TOKEN ~/.ssh", cwd: "$H/project", claude: 2, codex: 2 },
   { tool: "Bash", input: "rg --files ~/.ssh", cwd: "$H/project", claude: 2, codex: 2 },
+  { tool: "Bash", input: "rg --files --hidden", cwd: "$H/project", claude: 2, codex: 2, reason: "hiddenSearch", note: "a hidden listing is what xargs and find -exec hand to a reader" },
   { tool: "Bash", input: "rg --files -g '**/*'", cwd: "$H", claude: 2, codex: 2 },
   { tool: "Bash", input: "rg -g 'Library/**' needle", cwd: "$H", claude: 2, codex: 2 },
   { tool: "Bash", input: "rg -g '.env*' KEY", cwd: "$H/project", claude: 2, codex: 2, note: "ruling 4: positive glob is a read target, glob-aware" },

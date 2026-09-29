@@ -228,7 +228,13 @@ export function parseScript(source: string, cwd: string, home: string): Script {
     const { children: sources, code } = resolveCommand(command, home);
     const moved = (cwd: string) => command.argv.map((w) => (w.pwd ? { ...w, text: w.text.replaceAll(scope.dir.cwd, cwd), value: w.value.replaceAll(scope.dir.cwd, cwd) } : w));
     for (const cwd of scope.dir.alternatives ?? []) script.commands.push({ ...command, cwd, argv: moved(cwd) });
-    for (const src of sources) for (const cwd of [command.cwd, ...(scope.dir.alternatives ?? [])]) parse(src, cwd);
+    for (const { source, items } of sources) {
+      for (const cwd of [command.cwd, ...(scope.dir.alternatives ?? [])]) {
+        const start = script.commands.length;
+        parse(source, cwd);
+        if (items) for (const child of script.commands.slice(start)) child.items ??= items;
+      }
+    }
     script.uninspectable.push(...code);
     for (const r of redirects) {
       if (r.direction !== "heredoc" && r.direction !== "herestring") continue;
