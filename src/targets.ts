@@ -3,7 +3,7 @@ import { basename } from "node:path";
 
 import { programName } from "./argv";
 import { absPath, expandHome } from "./paths";
-import { type Context, DEFAULT_EFFECT, specFor, specs, walkOf } from "./programs";
+import { type Context, DEFAULT_EFFECT, dataPrograms, globalOptions, specFor, specs, walkOf } from "./programs";
 import type { Command, Effect, Request, Target, Word } from "./record";
 
 const pathRoles = new Set(["arg", "path", "patfile", "option:patfile", "optarg"]);
@@ -28,10 +28,10 @@ function maker(home: string, cmd: Command, command: number, walk: Target["walk"]
   };
 }
 
-// A glued `--name=value` is a path in the value; a bare option is not, and an exclude pattern is not a file.
+// A glued `--name=value` is a path in the value; a bare option is not.
 function operandValue(word: Word): string | undefined {
   if (!word.value.startsWith("-")) return word.value;
-  return word.value.includes("=") && !word.value.startsWith("--exclude=") ? word.value.slice(word.value.indexOf("=") + 1) : undefined;
+  return word.value.includes("=") ? word.value.slice(word.value.indexOf("=") + 1) : undefined;
 }
 
 function commandTargets(cmd: Command, command: number, home: string): Target[] {
@@ -48,7 +48,8 @@ function commandTargets(cmd: Command, command: number, home: string): Target[] {
   const sends = (spec.sends ?? false) && (!spec.remote || operandWords.some(remote));
   const make = maker(home, cmd, command, walk, sends);
   const ctx: Context = { cmd, words, walk, claimed: new Set(), make };
-  const operands: Effect = spec.operands ?? DEFAULT_EFFECT;
+  // The word list of a for loop or a [[ test is not read by the shell.
+  const operands: Effect = spec.operands ?? (program ? DEFAULT_EFFECT : "use");
   const targets: Target[] = [];
   for (const redirect of cmd.redirects) {
     if ((redirect.direction === "in" || redirect.direction === "out") && redirect.target)
@@ -67,18 +68,23 @@ function commandTargets(cmd: Command, command: number, home: string): Target[] {
   if (program?.value.includes("/")) targets.push(make(program.value, program, "use", { via: "option" }));
   const start = targets.length;
   targets.push(...(spec.targets?.(ctx) ?? []));
-  for (const word of words) {
+  const options = { ...globalOptions, ...spec.options };
+  for (const [i, word] of words.entries()) {
     const value = pathRoles.has(word.role) && !ctx.claimed.has(word) ? operandValue(word) : undefined;
     if (!value) continue;
-    const effect = remote(word) ? "name" : word === destination ? spec.last! : word.role === "optarg" ? "use" : operands;
+    // An option's value takes the option's effect, glued with = or in the next word.
+    const previous = words[i - 1]?.text ?? "";
+    // The last letter of a cluster such as -lf takes the value.
+    const option = word.value.startsWith("-") ? word.value.slice(0, word.value.indexOf("=")) : /^-[^-]/.test(previous) ? `-${previous.at(-1)}` : previous;
+    const effect = remote(word) ? "name" : word === destination ? spec.last! : (options[option] ?? (word.role === "optarg" ? "use" : operands));
     targets.push(make(value, word, effect, { via: word.role === "optarg" ? "option" : "operand" }));
   }
   const lists = spec.cwd && !targets.slice(start).some((target) => target.via === "operand");
   if (lists) targets.push(make(cmd.cwd, undefined, "list", { via: spec.cwd! }));
   // A program runs in its working directory, which App Data records even when the command names nothing,
   // or when it is a program the table does not model and may read what it does not name.
-  const named = targets.some((target) => ["operand", "cwd", "scan"].includes(target.via) && target.effect !== "enter");
-  if (program && spec.operands !== "name" && !["cd", "pushd", "popd"].includes(name) && (!named || !specs.has(name))) targets.push(make(cmd.cwd, undefined, "enter", { via: "cwd", walk: "none" }));
+  const named = targets.some((target) => ["operand", "cwd", "scan"].includes(target.via) && !["enter", "name"].includes(target.effect));
+  if (program && !dataPrograms.includes(name) && !["cd", "pushd", "popd"].includes(name) && (!named || !specs.has(name))) targets.push(make(cmd.cwd, undefined, "enter", { via: "cwd", walk: "none" }));
   return targets;
 }
 

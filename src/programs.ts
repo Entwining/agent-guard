@@ -1,5 +1,6 @@
 // How each program obtains the paths it touches and what it does with them.
 // A program with no entry reads nothing the guard can name.
+import { dockerTargets } from "./docker-targets";
 import { gitTargets } from "./git-targets";
 import type { Command, Effect, Target, Word } from "./record";
 import { searchTargets } from "./search-targets";
@@ -25,8 +26,9 @@ export interface Context {
 }
 
 export interface ProgramSpec {
-  operands?: Effect; // default: DEFAULT_EFFECT
+  operands?: Effect; // default "read": a program the table does not model reads every path it is handed
   walk?: Walk | { recursive: RegExp }; // default "visible"; { recursive } is "visible" only when an option matches
+  options?: Record<string, Effect>; // effect of an option's value, glued with = or separate
   last?: Effect; // the final operand
   sends?: boolean; // reads leave the machine
   remote?: RegExp; // an operand on another machine is a name; with `sends`, reads leave only when an operand is remote
@@ -34,14 +36,20 @@ export interface ProgramSpec {
   targets?: (ctx: Context) => Target[];
 }
 
-export const DEFAULT_EFFECT: Effect = "use";
+export const DEFAULT_EFFECT: Effect = "read";
 
+// Programs that read only the paths they are handed, so a command that names another directory does not read the working directory.
 export const readers = (
   "cat head tail less more bat sed awk jq yq base64 xxd od strings diff openssl plutil cp tee tar source . sort " +
   "uniq cut nl fold rev paste comm join iconv hexdump hd zcat gzcat bzcat xzcat ag ack tac column pr vim vi nvim view perl ruby dd scp rsync zip ed ex hg svn sh bash zsh dash ksh wget php zgrep zless zmore"
 ).split(" ");
-const dataPrograms = "echo printf print : true false export set unset typeset declare local".split(" ");
-const noWalk = "stat test [ mkdir mv cd pushd popd".split(" ");
+export const dataPrograms = "echo printf print : true false export set unset typeset declare local".split(" ");
+// Metadata, counts and digests: no content reaches the output.
+const meta = "stat test [ [[ chmod chown chgrp chflags touch rm rmdir mkdir mv ln wc file shasum sha1sum sha256sum md5 md5sum cksum realpath readlink basename dirname".split(" ");
+const noWalk = new Set("stat test [ mkdir mv".split(" "));
+
+// The value of these options is consumed by the program, not read into the output.
+export const globalOptions: Record<string, Effect> = { "--env-file": "use", "--kubeconfig": "use", "--exclude": "name", "--exclude-dir": "name", "--include": "name" };
 
 const remote = /^(rsync:\/\/|([^/@:]+@)?[^/@:]+:)/;
 const lsRecursive = /^(--recursive$|-[^-]*R)/;
@@ -155,7 +163,7 @@ function tarTargets({ words, make, claimed }: Context): Target[] {
   return targets;
 }
 
-// URLs are names; the file that holds the request body leaves the machine, and the output document is written.
+// The file that holds the request body leaves the machine, and the output document is written.
 function wgetTargets({ words, make, claimed }: Context): Target[] {
   const targets: Target[] = [];
   for (const [i, word] of words.entries()) {
@@ -163,7 +171,6 @@ function wgetTargets({ words, make, claimed }: Context): Target[] {
     const long = /^--(post-file|body-file|input-file|output-document)(=|$)/.exec(text);
     const short = /^-[^-]*([iO])$/.exec(text);
     const key = long?.[1] ?? short?.[1];
-    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) claimed.add(word);
     if (!key) continue;
     const value = text.includes("=") ? word : words[i + 1];
     if (!value) continue;
@@ -208,26 +215,33 @@ const filterTargets =
   };
 
 export const specs = new Map<string, ProgramSpec>();
-for (const name of readers) specs.set(name, { operands: "read" });
+for (const name of readers) specs.set(name, {});
 for (const name of dataPrograms) specs.set(name, { operands: "name", walk: "none" });
-for (const name of noWalk) specs.set(name, { walk: "none" });
-specs.set("jq", { operands: "read", targets: filterTargets([]) });
-specs.set("yq", { operands: "read", targets: filterTargets(["eval", "e", "eval-all", "ea"]) });
-specs.set("gh", { operands: "read" });
+for (const name of meta) specs.set(name, { operands: "meta", ...(noWalk.has(name) && { walk: "none" as const }) });
+for (const name of ["cd", "pushd", "popd"]) specs.set(name, { operands: "enter", walk: "none" });
+specs.set("jq", { targets: filterTargets([]) });
+specs.set("yq", { targets: filterTargets(["eval", "e", "eval-all", "ea"]) });
+specs.set("gh", {});
 specs.set("ls", { operands: "list", walk: { recursive: lsRecursive }, cwd: "cwd" });
 specs.set("tree", { operands: "list", cwd: "scan" });
-specs.set("du", { cwd: "scan" });
-specs.set("cp", { operands: "read", last: "write", walk: { recursive: anyRecursive } });
+specs.set("du", { operands: "list", cwd: "scan" });
+specs.set("cp", { last: "write", walk: { recursive: anyRecursive } });
 specs.set("dd", { walk: "none", targets: ddTargets });
-specs.set("tar", { operands: "read", targets: tarTargets });
+specs.set("tar", { targets: tarTargets });
 specs.set("tee", { operands: "write" });
 specs.set("install", { last: "write" });
-specs.set("scp", { operands: "read", last: "write", sends: true, remote });
-specs.set("rsync", { operands: "read", last: "write", sends: true, remote });
-specs.set("wget", { operands: "read", targets: wgetTargets });
-specs.set("curl", { targets: curlTargets });
+specs.set("scp", { options: { "-i": "use", "-F": "use" }, last: "write", sends: true, remote });
+specs.set("rsync", { last: "write", sends: true, remote });
+specs.set("wget", { operands: "name", targets: wgetTargets });
+specs.set("curl", { operands: "name", options: { "--cacert": "use", "--capath": "use", "--cert": "use", "--key": "use", "-E": "use", "--netrc-file": "use" }, targets: curlTargets });
 specs.set("git", { targets: gitTargets });
-for (const name of ["rg", "grep", "ag", "ack"]) specs.set(name, { operands: "read", targets: (ctx) => searchTargets(name, ctx) });
+specs.set("docker", { operands: "name", targets: dockerTargets });
+specs.set("ssh", { operands: "name", options: { "-i": "use", "-F": "use" } });
+specs.set("ssh-add", { operands: "use" });
+specs.set("ssh-keygen", { options: { "-f": "use" } });
+specs.set("dotenvx", { options: { "-f": "use" } });
+for (const name of ["npm", "pnpm", "yarn"]) specs.set(name, { options: { "--userconfig": "use" } });
+for (const name of ["rg", "grep", "ag", "ack"]) specs.set(name, { targets: (ctx) => searchTargets(name, ctx) });
 specs.set("find", { operands: "list", cwd: "scan", targets: findTargets });
 specs.set("fd", { operands: "list", cwd: "scan" });
 

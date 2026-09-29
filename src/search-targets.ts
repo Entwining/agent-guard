@@ -12,9 +12,12 @@ export function searchTargets(name: string, { cmd, words, make, claimed }: Conte
   // Listing names, or printing help, reads no content; a hidden listing feeds what reads it.
   const effect: Effect = help || (files && walk !== "hidden") ? "list" : "read";
   const targets: Target[] = [];
-  for (const word of words) {
+  for (const [i, word] of words.entries()) {
+    // The file these options name holds ignore rules that the search reads.
+    const owner = word.role === "optarg" ? words[i - 1] : word.role === "option:optarg" ? word : undefined;
     if (word.role === "path") targets.push(make(word.value, word, effect, { via: "operand", walk }));
     else if (word.role === "patfile" || word.role === "option:patfile") targets.push(make(word.value, word, effect, { via: "option", walk: "none" }));
+    else if (owner && /^--(ignore-file|exclude-from)(=|$)/.test(owner.text)) targets.push(make(word.value, word, "read", { via: "option", walk: "none" }));
     else continue;
     claimed.add(word);
   }
