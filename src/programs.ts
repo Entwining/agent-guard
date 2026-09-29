@@ -29,6 +29,7 @@ export interface ProgramSpec {
   walk?: Walk | { recursive: RegExp }; // default "visible"; { recursive } is "visible" only when an option matches
   last?: Effect; // the final operand
   sends?: boolean; // reads leave the machine
+  remote?: RegExp; // an operand on another machine is a name; with `sends`, reads leave only when an operand is remote
   cwd?: "cwd" | "scan"; // a command with no path operand lists its working directory
   targets?: (ctx: Context) => Target[];
 }
@@ -42,6 +43,7 @@ export const readers = (
 const dataPrograms = "echo printf print : true false export set unset typeset declare local".split(" ");
 const noWalk = "stat test [ mkdir mv cd pushd popd".split(" ");
 
+const remote = /^(rsync:\/\/|([^/@:]+@)?[^/@:]+:)/;
 const lsRecursive = /^(--recursive$|-[^-]*R)/;
 const anyRecursive = /^(--recursive$|-[^-]*[rR])/;
 
@@ -67,7 +69,7 @@ function curlTargets({ words, make, claimed }: Context): Target[] {
     }
     let key = "";
     let value = "";
-    const long = /^--(data|data-ascii|data-binary|data-urlencode|json|form|header|upload-file|config)(=|$)/s.exec(text);
+    const long = /^--(data|data-ascii|data-binary|data-urlencode|json|form|header|upload-file|config|output|dump-header)(=|$)/s.exec(text);
     if (long) {
       key = long[1]!;
       value = text.includes("=") ? text.slice(text.indexOf("=") + 1) : (words[++i]?.text ?? "");
@@ -92,6 +94,10 @@ function curlTargets({ words, make, claimed }: Context): Target[] {
         true,
       );
     else if (["T", "upload-file", "K", "config"].includes(key)) read(value, from);
+    else if (["o", "output", "D", "dump-header"].includes(key) && value) {
+      claimed.add(from);
+      targets.push(make(value, from, "write", { via: "option" }));
+    }
   }
   return targets;
 }
@@ -106,12 +112,28 @@ function ddTargets({ words, make, claimed }: Context): Target[] {
   return targets;
 }
 
+// A cluster of tar's short options, such as `-czf`, or the first word without a dash.
+const tarCluster = (word: Word, i: number) => !word.text.startsWith("--") && (word.text.startsWith("-") || i === 0);
+
+// The archive is the value of -f or --file.
+function tarArchive(words: Word[]): Word | undefined {
+  for (const [i, word] of words.entries()) if (word.text === "--file" || (tarCluster(word, i) && /^-?[^Cf]*f/.test(word.text))) return words[i + 1];
+  return words.find((word) => word.text.startsWith("--file="));
+}
+
 // A directory given to -C is entered, and later operands are relative to it.
 function tarTargets({ words, make, claimed }: Context): Target[] {
   const targets: Target[] = [];
   let base: string | undefined;
+  const creates = words.some((word, i) => word.text === "--create" || (tarCluster(word, i) && /^-?[^CfT]*c/.test(word.text)));
+  const archive = tarArchive(words);
+  if (archive) {
+    claimed.add(archive);
+    targets.push(make(archive.text.replace(/^--file=/, ""), archive, creates ? "write" : "read", { via: "option" }));
+  }
   for (const [i, word] of words.entries()) {
     const text = word.text;
+    if (word === archive) continue;
     if (/^--exclude=/.test(text)) {
       claimed.add(word);
       continue;
@@ -129,6 +151,26 @@ function tarTargets({ words, make, claimed }: Context): Target[] {
     const target = make(dir, word, "enter", { via: "option", base });
     targets.push(target);
     base = target.path;
+  }
+  return targets;
+}
+
+// URLs are names; the file that holds the request body leaves the machine, and the output document is written.
+function wgetTargets({ words, make, claimed }: Context): Target[] {
+  const targets: Target[] = [];
+  for (const [i, word] of words.entries()) {
+    const text = word.text;
+    const long = /^--(post-file|body-file|input-file|output-document)(=|$)/.exec(text);
+    const short = /^-[^-]*([iO])$/.exec(text);
+    const key = long?.[1] ?? short?.[1];
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) claimed.add(word);
+    if (!key) continue;
+    const value = text.includes("=") ? word : words[i + 1];
+    if (!value) continue;
+    claimed.add(value);
+    const path = value === word ? text.slice(text.indexOf("=") + 1) : value.text;
+    const write = key === "output-document" || key === "O";
+    targets.push(make(path, value, write ? "write" : "read", { via: "option", sends: key === "post-file" || key === "body-file" }));
   }
   return targets;
 }
@@ -178,8 +220,11 @@ specs.set("du", { cwd: "scan" });
 specs.set("cp", { operands: "read", last: "write", walk: { recursive: anyRecursive } });
 specs.set("dd", { walk: "none", targets: ddTargets });
 specs.set("tar", { operands: "read", targets: tarTargets });
-specs.set("scp", { operands: "read", last: "write", sends: true });
-specs.set("rsync", { operands: "read", last: "write", sends: true });
+specs.set("tee", { operands: "write" });
+specs.set("install", { last: "write" });
+specs.set("scp", { operands: "read", last: "write", sends: true, remote });
+specs.set("rsync", { operands: "read", last: "write", sends: true, remote });
+specs.set("wget", { operands: "read", targets: wgetTargets });
 specs.set("curl", { targets: curlTargets });
 specs.set("git", { targets: gitTargets });
 for (const name of ["rg", "grep", "ag", "ack"]) specs.set(name, { operands: "read", targets: (ctx) => searchTargets(name, ctx) });

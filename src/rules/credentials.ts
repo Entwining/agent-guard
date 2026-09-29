@@ -11,11 +11,7 @@ const { file: fileReason, upload: uploadReason, ssh: sshReason, grepSsh: grepSsh
 
 function targetReason(target: Target, home: string): string | undefined {
   const reason = target.sends ? uploadReason : fileReason;
-  if (target.effect === "write") {
-    // A destination that is itself a listed file.
-    if (target.via === "operand" && isSensitive(target.path, target.glob)) return reason;
-    return sshPrivate(target.path) ? sshReason : undefined;
-  }
+  if (target.effect === "write") return sshPrivate(target.path) ? sshReason : undefined;
   if (target.effect !== "read") return undefined;
   if (target.walk === "hidden") return hiddenSearchReason;
   // A directory that holds a listed file is read whole.

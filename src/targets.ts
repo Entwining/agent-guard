@@ -41,7 +41,12 @@ function commandTargets(cmd: Command, command: number, home: string): Target[] {
   // A command with no program, such as a for loop's word list, still names paths.
   const words = cmd.argv.slice(cmd.program + 1);
   const walk = walkOf(spec, name, words);
-  const make = maker(home, cmd, command, walk, spec.sends ?? false);
+  const operandWords = words.filter((word) => !word.text.startsWith("-"));
+  const destination = spec.last ? operandWords.at(-1) : undefined;
+  const remote = (word: Word) => spec.remote?.test(word.value) ?? false;
+  // A copy sends what it reads only when it names another machine; a local copy keeps its reads on this one.
+  const sends = (spec.sends ?? false) && (!spec.remote || operandWords.some(remote));
+  const make = maker(home, cmd, command, walk, sends);
   const ctx: Context = { cmd, words, walk, claimed: new Set(), make };
   const operands: Effect = spec.operands ?? DEFAULT_EFFECT;
   const targets: Target[] = [];
@@ -62,10 +67,11 @@ function commandTargets(cmd: Command, command: number, home: string): Target[] {
   if (program?.value.includes("/")) targets.push(make(program.value, program, "use", { via: "option" }));
   const start = targets.length;
   targets.push(...(spec.targets?.(ctx) ?? []));
-  const destination = spec.last ? words.filter((word) => !word.text.startsWith("-")).at(-1) : undefined;
   for (const word of words) {
     const value = pathRoles.has(word.role) && !ctx.claimed.has(word) ? operandValue(word) : undefined;
-    if (value) targets.push(make(value, word, word === destination ? spec.last! : word.role === "optarg" ? "use" : operands, { via: word.role === "optarg" ? "option" : "operand" }));
+    if (!value) continue;
+    const effect = remote(word) ? "name" : word === destination ? spec.last! : word.role === "optarg" ? "use" : operands;
+    targets.push(make(value, word, effect, { via: word.role === "optarg" ? "option" : "operand" }));
   }
   const lists = spec.cwd && !targets.slice(start).some((target) => target.via === "operand");
   if (lists) targets.push(make(cmd.cwd, undefined, "list", { via: spec.cwd! }));
