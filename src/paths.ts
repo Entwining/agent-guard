@@ -1,5 +1,4 @@
 // Filesystem checks run after lexical denials to avoid touching protected trees.
-import { realpathSync, statSync } from "node:fs";
 import { userInfo } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 
@@ -48,10 +47,14 @@ export function expandHome(path: string, home: string): string {
   return path;
 }
 
+// /System/Volumes/Data is the same tree as the root through firmlinks, so a path spelled through it is judged as the plain path. Case is ignored
+// because the default APFS volume ignores it.
+export const unfirmlink = (path: string): string => path.replace(/^\/System\/Volumes\/Data(?=\/|$)/i, "") || "/";
+
 // curl, open and git read a file:// URL as the path it names.
 export function absPath(path: string, cwd: string, home: string, quoted = false): string {
   if (!quoted) path = expandHome(path, home);
-  return resolve(cwd, path.replace(/^file:\/\//i, ""));
+  return unfirmlink(resolve(cwd, path.replace(/^file:\/\//i, "")));
 }
 
 // Whether the shell could expand the glob's leading segments to `directory`, so
@@ -101,7 +104,7 @@ export function isLibrary(path: string, home: string): boolean {
   return path.toLowerCase() === `${home}/library`.toLowerCase() || isAppdata(path, home);
 }
 
-const sshPublic = (name: string) => /^(config|config\..*|.*\.pub|allowed_signers|known_hosts.*)$/s.test(name);
+export const sshPublic = (name: string) => /^(config|config\..*|.*\.pub|allowed_signers|known_hosts.*)$/s.test(name);
 
 // Under ~/.ssh only a top-level client config, public key, allowed_signers or
 // known_hosts file is public.
@@ -209,61 +212,4 @@ export function isSensitiveRoot(path: string, home: string): boolean {
       .map((_, i, parts) => `${home.toLowerCase()}/${parts.slice(0, i + 1).join("/")}`),
   );
   return isSensitive(path) || credentialRoots.includes(basename(lower)) || listedDirectories.some((dir) => lower.endsWith(`/${dir}`)) || ancestors.includes(lower);
-}
-
-// A path that does not exist or cannot be searched has no inode to compare.
-function stat(path: string) {
-  try {
-    return statSync(path);
-  } catch {
-    return undefined;
-  }
-}
-
-function sameFile(a: string, b: string): boolean {
-  if (a === b) return true;
-  const x = stat(a);
-  const y = stat(b);
-  return x !== undefined && y !== undefined && x.dev === y.dev && x.ino === y.ino;
-}
-
-function real(path: string): string {
-  try {
-    return realpathSync(path);
-  } catch {
-    return path;
-  }
-}
-
-function kind(path: string): "dir" | "file" | "other" {
-  const st = stat(path);
-  return st?.isDirectory() ? "dir" : st?.isFile() ? "file" : "other";
-}
-
-// Filesystem check for a file tool target, or a search root when search is
-// set. It follows symlinks and compares inodes so a link or a case alias of
-// ~/.ssh resolves to the directory it names.
-export function sshScopeDenied(target: string, home: string, search: boolean): boolean {
-  const ssh = `${home}/.ssh`;
-  const candidates = [...new Set([target, real(target)])];
-  const roots = [...new Set([ssh, real(ssh)])];
-  for (const candidate of candidates) {
-    for (const root of roots) {
-      if (sameFile(candidate, root)) return true;
-      if (search) {
-        for (let parent = root; parent !== "/";) {
-          parent = dirname(parent);
-          if (sameFile(candidate, parent)) return true;
-        }
-      }
-      for (let parent = candidate; parent !== "/";) {
-        parent = dirname(parent);
-        if (!sameFile(parent, root)) continue;
-        if (parent !== dirname(candidate) || !sshPublic(basename(candidate))) return true;
-        if (kind(target) === "dir") return true;
-        if (search && kind(target) !== "file") return true;
-      }
-    }
-  }
-  return false;
 }

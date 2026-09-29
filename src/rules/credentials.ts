@@ -1,9 +1,10 @@
 // Credential rules: keep credential files and private keys out of what the
 // model reads. Clients that consume a credential file themselves (dotenvx, node
 // --env-file, ssh -i) are not readers and stay allowed.
-import { isSensitive, isSensitiveRoot, sshPrivate, sshScopeDenied } from "../paths";
+import { isSensitive, isSensitiveRoot, sshPrivate } from "../paths";
 import { reasons } from "../reasons";
 import type { Request, Target } from "../record";
+import { sshScopeDenied } from "../ssh";
 import { secretReasons, secretSignatures } from "./secrets";
 
 const { file: fileReason, codeFile: codeFileReason, upload: uploadReason, ssh: sshReason, grepSsh: grepSshReason, hiddenSearch: hiddenSearchReason } = reasons;
@@ -35,7 +36,7 @@ export function credentialRules(req: Request, targets: Target[]): string[] {
   return denials;
 }
 
-// The core runs this last: it follows symlinks, so it touches the filesystem.
+// The core runs this last: it compares inodes, so it touches the filesystem.
 export function credentialFilesystemRules(req: Request, targets: Target[]): string[] {
   for (const target of targets) {
     if (!["read", "write", "list"].includes(target.effect) || target.via === "items" || (target.via === "tool" && target.glob)) continue;

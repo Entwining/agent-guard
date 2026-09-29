@@ -192,6 +192,18 @@ describe("faults deny instead of passing", () => {
     expect(out).toMatchObject({ exit: 2, stderr: expect.stringMatching(/^DENIED: This reads a protected macOS app-data directory/) });
   });
 
+  test("a HOME spelled through a link still protects App Data behind a link", async () => {
+    const { h, guard } = install();
+    mkdirSync(join(h, "Library/Containers/com.x"), { recursive: true });
+    symlinkSync(join(h, "Library/Containers"), join(h, "project/data-link"));
+    const alias = `${h}-alias`;
+    symlinkSync(h, alias);
+    temporary.push(alias);
+    const event = { tool_name: "Bash", cwd: join(alias, "project"), tool_input: { command: "cat data-link/com.x/a.txt" } };
+    const out = await run(h, ["/usr/bin/env", `HOME=${alias}`, guard, "--runtime", "claude"], event);
+    expect(out).toMatchObject({ exit: 2, stderr: expect.stringMatching(/^DENIED: This reads a protected macOS app-data directory/) });
+  });
+
   test("the outer deadline kills the guard group when the supervisor stalls", async () => {
     const { h, pkg, guard } = install();
     const pidFile = join(h, "stalled-guard.pid");

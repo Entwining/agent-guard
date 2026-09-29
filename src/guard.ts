@@ -5,6 +5,7 @@
 // working directory, stands in when the event names none. Exit 0 means no
 // objection and exit 2 denies with the reason on stderr. The wrapper turns
 // every other outcome into a denial.
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -46,7 +47,9 @@ const [tool, field] = fields[(string(event.tool_name) ?? "Bash").toLowerCase()] 
 // Grep searches the working directory when it names no path.
 const value = field && (tool === "grep" && input[field] === undefined ? "" : string(input[field]));
 if (field && value === undefined) throw new Error(`tool_input.${field} is not a string`);
-const request = tool && value !== undefined ? buildRequest(runtime, tool, cwd, value, string(input["glob"]) ?? "", resolve(homedir())) : undefined;
+// The link walk reports physical paths, so a home directory spelled through a link (`/tmp`) is compared by the spelling the walk reports.
+// The home directory is not inside App Data, so resolving it cannot search a protected tree.
+const request = tool && value !== undefined ? buildRequest(runtime, tool, cwd, value, string(input["glob"]) ?? "", realpathSync(resolve(homedir()))) : undefined;
 const reason = request && evaluate(request);
 if (reason) {
   console.error(runtime === "claude" ? `DENIED: ${reason} Do NOT bypass this restriction or retry the same blocked command.` : reason);

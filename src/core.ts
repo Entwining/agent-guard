@@ -46,11 +46,11 @@ export function evaluate(req: Request): string | undefined {
     try {
       const linked = linkedTargets(targets, req.home);
       if (linked) denials.push(...appdataRules(req, linked), ...credentialRules(req, linked));
+      if (!denials.length) denials.push(...credentialFilesystemRules(req, linked ?? targets));
     } catch {
       denials.push(reasons.symlink);
     }
   }
-  if (!denials.length) denials.push(...credentialFilesystemRules(req, targets));
   return denials[0];
 }
 
