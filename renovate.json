@@ -4,9 +4,9 @@
   "timezone": "Asia/Singapore",
   "description": [
     "main has no required status checks, so platformAutomerge stays false and Renovate waits for PR checks before merging.",
-    "This repository does not use semantic commit prefixes, so disable Renovate's history-based autodetection."
+    "This repository writes type-prefixed commit subjects itself, so Renovate follows the same convention."
   ],
-  "semanticCommits": "disabled",
+  "semanticCommits": "enabled",
   "updateNotScheduled": false,
   "platformAutomerge": false,
   "lockFileMaintenance": {
