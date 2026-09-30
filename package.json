@@ -1,6 +1,6 @@
 {
   "name": "@loophubs/agent-guard",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Blocks filesystem scans and credential reads that macOS records as TCC App Data access, and points the agent at a safe alternative.",
   "homepage": "https://github.com/LoopHubs/agent-guard#readme",
   "bugs": {
