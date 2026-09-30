@@ -1,5 +1,5 @@
+import type { Effect, Target, Word } from "../record";
 import type { Context } from "./programs";
-import type { Effect, Target, Word } from "./record";
 
 // Subcommands that print the content of a file, a commit, or the index.
 const printing = new Set(["show", "diff", "log", "cat-file", "blame", "annotate", "grep", "archive", "format-patch", "whatchanged", "difftool", "diff-index", "diff-tree", "credential"]);
@@ -76,10 +76,12 @@ export function gitTargets({ words, make, claimed }: Context): Target[] {
   // Operands are relative to the directory the last -C or --work-tree names.
   let base: string | undefined;
   while (i < words.length && words[i]!.text.startsWith("-")) {
-    const glued = /^--work-tree=(.*)$/s.exec(words[i]!.text);
-    const takesValue = !glued && valueOptions.includes(words[i]!.text);
+    const text = words[i]!.text;
+    const glued = /^--work-tree=(.*)$/s.exec(text);
+    if (/^--(?:namespace|exec-path)=/.test(text)) claimed.add(words[i]!);
+    const takesValue = !glued && valueOptions.includes(text);
     const value = glued ? words[i] : words[i + 1];
-    if ((glued || (takesValue && ["-C", "--work-tree"].includes(words[i]!.text))) && value) {
+    if ((glued || (takesValue && ["-C", "--work-tree"].includes(text))) && value) {
       claimed.add(value);
       const target = make(glued ? glued[1]! : value.text, value, "enter", { via: "option", base });
       targets.push(target);

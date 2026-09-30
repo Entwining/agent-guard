@@ -1,4 +1,4 @@
-import type { Word } from "./record";
+import type { Word } from "../record";
 
 // Per interpreter: the short flags after which the code follows, in the rest of the cluster when `glued` and in the next word otherwise,
 // and the flags whose value is the rest of the cluster, so a value such as `-rtime` does not read its last letter as a code flag.

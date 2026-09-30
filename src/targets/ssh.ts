@@ -1,5 +1,5 @@
+import type { Effect, Target } from "../record";
 import type { Context } from "./programs";
-import type { Effect, Target } from "./record";
 
 // `-o KEY=VALUE`, `-o "KEY VALUE"` and `-oKEY=VALUE` set a client option; these keys name a file the client reads or writes.
 const sshFileOptions: Record<string, Effect> = { identityfile: "use", certificatefile: "use", globalknownhostsfile: "use", userknownhostsfile: "write", revokedhostkeys: "use", pkcs11provider: "use" };
@@ -7,8 +7,8 @@ const sshFileOptions: Record<string, Effect> = { identityfile: "use", certificat
 // The option letters that take a value, from each client's synopsis in the OpenSSH 10.3p1 manual page; the first one in a cluster takes the rest of the word or the next word.
 const valueLetters: Record<string, string> = { ssh: "BDEFIJLOPQRSWbceilmopw", scp: "DFJPSXcilo", sftp: "BDFJPRSXbcilos" };
 
-// The client uses the identity and configuration files itself (sftp passes them to ssh), and ssh writes its log file.
-const letterEffects: Record<string, Effect> = { i: "use", F: "use", E: "write" };
+// The client consumes identity files, configuration files, and -S transport operands itself; -E writes its log.
+const letterEffects: Record<string, Effect> = { i: "use", F: "use", S: "use", E: "write" };
 
 // ssh reads options before and right after the destination, scp and sftp before their first operand; later words are the remote command or operands.
 export const sshTargets =

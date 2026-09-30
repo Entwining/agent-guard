@@ -1,7 +1,4 @@
-// App Data rules. macOS records a Files & Folders App Data entry whenever a
-// process reads or enumerates another app's ~/Library data tree, so these deny
-// those reads and the broad walks that reach them.
-import { appdataTrees, isAppdata, isBroad, isLibrary } from "../paths";
+import { appdataTrees, isAppdata, isBroad, isLibrary } from "../filesystem/paths";
 import { reasons } from "../reasons";
 import type { Request, Target } from "../record";
 

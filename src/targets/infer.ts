@@ -1,10 +1,10 @@
 // Turn a request into inferred targets under modelled command semantics, each with what the command is modelled to do to it.
 import { basename } from "node:path";
 
-import { programName } from "./argv";
-import { absPath, expandHome } from "./paths";
+import { absPath, expandHome } from "../filesystem/paths";
+import type { Command, Effect, Request, Target, Word } from "../record";
+import { programName } from "../shell/argv";
 import { type Context, DEFAULT_EFFECT, dataPrograms, globalOptions, specFor, specs, walkOf } from "./programs";
-import type { Command, Effect, Request, Target, Word } from "./record";
 
 const pathRoles = new Set(["arg", "path", "patfile", "option:patfile", "optarg"]);
 
@@ -20,7 +20,7 @@ function maker(home: string, cmd: Command, command: number, walk: Target["walk"]
       effect,
       walk: options.walk ?? walk,
       sends: options.sends ?? sends,
-      expands: word?.expands ?? false,
+      expands: options.expands ?? word?.expands ?? false,
       via: options.via ?? "operand",
       search: options.search ?? false,
       command,
@@ -74,7 +74,7 @@ function commandTargets(cmd: Command, command: number, home: string): Target[] {
   const targets: Target[] = [];
   for (const redirect of cmd.redirects) {
     if ((redirect.direction === "in" || redirect.direction === "out") && redirect.target)
-      targets.push(make(redirect.target, undefined, redirect.direction === "in" ? "read" : "write", { via: "redirect", glob: redirect.globs }));
+      targets.push(make(redirect.target, undefined, redirect.direction === "in" ? "read" : "write", { via: "redirect", glob: redirect.globs, expands: redirect.expands }));
   }
   if (cmd.items && program) targets.push(make(cmd.items.root, undefined, operands, { via: "items", glob: false, walk: cmd.items.hidden ? "hidden" : "visible" }));
   // xargs reads its arguments from the -a file.

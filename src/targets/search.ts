@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 
+import type { Effect, Target } from "../record";
 import type { Context } from "./programs";
-import type { Effect, Target } from "./record";
 
 // rg, grep, ag and ack: the roles search-roles.ts gave the words say which are roots, pattern files and globs.
 export function searchTargets(name: string, { cmd, words, make, claimed }: Context): Target[] {

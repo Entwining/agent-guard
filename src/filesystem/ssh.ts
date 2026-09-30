@@ -14,14 +14,14 @@ function stat(path: string) {
   }
 }
 
-function sameFile(a: string, b: string): boolean {
+function sameFileOnDisk(a: string, b: string): boolean {
   if (a === b) return true;
   const x = stat(a);
   const y = stat(b);
   return x !== undefined && y !== undefined && x.dev === y.dev && x.ino === y.ino;
 }
 
-function kind(path: string): "dir" | "file" | "other" {
+function kindOnDisk(path: string): "dir" | "file" | "other" {
   const st = stat(path);
   return st?.isDirectory() ? "dir" : st?.isFile() ? "file" : "other";
 }
@@ -35,12 +35,16 @@ function near(path: string, root: string, search: boolean): boolean {
 // Filesystem check for a file tool target, or a search root when search is set. It compares inodes so a case alias of ~/.ssh resolves to the
 // directory it names. Only a path whose spelling, or whose readlink-followed spelling, is already at or under ~/.ssh is compared: the inode
 // probes follow links, so a target that is not established to be in ~/.ssh scope is never handed to them. When ~/.ssh scope leads into App Data
-// the comparison is skipped and the target is denied, because stat would search that tree.
-export function sshScopeDenied(target: string, home: string, search: boolean): boolean {
+// the comparison is skipped and the target is denied, because stat would search that tree. A target holding an expansion the guard cannot
+// resolve (`exact` false) names no path that exists yet, so it is judged by spelling alone and is never handed to stat.
+export function sshScopeDenied(target: string, home: string, search: boolean, exact = true): boolean {
+  const sameFile = exact ? sameFileOnDisk : (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const kind = exact ? kindOnDisk : () => "other";
   const ssh = `${home}/.ssh`;
   const appdataOnly = (path: string) => isAppdata(path, home);
   const roots = [...new Set([ssh, followLinks(ssh, home, appdataOnly)])];
-  const candidates = [...new Set([target, followLinks(target, home, appdataOnly)])];
+  // An unresolved target arrives with the links in its fixed prefix already followed.
+  const candidates = exact ? [...new Set([target, followLinks(target, home, appdataOnly)])] : [target];
   if (!candidates.some((candidate) => roots.some((root) => near(candidate, root, search)))) return false;
   if ([...roots, ...candidates].some((path) => isAppdata(path, home))) return true;
   for (const candidate of candidates) {

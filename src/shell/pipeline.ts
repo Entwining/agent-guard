@@ -1,8 +1,8 @@
 import { basename } from "node:path";
 
+import type { Command, Word } from "../record";
+import { showsHidden } from "../targets/search-roles";
 import { stdinKind } from "./argv";
-import type { Command, Word } from "./record";
-import { showsHidden } from "./search-roles";
 
 // A dotfile name, or a glob the shell expands to dotfiles; `.` and `..` are directories.
 const hiddenName = (text: string) => /^\.(?!\.?$)/.test(basename(text));

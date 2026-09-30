@@ -1,11 +1,12 @@
+import { reasons } from "../reasons";
+import type { Command } from "../record";
 // Secrets that print without a path: environment and variable dumps, stored
 // tokens, verbose HTTP traces. No target exists to check, so these name the
 // command that prints them. Each is a workaround that stays until the operating
 // system's read restrictions cover the store; do not extend the list.
-import { programName } from "../argv";
-import { curlValueLetters, readers } from "../programs";
-import { reasons } from "../reasons";
-import type { Command } from "../record";
+import { programName } from "../shell/argv";
+import { curlValueLetters } from "../targets/curl";
+import { readers } from "../targets/programs";
 
 const { dump: dumpReason, variable: varReason, token: tokenReason, keychain: keychainReason, trace: traceReason, secretPrint: secretReason } = reasons;
 
@@ -130,7 +131,7 @@ export function secretSignatures(fragment: string): string[] {
   for (const segment of fragment.replace(/&&|\|\||\n/g, ";").split(";")) {
     if (
       /(^|[^A-Za-z0-9_-])printenv([^A-Za-z0-9_-]|$)/.test(segment) ||
-      /(^|[|(])\s*(env|export|set|typeset|declare)\s*($|[|>)])/.test(segment) ||
+      /^\s*\(*\s*(env|export|set|typeset|declare)\s*($|[|>)])/.test(segment) ||
       /(declare|typeset|export)\s+-[a-z]*[px]/.test(segment)
     )
       denials.push(dumpReason);

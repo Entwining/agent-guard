@@ -1,8 +1,8 @@
 import type { DblQuoted, Lit, Node, ParamExp, SglQuoted, Word as WordNode } from "mvdan-sh";
 import sh from "mvdan-sh";
 
-import { expandHome } from "./paths";
-import type { Word } from "./record";
+import { expandHome } from "../filesystem/paths";
+import type { Word } from "../record";
 
 const type = sh.syntax.NodeType;
 

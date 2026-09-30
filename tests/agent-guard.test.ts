@@ -4,13 +4,16 @@ import { tmpdir, userInfo } from "node:os";
 import { basename, dirname, join } from "node:path";
 
 import { buildRequest, evaluate, suggestions } from "../src/core";
-import { probes } from "../src/probes";
+import { probes } from "../src/filesystem/probes";
 import { reasons } from "../src/reasons";
 import type { Tool } from "../src/record";
+import { extractTargets } from "../src/targets/infer";
 import appdataCases from "./fixtures/appdata.test";
 import clientCases from "./fixtures/clients.test";
 import credentialCases from "./fixtures/credentials.test";
 import cwdCases from "./fixtures/cwd.test";
+import { filesystem } from "./fixtures/filesystem";
+import interpreterCases from "./fixtures/interpreters.test";
 import optionCases from "./fixtures/options.test";
 import programCases from "./fixtures/programs.test";
 import readerCases from "./fixtures/readers.test";
@@ -18,7 +21,18 @@ import searchCases from "./fixtures/search.test";
 import shellCases from "./fixtures/shell.test";
 import type { BehaviorRow } from "./fixtures/types.test";
 
-const behaviorCases: BehaviorRow[] = [...appdataCases, ...clientCases, ...credentialCases, ...optionCases, ...programCases, ...readerCases, ...searchCases, ...cwdCases, ...shellCases];
+const behaviorCases: BehaviorRow[] = [
+  ...appdataCases,
+  ...clientCases,
+  ...credentialCases,
+  ...optionCases,
+  ...programCases,
+  ...readerCases,
+  ...searchCases,
+  ...cwdCases,
+  ...shellCases,
+  ...interpreterCases,
+];
 
 // Resolve the temp root so symlinked prefixes cannot hide paths under test.
 const root = realpathSync(mkdtempSync(join(tmpdir(), "agent-guard-")));
@@ -28,37 +42,14 @@ afterAll(() => {
   chmodSync(locked, 0o755);
   rmSync(root, { recursive: true, force: true });
 });
-for (const dir of [".ssh/config.d", ".ssh/directory.pub", ".ssh/keys", ".ssh/known_hosts.backup", "project/nested", "project/locked", "Library/Containers/com.x"]) {
+for (const dir of filesystem.directories) {
   mkdirSync(join(home, dir), { recursive: true });
 }
-for (const file of [
-  ".ssh/allowed_signers",
-  ".ssh/config",
-  ".ssh/config.d/nested.pub",
-  ".ssh/config.d/private",
-  ".ssh/config.work",
-  ".ssh/directory.pub/private",
-  ".ssh/id.pub",
-  ".ssh/id_rsa",
-  ".ssh/keys/nested.pub",
-  ".ssh/known_hosts.backup/private",
-  ".ssh/known_hosts.old",
-  ".ssh/private",
-  "project/file.txt",
-]) {
+for (const file of filesystem.files) {
   writeFileSync(join(home, file), "");
 }
-for (const [link, target] of [
-  [".ssh/deceptive.pub", ".ssh/private"],
-  ["project-link", "project"],
-  ["project/key-link", ".ssh/private"],
-  ["project/public-link", ".ssh/id.pub"],
-  ["project/ssh-link", ".ssh"],
-  ["project/data-link", "Library/Containers"],
-  ["project/env-link", ".npmrc"],
-  ["project/protected-loop", "Library/Containers/loopa"],
-]) {
-  symlinkSync(join(home, target!), join(home, link!));
+for (const [link, target] of filesystem.links) {
+  symlinkSync(join(home, target), join(home, link));
 }
 symlinkSync("data-link", join(home, "project/data-chain"));
 symlinkSync("nested", join(home, "project/alias1"));
@@ -142,6 +133,17 @@ test("a path in the directory a linked ~/.ssh leads to is judged as ~/.ssh", () 
   expect(evaluate(buildRequest("claude", "bash", relocated, `cat ${join(target, "private")}`, "", relocated))).toBe(reasons.ssh);
 });
 
+test("ssh and sftp -S values are modeled as client use", () => {
+  for (const [program, value] of [
+    ["ssh", "control.sock"],
+    ["sftp", "transport"],
+  ] as const) {
+    const path = `${home}/.ssh/${value}`;
+    const request = buildRequest("claude", "bash", `${home}/project`, `${program} -S ${path} host`, "", home);
+    expect(extractTargets(request)).toContainEqual(expect.objectContaining({ path, effect: "use", via: "option" }));
+  }
+});
+
 describe("behavior table", () => {
   test.each(behaviorCases.map((behaviorCase) => [`${behaviorCase.tool} ${JSON.stringify(behaviorCase.input)} in ${behaviorCase.cwd}`, behaviorCase] as const))("%s", (_, behaviorCase) => {
     const tool = behaviorCase.tool.toLowerCase() as Tool;
@@ -166,13 +168,15 @@ describe("probe safety", () => {
   const scratch = join(root, "probe-safety");
 
   // Run `run` with the directories unreadable and return the probes that failed with EACCES, apart from the ones aimed at the unreadable project directory.
-  function searchesInside<T>(unreadable: string[], run: () => T): { result: T; violations: string[]; statted: string[] } {
+  function searchesInside<T>(unreadable: string[], run: () => T): { result: T; violations: string[]; statted: string[]; readlinked: string[] } {
     const violations: string[] = [];
     const statted: string[] = [];
+    const readlinked: string[] = [];
     const [readlink, stat] = [probes.readlink, probes.stat];
     const watch = <F extends (path: string) => unknown>(call: F, name: string) =>
       ((path: string) => {
         if (name === "stat") statted.push(path);
+        else readlinked.push(path);
         try {
           return call(path);
         } catch (error) {
@@ -184,12 +188,63 @@ describe("probe safety", () => {
     probes.stat = watch(stat, "stat") as typeof probes.stat;
     for (const dir of unreadable) chmodSync(dir, 0);
     try {
-      return { result: run(), violations, statted };
+      return { result: run(), violations, statted, readlinked };
     } finally {
       for (const dir of unreadable) chmodSync(dir, 0o755);
       [probes.readlink, probes.stat] = [readlink, stat];
     }
   }
+
+  test("unresolved suffixes never reach filesystem helpers through an SSH alias", () => {
+    const request = (input: string) => buildRequest("claude", "bash", join(home, "project"), input, "", home);
+    for (const input of ["cat ssh-link/config.$UNSET_VARIABLE", "cat ssh-link/config.${PROFILE}", "cat < ssh-link/config.$UNSET_VARIABLE", "cat > ssh-link/config.${PROFILE}"]) {
+      const unresolved = searchesInside([], () => evaluate(request(input)));
+      expect(unresolved.statted).toEqual([]);
+      expect(unresolved.readlinked.filter((path) => path.includes("$"))).toEqual([]);
+      expect(unresolved.result).toBeUndefined();
+    }
+
+    const resolved = searchesInside([], () => evaluate(request("cat ssh-link/config")));
+    expect(resolved.statted.length).toBeGreaterThan(0);
+    expect(resolved.result).toBeUndefined();
+  });
+
+  test("a physical cd through a link into App Data never probes below the protected prefix", () => {
+    const request = buildRequest("claude", "bash", join(home, "project"), "cd -P data-link/com.x && cd .. && cd sub && cat x", "", home);
+    const physical = searchesInside([join(home, "Library/Containers")], () => evaluate(request));
+    expect(physical.result).toBe(reasons.appdata);
+    expect(physical.violations).toEqual([]);
+  });
+
+  test("a physical cd to an unresolved directory passes no uncertain suffix to readlink", () => {
+    const request = buildRequest("claude", "bash", join(home, "project"), "cd -P cache-link/$UNSET_VARIABLE/.. && cat x", "", home);
+    const unresolved = searchesInside([], () => evaluate(request));
+    expect(unresolved.readlinked.filter((path) => path.includes("$UNSET_VARIABLE"))).toEqual([]);
+    expect(unresolved.result).toBeUndefined();
+  });
+
+  test("an unresolved expansion behind an SSH alias is still judged by spelling, without a probe", () => {
+    const request = (input: string) => buildRequest("claude", "bash", join(home, "project"), input, "", home);
+    for (const input of ["cat ssh-link/$UNSET_VARIABLE", "cat ssh-link/$UNSET_VARIABLE/known_hosts"]) {
+      const denied = searchesInside([], () => evaluate(request(input)));
+      expect(denied.result).toBe(reasons.file);
+      expect(denied.statted).toEqual([]);
+      expect(denied.readlinked.filter((path) => path.includes("$UNSET_VARIABLE"))).toEqual([]);
+    }
+  });
+
+  test("unresolved SSH case aliases are judged without inode probes", () => {
+    for (const input of ["cat .SSH/$UNSET_VARIABLE", "cat ~/.Ssh/${PROFILE}id_rsa", "cat < .SSH/$UNSET_VARIABLE", "cat > .SSH/${PROFILE}id_rsa"]) {
+      const request = buildRequest("claude", "bash", home, input, "", home);
+      const denied = searchesInside([], () => evaluate(request));
+      expect(denied.result).toBe(reasons.ssh);
+      expect(denied.statted).toEqual([]);
+      expect(denied.readlinked.filter((path) => /[$`]/.test(path))).toEqual([]);
+    }
+    const publicFile = searchesInside([], () => evaluate(buildRequest("claude", "bash", home, "cat .SSH/config.$UNSET_VARIABLE", "", home)));
+    expect(publicFile.result).toBeUndefined();
+    expect(publicFile.statted).toEqual([]);
+  });
 
   test("a glob behind a link into App Data reaches the kernel as EACCES, not ENOENT", () => {
     // Premise: statting `cache/*.txt` makes the kernel search inside the tree `cache` leads to, which is what a guard probe must not do.

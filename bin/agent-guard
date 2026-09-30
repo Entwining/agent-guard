@@ -1,22 +1,20 @@
-#!/bin/zsh -f
+#!/bin/bash -p
 # PreToolUse entry for the agent guard:
 #   agent-guard --runtime claude|codex|pi < event.json
-# Runs the Bun supervisor from the package directory and passes denials through
+# Runs the Bun runner from the package directory and passes denials through
 # with exit 2. Exit 0 only means no objection; it never approves a call. Every
 # other outcome denies too, because Claude lets a hook's other failures and
 # timeouts through, Codex is assumed to, and nothing else stands between an
 # agent and ~/Library.
-emulate zsh
-setopt no_bg_nice
-zmodload zsh/zselect
-
 fail() {
-    print -u2 -- "The agent guard could not complete its check ($1), so this call is blocked. Inspect the guard installation, repair the reported failure, then retry the call."
+    printf '%s\n' "The agent guard could not complete its check ($1), so this call is blocked. Inspect the guard installation, repair the reported failure, then retry the call." >&2
     exit 2
 }
 
 [[ $HOME == /* ]] || fail 'HOME is not an absolute path'
-pkg=${0:A:h:h}
+entry=$(/bin/realpath "$0") || fail 'entry path unreadable'
+pkg=${entry%/*}
+pkg=${pkg%/*}
 bun=$(command -v bun) || fail 'bun missing'
 guard=$pkg/src/guard.ts
 [[ -r $guard ]] || fail 'guard.ts missing'
@@ -27,26 +25,30 @@ event=$(/bin/cat)
 # Bun reads bunfig.toml and environment files from its working directory;
 # the package config owns TypeScript paths. Pass the hook's directory as --cwd.
 hook_cwd=$PWD
-cd -q $pkg || fail 'package directory unreadable'
+cd "$pkg" || fail 'package directory unreadable'
 
-# The runner kills the guard's process group. This outer deadline still denies
-# if the runner itself does not return before the hook timeout.
-coproc { print -r -- "$event" | exec $bun $runner "$@" --cwd $hook_cwd 2>&1 }
-pid=$!
-read -r -t 1 -p group || { kill -KILL $pid 2>/dev/null; fail 'supervisor did not report its process group' }
-[[ $group == AGENT_GUARD_PGID=<-> ]] || { kill -KILL $pid 2>/dev/null; fail 'invalid supervisor process group' }
-pgid=${group#AGENT_GUARD_PGID=}
-{ zselect -t 300; kill -KILL -- -$pgid; kill -KILL $pid } >/dev/null 2>&1 &!
-watchdog=$!
-read -r -t 3 -p reason
-wait $pid
+# Bash job control establishes the job's group before exec, even without a TTY.
+# A single background command has PID = PGID; ordinary descendants inherit it.
+# Process substitution keeps Bun as the job leader and the event in a pipe.
+reason=$(
+    set -m
+    "$bun" "$runner" "$@" --cwd "$hook_cwd" < <(printf '%s\n' "$event") 2>&1 &
+    pid=$!
+    { /bin/sleep 3; kill -KILL -- -"$pid"; } >/dev/null 2>&1 &
+    watchdog=$!
+    wait "$pid" 2>/dev/null
+    rc=$?
+    kill -KILL -- -"$pid" 2>/dev/null
+    kill -KILL -- -"$watchdog" 2>/dev/null
+    wait "$watchdog" 2>/dev/null
+    exit "$rc"
+) 2>/dev/null
 rc=$?
-kill -KILL $watchdog 2>/dev/null
 case $rc in
-    (0) [[ -n $reason ]] && print -r -- "$reason"; exit 0 ;;
+    (0) [[ -n $reason ]] && printf '%s\n' "$reason"; exit 0 ;;
     (2) ;;
     (*) fail 'guard failed' ;;
 esac
 [[ -n $reason ]] || fail 'guard gave no reason'
-print -u2 -r -- "$reason"
+printf '%s\n' "$reason" >&2
 exit 2

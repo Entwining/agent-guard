@@ -1,3 +1,14 @@
 node_modules/
 .vendor/
 *.tgz
+__pycache__/
+*.py[cod]
+tests/harness/*.txt
+tests/harness/*.json
+tests/harness/*.jsonl
+experiments/*.json
+experiments/*.jsonl
+experiments/*.csv
+experiments/*.artifacts/
+.DS_Store
+._*

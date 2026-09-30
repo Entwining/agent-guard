@@ -2,6 +2,7 @@ import type { BehaviorRow } from "./types.test";
 
 export default [
   { tool: "Bash", input: "node --env-file=$HOME/Library/Containers/x app.js", cwd: "$H/project", claude: 2, codex: 2, reason: "appdata", note: "a value glued to its option with = is a path" },
+  { tool: "Bash", input: "node --env-file-if-exists=$H/.aws/credentials app.js", cwd: "$H/project", claude: 0, codex: 0, note: "Node consumes an optional env file like --env-file" },
   { tool: "Bash", input: "git --work-tree=$HOME/Library/Containers status", cwd: "$H/project", claude: 2, codex: 2, reason: "appdata" },
   { tool: "Bash", input: "rg --ignore-file ~/Library/Containers/x foo src", cwd: "$H/project", claude: 2, codex: 2, reason: "appdata", note: "rg opens the ignore file" },
   { tool: "Bash", input: "grep --exclude-from ~/Library/Containers/x TOKEN src", cwd: "$H/project", claude: 2, codex: 2, reason: "appdata" },

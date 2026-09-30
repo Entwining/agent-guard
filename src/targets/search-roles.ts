@@ -1,4 +1,4 @@
-import type { Command, ValueRole, Word } from "./record";
+import type { Command, ValueRole, Word } from "../record";
 
 // fd and ls skip hidden files unless asked; find never does.
 export function showsHidden(words: Word[]): boolean {

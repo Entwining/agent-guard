@@ -1,10 +1,11 @@
-import { basename, resolve } from "node:path";
+import { basename } from "node:path";
 
+import { absPath, expandHome } from "../filesystem/paths";
+import type { Command, Items, Word } from "../record";
+import { findRoots } from "../targets/programs";
+import { searchRoles, showsHidden } from "../targets/search-roles";
+import { changeDirectory } from "./cwd";
 import { interpreterCode, interpreterName } from "./interpreters";
-import { absPath, expandHome } from "./paths";
-import { findRoots } from "./programs";
-import type { Command, Items, Word } from "./record";
-import { searchRoles, showsHidden } from "./search-roles";
 
 const shellPrograms = new Set(["sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh"]);
 const zshBuiltins = new Set(["echo", "printf", "print", "export", "typeset", "declare", "set", "command", "eval", "source", "."]);
@@ -130,7 +131,8 @@ export function resolveCommand(cmd: Command, home: string): { children: Child[];
           const arg = w[i]!.text;
           if (arg === "-C") {
             if (w[i + 1]) {
-              cmd.cwd = resolve(cmd.cwd, w[i + 1]!.text);
+              // chdir(2) follows links before `..`, unlike a logical shell cd.
+              cmd.cwd = changeDirectory(cmd.cwd, w[i + 1]!.text, !w[i + 1]!.expands && !w[i + 1]!.globs);
               w[i + 1]!.role = "precommand";
             }
             i += 2;
@@ -204,7 +206,7 @@ export function resolveCommand(cmd: Command, home: string): { children: Child[];
         path.value = separate ? path.text : arg.slice(arg.indexOf("=") + 1);
         if (base) {
           path.value = expandHome(path.value, home);
-          cmd.cwd = resolve(cmd.cwd, path.value);
+          cmd.cwd = changeDirectory(cmd.cwd, path.value, !path.expands && !path.globs);
         }
       } else if (["-E", "-e", "-t", "-d", "--exclude", "--extension", "--type", "--max-depth"].includes(arg)) {
         rest[n]!.role = "option";

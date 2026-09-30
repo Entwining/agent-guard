@@ -18,6 +18,7 @@ export interface Redirect {
   direction: "in" | "out" | "herestring" | "heredoc";
   target: string; // file, word, or heredoc body
   globs: boolean; // the target holds an unquoted glob character
+  expands: boolean;
   vars: string[]; // parameters the shell expands in the target or body
 }
 

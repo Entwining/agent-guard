@@ -2,19 +2,19 @@
 // interpreter code still reaches the signature rules.
 
 import { existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { Assign, BinaryCmd, CallExpr, CmdSubst, DeclClause, FuncDecl, IfClause, Lit, Node, ParamExp, Redirect as RedirectNode, Stmt, Subshell, Word as WordNode } from "mvdan-sh";
 import sh from "mvdan-sh";
 
+import { expandHome } from "../filesystem/paths";
+import type { Command, Redirect, Script, Word } from "../record";
 import { resolveCommand, stdinKind } from "./argv";
 import { misreadComment } from "./comments";
-import { boundedDirectories } from "./cwd";
+import { boundedDirectories, changeDirectory } from "./cwd";
 import { movedOnSuccess } from "./moves";
-import { expandHome } from "./paths";
 import { markWalkedInput, shellInput, xargsHereInput, xargsReplacements } from "./pipeline";
-import type { Command, Redirect, Script, Word } from "./record";
 import { readWord } from "./words";
 
 const { syntax } = sh;
@@ -33,7 +33,8 @@ if (sh !== (await import(pathToFileURL(parserPath).href)).default) throw new Err
 const parser = syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash));
 
 interface Scope {
-  readonly dir: { cwd: string; alternatives?: string[] | undefined }; // shared by the commands a cd in this scope moves
+  // Shared by the commands a cd in this scope moves. `failures` collects where failed cds in an && chain leave the shell, for the commands after it.
+  readonly dir: { cwd: string; alternatives?: string[] | undefined; failures?: string[] | undefined };
   readonly vars: Map<string, string>;
   readonly slice: (start: number, end: number) => string;
 }
@@ -70,7 +71,7 @@ export function parseScript(source: string, cwd: string, home: string): Script {
 
   const text = (node: Node, scope: Scope) => scope.slice(node.Pos().Offset(), node.End().Offset());
   // A cd inside runs in a separate shell and leaves this scope's cwd alone.
-  const isolated = (scope: Scope): Scope => ({ ...scope, dir: { ...scope.dir }, vars: new Map(scope.vars) });
+  const isolated = (scope: Scope): Scope => ({ ...scope, dir: { ...scope.dir, failures: undefined }, vars: new Map(scope.vars) });
 
   function statement(stmt: Stmt, outer: Scope) {
     const scope = stmt.Background ? isolated(outer) : outer;
@@ -93,18 +94,23 @@ export function parseScript(source: string, cwd: string, home: string): Script {
   // Only the left side of && moves the directory the right side runs in.
   function binary(cmd: BinaryCmd, scope: Scope) {
     const op = scope.slice(cmd.OpPos.Offset(), cmd.OpPos.Offset() + 2).trim();
+    if (op === "&&" && movedOnSuccess(cmd.X!, scope.slice)) {
+      // The right side runs only where every cd before it succeeded. A compound right side may run a command after its own failed cd.
+      const outer = scope.dir.failures;
+      const failures: string[] = [];
+      scope.dir.failures = failures;
+      statement(cmd.X!, scope);
+      scope.dir.failures = cmd.Y!.Cmd && type(cmd.Y!.Cmd) === "CallExpr" ? failures : undefined;
+      statement(cmd.Y!, scope);
+      scope.dir.failures = outer;
+      if (outer) outer.push(...failures);
+      else scope.dir.alternatives = boundedDirectories(scope.dir.cwd, [...(scope.dir.alternatives ?? []), ...failures], home);
+      return;
+    }
     const failed = isolated(scope);
     const start = script.commands.length;
     statement(cmd.X!, op === "&&" || op === "||" ? scope : isolated(scope));
     const middle = script.commands.length;
-    const directCd = op === "&&" && movedOnSuccess(cmd.X!, scope.slice);
-    if (directCd) {
-      const old = [failed.dir.cwd, ...(failed.dir.alternatives ?? [])];
-      scope.dir.alternatives = scope.dir.alternatives?.filter((cwd) => !old.includes(cwd));
-      statement(cmd.Y!, scope);
-      scope.dir.alternatives = boundedDirectories(scope.dir.cwd, [...(scope.dir.alternatives ?? []), ...old], home);
-      return;
-    }
     // zsh runs the last element of a pipeline in this shell and bash forks it,
     // so a cd there may or may not move the commands after it.
     const right = op === "||" ? failed : op === "&&" ? scope : isolated(scope);
@@ -249,7 +255,11 @@ export function parseScript(source: string, cwd: string, home: string): Script {
       if (++functionRuns > maxFunctionRuns) script.parseFailed = true;
       else {
         running.add(called!);
+        // The body's commands run after its own failed cds.
+        const failures = scope.dir.failures;
+        scope.dir.failures = undefined;
         statement(func.body, { ...scope, slice: func.slice });
+        scope.dir.failures = failures;
         running.delete(called!);
       }
     }
@@ -262,13 +272,13 @@ export function parseScript(source: string, cwd: string, home: string): Script {
       const quoted = node.Word!.Parts.some((p) => type(p) !== "Lit" || (p as Lit).Value.includes("\\"));
       const vars: string[] = [];
       if (node.Hdoc && !quoted) expansions(node.Hdoc, scope, vars);
-      return { direction: "heredoc", target: node.Hdoc ? text(node.Hdoc, scope) : "", globs: false, vars };
+      return { direction: "heredoc", target: node.Hdoc ? text(node.Hdoc, scope) : "", globs: false, expands: false, vars };
     }
     const target = word(node.Word!, scope);
-    if (op === "<<<") return { direction: "herestring", target: target.text, globs: false, vars: target.vars };
+    if (op === "<<<") return { direction: "herestring", target: target.text, globs: false, expands: false, vars: target.vars };
     if ((op === "<&" || op === ">&") && /^(\d+|-)$/.test(target.text)) return undefined;
     const direction = op === "<" || op === "<>" ? "in" : "out";
-    return { direction, target: target.text, globs: target.globs, vars: [] };
+    return { direction, target: target.text, globs: target.globs, expands: target.expands, vars: [] };
   }
 
   function track(command: Command, scope: Scope) {
@@ -283,15 +293,30 @@ export function parseScript(source: string, cwd: string, home: string): Script {
     let target = args.find((w) => !w.text.startsWith("-"))?.text;
     if (target === undefined && args.every((w) => /^(--|-[PLqs]+)$/.test(w.text)) && program.text === "cd") target = home;
     if (target !== undefined) {
-      scope.dir.alternatives = boundedDirectories(
-        resolve(scope.dir.cwd, target),
-        [scope.dir.cwd, ...(scope.dir.alternatives ?? []), ...(scope.dir.alternatives ?? []).map((cwd) => resolve(cwd, target))],
-        home,
-      );
-      scope.dir.cwd = resolve(scope.dir.cwd, target);
+      // Bash obeys the last of -L and -P, zsh any -P; keep both possibilities when they disagree. Unresolved operands retain lexical inference.
+      const operand = args.findIndex((w) => !w.text.startsWith("-"));
+      const modes = args
+        .slice(0, operand < 0 ? args.length : operand)
+        .filter((w) => /^-[A-Za-z]+$/.test(w.text))
+        .flatMap((w) => [...w.text].filter((c) => c === "L" || c === "P"));
+      const physical = modes.includes("P") && !args[operand]?.expands && !args[operand]?.globs;
+      const disputed = physical && modes.at(-1) === "L";
+      const move = (cwd: string) => [changeDirectory(cwd, target, physical), ...(disputed ? [changeDirectory(cwd, target, false)] : [])];
+      const [next, ...others] = move(scope.dir.cwd);
+      const stayed = [scope.dir.cwd, ...(scope.dir.alternatives ?? [])];
+      scope.dir.failures?.push(...stayed);
+      scope.dir.alternatives = boundedDirectories(next!, [...(scope.dir.failures ? [] : stayed), ...others, ...(scope.dir.alternatives ?? []).flatMap(move)], home);
+      scope.dir.cwd = next!;
     }
   }
 
-  parse(source, cwd);
+  // `.` segments mark physical cd spellings, so the hook's directory must not bring its own; they name no step in either reading.
+  parse(
+    source,
+    cwd
+      .split("/")
+      .filter((segment) => segment !== ".")
+      .join("/") || "/",
+  );
   return script;
 }

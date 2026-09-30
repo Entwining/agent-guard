@@ -1,12 +1,12 @@
-import { parseScript } from "./frontend";
-import { linkedTargets } from "./links";
-import { absPath } from "./paths";
+import { linkedTargets } from "./filesystem/links";
+import { absPath } from "./filesystem/paths";
 import { reasons } from "./reasons";
 import type { Request, Runtime, Tool } from "./record";
 import { appdataRules } from "./rules/appdata";
 import { credentialFilesystemRules, credentialRules } from "./rules/credentials";
 import { claudeWorkflowRules } from "./rules/workflow";
-import { extractTargets } from "./targets";
+import { parseScript } from "./shell/frontend";
+import { extractTargets } from "./targets/infer";
 
 export function buildRequest(runtime: Runtime, tool: Tool, cwd: string, input: string, glob: string, home: string): Request {
   const inputCwd = cwd || "/";

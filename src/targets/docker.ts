@@ -1,5 +1,5 @@
+import type { Target, Word } from "../record";
 import type { Context } from "./programs";
-import type { Target, Word } from "./record";
 
 const globalValueOptions = ["-H", "--host", "-c", "--context", "-l", "--log-level", "--config", "--tlscacert", "--tlscert", "--tlskey"];
 
@@ -20,6 +20,7 @@ const flagOptions = [
   "--tty",
   "--use-api-socket",
 ];
+const valueOptions = ["--entrypoint"];
 const flagLetters = "diqPt";
 const composeValueOptions = ["-f", "--file", "-p", "--project-name", "--project-directory", "--profile", "--env-file", "--ansi", "--parallel", "--progress"];
 
@@ -28,8 +29,9 @@ function commandStart(words: Word[], start: number): number {
   for (let i = start + 1; i < words.length; i++) {
     const text = words[i]!.text;
     if (!text.startsWith("-")) return i;
+    if (text === "--") return i + 1;
     if (text.startsWith("--")) {
-      if (!text.includes("=") && !flagOptions.includes(text) && !/^-\D/.test(words[i + 1]?.text ?? "")) i++;
+      if (!text.includes("=") && (valueOptions.includes(text) || (!flagOptions.includes(text) && !/^-\D/.test(words[i + 1]?.text ?? "")))) i++;
       continue;
     }
     const value = [...text.slice(1)].findIndex((letter) => !flagLetters.includes(letter));
@@ -55,6 +57,7 @@ export function dockerTargets({ words, make, claimed }: Context): Target[] {
   let composeSub = start + 1;
   while (words[composeSub]?.text.startsWith("-")) composeSub += composeValueOptions.includes(words[composeSub]!.text) ? 2 : 1;
   for (const [i, word] of words.slice(0, end).entries()) {
+    if (words[i - 1]?.text === "--entrypoint") continue;
     // cp names a container as `name:path`; any other operand is a host path, and the last one is where the copy lands.
     if (sub === "cp" && i > start && !word.text.startsWith("-") && !/^[\w.-]+:/.test(word.text)) mount(word.text, word, i === words.length - 1 ? "write" : "read", "operand");
     // A short option's value is glued (`-i.env`, `-vSPEC`, `-v=SPEC`) or the next word; pflag reads the rest of a cluster after the option that takes it.

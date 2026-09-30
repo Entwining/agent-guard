@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
+import type { Target } from "../record";
 import { isAppdata, isSensitive, unfirmlink } from "./paths";
 import { probes } from "./probes";
-import type { Target } from "./record";
 
 // Errors that mean the path is not a link: it names a regular file or directory, or nothing (a component past NAME_MAX cannot exist). Any other
 // failure means the check did not run.
@@ -47,10 +47,10 @@ export function followLinks(absolute: string, home: string, stopAt = (path: stri
   return followed ? unfirmlink(path) : absolute;
 }
 
-// The path a glob target names up to its first wildcard segment: only that prefix exists as a path before the shell expands the rest.
-function followGlob(absolute: string, home: string): string {
+// Only the prefix before a wildcard or unresolved expansion is fixed before the shell expands the rest, so probing the suffix is unsafe.
+function followPrefix(absolute: string, home: string): string {
   const segments = absolute.split("/");
-  const wildcard = segments.findIndex((segment) => /[*?[{]/.test(segment));
+  const wildcard = segments.findIndex((segment) => /[*?[{$`]/.test(segment));
   if (wildcard < 0) return followLinks(absolute, home);
   const prefix = segments.slice(0, wildcard).join("/") || "/";
   const followed = followLinks(prefix, home);
@@ -61,8 +61,8 @@ function followGlob(absolute: string, home: string): string {
 export function linkedTargets(targets: Target[], home: string): Target[] | undefined {
   let changed = false;
   const result = targets.map((target) => {
-    if (target.expands || target.effect === "name" || (target.via === "tool" && target.glob)) return target;
-    const path = target.glob ? followGlob(target.unresolved, home) : followLinks(target.unresolved, home);
+    if ((target.effect === "name" && !target.glob) || (target.via === "tool" && target.glob)) return target;
+    const path = target.glob || target.expands ? followPrefix(target.unresolved, home) : followLinks(target.unresolved, home);
     if (path === target.unresolved) return target;
     changed = true;
     return { ...target, path, unresolved: path };

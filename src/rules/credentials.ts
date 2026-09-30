@@ -2,10 +2,10 @@
 // model reads. Clients the program table models as consuming a credential file
 // themselves (dotenvx, node --env-file, ssh -i) are not readers and stay
 // allowed; the guard does not control what they do with the contents.
-import { isSensitive, isSensitiveRoot, sshPrivate } from "../paths";
+import { isSensitive, isSensitiveRoot, sshPrivate } from "../filesystem/paths";
+import { sshScopeDenied } from "../filesystem/ssh";
 import { reasons } from "../reasons";
 import type { Request, Target } from "../record";
-import { sshScopeDenied } from "../ssh";
 import { secretReasons, secretSignatures } from "./secrets";
 
 const { file: fileReason, codeFile: codeFileReason, upload: uploadReason, ssh: sshReason, grepSsh: grepSshReason, hiddenSearch: hiddenSearchReason } = reasons;
@@ -43,7 +43,7 @@ export function credentialFilesystemRules(req: Request, targets: Target[]): stri
     if (!["read", "write", "list"].includes(target.effect) || target.via === "items" || (target.via === "tool" && target.glob)) continue;
     // A working directory is checked only for a search that reads what is under it.
     if ((target.via === "cwd" || target.via === "scan") && !target.search) continue;
-    if (sshScopeDenied(target.path, req.home, target.search)) return [target.search ? grepSshReason : sshReason];
+    if (sshScopeDenied(target.path, req.home, target.search, !target.expands)) return [target.search ? grepSshReason : sshReason];
   }
   return [];
 }

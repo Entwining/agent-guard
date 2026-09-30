@@ -78,6 +78,25 @@ describe("entry points", () => {
     expect(await run(h, [guard, "--runtime", "claude"], bash(h, "env"), project)).toMatchObject({ exit: 2, stderr: expect.stringMatching(/^DENIED:/) });
   });
 
+  test("BASH_ENV cannot exit before the entry checks a call", async () => {
+    const { h, guard } = install();
+    const startup = join(h, "startup.sh");
+    const marker = join(h, "startup-loaded");
+    writeFileSync(startup, `printf loaded > '${marker}'\nexit 0\n`);
+    const out = await run(h, ["/usr/bin/env", `BASH_ENV=${startup}`, guard, "--runtime", "claude"], bash(h, "env"));
+    expect(out).toMatchObject({ exit: 2, stderr: expect.stringMatching(/^DENIED:/) });
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  test("a linked executable resolves its package and preserves the hook directory", async () => {
+    const { h } = install();
+    const entry = join(h, "bin/agent-guard");
+    symlinkSync("../package/bin/agent-guard", entry);
+    const event = { tool_input: { command: "ls Library/Containers" } };
+    expect(await run(h, [entry, "--runtime", "codex"], event, h)).toMatchObject({ exit: 2 });
+    expect(await run(h, [entry, "--runtime", "codex"], event, join(h, "project"))).toMatchObject({ exit: 0 });
+  });
+
   test("an ancestor tsconfig cannot replace the shell parser", async () => {
     const { h, pkg, guard } = install();
     const marker = join(h, "fake-parser-loaded");
@@ -204,12 +223,12 @@ describe("faults deny instead of passing", () => {
     expect(out).toMatchObject({ exit: 2, stderr: expect.stringMatching(/^DENIED: This reads a protected macOS app-data directory/) });
   });
 
-  test("the outer deadline kills the guard group when the supervisor stalls", async () => {
+  test("the outer deadline kills the guard group when the runner stalls", async () => {
     const { h, pkg, guard } = install();
     const pidFile = join(h, "stalled-guard.pid");
     const runner = join(pkg, "src/runner.ts");
-    const marker = "process.stdout.write(`AGENT_GUARD_PGID=${child.pid}\\n`);";
-    writeFileSync(runner, readFileSync(runner, "utf8").replace(marker, `${marker}\nwhile (true) {}`));
+    const marker = "const forward = async";
+    writeFileSync(runner, readFileSync(runner, "utf8").replace(marker, `while (true) {}\n${marker}`));
     appendFileSync(join(pkg, "src/guard.ts"), `\nawait Bun.write(${JSON.stringify(pidFile)}, String(process.pid));\nwhile (true) {}\n`);
     const out = await run(h, [guard, "--runtime", "claude"], bash(h, "ls"), h, undefined, async () => {
       const pid = Number(readFileSync(pidFile, "utf8"));
@@ -217,7 +236,7 @@ describe("faults deny instead of passing", () => {
       expect(processExists(pid, false)).toBe(false);
     });
     expect(out).toMatchObject({ exit: 2, stderr: expect.stringMatching(blocked) });
-    // Waiting up to 1 s for the process group ID plus the watchdog must stay under Pi's 4.5 s hook timeout.
+    // The total deadline, including startup, must stay under Pi's 4.5 s hook timeout.
     expect(out.seconds).toBeLessThan(3.5);
   }, 15_000);
 

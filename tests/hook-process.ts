@@ -7,17 +7,22 @@ import { join } from "node:path";
 export function instrumentEntry(path: string): void {
   const source = readFileSync(path, "utf8");
   const marker = "pid=$!\n";
-  if (!source.includes(marker)) throw new Error("Test entry no longer reports its coprocess PID");
-  writeFileSync(path, source.replace(marker, 'pid=$!\nprint -r -- "P:$pid" >> "$AGENT_GUARD_TEST_PIDS"\n'));
+  if (!source.includes(marker)) throw new Error("Test entry no longer exposes its runner PID");
+  writeFileSync(
+    path,
+    source
+      .replace(marker, 'pid=$!\nprintf "%s\\n" "P:$pid" "G:$pid" >> "$AGENT_GUARD_TEST_PIDS"\n')
+      .replace("watchdog=$!\n", 'watchdog=$!\nprintf "%s\\n" "P:$watchdog" "G:$watchdog" >> "$AGENT_GUARD_TEST_PIDS"\n'),
+  );
 }
 
 export function instrumentRunner(path: string): void {
   const source = readFileSync(path, "utf8");
-  const marker = "process.stdout.write(`AGENT_GUARD_PGID=${child.pid}\\n`);";
-  if (!source.includes(marker)) throw new Error("Test runner no longer reports the guard process group");
-  const log = "appendFileSync(process.env.AGENT_GUARD_TEST_PIDS!, `G:${child.pid}\\n`);";
+  const spawn = /(const child = Bun\.spawn\(\{[\s\S]*?\}\);)/;
+  if (!spawn.test(source)) throw new Error("Test runner no longer exposes its checker spawn");
+  const log = "appendFileSync(process.env.AGENT_GUARD_TEST_PIDS!, `P:${child.pid}\\nG:${child.pid}\\n`);";
   const prefix = 'import { appendFileSync } from "node:fs";\nappendFileSync(process.env.AGENT_GUARD_TEST_PIDS!, `P:${process.pid}\\n`);\n';
-  writeFileSync(path, prefix + source.replace(marker, `${log}\n${marker}`));
+  writeFileSync(path, prefix + source.replace(spawn, `$1\n${log}`));
 }
 
 export function exists(pid: number, group: boolean): boolean {
@@ -26,6 +31,9 @@ export function exists(pid: number, group: boolean): boolean {
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+    // macOS can return EPERM for a group containing only zombies. Keep polling
+    // that group: the harness still requires it to disappear before passing.
+    if (group && (error as NodeJS.ErrnoException).code === "EPERM") return true;
     throw error;
   }
 }
@@ -34,7 +42,9 @@ export function stop(pid: number, group: boolean): void {
   try {
     process.kill(group ? -pid : pid, "SIGKILL");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+    if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
+    if (group && (error as NodeJS.ErrnoException).code === "EPERM") return;
+    throw error;
   }
 }
 
@@ -80,9 +90,6 @@ export async function run(h: string, cmd: string[], event: unknown, cwd = h, aft
         if (kind === "P") pids.add(pid);
       }
     }
-    for (const pid of groups) stop(pid, true);
-    for (const pid of pids) stop(pid, false);
-    if (child) await child.exited;
     try {
       if (!failed) {
         for (let attempt = 0; attempt < 20 && ([...groups].some((pid) => exists(pid, true)) || [...pids].some((pid) => exists(pid, false))); attempt++) {
@@ -92,7 +99,13 @@ export async function run(h: string, cmd: string[], event: unknown, cwd = h, aft
         expect([...pids].filter((pid) => exists(pid, false))).toEqual([]);
       }
     } finally {
-      rmSync(log, { force: true });
+      try {
+        for (const pid of groups) stop(pid, true);
+        for (const pid of pids) stop(pid, false);
+        if (child) await child.exited;
+      } finally {
+        rmSync(log, { force: true });
+      }
     }
   }
 }
