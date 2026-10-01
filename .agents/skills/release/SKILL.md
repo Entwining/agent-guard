@@ -25,7 +25,7 @@ Tagging, pushing and publishing are outward and hard to reverse: a registry vers
 
 ## Establish the repository's release contract before proposing
 
-The repository owns how its version becomes a release. Read its instructions, release documentation, CI workflows, and any release script, then state what completion means here.
+The repository owns how its version becomes a release. Read its instructions, [release documentation](../../../docs/setup.md#release), CI workflows, and any release script, then state what completion means here.
 
 - Do not assume a toolchain: the version may be bumped by hand, by a script, by a workflow on a tag or release event, or by a release automation tool.
 - Identify what starts the publish path, because it decides the agent's last action: when the pipeline reacts to a pushed tag or release, the agent stops at the push and the automation publishes; otherwise the agent runs the remaining steps.
@@ -49,7 +49,7 @@ Send one message that ends the first pass: the proposed version, the level with 
 
 ## Execute
 
-After direction for that exact version, follow the repository's own path. When the repository publishes from a tag or a release event, the agent's last action is the push: write the version into its owning file, commit that bump with the repository's message conventions, create the tag, then push the commit and the tag, and leave publishing and the release record to the automation. Otherwise run the remaining steps yourself, in the repository's order, with the hosted release before the publish step.
+After direction for that exact version, follow the repository's own path. Keep the version bump and its Release notes in a separate commit with subject `chore: release vX.Y.Z`, substituting the actual version. This separation permits folding an unconsumed preparation without rewriting a feature commit that may already be pushed. When the repository publishes from a tag or a release event, write the version into its owning file, create that release commit and the tag, then push the commit and tag and leave publishing and the release record to the automation. Otherwise run the remaining steps in the repository's order, with the hosted release before the publish step.
 
 - Use the repository's tag and release conventions; when it has none, use `v<version>` for the tag.
 - Order the steps so a failure leaves nothing published.

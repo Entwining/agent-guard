@@ -1,0 +1,142 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
+)
+
+const fault = FAULT_LITERAL
+
+func logProcess(role string, pid int) {
+	pgid, err := syscall.Getpgid(pid)
+	if err != nil {
+		panic(err)
+	}
+	f, err := os.OpenFile(filepath.Join(os.Getenv("HOME"), "processes.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	b, err := json.Marshal(map[string]any{"role": role, "pid": pid, "pgid": pgid})
+	if err != nil {
+		panic(err)
+	}
+	if _, err = f.Write(append(b, '\n')); err != nil {
+		panic(err)
+	}
+}
+func ready() {
+	if err := os.WriteFile(filepath.Join(os.Getenv("HOME"), "checker-ready"), nil, 0600); err != nil {
+		panic(err)
+	}
+}
+func waitReady(name string) {
+	deadline := time.Now().Add(time.Second)
+	for {
+		if _, err := os.Stat(filepath.Join(os.Getenv("HOME"), name)); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			panic("synthetic child failed to start")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+func init() {
+	if len(os.Args) > 1 && os.Args[1] == "--test-descendant" {
+		logProcess("child", os.Getpid())
+		child := exec.Command("/bin/sleep", "20")
+		if err := child.Start(); err != nil {
+			panic(err)
+		}
+		logProcess("grandchild", child.Process.Pid)
+		if err := os.WriteFile(filepath.Join(os.Getenv("HOME"), "descendant-ready"), nil, 0600); err != nil {
+			panic(err)
+		}
+		_ = child.Wait()
+		os.Exit(0)
+	}
+}
+func faultChecker(args []string) int {
+	logProcess("checker", os.Getpid())
+	switch fault {
+	case "pipe":
+		var stat syscall.Stat_t
+		if err := syscall.Fstat(0, &stat); err != nil {
+			panic(err)
+		}
+		b, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			panic(err)
+		}
+		var event any
+		if err = json.Unmarshal(b, &event); err != nil {
+			panic(err)
+		}
+		b, err = json.Marshal(map[string]any{"event": event, "pipe": stat.Mode&syscall.S_IFMT == syscall.S_IFIFO})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(string(b))
+		return 0
+	case "large-reason", "large-stderr":
+		writer := os.Stdout
+		if fault == "large-stderr" {
+			writer = os.Stderr
+		}
+		b := []byte(strings.Repeat("x", 131072) + "\n")
+		n, err := writer.Write(b)
+		if err != nil || n != len(b) {
+			panic("producer did not drain")
+		}
+		if err = os.WriteFile(filepath.Join(os.Getenv("HOME"), "producer-bytes"), []byte(fmt.Sprint(n)), 0600); err != nil {
+			panic(err)
+		}
+		return 2
+	case "slow-reason":
+		time.Sleep(3200 * time.Millisecond)
+		fmt.Println("DENIED: synthetic canary reason")
+		return 0
+	case "no-reason":
+		return 2
+	case "checker-failure":
+		return 7
+	case "partial-panic":
+		fmt.Println("PARTIAL_RESULT_CANARY")
+		panic("synthetic checker panic")
+	case "panic":
+		panic("synthetic checker panic")
+	case "hang", "runner-stall", "early-failure":
+		self, err := os.Executable()
+		if err != nil {
+			panic(err)
+		}
+		child := exec.Command(self, "--test-descendant")
+		if err = child.Start(); err != nil {
+			panic(err)
+		}
+		waitReady("descendant-ready")
+		ready()
+		time.Sleep(20 * time.Second)
+		return 0
+	case "leftover":
+		child := exec.Command("/bin/sleep", "20")
+		if err := child.Start(); err != nil {
+			panic(err)
+		}
+		logProcess("leftover", child.Process.Pid)
+		return 0
+	case "late-start", "startup-stall":
+		ready()
+		return 0
+	default:
+		panic("unknown test fault")
+	}
+}

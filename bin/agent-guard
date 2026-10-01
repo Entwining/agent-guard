@@ -1,11 +1,6 @@
 #!/bin/bash -p
 # PreToolUse entry for the agent guard:
 #   agent-guard --runtime claude|codex|pi < event.json
-# Runs the Bun runner from the package directory and passes denials through
-# with exit 2. Exit 0 only means no objection; it never approves a call. Every
-# other outcome denies too, because Claude lets a hook's other failures and
-# timeouts through, Codex is assumed to, and nothing else stands between an
-# agent and ~/Library.
 fail() {
     printf '%s\n' "The agent guard could not complete its check ($1), so this call is blocked. Inspect the guard installation, repair the reported failure, then retry the call." >&2
     exit 2
@@ -15,24 +10,22 @@ fail() {
 entry=$(/bin/realpath "$0") || fail 'entry path unreadable'
 pkg=${entry%/*}
 pkg=${pkg%/*}
-bun=$(command -v bun) || fail 'bun missing'
-guard=$pkg/src/guard.ts
-[[ -r $guard ]] || fail 'guard.ts missing'
-runner=$pkg/src/runner.ts
-[[ -r $runner ]] || fail 'runner.ts missing'
-[[ -r $pkg/tsconfig.json ]] || fail 'tsconfig.json missing'
+runner=$pkg/bin/agent-guard-native
+[[ -x $runner ]] || fail 'native runner missing'
+if [[ $# == 1 && $1 == --version ]]; then
+    exec "$runner" --version
+fi
 event=$(/bin/cat)
-# Bun reads bunfig.toml and environment files from its working directory;
-# the package config owns TypeScript paths. Pass the hook's directory as --cwd.
+# The package owns the native executable; the hook directory owns relative targets.
 hook_cwd=$PWD
 cd "$pkg" || fail 'package directory unreadable'
 
 # Bash job control establishes the job's group before exec, even without a TTY.
 # A single background command has PID = PGID; ordinary descendants inherit it.
-# Process substitution keeps Bun as the job leader and the event in a pipe.
+# Process substitution keeps the runner as the job leader and the event in a pipe.
 reason=$(
     set -m
-    "$bun" "$runner" "$@" --cwd "$hook_cwd" < <(printf '%s\n' "$event") 2>&1 &
+    "$runner" "$@" --cwd "$hook_cwd" < <(printf '%s\n' "$event") 2>&1 &
     pid=$!
     { /bin/sleep 3; kill -KILL -- -"$pid"; } >/dev/null 2>&1 &
     watchdog=$!
@@ -44,9 +37,10 @@ reason=$(
     exit "$rc"
 ) 2>/dev/null
 rc=$?
+# Only status 3 marks a completed rejection; Go's default crash status is 2.
 case $rc in
     (0) [[ -n $reason ]] && printf '%s\n' "$reason"; exit 0 ;;
-    (2) ;;
+    (3) ;;
     (*) fail 'guard failed' ;;
 esac
 [[ -n $reason ]] || fail 'guard gave no reason'

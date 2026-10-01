@@ -1,0 +1,3 @@
+`contract.jsonl` contains 1,265 behavior partitions, each with Claude Code, Codex and Pi expectations for verdicts, denial reasons and advice. `$H` and `$R` denote the synthetic home and its parent; `$U` denotes the synthetic username. Command placeholders do not replace longer shell variable names. `filesystem.json` declares empty files and links created inside that synthetic home.
+
+The initial expectations were captured from the v0.5.0 implementation at `a8c3a38f6c1f1be473ed869c8e1d74a038a31b75`. They are regression data, not an executable reference implementation. Update them only for an intentional contract change, together with a regression that explains it. Go tests always load these fixtures; no exporter or environment opt-in is required.

@@ -1,0 +1,30 @@
+{
+  "directories": [".ssh/config.d", ".ssh/directory.pub", ".ssh/keys", ".ssh/known_hosts.backup", "project/nested", "project/locked", "Library/Containers/com.x", "Library/Caches/tool"],
+  "files": [".ssh/allowed_signers", ".ssh/config", ".ssh/config.d/nested.pub", ".ssh/config.d/private", ".ssh/config.work", ".ssh/directory.pub/private", ".ssh/id.pub", ".ssh/id_rsa", ".ssh/keys/nested.pub", ".ssh/known_hosts.backup/private", ".ssh/known_hosts.old", ".ssh/private", "project/file.txt"],
+  "links": [
+    ["Library/Caches/escape-link", "$H/project/nested"],
+    ["Library/Caches/keys", "$H/.ssh"],
+    [".ssh/deceptive.pub", "$H/.ssh/private"],
+    ["project-link", "$H/project"],
+    ["project/key-link", "$H/.ssh/private"],
+    ["project/public-link", "$H/.ssh/id.pub"],
+    ["project/ssh-link", "$H/.ssh"],
+    ["project/data-link", "$H/Library/Containers"],
+    ["project/cache-link", "$H/Library/Caches/tool"],
+    ["project/env-link", "$H/.npmrc"],
+    ["project/protected-loop", "$H/Library/Containers/loopa"],
+    ["project/data-chain", "data-link"],
+    ["project/alias1", "nested"],
+    ["project/nested/alias2", "$H/Library/Containers"],
+    ["project/firmlink-data", "/System/Volumes/Data$H/Library/Containers/com.x"],
+    ["project/firmlink-ssh", "/System/Volumes/Data$H/.ssh"],
+    ["project/firmlink-up", "/System/Volumes/Data/../Data$H/project/data-link"],
+    ["project/firmlink-data-only", "/System/Volumes/Data/mnt/../../Data$H/project/data-link"],
+    [".ssh/inside-link", "$H/Library/Containers/com.x"],
+    ["project/env-relative", "../.npmrc"],
+    ["project/loop-a", "loop-b"],
+    ["project/loop-b", "loop-a"],
+    ["Library/Containers/loopa", "loopb"],
+    ["Library/Containers/loopb", "loopa"]
+  ]
+}

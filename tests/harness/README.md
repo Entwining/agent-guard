@@ -1,19 +1,45 @@
 # Synthetic hook evaluation
 
-Run these checks from the checkout on macOS with Bun and Python 3.9 or newer installed. The runtime drivers resolve Claude Code, Pi, or Codex from PATH. They use temporary homes, synthetic files, and local scripted model servers; they do not require live model credentials.
+The Go harness runs on Apple Silicon macOS. Build an assembled package as described in [the setup guide](../../docs/setup.md#development-checks). All evidence directories must be new and outside Git checkouts. The harness uses temporary homes, synthetic files, and scripted model servers bound to loopback. It does not use live model credentials or change the user's runtime configuration.
 
-The focused entry and adapter checks run with the project test runner:
+## Runtime registration and attribution
 
-```sh
-bun test tests/harness/fault-injection.test.ts tests/harness/runtime-fidelity.test.ts
-```
-
-Runtime observations write to a new `/tmp` result path when no output is given. To keep paired runs together, pass explicit output paths outside the checkout:
+Build the runtime driver outside the checkout, then select the installed Claude Code, Pi, and Codex clients from `PATH`:
 
 ```sh
-bun tests/harness/runtime-suite.ts /tmp/agent-guard-runtime-normal.json --paired /tmp/agent-guard-runtime-without-guard.json
-bun tests/harness/runtime-paired-runs.ts /tmp/agent-guard-runtime-normal.json /tmp/agent-guard-runtime-without-guard.json /tmp/agent-guard-runtime-paired.json
-bun tests/harness/runtime-codex.ts /tmp/agent-guard-runtime-codex.json
+go build -o "$out/agent-guard-runtime" ./cmd/agent-guard-runtime
+"$out/agent-guard-runtime" --source "$PWD" --entry "$out/package/bin/agent-guard" --output "$out/runtime" --runtimes claude,pi,codex
 ```
 
-The drivers record hook status and output separately from the runtime tool result. A runtime that cannot start yields incomplete evidence, not a guard verdict.
+Each selected runtime has ten synthetic cases, repeated three times. The driver records the client's resolved path, executable hash and version, the copied guard entry and native binary hashes, and the source manifest. `records.jsonl` retains each completed attempt; `report.json` contains the summary and records. Hook status and output are separate from the runtime tool result. Missing hooks, mismatched commands, missing execution witnesses and conflicting evidence prevent a complete result. If startup fails before the first model request or hook, the driver stops that runtime and reports the attempted count separately from the planned 30 calls.
+
+The Claude Code and Pi drivers use an Anthropic Messages loopback server. Pi's JavaScript extension is generated only inside the synthetic home and invokes the Go hook adapter. Codex uses a Responses loopback server and synthetic hook configuration. A runtime failure before hooks remains unverified, not a guard denial.
+
+Run the no-guard control separately with the same package and clients:
+
+```sh
+"$out/agent-guard-runtime" --source "$PWD" --entry "$out/package/bin/agent-guard" --output "$out/runtime-without-guard" --runtimes claude,pi,codex --ablate
+```
+
+Every control case must execute, including the synthetic protected canaries. Compare the recorded identities before comparing reports. The measured hook duration excludes runtime startup; cold runtime durations include startup variability. These reports observe the entry PID only. They do not establish cleanup of runner, checker, watchdog or other descendants.
+
+## Instrumented lifecycle
+
+The lifecycle driver copies the Go source into its evidence directory and injects faults there. It does not edit the checkout. Set the Go module and build caches outside the checkout and populate the module cache with the ordinary development checks first; fault builds use `GOPROXY=off`.
+
+```sh
+go build -o "$out/agent-guard-lifecycle" ./cmd/agent-guard-lifecycle
+"$out/agent-guard-lifecycle" --source "$PWD" --go "$(command -v go)" --output "$out/lifecycle"
+```
+
+Fifteen faults run three times each: pipe input, delayed startup, startup stall, large stdout/stderr denial reasons, slow or absent reasons, checker failure and panic, partial output before panic, hung descendants, stalled or failed supervisor, leftover child, and filesystem dependency failure. Instrumented children record their own PID and process group. The driver samples survivors before its cleanup, records full output, verifies the large-output producer independently, and requires the guard's total deadline and failure contract.
+
+The following negative controls must each exit unsuccessfully with three contract violations. Use a distinct output directory for every invocation:
+
+```sh
+"$out/agent-guard-lifecycle" --source "$PWD" --go "$(command -v go)" --output "$out/control-drain" --control drain
+```
+
+Available controls are `drain`, `stderr-drain`, `failclosed`, `deadline`, `cleanup`, and `dependency`. `results.jsonl` records each observation and its violations; `summary.json` binds the source and counts failures. Rerun the unmodified lifecycle driver into a new directory after the controls to establish recovery. These instrumented copies prove the named lifecycle contracts, not all possible runtime descendants.
+
+The local harness contracts run with `go test -race ./tests/harness`. They exercise the HTTP protocols and CLI boundary with scripted clients, byte-preserving hook forwarding, timeout cleanup, report path isolation, full runtime case counts and missing-evidence failures. Actual client acceptance requires the separate runtime invocation above.

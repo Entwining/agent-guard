@@ -1,15 +1,29 @@
 name: Check
 
-on: pull_request
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
   check:
-    runs-on: macos-latest
+    runs-on: macos-15
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-      - run: bun install --frozen-lockfile
-      - run: bun run check
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - run: go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+      - name: Check Go implementation and contract fixtures
+        run: make check
+      - name: Build and verify the installed Go package
+        run: |
+          test "$(uname -m)" = arm64
+          make build OUT="$RUNNER_TEMP/package"
+          test "$("$RUNNER_TEMP/package/bin/agent-guard" --version)" = "agent-guard $(cat VERSION)"
+          go run ./cmd/agent-guard-verify "$RUNNER_TEMP/package/bin/agent-guard"

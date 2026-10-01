@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+go=${GO:-go}
+go=$(command -v "$go")
+PATH="$(dirname "$go"):$PATH"
+export PATH
+staticcheck=${STATICCHECK:-staticcheck}
+[ "$("$staticcheck" -version)" = 'staticcheck 2026.2.1 (0.8.1)' ] || { printf '%s\n' 'Staticcheck v0.8.1 is required.' >&2; exit 1; }
+files=$("$go" list -f '{{range .GoFiles}}{{$.Dir}}/{{.}} {{end}}{{range .TestGoFiles}}{{$.Dir}}/{{.}} {{end}}' ./...)
+# These are ordinary Go source paths owned by this checkout.
+goroot=$("$go" env GOROOT)
+unformatted=$("$goroot/bin/gofmt" -l $files)
+[ -z "$unformatted" ] || { printf '%s\n' "$unformatted" 'Run gofmt on the listed Go sources.' >&2; exit 1; }
+"$go" vet ./...
+"$staticcheck" ./...
+GORACE=atexit_sleep_ms=0 "$go" test -race -count=1 -timeout=90s ./...

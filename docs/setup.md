@@ -4,39 +4,27 @@
 
 ## Prerequisites
 
-- macOS with a local Claude Code, Codex, or Pi session.
-- Bun 1.4 or newer on the hook's `PATH`, including when the runtime starts outside your interactive shell. Check with `bun --version`.
+- Apple Silicon macOS with a local Claude Code, Codex, or Pi session.
+- Homebrew for installation. Go is a build dependency managed by the formula; Node.js and Bun are not needed by the installed guard.
 - Permission to edit the configuration for the runtime you choose. Codex's managed configuration uses the system `/etc/codex/requirements.toml` and may require an administrator.
 
-Bun is required at runtime even if you install with npm or Homebrew. After installation, run `command -v agent-guard`, confirm it prints an absolute path, and substitute that path for `/absolute/path/to/agent-guard` below. For Codex, use the path's containing directory for `/absolute/path/to`.
+The Homebrew executable is `/opt/homebrew/bin/agent-guard`. Use that path for hook registration; an older npm or Bun global installation may still appear first in `PATH`.
 
 The package denies unscoped `rg` and `fd` searches from the home directory itself. No `~/.ignore` file or other dotfiles setup is required for that protection; give an explicit project path to search from home.
 
 ## Install
 
-Choose one package manager:
-
-```sh
-npm install --global @loophubs/agent-guard
-```
-
-```sh
-bun add --global @loophubs/agent-guard
-```
-
-For the LoopHubs Homebrew tap, add the tap and install its formula:
+Install from tagged GitHub source through the LoopHubs tap:
 
 ```sh
 brew tap loophubs/tap
 brew install loophubs/tap/agent-guard
+/opt/homebrew/bin/agent-guard --version
 ```
 
-Confirm that the executable is available:
+For an existing Homebrew installation, use `brew update` followed by `brew upgrade loophubs/tap/agent-guard`.
 
-```sh
-command -v agent-guard
-bun --version
-```
+The legacy npm package is no longer maintained. To migrate an npm or Bun global installation, first install through Homebrew, then update each registered hook to `/opt/homebrew/bin/agent-guard`. Start a new agent session and verify registration before removing the legacy package with `npm uninstall --global @loophubs/agent-guard` or `bun remove --global @loophubs/agent-guard`. For interactive use, confirm `command -v agent-guard` resolves to the Homebrew executable after removal.
 
 ## Register Claude Code
 
@@ -47,7 +35,7 @@ Merge the following hook into your existing `~/.claude/settings.json`; retain an
   "hooks": {
     "PreToolUse": [{
       "matcher": "Bash|Read|Edit|Write|Grep",
-      "hooks": [{ "type": "command", "command": "/absolute/path/to/agent-guard --runtime claude", "timeout": 5 }]
+      "hooks": [{ "type": "command", "command": "/opt/homebrew/bin/agent-guard --runtime claude", "timeout": 5 }]
     }]
   }
 }
@@ -64,14 +52,14 @@ Use a managed `PreToolUse` hook in `/etc/codex/requirements.toml`. Merge these t
 hooks = true
 
 [hooks]
-managed_dir = "/absolute/path/to"
+managed_dir = "/opt/homebrew/bin"
 
 [[hooks.PreToolUse]]
 matcher = "^Bash$"
 
 [[hooks.PreToolUse.hooks]]
 type = "command"
-command = "/absolute/path/to/agent-guard --runtime codex"
+command = "/opt/homebrew/bin/agent-guard --runtime codex"
 timeout = 5
 ```
 
@@ -85,7 +73,7 @@ Create `~/.pi/agent/extensions/agent-guard.ts` with the adapter below. Replace t
 import { spawnSync } from "node:child_process";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-const guard = "/absolute/path/to/agent-guard";
+const guard = "/opt/homebrew/bin/agent-guard";
 
 export default function (pi: ExtensionAPI) {
   pi.on("tool_call", (event, ctx) => {
@@ -108,58 +96,68 @@ A failed, missing, or timed-out guard check blocks the Pi tool call.
 
 ## Verify
 
-Run this direct check from a project directory. It sends a JSON event to the guard; it does **not** run `du` or scan `~/Library`.
+Check the installed version and an allowed synthetic event:
 
 ```sh
-printf '%s\n' '{"tool_name":"Bash","tool_input":{"command":"du -sh ~/Library"}}' | agent-guard --runtime claude
+/opt/homebrew/bin/agent-guard --version
+printf '%s\n' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | /opt/homebrew/bin/agent-guard --runtime codex
 ```
 
-Expect exit code `2` and a stderr line starting with `DENIED:`. To verify registration, ask each configured agent to run `du -sh ~/Library`; it should report a denial before executing `du`. A passing direct check alone does not show that a runtime loaded its hook.
+The event is checked, not executed. Require exit code `0` and no output for this event. This smoke check does not show that a runtime loaded its hook. Inspect the runtime's hook listing and confirm registration separately.
+
+Developers can run the full [installed acceptance tool](../cmd/agent-guard-verify) with Go from a checkout of the release being evaluated, passing the absolute installed executable. See the development checks below; the tool is not part of the runtime package.
+
+## Administrator App Data policy
+
+The [App Data profile generator](../cmd/agent-guard-profile) creates an unsigned policy for an explicitly selected client and prints the exact inspection, MDM deployment, and test steps. Run this optional tool with Go from a checkout of the release being evaluated:
+
+```sh
+go run ./cmd/agent-guard-profile --instructions
+```
+
+Follow the printed prerequisite, attribution, deployment, and test steps before applying a profile. They use [Apple's deployment requirements](https://support.apple.com/guide/deployment/privacy-preferences-policy-control-payload-dep38df53c2a/web) and the reviewed [PPPC schema](https://github.com/apple/device-management/blob/09f249a06e7e3289930bf6d05f38fb562f748ebf/mdm/profiles/com.apple.TCC.configuration-profile-policy.yaml). A successful installed-package check or plist validation does not prove OS enforcement.
 
 ## Remove
 
 First remove the entry you added from Claude Code's `PreToolUse` list, Codex's `/etc/codex/requirements.toml`, or Pi's `~/.pi/agent/extensions/agent-guard.ts`. Keep unrelated entries and requirements. Restart or reload the runtime and verify that its hook listing no longer contains the guard. For Codex, retain any existing `[features].hooks` setting needed by other hooks.
 
-Then uninstall with the package manager you used:
-
-```sh
-npm uninstall --global @loophubs/agent-guard
-```
-
-```sh
-bun remove --global @loophubs/agent-guard
-```
+Then uninstall:
 
 ```sh
 brew uninstall loophubs/tap/agent-guard
 ```
 
+## Development checks
+
+Use the Go version and parser source pinned in `go.mod`. The parser pin preserves the supported shell syntax. Development tools, tests and runtime harnesses use Go. Historical implementations are available from Git history; the fixed [contract fixtures](../tests/fixtures/README.md) preserve their useful regression expectations.
+
+Keep build outputs, module and build caches, and evidence outside every checkout:
+
+```sh
+out=/absolute/path/outside/checkouts/agent-guard-evidence
+export GOMODCACHE="$out/modcache" GOCACHE="$out/buildcache"
+GOBIN="$out/tools" go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+export STATICCHECK="$out/tools/staticcheck"
+make check
+make build OUT="$out/package"
+go run ./cmd/agent-guard-verify "$out/package/bin/agent-guard"
+```
+
+`make check` runs `native/check`: gofmt, go vet, Staticcheck v0.8.1 and Go race tests across the implementation, tools and harnesses. Set `GO` and `STATICCHECK` to absolute executable paths when they are absent from `PATH`. Plain `go test ./...` includes all 3,795 fixture cases and checks exact public exit codes, denial text and Claude advice; it requires no exporter or environment opt-in.
+
+The installed verifier requires the assembled `bin/agent-guard`, adjacent `agent-guard-native` and `VERSION`; it rejects checkout entries and records both executable hashes. Require all 33 protocol cases to pass. It does not prove hook loading or all descendant cleanup.
+
+The [synthetic runtime and lifecycle harnesses](../tests/harness/README.md) check the assembled entry and adjacent binary. Runtime verdicts, direct protocol checks and instrumented lifecycle checks are separate evidence. A runtime failure before hooks is not a guard denial. Check registration and runtime acceptance separately before replacing an installation.
+
 ## Release
 
-From a clean checkout of the default branch, choose the next `patch`, `minor`, or `major` version. A change to what the guard denies or allows, whether stricter or looser, is a `minor` release; a fix that leaves both unchanged is a `patch`. A commit's type prefix does not decide the level: a `fix:` commit that widens denials still needs `minor`, and a dependency update that Renovate prefixes with `fix` stays a `patch` while parsing behavior is unchanged. Configure npm trusted publishing for this repository and `publish.yml` with direct `npm publish` allowed.
+This project remains in `0.x`; do not prepare `1.0.0` under the current policy. Use patch for internal, fix, dependency and documentation changes that leave user-visible behavior unchanged. Use minor only for a real contract change, such as moving installation from npm to Homebrew. The [release workflow](../.agents/skills/release/SKILL.md) owns authorization, version selection, preparation folding and tag safety.
 
-For a patch release (substitute `minor` or `major` when appropriate):
+`VERSION` is the single version owner. From a validated default-branch checkout, update it and write `docs/releases/<version>.md`. Keep the version and release notes in a separate `chore: release vX.Y.Z` commit. Create an annotated `v<version>` tag at that commit and push it only after the release gate clears.
 
-```sh
-npm version patch --no-git-tag-version
-version=$(node -p 'require("./package.json").version')
-mkdir -p docs/releases
-```
+Pushing the tag starts `publish.yml`, which checks the version and notes, runs the checks, creates the GitHub Release from the notes, then dispatches `agent-guard-release` to the tap. The formula builds that GitHub tag and records its commit revision. The tap uses Homebrew livecheck's `github_latest` strategy and `bump-formula-pr --write-only` for later updates, so a tag alone cannot trigger an update before the Release passes its checks; npm is no longer a publish destination. Verify the Release, tap revision and a built installation before declaring a release complete.
 
-Write `docs/releases/<version>.md` for this version only, using the value of `version` in its filename. Name what the guard newly blocks or allows and what existing checks became stricter or looser; include dependency changes only if useful. Review the file before committing it with the version bump. These files are individual Release bodies, not an accumulated `CHANGELOG.md`, and the npm package excludes `docs/`.
-
-Commit the version and its notes together, then push the annotated tag:
-
-```sh
-git add package.json "docs/releases/$version.md"
-git commit -m "release: prepare v$version"
-git tag -a "v$version" -m "v$version"
-git push --follow-tags
-```
-
-`--no-git-tag-version` leaves the version change uncommitted so the notes file can enter the same bump commit. `bun.lock` contains dependency versions but no root package version, so the version bump does not require a lockfile edit. Pushing the tag triggers the publish workflow, which checks it against `package.json` and requires a nonempty `docs/releases/<version>.md` before publishing to npm with OIDC. The Release job reads that file from the tagged commit and creates the GitHub Release only after publishing succeeds; its step summary then records the package version and Release URL.
-
-For a transient job failure, use **Re-run failed jobs** in GitHub Actions for the same tag ref. If npm publishing succeeded and Release creation failed, rerun only the Release job; a successful npm publish cannot be repeated for the same package version. If the tagged commit lacks its notes file, re-running cannot add it: prepare a new version commit and tag with the notes included.
+If a job fails, inspect the Release and tap state before retrying. An existing Release is not recreated. Fix an unconsumed preparation before publishing; a consumed tag is never moved, and a published version is corrected by a new version.
 
 ## Safety model and limits
 
@@ -177,4 +175,4 @@ The hook installs no operating system read policy. In a local 2x2 comparison, ev
 
 [Apple's container access rules](https://developer.apple.com/documentation/security/accessing-files-from-the-macos-app-sandbox) tie TCC access to another app's container to the recognized client identity and the user's grant; an allowed app may access other app containers until it exits. No prompt was observed in the local comparison, and whether the shell, hook or child was the responsible client was not established. [App Sandbox](https://developer.apple.com/documentation/xcode/configuring-the-macos-app-sandbox) belongs to the owning app's entitlements, while [Endpoint Security](https://developer.apple.com/documentation/BundleResources/Entitlements/com.apple.developer.endpoint-security.client) requires its client entitlement.
 
-Apple's [PPPC schema](https://github.com/apple/device-management/blob/release/mdm/profiles/com.apple.TCC.configuration-profile-policy.yaml) supports `SystemPolicyAppData` from macOS 14, with `Allowed: false` or `Authorization: Deny` for an identified client. [Deployment requires device management and supervision](https://support.apple.com/guide/deployment/privacy-preferences-policy-control-payload-dep38df53c2a/web); this is an administrator controlled client policy that the package does not install. macOS 27 [AppSettings privacy defaults](https://developer.apple.com/documentation/devicemanagement/appsettings) configure consent defaults, not arbitrary file read restrictions, and do not replace `SystemPolicyAppData`.
+macOS 27 [AppSettings privacy defaults](https://developer.apple.com/documentation/devicemanagement/appsettings) configure consent defaults, not arbitrary file read restrictions, and do not replace the administrator App Data policy described above.
