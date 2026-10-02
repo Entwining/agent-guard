@@ -177,9 +177,6 @@ func RunRuntime(options RuntimeOptions) error {
 	go func() { serverResult <- server.Serve(listener) }()
 	defer func() { _ = server.Close(); <-serverResult }()
 	url := "http://" + listener.Addr().String()
-	if err = runtimeConfig(home, options.Helper, url); err != nil {
-		return err
-	}
 	trace := filepath.Join(home, "trace.jsonl")
 	ablate := "0"
 	if options.Ablate {
@@ -208,6 +205,10 @@ func RunRuntime(options RuntimeOptions) error {
 			if err != nil {
 				return err
 			}
+			client = resolved
+		}
+		if err = runtimeConfig(home, runtime, client, options.Helper, url); err != nil {
+			return err
 		}
 		identity.Version, err = runProcess([]string{client, "--version"}, nil, filepath.Join(home, "workspace"), env, 5*time.Second, nil)
 		if err != nil {
@@ -284,8 +285,9 @@ func runtimeArgs(runtime, client, home string) []string {
 	}
 }
 
-func runtimeConfig(home, helper, url string) error {
-	for _, runtime := range []string{"claude", "codex"} {
+func runtimeConfig(home, runtime, client, helper, url string) error {
+	switch runtime {
+	case "claude", "codex":
 		matcher := "Bash"
 		if runtime == "codex" {
 			matcher = "^Bash$"
@@ -298,12 +300,20 @@ func runtimeConfig(home, helper, url string) error {
 		if err := writeJSON(path, config); err != nil {
 			return err
 		}
+		if runtime == "claude" {
+			return nil
+		}
+		// Codex launches its filesystem helper from its own executable; :minimal
+		// does not cover Homebrew's installation paths.
+		reads := fmt.Sprintf("%q = \"read\"\n", helper)
+		if filepath.IsAbs(client) {
+			reads += fmt.Sprintf("%q = \"read\"\n", client)
+		}
+		configText := fmt.Sprintf("model = \"synthetic\"\nmodel_provider = \"harness\"\napproval_policy = \"on-request\"\napprovals_reviewer = \"auto_review\"\ndefault_permissions = \"development\"\n[features]\nhooks = true\n[permissions.development.filesystem]\n\":minimal\" = \"read\"\n%q = \"write\"\n%s[permissions.development.network]\nenabled = true\n[model_providers.harness]\nname = \"Synthetic local harness\"\nbase_url = %q\nwire_api = \"responses\"\nrequires_openai_auth = false\n", home, reads, url+"/v1")
+		return os.WriteFile(filepath.Join(home, ".codex/config.toml"), []byte(configText), 0600)
+	default:
+		return os.WriteFile(filepath.Join(home, "runtime-pi.mjs"), []byte(strings.TrimSpace(piAdapter)+"\n"), 0600)
 	}
-	config := fmt.Sprintf("model = \"synthetic\"\nmodel_provider = \"harness\"\napproval_policy = \"on-request\"\napprovals_reviewer = \"auto_review\"\ndefault_permissions = \"development\"\n[features]\nhooks = true\n[permissions.development.filesystem]\n\":minimal\" = \"read\"\n%q = \"write\"\n[permissions.development.network]\nenabled = true\n[model_providers.harness]\nname = \"Synthetic local harness\"\nbase_url = %q\nwire_api = \"responses\"\nrequires_openai_auth = false\n", home, url+"/v1")
-	if err := os.WriteFile(filepath.Join(home, ".codex/config.toml"), []byte(config), 0600); err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(home, "runtime-pi.mjs"), []byte(strings.TrimSpace(piAdapter)+"\n"), 0600)
 }
 
 const piAdapter = `

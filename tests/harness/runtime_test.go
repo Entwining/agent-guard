@@ -144,7 +144,19 @@ func TestRuntimeDriverCompleteAndMissingHook(t *testing.T) {
 	}
 	for _, runtime := range []string{"claude", "pi", "codex"} {
 		launcher := "#!/bin/sh\nif test \"$1\" = --version; then printf 'synthetic runtime 1\\n'; exit 0; fi\nexport GORACE=atexit_sleep_ms=0\nexec " + quote(self) + " -test.run=TestSyntheticRuntimeClient -- " + runtime + " \"$@\"\n"
-		if err = os.WriteFile(filepath.Join(bin, runtime), []byte(launcher), 0700); err != nil {
+		client := filepath.Join(bin, runtime)
+		if runtime == "codex" {
+			physicalBin, err := filepath.EvalSymlinks(bin)
+			if err != nil {
+				t.Fatal(err)
+			}
+			client = filepath.Join(physicalBin, "installed-codex")
+			launcher = "#!/bin/sh\ntest \"$0\" = " + quote(client) + " || exit 80\n" + strings.TrimPrefix(launcher, "#!/bin/sh\n")
+			if err = os.Symlink(client, filepath.Join(bin, runtime)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err = os.WriteFile(client, []byte(launcher), 0700); err != nil {
 			t.Fatal(err)
 		}
 	}
