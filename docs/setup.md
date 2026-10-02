@@ -5,10 +5,10 @@
 ## Prerequisites
 
 - Apple Silicon macOS with a local Claude Code, Codex, or Pi session.
-- Homebrew for installation. Go is a build dependency managed by the formula; Node.js and Bun are not needed by the installed guard.
+- Homebrew for installation. Go is a build dependency managed by the formula.
 - Permission to edit the configuration for the runtime you choose. Codex's managed configuration uses the system `/etc/codex/requirements.toml` and may require an administrator.
 
-The Homebrew executable is `/opt/homebrew/bin/agent-guard`. Use that path for hook registration; an older npm or Bun global installation may still appear first in `PATH`.
+The Homebrew executable is `/opt/homebrew/bin/agent-guard`. Use that path for hook registration.
 
 The package denies unscoped `rg` and `fd` searches from the home directory itself. No `~/.ignore` file or other dotfiles setup is required for that protection; give an explicit project path to search from home.
 
@@ -23,8 +23,6 @@ brew install loophubs/tap/agent-guard
 ```
 
 For an existing Homebrew installation, use `brew update` followed by `brew upgrade loophubs/tap/agent-guard`.
-
-The legacy npm package is no longer maintained. To migrate an npm or Bun global installation, first install through Homebrew, then update each registered hook to `/opt/homebrew/bin/agent-guard`. Start a new agent session and verify registration before removing the legacy package with `npm uninstall --global @loophubs/agent-guard` or `bun remove --global @loophubs/agent-guard`. For interactive use, confirm `command -v agent-guard` resolves to the Homebrew executable after removal.
 
 ## Register Claude Code
 
@@ -149,11 +147,11 @@ The [synthetic runtime and lifecycle harnesses](../tests/harness/README.md) chec
 
 ## Release
 
-This project remains in `0.x`; do not prepare `1.0.0` under the current policy. Use patch for internal, fix, dependency and documentation changes that leave user-visible behavior unchanged. Use minor only for a real contract change, such as moving installation from npm to Homebrew. The [release workflow](../.agents/skills/release/SKILL.md) owns authorization, version selection, preparation folding and tag safety.
+This project remains in `0.x`; do not prepare `1.0.0` under the current policy. Use patch for internal, fix, dependency and documentation changes that leave user-visible behavior unchanged. Use minor only for a real contract change. The [release workflow](../.agents/skills/release/SKILL.md) owns authorization, version selection, preparation folding and tag safety.
 
 `VERSION` is the single version owner. From a validated default-branch checkout, update it and write `docs/releases/<version>.md`. Keep the version and release notes in a separate `chore: release vX.Y.Z` commit. Create an annotated `v<version>` tag at that commit and push it only after the release gate clears.
 
-Pushing the tag starts `publish.yml`, which checks the version and notes, runs the checks, creates the GitHub Release from the notes, then dispatches `agent-guard-release` to the tap. The formula builds that GitHub tag and records its commit revision. The tap uses Homebrew livecheck's `github_latest` strategy and `bump-formula-pr --write-only` for later updates, so a tag alone cannot trigger an update before the Release passes its checks; npm is no longer a publish destination. Verify the Release, tap revision and a built installation before declaring a release complete.
+Pushing the tag starts `publish.yml`, which checks the version and notes, runs the checks, creates the GitHub Release from the notes, then dispatches `agent-guard-release` to the tap. The formula builds that GitHub tag and records its commit revision. The tap uses Homebrew livecheck's `github_latest` strategy and `bump-formula-pr --write-only` for later updates, so a tag alone cannot trigger an update before the Release passes its checks. Verify the Release, tap revision and a built installation before declaring a release complete.
 
 If a job fails, inspect the Release and tap state before retrying. An existing Release is not recreated. Fix an unconsumed preparation before publishing; a consumed tag is never moved, and a published version is corrected by a new version.
 
