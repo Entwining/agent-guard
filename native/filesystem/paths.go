@@ -8,8 +8,7 @@ import (
 )
 
 func ExpandHome(p, home string) string {
-	// The baseline calls node:os.userInfo; Bun 1.4.2 reads USER and preserves empty values.
-	// Keep that API's missing-value result instead of querying the account database.
+	// Tilde-user matching follows USER, including an empty value; account lookup would change that contract.
 	username, present := os.LookupEnv("USER")
 	if !present {
 		username = "unknown"

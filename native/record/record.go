@@ -1,43 +1,42 @@
 package record
 
 import (
-	"encoding/json"
 	"path"
 	"slices"
 )
 
 type Word struct {
-	Text    string   `json:"text"`
-	Raw     string   `json:"raw"`
-	Expands bool     `json:"expands"`
-	Globs   bool     `json:"globs"`
-	Vars    []string `json:"vars"`
-	Role    string   `json:"role"`
-	Value   string   `json:"value"`
-	Pwd     bool     `json:"pwd"`
+	Text    string
+	Raw     string
+	Expands bool
+	Globs   bool
+	Vars    []string
+	Role    string
+	Value   string
+	Pwd     bool
 }
 type Redirect struct {
-	Direction string   `json:"direction"`
-	Target    string   `json:"target"`
-	Globs     bool     `json:"globs"`
-	Expands   bool     `json:"expands"`
-	Vars      []string `json:"vars"`
+	Direction string
+	Target    string
+	Globs     bool
+	Expands   bool
+	Vars      []string
 }
 type Items struct {
-	Root   string `json:"root"`
-	Hidden bool   `json:"hidden"`
+	Root   string
+	Hidden bool
 }
 type Target struct {
-	Path       string `json:"path"`
-	Unresolved string `json:"unresolved"`
-	Glob       bool   `json:"glob"`
-	Effect     string `json:"effect"`
-	Walk       string `json:"walk"`
-	Sends      bool   `json:"sends"`
-	Expands    bool   `json:"expands"`
-	Via        string `json:"via"`
-	Search     bool   `json:"search"`
-	Command    int    `json:"command"`
+	Path       string
+	Unresolved string
+	Glob       bool
+	Effect     string
+	Walk       string
+	Sends      bool
+	Expands    bool
+	Via        string
+	Search     bool
+	Command    int
 }
 type Flags []string
 
@@ -58,43 +57,35 @@ func (f *Flags) Delete(s string) {
 	}
 }
 
-func (f Flags) MarshalJSON() ([]byte, error) {
-	if f == nil {
-		return []byte("[]"), nil
-	}
-	return json.Marshal([]string(f))
-}
-
 type Command struct {
-	Argv      []*Word    `json:"argv"`
-	Redirects []Redirect `json:"redirects"`
-	Cwd       string     `json:"cwd"`
-	Program   int        `json:"program"`
-	Wrappers  []string   `json:"wrappers"`
-	Shell     bool       `json:"shell"`
-	Flags     Flags      `json:"flags"`
-	Items     *Items     `json:"items,omitempty"`
+	Argv      []*Word
+	Redirects []Redirect
+	Cwd       string
+	Program   int
+	Wrappers  []string
+	Shell     bool
+	Flags     Flags
+	Items     *Items
 }
 type Fragment struct {
-	Text string `json:"text"`
-	Cwd  string `json:"cwd"`
+	Text string
+	Cwd  string
 }
 type Script struct {
-	Commands      []*Command `json:"commands"`
-	Uninspectable []Fragment `json:"uninspectable"`
-	ParseFailed   bool       `json:"parseFailed"`
+	Commands      []*Command
+	Uninspectable []Fragment
+	ParseFailed   bool
 }
 type Request struct {
-	Runtime    string `json:"runtime"`
-	Tool       string `json:"tool"`
-	Home       string `json:"home"`
-	Cwd        string `json:"cwd"`
-	InputCwd   string `json:"inputCwd"`
-	PathInput  string `json:"pathInput"`
-	Operation  string `json:"operation"`
-	Target     string `json:"target"`
-	SearchRoot string `json:"searchRoot"`
-	Glob       string `json:"glob"`
+	Runtime    string
+	Tool       string
+	Home       string
+	Cwd        string
+	InputCwd   string
+	PathInput  string
+	Operation  string
+	SearchRoot string
+	Glob       string
 	Script
 }
 

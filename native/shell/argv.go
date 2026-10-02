@@ -1,11 +1,12 @@
 package shell
 
 import (
-	"agentguard/native/record"
 	"path"
 	"regexp"
 	"slices"
 	"strings"
+
+	"agentguard/native/record"
 )
 
 func rx(p, s string) bool { return regexp.MustCompile(p).MatchString(s) }

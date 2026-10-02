@@ -1,9 +1,11 @@
 package shell
 
 import (
-	"agentguard/native/record"
-	"mvdan.cc/sh/v3/syntax"
 	"strings"
+
+	"mvdan.cc/sh/v3/syntax"
+
+	"agentguard/native/record"
 )
 
 func (f *frontend) redirect(node *syntax.Redirect, s scope) *record.Redirect {

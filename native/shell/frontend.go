@@ -1,10 +1,12 @@
 package shell
 
 import (
-	"agentguard/native/record"
 	"maps"
-	"mvdan.cc/sh/v3/syntax"
 	"strings"
+
+	"mvdan.cc/sh/v3/syntax"
+
+	"agentguard/native/record"
 )
 
 type directory struct {

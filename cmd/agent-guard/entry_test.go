@@ -1,7 +1,6 @@
 package main
 
 import (
-	"agentguard/native/reasons"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"agentguard/native/reasons"
 )
 
 func TestNativeEntry(t *testing.T) {

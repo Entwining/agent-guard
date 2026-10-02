@@ -1,11 +1,12 @@
 package shell
 
 import (
-	"agentguard/native/filesystem"
-	"agentguard/native/record"
 	"path"
 	"slices"
 	"strings"
+
+	"agentguard/native/filesystem"
+	"agentguard/native/record"
 )
 
 func boundedDirectories(current string, candidates []string, home string) []string {

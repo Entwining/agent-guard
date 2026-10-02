@@ -1,11 +1,12 @@
 package rules
 
 import (
+	"regexp"
+	"strings"
+
 	"agentguard/native/filesystem"
 	"agentguard/native/reasons"
 	"agentguard/native/record"
-	"regexp"
-	"strings"
 )
 
 func rx(p, s string) bool { return regexp.MustCompile(p).MatchString(s) }

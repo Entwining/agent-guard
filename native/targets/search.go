@@ -1,8 +1,9 @@
 package targets
 
 import (
-	"agentguard/native/record"
 	"path"
+
+	"agentguard/native/record"
 )
 
 func searchTargets(name string, c *Context) []record.Target {
@@ -43,12 +44,12 @@ func searchTargets(name string, c *Context) []record.Target {
 		if name == "grep" {
 			via = "cwd"
 		}
-		ts = append(ts, c.Make(c.Cmd.Cwd, nil, effect, Options{Via: via, Walk: walk, Search: B(!help)}))
+		ts = append(ts, c.Make(c.Cmd.Cwd, nil, effect, Options{Via: via, Walk: walk, Search: new(!help)}))
 	}
 	for _, w := range c.Words {
 		if w.Role == "glob" || w.Role == "option:glob" {
 			c.Claimed[w] = true
-			ts = append(ts, c.Make(path.Base(w.Value), w, effect, Options{Via: "option", Glob: B(true), Walk: "none"}))
+			ts = append(ts, c.Make(path.Base(w.Value), w, effect, Options{Via: "option", Glob: new(true), Walk: "none"}))
 		}
 	}
 	return ts

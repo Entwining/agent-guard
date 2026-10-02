@@ -1,11 +1,12 @@
 package targets
 
 import (
-	"agentguard/native/record"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"agentguard/native/record"
 )
 
 const CurlValueLetters = "AbcCdDeEFHKmoPQrTtuUwxXyYz"
@@ -16,9 +17,9 @@ func curlTargets(c *Context) []record.Target {
 	ts := []record.Target{}
 	read := func(p string, w *record.Word, quoted, sends bool) {
 		c.Claimed[w] = true
-		o := Options{Via: "option", Sends: B(sends)}
+		o := Options{Via: "option", Sends: new(sends)}
 		if quoted {
-			o.Quoted = B(true)
+			o.Quoted = new(true)
 		}
 		ts = append(ts, c.Make(p, w, "read", o))
 	}
@@ -46,7 +47,7 @@ func curlTargets(c *Context) []record.Target {
 			c.Claimed[w] = true
 			p := regexp.MustCompile(`(?i)^file:(//)?`).ReplaceAllString(url[2], "")
 			p = regexp.MustCompile(`(?i)%([0-9a-f]{2})`).ReplaceAllStringFunc(p, func(s string) string { n, _ := strconv.ParseInt(s[1:], 16, 32); return string(rune(n)) })
-			ts = append(ts, c.Make(p, w, "read", Options{Via: "operand", Glob: B(strings.ContainsAny(p, "[{"))}))
+			ts = append(ts, c.Make(p, w, "read", Options{Via: "operand", Glob: new(strings.ContainsAny(p, "[{"))}))
 			continue
 		}
 		key, value := "", ""

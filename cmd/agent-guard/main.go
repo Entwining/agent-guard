@@ -1,7 +1,6 @@
 package main
 
 import (
-	"agentguard/native/core"
 	"context"
 	"fmt"
 	"io"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"agentguard/native/core"
 )
 
 // Only a completed supervised rejection uses 3; Go's default panic status is 2.

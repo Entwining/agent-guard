@@ -1,12 +1,13 @@
 package core
 
 import (
-	"agentguard/native/filesystem"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"agentguard/native/filesystem"
 )
 
 type Result struct {

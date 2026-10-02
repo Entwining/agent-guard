@@ -1,13 +1,14 @@
 package core
 
 import (
-	"agentguard/native/filesystem"
 	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
+
+	"agentguard/native/filesystem"
 )
 
 type cancelingProbe struct {

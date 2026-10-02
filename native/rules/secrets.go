@@ -1,13 +1,14 @@
 package rules
 
 import (
+	"regexp"
+	"slices"
+	"strings"
+
 	text "agentguard/native"
 	"agentguard/native/reasons"
 	"agentguard/native/record"
 	"agentguard/native/targets"
-	"regexp"
-	"slices"
-	"strings"
 )
 
 func secretName(s string) bool { return rx(`TOKEN|SECRET|KEY|PASSWORD|CREDENTIAL`, strings.ToUpper(s)) }

@@ -1,10 +1,11 @@
 package shell
 
 import (
-	"agentguard/native/record"
 	"fmt"
 	"strings"
 	"testing"
+
+	"agentguard/native/record"
 )
 
 func TestCwdBudget(t *testing.T) {

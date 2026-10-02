@@ -1,9 +1,10 @@
 package shell
 
 import (
-	"agentguard/native/record"
 	"slices"
 	"testing"
+
+	"agentguard/native/record"
 )
 
 func TestSubshellVariables(t *testing.T) {

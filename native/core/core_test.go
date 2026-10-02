@@ -1,16 +1,17 @@
 package core
 
 import (
-	"agentguard/native/filesystem"
-	"agentguard/native/reasons"
-	"agentguard/native/record"
-	"agentguard/native/targets"
 	"fmt"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"agentguard/native/filesystem"
+	"agentguard/native/reasons"
+	"agentguard/native/record"
+	"agentguard/native/targets"
 )
 
 func TestCoreContracts(t *testing.T) {

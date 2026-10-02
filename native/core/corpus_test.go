@@ -1,7 +1,6 @@
 package core
 
 import (
-	"agentguard/native/filesystem"
 	"bufio"
 	"encoding/json"
 	"fmt"
@@ -11,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"agentguard/native/filesystem"
 )
 
 type contractRow struct {

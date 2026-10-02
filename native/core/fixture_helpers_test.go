@@ -1,8 +1,6 @@
 package core
 
 import (
-	"agentguard/native/filesystem"
-	"agentguard/native/record"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,6 +8,9 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+
+	"agentguard/native/filesystem"
+	"agentguard/native/record"
 )
 
 type watchingProbe struct {

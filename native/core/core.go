@@ -1,13 +1,14 @@
 package core
 
 import (
+	"context"
+
 	"agentguard/native/filesystem"
 	"agentguard/native/reasons"
 	"agentguard/native/record"
 	"agentguard/native/rules"
 	"agentguard/native/shell"
 	"agentguard/native/targets"
-	"context"
 )
 
 func BuildRequest(runtime, tool, cwd, input, glob, home string) record.Request {
@@ -31,7 +32,6 @@ func BuildRequest(runtime, tool, cwd, input, glob, home string) record.Request {
 		if tool == "read" {
 			r.Operation = "read"
 		}
-		r.Target = filesystem.AbsPath(input, r.Cwd, home)
 	}
 	return r
 }

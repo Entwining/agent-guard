@@ -1,9 +1,10 @@
 package targets
 
 import (
-	"agentguard/native/record"
 	"slices"
 	"strings"
+
+	"agentguard/native/record"
 )
 
 var gitMetadata = strings.Fields("add rm mv restore checkout reset stash check-ignore check-attr update-index ls-files status clean commit")
@@ -96,7 +97,7 @@ func gitTargets(c *Context) []record.Target {
 	add := func(p string, w *record.Word, e, via string) {
 		c.Claimed[w] = true
 		glob := pathspec && strings.ContainsAny(p, "*?[")
-		o := Options{Via: via, Glob: B(glob), Base: base}
+		o := Options{Via: via, Glob: new(glob), Base: base}
 		ts = append(ts, c.Make(p, w, e, o))
 		if e == "read" && strings.Contains(p, ":") {
 			ts = append(ts, c.Make(p[strings.Index(p, ":")+1:], w, e, o))

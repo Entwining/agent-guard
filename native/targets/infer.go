@@ -1,14 +1,15 @@
 package targets
 
 import (
-	text "agentguard/native"
-	"agentguard/native/filesystem"
-	"agentguard/native/record"
 	"maps"
 	"path"
 	"regexp"
 	"slices"
 	"strings"
+
+	text "agentguard/native"
+	"agentguard/native/filesystem"
+	"agentguard/native/record"
 )
 
 func maker(home string, cmd *record.Command, command int, walk string, sends bool) func(string, *record.Word, string, Options) record.Target {
@@ -126,7 +127,7 @@ func commandTargets(cmd *record.Command, index int, home string) []record.Target
 		}
 	}
 	make := maker(home, cmd, index, walk, sends)
-	c := &Context{Cmd: cmd, Words: ws, Walk: walk, Claimed: map[*record.Word]bool{}, Make: make}
+	c := &Context{Cmd: cmd, Words: ws, Claimed: map[*record.Word]bool{}, Make: make}
 	operands := spec.Operands
 	if operands == "" {
 		operands = "read"
@@ -141,7 +142,7 @@ func commandTargets(cmd *record.Command, index int, home string) []record.Target
 			if r.Direction == "out" {
 				effect = "write"
 			}
-			ts = append(ts, make(r.Target, nil, effect, Options{Via: "redirect", Glob: B(r.Globs), Expands: B(r.Expands)}))
+			ts = append(ts, make(r.Target, nil, effect, Options{Via: "redirect", Glob: new(r.Globs), Expands: new(r.Expands)}))
 		}
 	}
 	if cmd.Items != nil && program != nil {
@@ -149,7 +150,7 @@ func commandTargets(cmd *record.Command, index int, home string) []record.Target
 		if cmd.Items.Hidden {
 			walk = "hidden"
 		}
-		ts = append(ts, make(cmd.Items.Root, nil, operands, Options{Via: "items", Glob: B(false), Walk: walk}))
+		ts = append(ts, make(cmd.Items.Root, nil, operands, Options{Via: "items", Glob: new(false), Walk: walk}))
 	}
 	if slices.Contains(cmd.Wrappers, "xargs") && program != nil {
 		os := cmd.Argv[:cmd.Program]

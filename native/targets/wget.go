@@ -1,10 +1,11 @@
 package targets
 
 import (
-	jsText "agentguard/native"
-	"agentguard/native/record"
 	"slices"
 	"strings"
+
+	jsText "agentguard/native"
+	"agentguard/native/record"
 )
 
 var wgetShort = map[string]string{"i": "input-file", "O": "output-document", "e": "execute", "P": "directory-prefix", "o": "output-file", "a": "append-output"}
@@ -66,7 +67,7 @@ func wgetTargets(c *Context) []record.Target {
 		if slices.Contains(wgetWrites, key) {
 			e = "write"
 		}
-		ts = append(ts, c.Make(p, holder, e, Options{Via: "option", Walk: "none", Sends: B(slices.Contains([]string{"post-file", "body-file", "config"}, key))}))
+		ts = append(ts, c.Make(p, holder, e, Options{Via: "option", Walk: "none", Sends: new(slices.Contains([]string{"post-file", "body-file", "config"}, key))}))
 	}
 	if !placed {
 		ts = append(ts, c.Make(".", nil, "write", Options{Via: "option", Walk: "none"}))

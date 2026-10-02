@@ -2,7 +2,7 @@ package native
 
 import "regexp"
 
-// ECMAScript WhiteSpace and LineTerminator, used by the frozen Bun regex API.
+// These patterns retain ECMAScript whitespace rather than Go's Unicode whitespace set.
 const SpaceClass = `\x09-\x0d\x20\x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}`
 const Space = "[" + SpaceClass + "]"
 const NonSpace = "[^" + SpaceClass + "]"

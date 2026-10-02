@@ -28,7 +28,7 @@ The legacy npm package is no longer maintained. To migrate an npm or Bun global 
 
 ## Register Claude Code
 
-Merge the following hook into your existing `~/.claude/settings.json`; retain any other settings and `PreToolUse` entries. Replace the executable path before saving. [Claude Code's hook reference](https://code.claude.com/docs/en/hooks) describes user-level settings, `PreToolUse` matchers, and exit-code-2 blocking.
+Merge the following [Claude Code `PreToolUse` hook](https://code.claude.com/docs/en/hooks) into your existing `~/.claude/settings.json`; retain other settings and hook entries. Set the installed executable path before saving. A hook exit code of `2` blocks the call.
 
 ```json
 {
@@ -45,7 +45,7 @@ Start a new Claude Code session after saving. This matcher covers the named shel
 
 ## Register Codex
 
-Use a managed `PreToolUse` hook in `/etc/codex/requirements.toml`. Merge these tables with any existing requirements rather than replacing the file. Set `managed_dir` to the absolute directory containing the installed `agent-guard` executable and `command` to that executable's absolute path. The directory must exist. [OpenAI's managed-hook documentation](https://learn.chatgpt.com/docs/hooks) specifies the `requirements.toml` format, the managed directory, and the `Bash` matcher; [managed configuration](https://learn.chatgpt.com/docs/enterprise/managed-configuration) places system requirements at `/etc/codex/requirements.toml` on macOS.
+Use a [managed `PreToolUse` hook](https://learn.chatgpt.com/docs/hooks) in macOS's [system requirements file](https://learn.chatgpt.com/docs/enterprise/managed-configuration), `/etc/codex/requirements.toml`. Merge these tables with existing requirements rather than replacing the file. Set `managed_dir` to the existing absolute directory containing the installed executable and `command` to the executable's absolute path.
 
 ```toml
 [features]
@@ -63,11 +63,11 @@ command = "/opt/homebrew/bin/agent-guard --runtime codex"
 timeout = 5
 ```
 
-Start a new Codex session and inspect `/hooks` to confirm this `PreToolUse` hook appears as managed. This matcher checks Codex's Bash calls only. Codex may expose other local tools to hooks, but this package currently interprets Codex Bash input; adding other matchers here would not extend its checks.
+Start a new Codex session and inspect `/hooks` to confirm this `PreToolUse` hook appears as managed. This registration and the verified Codex integration cover Bash calls only. Before adding another matcher, verify that the runtime's tool name and event payload match a supported guard input.
 
 ## Register Pi
 
-Create `~/.pi/agent/extensions/agent-guard.ts` with the adapter below. Replace the executable path, then start or reload Pi so it discovers the extension. [Pi's extension documentation](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md) specifies the `tool_call` event, blocking return value, and user extension directory.
+Create the [Pi `tool_call` extension](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md) below at `~/.pi/agent/extensions/agent-guard.ts`. Set the installed executable path, then start or reload Pi so it discovers the extension. Returning `block: true` prevents the call.
 
 ```ts
 import { spawnSync } from "node:child_process";
@@ -105,7 +105,7 @@ printf '%s\n' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | /opt/homebr
 
 The event is checked, not executed. Require exit code `0` and no output for this event. This smoke check does not show that a runtime loaded its hook. Inspect the runtime's hook listing and confirm registration separately.
 
-Developers can run the full [installed acceptance tool](../cmd/agent-guard-verify) with Go from a checkout of the release being evaluated, passing the absolute installed executable. See the development checks below; the tool is not part of the runtime package.
+Developers can run the full [installed acceptance tool](../cmd/agent-guard-verify) with Go from a checkout of the release being evaluated, passing the absolute installed executable. The development checks below include this invocation; the tool is not part of the runtime package.
 
 ## Administrator App Data policy
 
@@ -141,7 +141,7 @@ make build OUT="$out/package"
 go run ./cmd/agent-guard-verify "$out/package/bin/agent-guard"
 ```
 
-`make check` runs `native/check`: gofmt, go vet, the Staticcheck tool pinned in `go.mod`, and Go race tests across the implementation, tools and harnesses. Set `GO` to an absolute executable path when it is absent from `PATH`. Plain `go test ./...` includes all 3,795 fixture cases and checks exact public exit codes, denial text and Claude advice; it requires no exporter or environment opt-in.
+`make check` runs `native/check`: goimports formatting and import grouping, go vet, Staticcheck, and Go race tests across the implementation, tools and harnesses. Both development tools are pinned in `go.mod` and run with `go tool`. goimports runs in `-format-only` mode, which applies gofmt formatting without adding or removing imports; fix listed files with `go tool goimports -format-only -local agentguard -w FILES`. Set `GO` to an absolute executable path when it is absent from `PATH`. Plain `go test ./...` includes all 3,795 fixture cases and checks exact public exit codes, denial text and Claude advice; it requires no exporter or environment opt-in.
 
 The installed verifier requires the assembled `bin/agent-guard`, adjacent `agent-guard-native` and `VERSION`; it rejects checkout entries and records both executable hashes. Require all 33 protocol cases to pass. It does not prove hook loading or all descendant cleanup.
 
@@ -165,7 +165,13 @@ The guard is a bounded preflight check. It decides from the targets it infers un
 
 **Observation coverage** is which calls reach the guard. A disabled, skipped, or unregistered hook cannot inspect a call, and custom tools and processes outside the registered runtime are outside this coverage. `Glob` is not covered by the matchers or guard input handlers. Codex's example checks Bash calls, while the Pi adapter checks the five named tools.
 
-**Execution semantics** is what a command does when it runs, beyond what its text names. The guard treats a program it does not know as reading every path it is handed, so `aws s3 cp .env s3://bucket/x`, `open .env`, and `python3 script.py .env` are denied; pass a credential file through the program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`, which the guard allows for the clients its program table models. The guard does not control what such a client does with the contents. A read whose target the program picks while it runs cannot be decided before execution: an interpreter opening a file itself, `git diff`, `git log -p`, or `git show` without a path operand, and a walk that reaches credential files it does not treat as hidden (such as `*.pem` under `rg`, `fd -x`, `tar`, or `cp -r`). An interpreter that chooses to print process environment values, such as Python code that prints `os.environ`, is also outside the static dump-command list. Command text the guard does not follow is also not covered: process substitution as input (`xargs cat < <(echo …)`), names another command prints into `xargs` (`ls *.pem | xargs cat`), wrappers the guard does not list such as `xcrun`, a value glued to a short option of a program the guard does not know (`tool -f.env`), a path built by command substitution or held in a variable (including a `for` loop variable), and shell state such as `cd -`, `~-`, `readonly`, `set -P`, zsh's `CHASE_LINKS`, or `env -C` with a redirection. The table models only some file options of curl, wget, docker, ssh, scp, sftp, and git, and treats the value of any other option as a name it does not judge: docker's build context and its `--build-context`, `--cache-from`, `--cache-to`, `--output`, `--ssh`, `--metadata-file`, and `--security-opt` values, the words `docker compose run` and `compose exec` pass to the container command, the other file settings of `ssh -o`, and `git clone --reference`, `--template`, and `--separate-git-dir` or `git worktree add`. A `-` that a client reads as standard input (`curl -K -`, `curl -T -`, `wget -i -`) is judged as a path when the working directory is sensitive. A file the client uses itself, such as `ssh -i` or `docker run --env-file`, is allowed by design. A command that prints a secret it is allowed to read, such as `gcloud auth print-access-token`, has no path to check, so the guard lists the subcommands it knows and cannot list them all.
+**Execution semantics** is what a command does when it runs, beyond what its text names:
+
+- The guard treats a program it does not know as reading every path it is handed, so `aws s3 cp .env s3://bucket/x`, `open .env`, and `python3 script.py .env` are denied. Pass a credential file through the program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`, which the guard allows for the clients its program table models. A file the client uses itself, such as `ssh -i` or `docker run --env-file`, is allowed by design; the guard does not control what the client does with its contents.
+- A read whose target the program picks while it runs cannot be decided before execution: an interpreter opening a file itself, `git diff`, `git log -p`, or `git show` without a path operand, and a walk that reaches credential files it does not treat as hidden (such as `*.pem` under `rg`, `fd -x`, `tar`, or `cp -r`). An interpreter that chooses to print process environment values, such as Python code that prints `os.environ`, is also outside the static dump-command list.
+- Command text the guard does not follow is also not covered: process substitution as input (`xargs cat < <(echo …)`), names another command prints into `xargs` (`ls *.pem | xargs cat`), wrappers the guard does not list such as `xcrun`, a value glued to a short option of a program the guard does not know (`tool -f.env`), a path built by command substitution or held in a variable (including a `for` loop variable), and shell state such as `cd -`, `~-`, `readonly`, `set -P`, zsh's `CHASE_LINKS`, or `env -C` with a redirection.
+- The table models only some file options of curl, wget, docker, ssh, scp, sftp, and git, and treats the value of any other option as a name it does not judge: docker's build context and its `--build-context`, `--cache-from`, `--cache-to`, `--output`, `--ssh`, `--metadata-file`, and `--security-opt` values, the words `docker compose run` and `compose exec` pass to the container command, the other file settings of `ssh -o`, and `git clone --reference`, `--template`, and `--separate-git-dir` or `git worktree add`. A `-` that a client reads as standard input (`curl -K -`, `curl -T -`, `wget -i -`) is judged as a path when the working directory is sensitive.
+- A command that prints a secret it is allowed to read, such as `gcloud auth print-access-token`, has no path to check, so the guard lists the subcommands it knows and cannot list them all.
 
 **State and resource identity** is which file a path names when the command runs, compared with when the guard checked it. For a shell operand or file redirect with an unresolved expansion, the guard may call `readlink` on the fixed path prefix; it judges the uncertain suffix lexically without passing that suffix to `readlink` or `stat`. Unresolved working directories and iterator roots are outside this probe guarantee. A file moved or linked by an earlier command and then read, child links that `rg -L` follows, and a wildcard the shell expands to a link (`da*/x` where `data-link` leads elsewhere) are not resolved.
 

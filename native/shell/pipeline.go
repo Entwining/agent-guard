@@ -1,14 +1,15 @@
 package shell
 
 import (
-	jsText "agentguard/native"
-	"agentguard/native/record"
-	"agentguard/native/targets"
 	"path"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	jsText "agentguard/native"
+	"agentguard/native/record"
+	"agentguard/native/targets"
 )
 
 func hiddenName(s string) bool {

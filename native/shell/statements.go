@@ -1,8 +1,9 @@
 package shell
 
 import (
-	"agentguard/native/record"
 	"mvdan.cc/sh/v3/syntax"
+
+	"agentguard/native/record"
 )
 
 func (f *frontend) statement(stmt *syntax.Stmt, outer scope) {

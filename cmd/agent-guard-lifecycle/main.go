@@ -1,10 +1,11 @@
 package main
 
 import (
-	"agentguard/tests/harness"
 	"flag"
 	"fmt"
 	"os"
+
+	"agentguard/tests/harness"
 )
 
 func main() {

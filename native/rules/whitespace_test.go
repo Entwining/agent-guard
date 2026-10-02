@@ -1,9 +1,10 @@
 package rules
 
 import (
-	"agentguard/native/reasons"
 	"reflect"
 	"testing"
+
+	"agentguard/native/reasons"
 )
 
 func TestSignatureWhitespace(t *testing.T) {

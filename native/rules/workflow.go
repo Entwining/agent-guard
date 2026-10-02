@@ -1,10 +1,11 @@
 package rules
 
 import (
-	"agentguard/native/reasons"
-	"agentguard/native/record"
 	"path"
 	"slices"
+
+	"agentguard/native/reasons"
+	"agentguard/native/record"
 )
 
 func Workflow(req record.Request) []string {

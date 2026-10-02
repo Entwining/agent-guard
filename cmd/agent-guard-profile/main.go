@@ -133,14 +133,7 @@ func generate(args []string, stdout io.Writer) error {
 	if err := validate("/usr/bin/csreq", "-r", "="+requirement, "-t"); err != nil {
 		return fmt.Errorf("invalid code requirement: %w", err)
 	}
-	uuid, err := randomUUID()
-	if err != nil {
-		return err
-	}
-	payloadUUID, err := randomUUID()
-	if err != nil {
-		return err
-	}
+	uuid, payloadUUID := randomUUID(), randomUUID()
 	payloadIdentifier := "com.loophubs.agent-guard.appdata-deny." + uuid
 	var identity, code bytes.Buffer
 	if err := xml.EscapeText(&identity, []byte(identifier)); err != nil {
@@ -212,13 +205,11 @@ func validate(path string, args ...string) error {
 	return nil
 }
 
-func randomUUID() (string, error) {
+func randomUUID() string {
 	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return "", err
-	}
+	rand.Read(b[:])
 	b[6], b[8] = b[6]&0x0f|0x40, b[8]&0x3f|0x80
-	return fmt.Sprintf("%X-%X-%X-%X-%X", b[:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
+	return fmt.Sprintf("%X-%X-%X-%X-%X", b[:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
 func quote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

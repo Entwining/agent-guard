@@ -1,9 +1,10 @@
 package filesystem
 
 import (
-	"agentguard/native/record"
 	"context"
 	"sync"
+
+	"agentguard/native/record"
 )
 
 // Bounded parallel resolution improved existing multi-target workloads.

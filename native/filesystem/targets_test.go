@@ -1,7 +1,6 @@
 package filesystem
 
 import (
-	"agentguard/native/record"
 	"context"
 	"errors"
 	"fmt"
@@ -12,6 +11,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"agentguard/native/record"
 )
 
 type targetProbe struct {

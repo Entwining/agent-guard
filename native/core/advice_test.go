@@ -1,9 +1,10 @@
 package core
 
 import (
+	"testing"
+
 	"agentguard/native/filesystem"
 	"agentguard/native/reasons"
-	"testing"
 )
 
 func TestAssignmentProtectedSubstitution(t *testing.T) {

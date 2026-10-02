@@ -127,7 +127,7 @@ func apiGlobMatch(pattern, subject string) bool {
 	}
 	matched := false
 	for _, candidate := range Braces(pattern) {
-		// Bun.Glob consumes single-element braces at this API boundary.
+		// API glob patterns consume single-element braces, unlike shell expansion.
 		for {
 			left := strings.LastIndex(candidate, "{")
 			if left < 0 {

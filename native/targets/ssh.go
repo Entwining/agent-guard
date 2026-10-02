@@ -1,10 +1,11 @@
 package targets
 
 import (
-	text "agentguard/native"
-	"agentguard/native/record"
 	"regexp"
 	"strings"
+
+	text "agentguard/native"
+	"agentguard/native/record"
 )
 
 var sshFileOptions = map[string]string{"identityfile": "use", "certificatefile": "use", "globalknownhostsfile": "use", "userknownhostsfile": "write", "revokedhostkeys": "use", "pkcs11provider": "use"}
@@ -81,7 +82,7 @@ func sshTargets(client string) func(*Context) []record.Target {
 			for _, p := range paths {
 				o := Options{Via: "option"}
 				if letter == "o" {
-					o.Quoted = B(false)
+					o.Quoted = new(false)
 				}
 				ts = append(ts, c.Make(p, holder, effect, o))
 			}

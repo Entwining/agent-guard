@@ -1,9 +1,10 @@
 package shell
 
 import (
-	"agentguard/native/record"
 	"regexp"
 	"strings"
+
+	"agentguard/native/record"
 )
 
 type interpreter struct {

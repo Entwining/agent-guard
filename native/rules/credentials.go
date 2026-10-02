@@ -1,11 +1,12 @@
 package rules
 
 import (
+	"context"
+	"slices"
+
 	"agentguard/native/filesystem"
 	"agentguard/native/reasons"
 	"agentguard/native/record"
-	"context"
-	"slices"
 )
 
 func targetReason(t record.Target, home string) string {

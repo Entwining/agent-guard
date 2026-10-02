@@ -1,9 +1,10 @@
 package targets
 
 import (
-	"agentguard/native/record"
 	"slices"
 	"strings"
+
+	"agentguard/native/record"
 )
 
 func ShowsHidden(ws []*record.Word) bool {

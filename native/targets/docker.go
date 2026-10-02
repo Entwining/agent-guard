@@ -1,9 +1,10 @@
 package targets
 
 import (
-	"agentguard/native/record"
 	"slices"
 	"strings"
+
+	"agentguard/native/record"
 )
 
 var dockerGlobal = strings.Fields("-H --host -c --context -l --log-level --config --tlscacert --tlscert --tlskey")

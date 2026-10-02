@@ -1,13 +1,14 @@
 package core
 
 import (
-	"agentguard/native/reasons"
-	"agentguard/native/record"
 	"errors"
 	"os"
 	"strings"
 	"syscall"
 	"testing"
+
+	"agentguard/native/reasons"
+	"agentguard/native/record"
 )
 
 func TestProbeSafety(t *testing.T) {

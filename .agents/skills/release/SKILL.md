@@ -15,7 +15,7 @@ Turn the current state of a repository into one published version, or report why
 
 ## Gate
 
-Tagging, pushing and publishing are outward and hard to reverse: a registry version cannot be overwritten. The first pass therefore ends with a proposal, never with a release action.
+Tagging, pushing and publishing expose a version to consumers. An already authorized release continues with that exact version and batch; otherwise the first pass ends with a proposal, never with a release action. A consumed tag is not moved.
 
 - Release only when the user asked for this release, or answered a proposal about this exact version. A request to commit, push, merge, or finish a change is not a request to release it.
 - Confirm the proposed version does not already exist at the destination before proposing it; never republish a version that exists.
@@ -45,7 +45,7 @@ Derive the level from the range that this release would include, not from the re
 
 ## Propose
 
-Send one message that ends the first pass: the proposed version, the level with the evidence that decided it, the steps the repository will run in order, the destination of the published artifact, and any step that needs the user. Wait for direction on that version.
+When authorization is missing, send one proposal: the version, the level with the evidence that decided it, the steps the repository will run in order, the destination of the published artifact, and any step that needs the user. Wait for direction on that version; reuse an existing authorization that still covers it and the publication batch.
 
 ## Release notes
 

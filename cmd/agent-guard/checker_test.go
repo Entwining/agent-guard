@@ -1,7 +1,6 @@
 package main
 
 import (
-	"agentguard/native/reasons"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"agentguard/native/reasons"
 )
 
 func assertCheckerContracts(t *testing.T, home, entry string) {

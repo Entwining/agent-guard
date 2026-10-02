@@ -1,13 +1,15 @@
 package shell
 
 import (
-	jsText "agentguard/native"
-	"agentguard/native/filesystem"
-	"agentguard/native/record"
-	"mvdan.cc/sh/v3/syntax"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"mvdan.cc/sh/v3/syntax"
+
+	jsText "agentguard/native"
+	"agentguard/native/filesystem"
+	"agentguard/native/record"
 )
 
 var braceSequence = regexp.MustCompile(`\{(?:-?\d+|[A-Za-z])\.\.(?:-?\d+|[A-Za-z])(?:\.\.-?\d+)?\}`)

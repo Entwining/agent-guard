@@ -1,8 +1,9 @@
 package targets
 
 import (
-	"agentguard/native/record"
 	"strings"
+
+	"agentguard/native/record"
 )
 
 func tarCluster(w *record.Word, i int) bool {

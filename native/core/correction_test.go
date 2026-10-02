@@ -1,13 +1,14 @@
 package core
 
 import (
-	"agentguard/native/filesystem"
-	"agentguard/native/reasons"
-	"agentguard/native/targets"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
+
+	"agentguard/native/filesystem"
+	"agentguard/native/reasons"
+	"agentguard/native/targets"
 )
 
 func TestWhitespaceOperands(t *testing.T) {

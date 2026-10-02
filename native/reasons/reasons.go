@@ -21,25 +21,3 @@ const (
 	Include      = "rg has no --include flag. Filter files with -g GLOB (for example -g '*.ts') or a type filter such as -t ts."
 	Bre          = "rg regex is not grep BRE: a\\|b matches a literal pipe. Write alternation as a|b; for a literal pipe, use [|] or -F."
 )
-
-var All = map[string]string{
-	"syntax":       Syntax,
-	"appdata":      Appdata,
-	"broad":        Broad,
-	"file":         File,
-	"codeFile":     CodeFile,
-	"hiddenSearch": HiddenSearch,
-	"dump":         Dump,
-	"variable":     Variable,
-	"token":        Token,
-	"keychain":     Keychain,
-	"secretPrint":  SecretPrint,
-	"trace":        Trace,
-	"upload":       Upload,
-	"ssh":          Ssh,
-	"grepSsh":      GrepSsh,
-	"symlink":      Symlink,
-	"replace":      Replace,
-	"include":      Include,
-	"bre":          Bre,
-}

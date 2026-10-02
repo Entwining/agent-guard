@@ -1,10 +1,11 @@
 package core
 
 import (
-	"agentguard/native/reasons"
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"agentguard/native/reasons"
 )
 
 func TestProtocol(t *testing.T) {

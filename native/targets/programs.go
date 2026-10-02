@@ -1,10 +1,11 @@
 package targets
 
 import (
-	"agentguard/native/record"
 	"regexp"
 	"slices"
 	"strings"
+
+	"agentguard/native/record"
 )
 
 var Readers = strings.Fields("cat head tail less more bat sed awk jq yq base64 xxd od strings diff openssl plutil cp tee tar source . sort uniq cut nl fold rev paste comm join iconv hexdump hd zcat gzcat bzcat xzcat ag ack tac column pr vim vi nvim view perl ruby dd scp rsync zip ed ex hg svn sh bash zsh dash ksh wget php zgrep zless zmore")
@@ -15,12 +16,9 @@ type Options struct {
 	Glob, Expands, Sends, Search, Quoted *bool
 }
 
-func B(b bool) *bool { return &b }
-
 type Context struct {
 	Cmd     *record.Command
 	Words   []*record.Word
-	Walk    string
 	Claimed map[*record.Word]bool
 	Make    func(string, *record.Word, string, Options) record.Target
 }

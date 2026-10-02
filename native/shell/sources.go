@@ -1,11 +1,12 @@
 package shell
 
 import (
+	"slices"
+	"strings"
+
 	"agentguard/native/filesystem"
 	"agentguard/native/record"
 	"agentguard/native/targets"
-	"slices"
-	"strings"
 )
 
 func commandSources(cmd *record.Command, home string) ([]child, []string) {
