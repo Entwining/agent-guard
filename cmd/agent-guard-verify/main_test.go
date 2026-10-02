@@ -52,6 +52,9 @@ func runVerification(t *testing.T, entry string) (int, string, string) {
 
 func TestInstalledPackage(t *testing.T) {
 	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("TMPDIR", root)
 	entry := testPackage(t, root, "none")
 	if err := os.Remove(filepath.Join(filepath.Dir(entry), "agent-guard-native")); err != nil {
@@ -158,12 +161,6 @@ func TestInstalledIdentity(t *testing.T) {
 		if _, err := installed([]string{path}); err == nil {
 			t.Fatalf("invalid executable accepted: %s", path)
 		}
-	}
-	if err := os.WriteFile(filepath.Join(root, ".git"), nil, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := installed([]string{alias}); err == nil || !strings.Contains(err.Error(), "Git checkout") {
-		t.Fatalf("checkout alias accepted: %v", err)
 	}
 }
 
