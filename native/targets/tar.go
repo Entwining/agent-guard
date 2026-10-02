@@ -59,7 +59,7 @@ func tarTargets(c *Context) []record.Target {
 			c.Claimed[w] = true
 			continue
 		}
-		glued := match(`(?s)^(?:--directory=|-[^-]*C)(.+)$`, w.Text)
+		glued := match(`(?s)^(?:--directory=|-[^-]*?C)(.+)$`, w.Text)
 		enters := glued != nil || rx(`^(--directory|--cd|-[^-]*C)$`, record.Text(c.Words, i-1))
 		if !enters {
 			if base != "" && !strings.HasPrefix(w.Text, "-") {

@@ -139,3 +139,27 @@ func TestSurrogateParserBoundary(t *testing.T) {
 		}
 	}
 }
+
+func TestTarDirectoryOption(t *testing.T) {
+	home := "/synthetic/CapitalC/home"
+	for _, c := range []struct{ name, option string }{
+		{"short-glued", "-C" + home + "/.ssh"},
+		{"cluster-glued", "-xC" + home + "/.ssh"},
+		{"short-separate", "-C " + home + "/.ssh"},
+		{"long-glued", "--directory=" + home + "/.ssh"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			req := BuildRequest("codex", "bash", home+"/project", "tar -xf x.tar "+c.option, "", home)
+			if got := verdict(t, req, filesystem.DiskProbe{}); got != reasons.Ssh {
+				t.Fatalf("reason %q, want %q", got, reasons.Ssh)
+			}
+			ts := targets.ExtractTargets(req)
+			for _, target := range ts {
+				if target.Path == home+"/.ssh" && target.Effect == "write" {
+					return
+				}
+			}
+			t.Fatalf("missing extraction directory %s/.ssh in targets %+v", home, ts)
+		})
+	}
+}
