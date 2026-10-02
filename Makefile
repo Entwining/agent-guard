@@ -1,5 +1,4 @@
 GO ?= go
-STATICCHECK ?= staticcheck
 
 .PHONY: build check
 
@@ -19,4 +18,4 @@ build:
 	install -m 644 VERSION LICENSE README.md "$(OUT)/"
 
 check:
-	GO="$(GO)" STATICCHECK="$(STATICCHECK)" native/check
+	GO="$(GO)" native/check

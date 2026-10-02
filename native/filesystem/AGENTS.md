@@ -1,3 +1,3 @@
 # Filesystem ownership
 
-Check lexical protected paths before any probe. App Data traversal uses readlink alone; inode and stat checks belong only to SSH identity. Preserve legitimate operational errors for the caller's failure contract. Shell patterns and API globs have separate syntax owners; do not weaken Bash/POSIX protected-path coverage to reproduce a matcher defect.
+During App Data traversal, stop at lexically protected paths before each probe and use readlink alone; inode and stat checks belong only to SSH identity. Shell patterns and API globs have separate syntax owners; API matching must not narrow Bash/POSIX protected-path coverage.

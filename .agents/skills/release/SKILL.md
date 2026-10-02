@@ -47,6 +47,12 @@ Derive the level from the range that this release would include, not from the re
 
 Send one message that ends the first pass: the proposed version, the level with the evidence that decided it, the steps the repository will run in order, the destination of the published artifact, and any step that needs the user. Wait for direction on that version.
 
+## Release notes
+
+Write for people installing or using the version. Select changes that affect observable behavior, compatibility, supported environments, installation, or required user action. Describe the consequence; include implementation details only when they explain it. Routine development work and validation results belong in the operator's completion report. If the release contains only internal maintenance, say so briefly without inventing a user-visible change.
+
+Before publication, compare the notes with the release range and owning public contract. Remove work summaries with no relevant user consequence, and preserve changed requirements, limits, and migration steps, including whether an action is required and when it must occur.
+
 ## Execute
 
 After direction for that exact version, follow the repository's own path. Keep the version bump and its Release notes in a separate commit with subject `chore: release vX.Y.Z`, substituting the actual version. This separation permits folding an unconsumed preparation without rewriting a feature commit that may already be pushed. When the repository publishes from a tag or a release event, write the version into its owning file, create that release commit and the tag, then push the commit and tag and leave publishing and the release record to the automation. Otherwise run the remaining steps in the repository's order, with the hosted release before the publish step.
@@ -54,7 +60,6 @@ After direction for that exact version, follow the repository's own path. Keep t
 - Use the repository's tag and release conventions; when it has none, use `v<version>` for the tag.
 - Order the steps so a failure leaves nothing published.
 - Verify each step before the next: the owning file holds the new version, the tag names that version, and the run that the push started appears. Then follow that run to a terminal state within a bounded wait, check its result, and confirm at the destination that the artifact exists, that its contents match the repository's include list, and that the attestation or provenance the destination offers is present.
-- When release notes are the only durable record of a version, make them name the behavior changes a user must know, not only dependency updates.
 
 ## When it fails
 

@@ -2,6 +2,7 @@ package shell
 
 import (
 	"agentguard/native/record"
+	"maps"
 	"mvdan.cc/sh/v3/syntax"
 	"strings"
 )
@@ -74,9 +75,7 @@ func isolated(s scope) scope {
 	d.failures = nil
 	d.alternatives = append([]string{}, d.alternatives...)
 	v := map[string]string{}
-	for k, x := range s.vars {
-		v[k] = x
-	}
+	maps.Copy(v, s.vars)
 	return scope{&d, v, s.src}
 }
 

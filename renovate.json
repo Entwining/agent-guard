@@ -20,10 +20,11 @@
       "automerge": true
     },
     {
-      "description": "Keep the formatter and linter in their own update group.",
-      "matchPackageNames": ["oxlint", "oxfmt"],
-      "matchUpdateTypes": ["minor", "patch", "pin", "pinDigest", "digest"],
-      "groupName": "Oxc tools"
+      "description": "Keep the Go version used by CI current.",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "matchDepTypes": ["golang"],
+      "rangeStrategy": "bump"
     }
   ]
 }

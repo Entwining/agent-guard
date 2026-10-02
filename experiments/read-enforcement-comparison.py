@@ -194,7 +194,7 @@ def main():
     parser.add_argument("--guard-mode", required=True, choices=("on", "off"))
     parser.add_argument("--os-mode", required=True, choices=("on", "off"))
     parser.add_argument("--form", required=True, choices=FORMS)
-    parser.add_argument("--guard", type=Path, default=Path(__file__).resolve().parents[1] / "bin" / "agent-guard")
+    parser.add_argument("--guard", type=Path, help="assembled guard executable; required when --guard-mode is on")
     parser.add_argument("--synthetic-home", type=Path, help="new HOME outside real HOME; no native writer launch or TCC observations")
     args = parser.parse_args()
     validation = args.synthetic_home is not None
@@ -211,9 +211,9 @@ def main():
         parser.error("synthetic HOME must be a new directory outside the real HOME")
     if not validation and sys.platform != "darwin":
         parser.error("native cells require macOS")
-    guard = args.guard.expanduser().resolve()
-    if args.guard_mode == "on" and not guard.is_file():
-        parser.error("guard executable not found")
+    guard = args.guard.expanduser().resolve() if args.guard is not None else None
+    if args.guard_mode == "on" and (guard is None or not guard.is_file()):
+        parser.error("--guard must name an assembled guard executable when --guard-mode is on")
     work = output.with_name(output.name + ".artifacts")
     if output.exists() or work.exists():
         parser.error("output or artifact directory already exists")

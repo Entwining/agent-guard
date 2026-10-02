@@ -136,14 +136,12 @@ Keep build outputs, module and build caches, and evidence outside every checkout
 ```sh
 out=/absolute/path/outside/checkouts/agent-guard-evidence
 export GOMODCACHE="$out/modcache" GOCACHE="$out/buildcache"
-GOBIN="$out/tools" go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
-export STATICCHECK="$out/tools/staticcheck"
 make check
 make build OUT="$out/package"
 go run ./cmd/agent-guard-verify "$out/package/bin/agent-guard"
 ```
 
-`make check` runs `native/check`: gofmt, go vet, Staticcheck v0.8.1 and Go race tests across the implementation, tools and harnesses. Set `GO` and `STATICCHECK` to absolute executable paths when they are absent from `PATH`. Plain `go test ./...` includes all 3,795 fixture cases and checks exact public exit codes, denial text and Claude advice; it requires no exporter or environment opt-in.
+`make check` runs `native/check`: gofmt, go vet, the Staticcheck tool pinned in `go.mod`, and Go race tests across the implementation, tools and harnesses. Set `GO` to an absolute executable path when it is absent from `PATH`. Plain `go test ./...` includes all 3,795 fixture cases and checks exact public exit codes, denial text and Claude advice; it requires no exporter or environment opt-in.
 
 The installed verifier requires the assembled `bin/agent-guard`, adjacent `agent-guard-native` and `VERSION`; it rejects checkout entries and records both executable hashes. Require all 33 protocol cases to pass. It does not prove hook loading or all descendant cleanup.
 

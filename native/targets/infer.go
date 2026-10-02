@@ -4,6 +4,7 @@ import (
 	text "agentguard/native"
 	"agentguard/native/filesystem"
 	"agentguard/native/record"
+	"maps"
 	"path"
 	"regexp"
 	"slices"
@@ -84,12 +85,8 @@ func commandTargets(cmd *record.Command, index int, home string) []record.Target
 	ws := record.Rest(cmd)
 	walk := walkOf(spec, name, ws)
 	options := map[string]string{}
-	for k, v := range GlobalOptions {
-		options[k] = v
-	}
-	for k, v := range spec.Options {
-		options[k] = v
-	}
+	maps.Copy(options, GlobalOptions)
+	maps.Copy(options, spec.Options)
 	optionEffect := func(i int) string {
 		w := ws[i]
 		prev := record.Text(ws, i-1)

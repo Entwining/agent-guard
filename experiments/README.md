@@ -1,6 +1,6 @@
 # macOS App Data 2x2 experiment
 
-Run manually from a terminal without an agent hook. Do not retry a blocked agent command through another tool. Python 3.9 or later, Apple Command Line Tools, codesign, Bun and this checkout's dependencies must already be installed. The script reads only its random canary, never real application data, credentials or TCC.db, and never changes permission configuration.
+Run manually from a terminal without an agent hook. Do not retry a blocked agent command through another tool. Python 3.9 or later, Apple Command Line Tools and codesign must already be installed. For `--guard-mode on`, pass `--guard` with the assembled executable built using [the development checks](../docs/setup.md#development-checks) or installed by Homebrew; the checkout entry alone is not an assembled package. The script reads only its random canary, never real application data, credentials or TCC.db, and never changes permission configuration.
 
 Each invocation measures one cell: choose `--guard-mode off/on`, `--os-mode off/on`, and `--form direct_operand/inline_literal/external_script/runtime_config_path`. Run all 16 combinations separately in disposable accounts or restored snapshots with equivalent initial permissions and the same terminal launch arrangement. Record existing App Data and Full Disk Access status. Prior setup, reads, grants and entries can mask later effects; sequential reads in one session cannot establish independent TCC prevention. Do not reset permissions or change settings to make a result pass.
 
@@ -21,7 +21,7 @@ JSONL retains exact argv, exit code, operation status, stderr, stdout byte count
 For credential free validation outside the user's Library, use a new synthetic HOME and output name:
 
 ```sh
-python3 experiments/read-enforcement-comparison.py --guard-mode on --os-mode off --form direct_operand --synthetic-home /private/tmp/agent-guard-validation-home --output /private/tmp/agent-guard-validation.jsonl
+python3 experiments/read-enforcement-comparison.py --guard-mode on --guard "$out/package/bin/agent-guard" --os-mode off --form direct_operand --synthetic-home /private/tmp/agent-guard-validation-home --output /private/tmp/agent-guard-validation.jsonl
 ```
 
 Synthetic mode builds and verifies the native fixture but never launches it. It creates the canary under the supplied new HOME's ordinary `canaries` directory, runs the same access commands and guard preflight, and marks every UI observation `not_observed_synthetic`. It does not recreate the previously blocked synthetic Library/Containers setup or validate App Data rejection. OS on can still exit 3 if this execution context cannot apply the sandbox. Synthetic results validate setup and execution, never TCC.
