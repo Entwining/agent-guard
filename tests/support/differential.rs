@@ -27,7 +27,7 @@ pub fn validate_sources() {
         ),
         (
             "tests/fixtures/rust-contract-classification.jsonl",
-            "a59ddafbc4557a901670a7e7569295257d2c37df2fb92d54c08895d24883c4e6",
+            "87171281c243ebceefed14d6fbb103c5f75187239dab3c449652d3d156b63ed5",
         ),
         (
             "tests/fixtures/rust-d22-scope.jsonl",
