@@ -1,8 +1,17 @@
-//! Offline trial contracts. These types do not evaluate events or establish execution protection.
+//! Offline preflight trial. No production hook or execution-confinement path uses this package.
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
 use std::fmt;
+
+pub mod adapters;
+pub mod filesystem;
+pub mod limits;
+mod policy;
+pub mod shell;
+mod targets;
+
+pub use policy::{Context, Event, evaluate, evaluate_with_arm};
 
 /// A completed preflight decision retains coverage independently of whether the call proceeds.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,8 +57,18 @@ pub struct Recovery {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecoveryStep {
-    RecheckOperation { description: String },
-    OwnerAction { description: String },
+    RecheckOperation {
+        description: String,
+    },
+    OwnerAction {
+        description: String,
+    },
+    StructuredOperation {
+        tool: String,
+        input: serde_json::Value,
+        cwd: String,
+        description: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,6 +95,9 @@ pub enum CoverageGap {
     OutsideObservedTool { tool: String },
     ExecutionOwnerUnavailable,
     IdentityBound,
+    InspectionBudget,
+    InterpreterChosenRead,
+    UnsupportedDialectConstruct,
 }
 
 /// Entry owners must block on this error; it is not a completed no-objection decision.
