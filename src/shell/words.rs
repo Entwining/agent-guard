@@ -25,7 +25,7 @@ pub(super) fn expand(
     let (input, braces) = if heredoc {
         (raw.to_owned(), false)
     } else {
-        brace_text(raw)
+        brace_text(raw)?
     };
     let pieces = if heredoc {
         word::parse_heredoc(&input, &options)
@@ -43,10 +43,18 @@ pub(super) fn expand(
     out.word.raw = raw.to_owned();
     out.word.globs = braces;
     let mut splitting = false;
+    let lexical = if heredoc {
+        super::lexer::Lexed::heredoc(&input)
+    } else {
+        super::lexer::Lexed::scan(&input)
+    }
+    .map_err(|_| CheckError {
+        kind: CheckErrorKind::GuardFault,
+    })?;
     fill(
         &input,
         &pieces,
-        heredoc,
+        &lexical,
         variables,
         host,
         &mut out,
@@ -70,26 +78,25 @@ pub(super) fn expand(
     Ok(out)
 }
 
-fn brace_text(raw: &str) -> (String, bool) {
+fn brace_text(raw: &str) -> Result<(String, bool), CheckError> {
+    let lexical = super::lexer::Lexed::scan(raw).map_err(|_| CheckError {
+        kind: CheckErrorKind::GuardFault,
+    })?;
     let mut text = String::new();
     let mut expands = false;
     let mut cursor = 0;
     while cursor < raw.len() {
-        if let Some(end) = super::quotes::skip(raw, cursor) {
-            text.push_str(&raw[cursor..end]);
-            cursor = end;
-            continue;
-        }
         let ch = raw[cursor..].chars().next().unwrap_or_default();
-        if ch == '{'
-            && let Some((right, list)) = brace_group(raw, cursor)
+        if lexical.context(cursor).word_syntax()
+            && ch == '{'
+            && let Some((right, list)) = brace_group(raw, cursor, &lexical)
         {
             let group = &raw[cursor..=right];
             if raw[..cursor].ends_with('$') {
                 text.push_str(group);
             } else {
                 let body = &raw[cursor + 1..right];
-                let (inner, nested) = brace_text(body);
+                let (inner, nested) = brace_text(body)?;
                 if let Some(sequence) = brace_sequence(body) {
                     text.push_str(&sequence);
                     expands = true;
@@ -106,29 +113,25 @@ fn brace_text(raw: &str) -> (String, bool) {
         text.push(ch);
         cursor += ch.len_utf8();
     }
-    (text, expands)
+    Ok((text, expands))
 }
 
-fn brace_group(raw: &str, left: usize) -> Option<(usize, bool)> {
+fn brace_group(raw: &str, left: usize, lexical: &super::lexer::Lexed<'_>) -> Option<(usize, bool)> {
     let mut depth = 0;
     let mut list = false;
     let mut cursor = left;
     while cursor < raw.len() {
-        if let Some(end) = super::quotes::skip(raw, cursor) {
-            cursor = end;
-            continue;
-        }
         let ch = raw[cursor..].chars().next().unwrap_or_default();
-        if ch == '{' {
+        if lexical.context(cursor).word_syntax() && ch == '{' {
             depth += 1;
         }
-        if ch == '}' {
+        if lexical.context(cursor).word_syntax() && ch == '}' {
             depth -= 1;
             if depth == 0 {
                 return Some((cursor, list));
             }
         }
-        if ch == ',' && depth == 1 {
+        if lexical.context(cursor).word_syntax() && ch == ',' && depth == 1 {
             list = true;
         }
         cursor += ch.len_utf8();
@@ -167,13 +170,15 @@ fn brace_sequence(body: &str) -> Option<String> {
 fn fill(
     raw: &str,
     pieces: &[WordPieceWithSource],
-    quoted: bool,
+    lexical: &super::lexer::Lexed<'_>,
     variables: &BTreeMap<String, String>,
     host: crate::record::HostFacts<'_>,
     out: &mut Expanded,
     splitting: &mut bool,
 ) -> Result<(), CheckError> {
     for piece in pieces {
+        let context = lexical.context(piece.start_index);
+        let quoted = !context.unquoted() || context.heredoc.is_some();
         // Brush word offsets are UTF-8 byte offsets, unlike its program SourceSpan.
         let spelling = raw
             .get(piece.start_index..piece.end_index)
@@ -191,7 +196,7 @@ fn fill(
             WordPiece::AnsiCQuotedText(text) => out.word.text.push_str(&ansi(text)),
             WordPiece::DoubleQuotedSequence(inner)
             | WordPiece::GettextDoubleQuotedSequence(inner) => {
-                fill(raw, inner, true, variables, host, out, splitting)?
+                fill(raw, inner, lexical, variables, host, out, splitting)?
             }
             WordPiece::EscapeSequence(text) => {
                 let text = text.strip_prefix('\\').unwrap_or(text);
@@ -237,10 +242,16 @@ fn fill(
                         split: Vec::new(),
                         nested: Vec::new(),
                     };
+                    let lexical =
+                        super::lexer::Lexed::parameter_fragment(fragment).map_err(|_| {
+                            CheckError {
+                                kind: CheckErrorKind::GuardFault,
+                            }
+                        })?;
                     fill(
                         fragment,
                         &inner,
-                        true,
+                        &lexical,
                         variables,
                         host,
                         &mut expansion,
@@ -259,6 +270,8 @@ fn fill(
                     out.word.pwd |= plain.is_some_and(|name| name == "PWD");
                     out.word.text.push_str(value);
                     *splitting |= !quoted;
+                    // D1 retains Bash pathname expansion even when Zsh leaves the binding literal.
+                    out.word.globs |= !quoted && value.contains(['*', '?', '[']);
                 } else {
                     out.word.text.push_str(spelling);
                     out.word.expands = true;
@@ -288,10 +301,16 @@ fn fill(
                     split: Vec::new(),
                     nested: Vec::new(),
                 };
+                let lexical =
+                    super::lexer::Lexed::parameter_fragment(&expr.value).map_err(|_| {
+                        CheckError {
+                            kind: CheckErrorKind::GuardFault,
+                        }
+                    })?;
                 fill(
                     &expr.value,
                     &pieces,
-                    true,
+                    &lexical,
                     variables,
                     host,
                     &mut inner,

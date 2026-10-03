@@ -222,7 +222,10 @@ impl Target {
         effect: Effect,
         walk: Walk,
     ) -> Self {
-        let input = if word.raw.starts_with(['\'', '"']) {
+        let input = if matches!(
+            crate::shell::lexer::initial_quote(&word.raw),
+            crate::shell::lexer::Quote::Single | crate::shell::lexer::Quote::Double
+        ) {
             word.text.clone()
         } else {
             crate::filesystem::expand_home(&word.text, host.home, host.user)

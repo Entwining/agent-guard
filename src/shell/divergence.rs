@@ -10,29 +10,6 @@ pub(super) struct Detection {
     pub evaluated_variables: Vec<String>,
 }
 
-pub(super) fn closing(source: &str, start: usize, open: u8, close: u8) -> Option<usize> {
-    let bytes = source.as_bytes();
-    let mut depth = 0;
-    let mut index = start;
-    while index < bytes.len() {
-        if let Some(end) = super::quotes::skip(source, index) {
-            index = end;
-            continue;
-        }
-        let byte = bytes[index];
-        if byte == open {
-            depth += 1;
-        } else if byte == close {
-            depth -= 1;
-            if depth == 0 {
-                return Some(index);
-            }
-        }
-        index += source[index..].chars().next().map_or(1, char::len_utf8);
-    }
-    None
-}
-
 fn mask(bytes: &mut [u8], range: Range<usize>) {
     for byte in &mut bytes[range] {
         *byte = b'_';
@@ -49,7 +26,11 @@ fn qualifier(body: &str, trailing: bool) -> bool {
 }
 
 // Detection reads original checked spans even when the Bash parser rejects them.
-pub(super) fn detect(source: &str, spans: &[Range<usize>]) -> Result<Detection, CheckError> {
+pub(super) fn detect_lexed(
+    source: &str,
+    spans: &[Range<usize>],
+    lexical: &super::lexer::Lexed<'_>,
+) -> Result<Detection, CheckError> {
     for span in spans {
         if source.get(span.clone()).is_none() {
             return Err(CheckError {
@@ -65,27 +46,10 @@ pub(super) fn detect(source: &str, spans: &[Range<usize>]) -> Result<Detection, 
     let mut cursor = 0;
     while cursor < source.len() {
         let tail = &source[cursor..];
-        if tail.starts_with("<<")
-            && !tail.starts_with("<<<")
-            && let Some(newline) = tail.find('\n')
-            && let Some((delimiter, quoted)) =
-                super::quotes::heredoc_delimiter(tail[2..newline].trim_start_matches('-').trim())
-            && quoted
-            && !delimiter.is_empty()
-            && !delimiter.contains(char::is_whitespace)
-        {
-            let body_start = cursor + newline + 1;
-            cursor = source[body_start..]
-                .find(&format!("\n{delimiter}"))
-                .map(|n| body_start + n)
-                .unwrap_or(source.len());
-            continue;
-        }
+        let context = lexical.context(cursor);
         let byte = source.as_bytes()[cursor];
-        if (matches!(byte, b'\\' | b'\'') || tail.starts_with("$'"))
-            && let Some(end) = super::quotes::skip(source, cursor)
-        {
-            cursor = end;
+        if !context.active() {
+            cursor += source[cursor..].chars().next().map_or(1, char::len_utf8);
             continue;
         }
         if tail.starts_with("${(")
@@ -102,8 +66,9 @@ pub(super) fn detect(source: &str, spans: &[Range<usize>]) -> Result<Detection, 
             cursor += end + 1;
             continue;
         }
-        if tail.starts_with("=(")
-            && let Some(end) = closing(source, cursor + 1, b'(', b')')
+        if context.unquoted()
+            && tail.starts_with("=(")
+            && let Some(end) = lexical.closing(cursor + 1, b'(', b')')
         {
             result.divergent = true;
             result.code.push(source[cursor + 2..end].to_owned());
@@ -111,13 +76,14 @@ pub(super) fn detect(source: &str, spans: &[Range<usize>]) -> Result<Detection, 
             cursor = end + 1;
             continue;
         }
-        if byte == b'('
+        if context.unquoted()
+            && byte == b'('
             && cursor > 0
             && matches!(
                 source.as_bytes()[cursor - 1],
                 b'*' | b'?' | b'+' | b'!' | b'@'
             )
-            && let Some(end) = closing(source, cursor, b'(', b')')
+            && let Some(end) = lexical.closing(cursor, b'(', b')')
         {
             let body = &source[cursor + 1..end];
             let trailing = end + 1 == source.len()
@@ -137,13 +103,15 @@ pub(super) fn detect(source: &str, spans: &[Range<usize>]) -> Result<Detection, 
             cursor = end + 1;
             continue;
         }
-        if ["setopt", "unsetopt", "emulate"].iter().any(|name| {
-            tail.starts_with(name)
-                && tail
-                    .as_bytes()
-                    .get(name.len())
-                    .is_none_or(u8::is_ascii_whitespace)
-        }) && statement_boundary(&source[..cursor])
+        if context.unquoted()
+            && ["setopt", "unsetopt", "emulate"].iter().any(|name| {
+                tail.starts_with(name)
+                    && tail
+                        .as_bytes()
+                        .get(name.len())
+                        .is_none_or(u8::is_ascii_whitespace)
+            })
+            && statement_boundary(&source[..cursor])
         {
             result.divergent = true;
         }
@@ -168,6 +136,13 @@ fn statement_boundary(prefix: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn detect(source: &str, spans: &[Range<usize>]) -> Result<Detection, CheckError> {
+        detect_lexed(
+            source,
+            spans,
+            &super::super::lexer::Lexed::scan(source).unwrap(),
+        )
+    }
     #[test]
     fn glob_position_rule() {
         assert!(!qualifier("a|b", false));

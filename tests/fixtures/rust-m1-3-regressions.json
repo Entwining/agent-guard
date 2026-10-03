@@ -1,0 +1,213 @@
+[
+  {
+    "id": "eval-double-apostrophe",
+    "owner": "double_context",
+    "source": "v='$(cat ~/.ssh/id_rsa)'; printf %s \"it's\" \"${(e)v}\"",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "private-key"
+  },
+  {
+    "id": "eval-double-dollar-apostrophe",
+    "owner": "double_context",
+    "source": "v='$(cat ~/.ssh/id_rsa)'; printf %s \"$'\" \"${(e)v}\"",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "private-key"
+  },
+  {
+    "id": "eval-unquoted-after-double",
+    "owner": "double_context",
+    "source": "v='$(cat ~/.ssh/id_rsa)'; printf %s \"it's\" ${(e)v}",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "private-key"
+  },
+  {
+    "id": "flag-double-apostrophe",
+    "owner": "double_context",
+    "source": "printf %s \"it's\" \"${(f)v}\"",
+    "expected": "UR",
+    "decision_id": "D29"
+  },
+  {
+    "id": "flag-double-dollar-apostrophe",
+    "owner": "double_context",
+    "source": "printf %s \"$'\" \"${(f)v}\"",
+    "expected": "UR",
+    "decision_id": "D29"
+  },
+  {
+    "id": "qualifier-balanced-statement",
+    "owner": "qualifier",
+    "source": "echo \"it's\"; printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "private-key"
+  },
+  {
+    "id": "qualifier-balanced-word",
+    "owner": "qualifier",
+    "source": "printf %s \"it's\" *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "private-key"
+  },
+  {
+    "id": "qualifier-balanced-dollar",
+    "owner": "qualifier",
+    "source": "printf %s \"$'\" *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "private-key"
+  },
+  {
+    "id": "qualifier-balanced-path",
+    "owner": "qualifier",
+    "source": "printf %s \"it's\" ~/project/*(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "private-key"
+  },
+  {
+    "id": "qualifier-plus",
+    "owner": "qualifier",
+    "source": "printf %s \"it's\" ~/project/*(+f)",
+    "expected": "UR",
+    "decision_id": "D29"
+  },
+  {
+    "id": "setopt-extendedglob",
+    "owner": "command_gate",
+    "source": "echo \"it's\"; setopt extendedglob; echo ~/.ssh/id_*(.)",
+    "expected": "UR",
+    "decision_id": "D29"
+  },
+  {
+    "id": "setopt-globsubst",
+    "owner": "command_gate",
+    "source": "echo \"it's\"; setopt globsubst; p='.e*'; cat $p",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "environment-file"
+  },
+  {
+    "id": "equals-process-apostrophe",
+    "owner": "process",
+    "source": "cat \"it's\" =(cat ~/.ssh/id_rsa)",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "private-key"
+  },
+  {
+    "id": "equals-process-dollar-apostrophe",
+    "owner": "process",
+    "source": "cat \"$'\" =(cat ~/.ssh/id_rsa)",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "private-key"
+  },
+  {
+    "id": "resolved-star",
+    "owner": "expansion_glob",
+    "source": "p='.e*'; cat $p",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "environment-file"
+  },
+  {
+    "id": "resolved-question",
+    "owner": "expansion_glob",
+    "source": "p='.en?'; cat $p",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "environment-file"
+  },
+  {
+    "id": "resolved-bracket",
+    "owner": "expansion_glob",
+    "source": "p='.e[n]v'; cat $p",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "environment-file"
+  },
+  {
+    "id": "resolved-quoted-control",
+    "owner": "expansion_glob",
+    "source": "p='.e*'; cat \"$p\"",
+    "expected": "N",
+    "decision_id": "D29"
+  },
+  {
+    "id": "resolved-globsubst",
+    "owner": "expansion_glob",
+    "source": "setopt globsubst; p='.e*'; cat $p",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "environment-file"
+  },
+  {
+    "id": "resolved-appdata",
+    "owner": "expansion_glob",
+    "source": "p='$H/Library/Cont*'; ls $p",
+    "expected": "D",
+    "decision_id": "D29",
+    "protection": "App Data"
+  },
+  {
+    "id": "inert-single",
+    "owner": "masking",
+    "source": "printf '%s\\n' '${(f)var}'",
+    "expected": "N",
+    "decision_id": "D1"
+  },
+  {
+    "id": "inert-ansi",
+    "owner": "masking",
+    "source": "printf %s $'it\\'s ${(f)v}'",
+    "expected": "N",
+    "decision_id": "D1"
+  },
+  {
+    "id": "inert-double-qualifier",
+    "owner": "masking",
+    "source": "printf %s \"it's *(e:'cat ~/.ssh/id_rsa':)\"",
+    "expected": "N",
+    "decision_id": "D1"
+  },
+  {
+    "id": "inert-comment",
+    "owner": "masking",
+    "source": "printf ok # ${(f)v} *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "N",
+    "decision_id": "D1"
+  },
+  {
+    "id": "quoted-heredoc",
+    "owner": "masking",
+    "source": "cat <<'EOF'\n${(f)v}\nEOF\nprintf %s \"it's\"",
+    "expected": "N",
+    "decision_id": "D1"
+  },
+  {
+    "id": "nested-command",
+    "owner": "masking",
+    "source": "printf %s \"$(printf %s \"it's\" \"${(f)v}\")\"",
+    "expected": "UR",
+    "decision_id": "D1"
+  },
+  {
+    "id": "quoted-end-tag",
+    "owner": "masking",
+    "source": "cat <<'${(f)v}'\nDATA\n${(f)v}",
+    "expected": "N",
+    "decision_id": "D1"
+  },
+  {
+    "id": "active-after-end-tag",
+    "owner": "masking",
+    "source": "cat <<'${(f)v}'\nDATA\n${(f)v}\nprintf %s \"${(f)v}\"",
+    "expected": "UR",
+    "decision_id": "D1"
+  }
+]

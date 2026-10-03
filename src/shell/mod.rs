@@ -1,6 +1,6 @@
 mod brush;
 mod divergence;
-mod quotes;
+pub mod lexer;
 mod words;
 
 use crate::{CheckError, CheckErrorKind, CoverageGap, limits::MAX_NESTING};
@@ -162,7 +162,19 @@ fn observe_source(
         output.script.parse_failed = true;
         output.parse_failures += 1;
     }
-    let detection = divergence::detect(source, &original.spans)?;
+    let lexical = match lexer::Lexed::scan(source) {
+        Ok(lexical) => lexical,
+        Err(lexer::LexError::Nesting) => {
+            return Err(CheckError {
+                kind: CheckErrorKind::ResourceLimit,
+            });
+        }
+        Err(lexer::LexError::Unterminated { .. }) => {
+            output.gap(CoverageGap::UnsupportedShellSyntax);
+            return Ok(());
+        }
+    };
+    let detection = divergence::detect_lexed(source, &original.spans, &lexical)?;
     output.executable_qualifier |= detection.executable_qualifier;
     if detection.divergent {
         output.gap(if zsh {

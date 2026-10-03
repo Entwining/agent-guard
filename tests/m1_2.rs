@@ -40,7 +40,7 @@ fn regressions(owner: &str) {
                 json!({"tool_name":"Read","tool_input":{"file_path":fixture.expand(row["path"].as_str().unwrap())}})
             };
             let bytes = serde_json::to_vec(&event).unwrap();
-            let mut probe = support::RecordingProbe::literal(&fixture);
+            let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
             let result = evaluate_with_arm(
                 Event {
                     bytes: &bytes,
@@ -115,7 +115,7 @@ fn credential_directory_walk_requires_read() {
         let bytes =
             serde_json::to_vec(&json!({"tool_name":"Bash","tool_input":{"command":source}}))
                 .unwrap();
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         assert_eq!(
             support::class(&evaluate_with_arm(
                 Event {

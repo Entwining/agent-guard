@@ -70,13 +70,13 @@ fn alternative_argv_union_preserves_roles() {
             ),
             format!("p='needle -e'; rg $p '{}/data.txt'", fixture.container),
         ] {
-            let mut probe = support::RecordingProbe::literal(&fixture);
+            let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
             assert_eq!(
                 support::class(&check(&fixture, &ctx, &mut probe, arm, &source)),
                 "D"
             );
         }
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         assert_eq!(
             support::class(&check(
                 &fixture,
@@ -99,7 +99,7 @@ fn glob_group_position_and_body() {
     let ctx = context(&fixture);
     for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         for group in ["+(a|b).txt", "*(.)", "!(x)", "+(e:).txt"] {
-            let mut probe = support::RecordingProbe::literal(&fixture);
+            let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
             assert_eq!(
                 support::class(&check(
                     &fixture,
@@ -112,7 +112,7 @@ fn glob_group_position_and_body() {
                 "{group}"
             );
         }
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         assert_eq!(
             support::class(&check(
                 &fixture,
@@ -138,7 +138,7 @@ fn lexical_protection_precedes_probe() {
     ] {
         let body = serde_json::to_vec(&json!({"tool_name":"Read","tool_input":{"file_path":path}}))
             .unwrap();
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         let result = evaluate_with_arm(
             Event {
                 bytes: &body,
@@ -157,7 +157,7 @@ fn identity_depth_bound_is_not_syntax_or_success() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
     for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         probe
             .links
             .insert(format!("{}/loop-a", fixture.project), "loop-b".into());
@@ -204,7 +204,7 @@ fn identity_depth_bound_is_not_syntax_or_success() {
                 .count(),
             40
         );
-        let mut public = support::RecordingProbe::literal(&fixture);
+        let mut public = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         for index in 0..39 {
             public.links.insert(
                 format!("{}/link-{index}", fixture.project),
@@ -226,7 +226,7 @@ fn identity_depth_bound_is_not_syntax_or_success() {
 fn probe_fault_is_not_permission() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
-    let mut probe = support::RecordingProbe::literal(&fixture);
+    let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
     probe.fault = Some(fixture.project.clone());
     let result = check(&fixture, &ctx, &mut probe, Arm::Brush, "cat input.txt");
     assert_eq!(result.unwrap_err().kind, CheckErrorKind::ProbeFault);
@@ -252,7 +252,7 @@ fn interpreter_backslash_boundary() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
     for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         let escaped = check(
             &fixture,
             &ctx,
@@ -284,7 +284,7 @@ fn name_only_listing_and_content_consumer() {
                 (" | xargs cat", "D"),
                 ("; xargs cat input.txt", "N"),
             ] {
-                let mut probe = support::RecordingProbe::literal(&fixture);
+                let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
                 let result = check(
                     &fixture,
                     &ctx,
@@ -319,7 +319,7 @@ fn listing_recursion_controls_broad_root() {
                     "ls > out.txt",
                     "ls -- -R ~",
                 ] {
-                    let mut probe = support::RecordingProbe::literal(&fixture);
+                    let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
                     let result = check(&fixture, &ctx, &mut probe, arm, source);
                     assert_eq!(
                         support::class(&result),
@@ -333,7 +333,7 @@ fn listing_recursion_controls_broad_root() {
             for option in ["-R", "--recursive", "-laR", "-Rl"] {
                 for root in ["~", "~/Library", "/", "", "> out.txt"] {
                     let source = format!("ls {option} {root}");
-                    let mut probe = support::RecordingProbe::literal(&fixture);
+                    let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
                     let result = check(&fixture, &ctx, &mut probe, arm, &source);
                     assert_eq!(
                         support::class(&result),
@@ -363,7 +363,7 @@ fn listing_recursion_controls_broad_root() {
                     );
                     let next = json!({"tool":if consumer==Consumer::Pi {"bash"} else {"Bash"},"input":{"command":format!("ls '{}'",fixture.project)},"cwd":fixture.project});
                     let body = serde_json::to_vec(&json!({"tool_name":next["tool"],"tool_input":next["input"],"cwd":next["cwd"]})).unwrap();
-                    let mut probe = support::RecordingProbe::literal(&fixture);
+                    let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
                     let rechecked = evaluate_with_arm(
                         Event {
                             bytes: &body,
@@ -377,7 +377,7 @@ fn listing_recursion_controls_broad_root() {
             }
             ctx.cwd = fixture.project.clone();
             for path in [format!("{}/.ssh", fixture.home), fixture.container.clone()] {
-                let mut probe = support::RecordingProbe::literal(&fixture);
+                let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
                 let result = check(&fixture, &ctx, &mut probe, arm, &format!("ls '{path}'"));
                 assert_eq!(support::class(&result), "D", "{path}");
                 assert!(
@@ -399,7 +399,7 @@ fn protected_cwd_is_an_independent_owner() {
     let mut ctx = context(&fixture);
     ctx.cwd = fixture.container.clone();
     for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         let result = check(&fixture, &ctx, &mut probe, arm, "printf ok");
         assert_eq!(support::class(&result), "D");
         let reason = render(ctx.consumer, &result).stderr;
@@ -432,7 +432,7 @@ fn broad_root_recovery_preserves_excluded_scope() {
 fn limited_coverage_is_quiet_on_wire() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
-    let mut probe = support::RecordingProbe::literal(&fixture);
+    let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
     let result = check(
         &fixture,
         &ctx,
@@ -454,7 +454,7 @@ fn limited_coverage_is_quiet_on_wire() {
 fn gate_a_zero_starts_and_bypass_negative() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
-    let mut probe = support::RecordingProbe::literal(&fixture);
+    let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
     let result = check(
         &fixture,
         &ctx,
@@ -548,7 +548,7 @@ fn inspection_budget_bounds_function_expansion() {
         assert!(obs.script.commands.len() <= 512);
         let fixture = support::Fixture::new();
         let ctx = context(&fixture);
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         let result = check(&fixture, &ctx, &mut probe, arm, &source);
         assert!(
             render(ctx.consumer, &result)
@@ -592,7 +592,7 @@ fn command_boundaries_preserve_protected_operands() {
             "printf \"%s\" file\\\n#1; env",
             "cat <<'EOF' \\\n.env\nx\nEOF",
         ] {
-            let mut probe = support::RecordingProbe::literal(&fixture);
+            let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
             assert_eq!(
                 support::class(&check(&fixture, &ctx, &mut probe, arm, source)),
                 "D",
@@ -607,7 +607,7 @@ fn command_boundaries_preserve_protected_operands() {
             "rg -uu --no-hidden -u needle src",
             "node -e 'console.log(e.key)'",
         ] {
-            let mut probe = support::RecordingProbe::literal(&fixture);
+            let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
             assert!(
                 ["N", "UC"].contains(&support::class(&check(
                     &fixture, &ctx, &mut probe, arm, source
@@ -617,7 +617,7 @@ fn command_boundaries_preserve_protected_operands() {
         }
     }
     for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         assert_eq!(
             support::class(&check(
                 &fixture,
@@ -636,7 +636,7 @@ fn agent_continuation_preserves_chosen_search_data() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
     for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         let result = check(
             &fixture,
             &ctx,
@@ -656,7 +656,7 @@ fn agent_continuation_preserves_chosen_search_data() {
         let decoded = agent_guard_rust::adapters::decode(ctx.consumer, &bytes, &ctx.cwd).unwrap();
         assert_eq!(decoded.input["pattern"], "different phrase");
         assert_eq!(decoded.input["glob"], "*.txt");
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         assert_eq!(
             support::class(&evaluate_with_arm(
                 Event {

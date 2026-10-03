@@ -219,7 +219,7 @@ impl RecordingProbe {
             patterned: word.globs,
         }
     }
-    pub fn literal(fixture: &Fixture) -> Self {
+    pub fn literal_for_quoted_paths(fixture: &Fixture) -> Self {
         Self::new(
             fixture,
             &agent_guard_rust::record::Word::literal(String::new()),
@@ -347,7 +347,7 @@ pub fn run(row: &Value, arm: Arm) -> Value {
     fixture.setup(row);
     let context = fixture.context(row);
     let body = fixture.body(row);
-    let mut probe = RecordingProbe::literal(&fixture);
+    let mut probe = RecordingProbe::literal_for_quoted_paths(&fixture);
     if row["fault_injection"]["operation"].as_str().is_some() {
         probe.fault = Some(fixture.project.clone());
     }
@@ -678,7 +678,7 @@ fn verify_recovery(fixture: &Fixture, row: &Value, recovery: &Value, arm: Arm) -
         &json!({"tool_name":next["tool"],"tool_input":next["input"],"cwd":fixture.project}),
     )
     .unwrap();
-    let mut probe = RecordingProbe::literal(fixture);
+    let mut probe = RecordingProbe::literal_for_quoted_paths(fixture);
     let result = evaluate_with_arm(
         Event {
             bytes: &body,

@@ -1,109 +1,179 @@
-# Offline Rust R4h M1.2 evidence
+# Offline Rust R4h M1.3 evidence
 
-M1.2 closes D27 2a–2d at the quote, credential-effect and test-oracle owners,
-records D27 3 literal-brace divergences, and lists D27 4 deferrals. The baseline
-is `5c52c9afe9074cbd608dab6b6303ecee33722443`; decisions.md v3.0 D27/D28 governs
-this round. D28 is read for sequencing and owner rulings only: **M2 Phase B has
-not started**. M1 remains unaccepted until both coordinator-owned Opus 5.5 and
-DeepSeek verifications pass (D27 1).
+M1.3 replaces partial raw-shell quote scanners with one lexical owner under
+decisions.md v3.1 D29 2–7 and records D29 8. The baseline is
+`577218f2147e097d8f746272e8ff0aef552c19a4`. M1 remains unaccepted until the
+same coordinator-owned Opus 5.5 and DeepSeek reviewers complete successful verification
+(D29 1/10). **M2 Phase B has not started.** P2 binding producers and P3 heredoc
+parsing retain their assigned owners.
 
-The 1,289-row corpus has zero outcome/category flips and zero new row or
-consumer conflicts. This is a corpus claim, not arbitrary shell/program
-equivalence. The M1.1 claim that all flips moved toward Go was valid only for
-its 720 observations; it missed the subsequently reviewed N1 ANSI-C brace loss
-and N4 recursive-listing over-deny. Both are repaired here and their inputs are
-in the current variant set.
+The 1,289-row corpus has zero verdict/category/exit/reason/advice flips and
+zero new row or consumer conflicts. The expanded 1,875-observation variant
+set has 114 semantic/class changes, all assigned below, and zero new
+Go-deny/Rust-permit. These are finite-set claims, not arbitrary shell or
+production equivalence. Go remains authoritative; hook paths, Go code,
+dependencies, public setup and the version-only packaged Rust entry are
+unchanged.
 
-Go remains authoritative. Production Go, hook paths, dependencies, Cargo.lock,
-the packaged binary entry and public setup are unchanged. The packaged
-`agent-guard-rust-slice` remains version-only. No holdout, real credential store,
-private key or declared environment file was read. Homes, probes, builds and
-scratch source copies are synthetic or external to the checkout.
+No holdout, real credential store, private key or declared environment file
+was read. Test homes, filesystem canaries and probes are synthetic. Cargo
+HOME/target and Go caches are external. Host probes print names or benign
+markers, or use built-in read/printf on synthetic heredocs; they do not read
+protected contents. No concurrency, bypass, configuration switch, installation,
+permission change, remote write, release or paid call was added.
 
 ## Source and measurement binding
 
-All current artifacts named below live under `~/.cache/guard-fixtures/fixture-seat/`
-with the `r4h-m1-2-` prefix. `initial-state.json` verifies the prior source and
-four preserved untracked-plan hashes against M1.1's delivery binding. The
-measurement and final-delivery bindings record final source, fixtures, raw
-artifacts, binaries, commit ancestry, status and evidence hash. No threshold,
-configuration bypass or concurrency was added.
+Current artifacts live under `~/.cache/guard-fixtures/fixture-seat/r4h-m1-3-*`.
+`initial-state.json` records the clean tracked baseline and verifies M1.2's
+source and four untracked-plan hashes against its delivery binding.
+`input-binding.json` binds all 19 original reviewer data sources. Reviewer
+runners were not executed or modified. `measurement-binding.json` binds the
+final source, fixtures, raw artifacts and binaries; `final-delivery-binding.json`
+adds commit ancestry and final index/tree checks. The four untracked plans
+and external M2 Phase A plan remain byte-identical.
 
-The baseline differential is bound to M1.1's final delivery: SHA-256
-`b706ac065114056db49fca675e2af1516c1bc6952b9f36c2c9fcebf838f1ff4d`.
+Baseline corpus raw SHA-256: `bd291c3ecee20d2e367b81f3449aa0c77ff580025999c755ae5b71a1f5d6521a`.
 
-| Input | SHA-256 | M1.2 change |
+| Input | SHA-256 | M1.3 change |
 | --- | --- | --- |
-| Original Go corpus | `1e223c6453d6883acc88af9967beab4251ba0fc6d636a1186482b6e4b524c695` | None |
-| Filesystem setup | `b1d51062925ccbfdfae5c8ffbc3e130e25391f31b05207448ee02be8cc874b3e` | None |
-| D22 scope | `a3e41fd04bf1daf575c7312f9a275d298203ac7493228f6517dbcbb1fccd18ac` | None |
-| Dev manifest | `385e395dbee8855c2985a7b6d2f92083b898e1614573ad4f7b9ac71b8597be10` | None |
-| Classification overlay | `87171281c243ebceefed14d6fbb103c5f75187239dab3c449652d3d156b63ed5` | None |
-| D22 regressions | `44d12aea41a947e0c1996071b70bb9777293bfa6b58f0b3d4bbd63060debc632` | None |
-| M1.1 regressions | `3a30251e6159235f512dc07f3bcc947ec5bf13571b57a963a7752609ec47250f` | None |
-| M1.2 regressions | `b1f591d91cec5d1ddd222817af7b98530aae896de0772969a227ac2c4a3375e9` | 21 new rows, including D27 shell/redirect/structured literals |
+| `contract.jsonl` | `1e223c6453d6883acc88af9967beab4251ba0fc6d636a1186482b6e4b524c695` | None |
+| `filesystem.json` | `b1d51062925ccbfdfae5c8ffbc3e130e25391f31b05207448ee02be8cc874b3e` | None |
+| `rust-d22-scope.jsonl` | `a3e41fd04bf1daf575c7312f9a275d298203ac7493228f6517dbcbb1fccd18ac` | None |
+| `rust-slice-dev.jsonl` | `385e395dbee8855c2985a7b6d2f92083b898e1614573ad4f7b9ac71b8597be10` | None |
+| `rust-contract-classification.jsonl` | `87171281c243ebceefed14d6fbb103c5f75187239dab3c449652d3d156b63ed5` | None |
+| `rust-review-d22.json` | `44d12aea41a947e0c1996071b70bb9777293bfa6b58f0b3d4bbd63060debc632` | None |
+| `rust-m1-1-regressions.json` | `3a30251e6159235f512dc07f3bcc947ec5bf13571b57a963a7752609ec47250f` | None |
+| `rust-m1-2-regressions.json` | `b1f591d91cec5d1ddd222817af7b98530aae896de0772969a227ac2c4a3375e9` | None |
+| `rust-m1-3-regressions.json` | `edd0e80da1343c3c5feec25c977e91065d913bb1c662cbe47847316756dd8ddc` | 28 owner/control rows |
+| `rust-m1-3-reviewer-inputs.json` | `cc82d3ee5a748cd65b72e7d2d67e23f46a9ab5e2ded5c5986cce70fe6f6f45f4` | 491 reviewer shell inputs with provenance |
 
-## Owner repairs and scanner audit
+Installed versions (`tool-versions.json`): Rust/Cargo 1.98.1, Clippy 0.1.98,
+cargo-deny 0.20.2, Go 1.27.1, Bash 3.2.57(1), Zsh 5.9. Brush is locked to
+0.4.0. Final evaluator and comparator hashes appear in the measurement binding;
+the external 577218f evaluator is `47ed05f0…540c`.
 
-`src/shell/quotes.rs` supplies one raw quoted-span mechanism. Ordinary single
-quotes keep backslashes literal; ANSI-C single quotes honor escapes; double
-quotes and dollar-double quotes skip escaped delimiters. `brace_text`,
-`brace_group` and D1 parenthesis pairing use that mechanism. D1 skips an entire
-ANSI-C literal, while active parameter syntax in double/gettext quotes retains
-its prior treatment. The detector remains independent of a parser arm.
+## One lexical owner and corrected inventory
 
-Heredoc delimiter quote removal also uses the raw scanner and the existing
-ANSI-C decoder, without parameter substitution. This fixes D1's false
-divergence classification for dollar-quoted heredoc bodies. Brush 0.4.0 still
-rejects these delimiter forms, so they remain U-R: the regression asserts the
-coverage distinction and an active-tail control, not a permit. Full heredoc
-grammar and stdin execution ownership remain P3 work.
+`src/shell/lexer.rs` supplies per-byte `Unquoted`, `Single`, `Double`, `AnsiC` and
+`Gettext` context, command/parameter/backtick/arithmetic depth, escape, comment,
+heredoc delimiter and quoted/unquoted body context. A dollar-apostrophe or
+apostrophe inside Double is ordinary text. Nested executable code receives
+its own context. Heredoc declarations are queued and terminators match complete
+lines (with the existing tab-stripping syntax); bodies and end tags are marked
+at the same owner. `quotes.rs` and scanner-owned quote tracking are deleted.
+The raw lexer runs independently of Brush, including after a parser failure.
+Brush still owns decoded word values; it is not a production quote-state oracle.
 
-The credential-directory walk branch now requires `Effect::Read`, mirroring
-`native/rules/credentials.go:25`; List is not added to an exclusion list. The
-suffix list remains the D25 shape patch, to be deleted by P6. App Data walking
-and credential-content reads retain denial controls.
+M1.2's `docs/rust-slice-evidence.md:89` claimed the D1 literal skip was "Fixed".
+That claim was false for M12-N1: the partial scanner treated apostrophes inside
+Double as openers and hid subsequent executable syntax. The inventory below
+replaces that audit and includes the formerly omitted Target tilde test.
 
-RecordingProbe's default `new(fixture, word)` requires Word provenance and
-derives `patterned` from `word.globs`. The explicit `literal(fixture)` mode is
-used by event-level harnesses that do not carry one word. The word-to-target
-probe regression uses the default constructor and directly rejects an
-attempted protected glob probe; a quoted-word control permits the literal
-probe. The duplicate new oracle test was merged into the existing `m1_1`
-test. This does not claim universal per-target provenance tracing for mixed
-event-level harnesses and introduces no production testing seam.
-
-The audit covers every hand-written quote/brace/paren scanner under `src/`,
-including decoded-pattern and non-shell code boundaries. `$'…'` and `$"…"`
-are shell modes only at raw-shell owners.
-
-| Scanner / producer | Dollar-quote result | Disposition |
+| Consumer / boundary | Before at 577218f | Current query / disposition |
 | --- | --- | --- |
-| `quotes::skip` | ANSI-C escaped quotes differ from ordinary single quotes; dollar-double quotes use double-quote escapes | New shared raw scanner; ablated |
-| `words::brace_text` | Skips complete ANSI-C/gettext spans before outside brace reach | Fixed; prefix-list regression and ablation |
-| `words::brace_group` | Escaped ANSI-C quotes no longer hide the member comma/closing brace | Fixed; member-list regression and ablation |
-| `words::brace_sequence` | Receives an unquoted group body; parses endpoints, not quote state | Unchanged; D1/D26 sequence union remains |
-| `words::fill` glob detection | Brush ANSI-C pieces do not set Glob; double/gettext pieces recurse with `quoted=true` | Already provenance-aware; unchanged |
-| `words::ansi` | Receives quote contents from Brush or the raw delimiter owner; decodes existing escapes | Reused decoder; no second implementation |
-| `divergence::closing` paren pairing | Uses shared ANSI-C/gettext span skipping | Fixed; executable-qualifier regression and ablation |
-| `divergence::detect` literal skip | Complete ANSI-C literal is inert; double/gettext parameter syntax stays active | Fixed; inert-literal regression and ablation; not a full shell interpreter |
-| `divergence::detect` heredoc / `quotes::heredoc_delimiter` | Recognizes dollar quoting and removes delimiter quotes without expanding variables | Fixed classification; ablated; P3 parser limitation retained |
-| `divergence::detect` parameter-flag boundary | After `${(` is seen, rejection does not depend on full nested-brace grammar | Unchanged conservative D1 boundary; full parameter grammar not claimed |
-| `divergence::qualifier` body/position gate | Body contents stay active even when code is quoted, per D1 | Unchanged; pairing fixed at its owner |
-| `glob::brace_members` | Scans decoded path/pattern text; shell quote syntax has already been removed | No raw quote state; unchanged |
-| `glob::alternatives` paren gate | Requires `patterned`; ANSI-C/gettext literals therefore do not acquire group reach | No raw quote state; unchanged |
-| `glob::tokens` / `class_matches` | Decoded glob escapes/brackets, not shell quotation | Unchanged pattern grammar |
-| `targets::code_paths` | Foreign-language token boundary receives already shell-decoded inline code | No shell ANSI/gettext mode belongs here; unchanged P3 boundary |
-| `shell::check_nesting` | Deliberately counts raw delimiters for a resource bound, including quoted data | No semantic quote state; unchanged bound |
+| `words::brace_text` | quotes::skip walked raw spans; no shared full-source quote state | Lexed::scan and Context::word_syntax; brace nesting only remains in consumer |
+| `words::brace_group` | quotes::skip before brace/comma scan | same Lexed context word_syntax for braces and separators |
+| `words::fill splitting/glob` | recursive quoted bool from Brush Double/Gettext pieces and heredoc flag | Lexed context unquoted/heredoc; decoding remains Brush-owned; resolved unquoted parameter text supplies Bash glob reach |
+| `D1 literal masking` | skipped backslash, Single and ANSI-C wherever seen, including inside Double | Context::active excludes literal quote modes, escapes, comments, literal heredoc bodies and delimiter |
+| `D1 parameter flags` | raw ${ syntax after partial literal skipping | Context::active, including active Double/Gettext and nested command code |
+| `D1 paren/glob/process gates` | divergence::closing ran independent quoted-span skipping | Context::unquoted and Lexed::closing; consumer retains only content/position classification |
+| `D1 dialect command gates` | raw statement-boundary scan after partial skipping | Context::unquoted and existing statement-boundary contract |
+| `D1 heredoc masking` | raw prefix/newline search plus quotes::heredoc_delimiter | Lexed delimiter/body/end-tag contexts, full-line end-tag queue and nested expansion contexts |
+| `Target tilde test` | Raw starts with ordinary apostrophe or double quote | lexer::initial_quote query; Single/Double only per native/targets/infer.go:17 |
+| `words::brace_sequence / ansi decoder` | group-endpoint or quote-body decoding | same non-state role; ANSI decoder reused by lexer delimiter removal |
+| `filesystem glob grammar` | decoded pattern brace/paren/escape grammar | unchanged; no raw shell quote state |
+| `targets::code_paths` | foreign-language CodeFile token quote boundary | unchanged foreign-language owner, outside raw shell quotation |
+| `shell::check_nesting / variable context prefilter` | raw resource bound / overinclusive name prefilter | unchanged; neither interprets shell quote state |
 
-`shell-readings.json` contains 20 printf-only Bash/Zsh readings for escaped
-ANSI-C prefixes/members, gettext, ordinary single quoting, literal braces and
-the signed sequence. `heredoc-final-audit.json` uses built-in read/printf only.
-An escaped ANSI-C heredoc delimiter is accepted by both host shells but the
-Go comparator refuses it as syntax; **that row is stopped as a Go baseline
-limitation candidate**, not used to direct a Go-syntax port or claim equivalence.
-Rust also refuses it through the pinned parser. Neither checked cat command
-was executed on the host.
+`Target::from_word` queries `lexer::initial_quote`; it retains Go's
+`native/targets/infer.go:17` Raw-prefix specification: only an ordinary leading
+single/double quote suppresses tilde expansion. ANSI-C and escaped tilde
+spellings retain the shared Go/Rust over-deny candidate (M12-N3), supported by
+host name-printing readings. Gettext also retains the Go result; Bash keeps
+literal tilde and Zsh prints literal dollar/tilde. No baseline behavior was
+ported from those host differences in this round.
+
+`RecordingProbe::literal_for_quoted_paths` names the word-free oracle's literal
+path intent. `new(fixture, word)` still derives `patterned` from Word.globs.
+The existing default-oracle regression protects pre-probe glob ordering.
+Event-level mixed-word harnesses still lack universal per-target Word tracing;
+the rename does not claim that stronger boundary.
+
+Resolved plain unquoted parameter values containing `*`, `?` or `[` now set
+Word.globs, preserving Bash pathname expansion under D1's union reading.
+Quoted uses remain literal. No unresolved binding producer or shell-state
+implementation was added (P2 remains pending).
+
+A final boundary check found heredoc end-tag bytes were initially left active:
+`cat <<'${(f)v}'` with body DATA and that literal terminator was Rust U-R / Go N,
+while both hosts printed DATA using read/printf. The correction marks the tag
+inert at the lexical owner. An active-tail control remains U-R.
+`tag-boundary-check.json` retains the before/host evidence; current variant
+records and the end-tag ablation retain the after result.
+
+## Brush oracle and host readings
+
+`m1_3::lexer_matches_brush_word_quoting` visits the 1,289-row corpus and all
+JSON/JSONL `tests/fixtures/rust-*` fixtures, including the reviewer-input fixture.
+Its 491 shell inputs retain every shell variant from all 536 reviewer records;
+the other 45 are structured events with no shell quote state. The full event
+set is separately replayed against the built Go comparator.
+
+| Oracle measure | Final |
+| --- | ---: |
+| fixture_files | 9 |
+| oracle_inputs | 3456 |
+| tokenized | 3449 |
+| parsed_programs | 3429 |
+| word_parses | 17721 |
+| nested_scripts | 61 |
+| compared_bytes | 109066 |
+| tokenizer_refusals | 7 |
+| Quote-context disagreements | 0 |
+| Word-piece / nested-tokenizer refusals | 0 / 0 |
+| Span discrepancies, explicitly mapped | 68 |
+
+All 68 span discrepancies are Brush's synthetic heredoc end-tag token location:
+it reports a position after consuming the tag, occasionally after its newline.
+An independent AST body boundary plus exact original tag bytes identifies the
+actual position. Every discrepancy records id, reported byte, actual byte and
+disposition in `oracle-final.json`. The mapped bytes still undergo quote and
+end-tag inertness comparisons; no quote disagreement is suppressed. This is
+source-position metadata, not a different host execution reading.
+
+Seven tokenizer refusals are the four existing M1.2 dollar-quoted heredoc rows
+and their three DeepSeek reviewer forms. Both host shells accept the escaped
+ANSI-C delimiter using benign read/printf. Go and Brush refuse that escaped
+form; both guards stop it. **That row remains stopped as a Go baseline parser
+limitation candidate (D29 6, P3/M3).** Plain dollar-quoted delimiter variants
+remain Go N / Rust U-R through the pinned Brush parser. There is no P3 port.
+
+The oracle compares Brush's available word-piece quoting, recursively including
+Double/Gettext and command/backtick bodies. Parameter/arithmetic interiors for
+which Brush supplies no nested word pieces are opaque apart from their markers;
+the separate metadata contract tests their lexical nesting depth. Oracle
+coverage does not establish complete shell grammar or universal host equivalence.
+
+`host-readings.json` contains 22 probes; `tag-boundary-check.json` adds the tag
+boundary reading. All use isolated HOME and no user startup files. Their
+observable partitions are:
+
+| Form | Bash | Zsh | Disposition |
+| --- | --- | --- | --- |
+| Escaped ANSI-C brace prefix | Both brace members printed | Same | N1 brace reach retained |
+| Double apostrophe / dollar-apostrophe then eval flag | Bad substitution | CODE_MARKER executed | M12-N1 active code; D1 union |
+| Balanced executable qualifier / +f | Syntax refusal | QUALIFIER_MARKER / PLUS_MARKER | Active even when qualifier code is quoted |
+| Equals process substitution | Syntax refusal | PROCESS_MARKER and temporary-file path | Nested target extraction; no file contents read |
+| Resolved unquoted star/question/bracket | Existing synthetic pathnames | Literal binding by default | D29 Bash reach |
+| Quoted binding use | Literal pattern | Literal pattern | N control |
+| Zsh globsubst | Not a Bash option reading | Existing synthetic pathnames | D29 reach / D1 command gate |
+| Quoted heredoc nested substitution | Body stays literal | Same | D1 inert body |
+| Escaped ANSI-C heredoc delimiter | Accepted, literal data | Same | Go/Brush limitation candidate; row stopped |
+| ANSI-C / escaped tilde | Literal tilde | Same | Shared guard over-deny candidate; unchanged |
+| Gettext tilde | Literal tilde | Literal dollar/tilde | Go Raw semantics retained |
+| Six unterminated quote forms (syntax-only) | Refused | Refused | Go also exit 2; Rust malformed blocking path |
+| Quoted heredoc end tag | DATA only | DATA only | Tag is inert; following active flags still U-R |
 
 ## P0 record limits (E1 corrected)
 
@@ -128,12 +198,13 @@ was executed on the host.
 | Target.search | Implicit-root help heuristic omits Go --version/-V/combined flags; field still unread | P5/P7, D27 4 |
 | Target.glob | Word transport plus explicit Git/search overrides; other owners pending | P5/P7 |
 
-## Complete corpus differential
+## Complete corpus differential against 577218f
 
-1,265 operations × three consumers = 3,795 observations, plus 24 metadata
-checks; 963 operations are in slice and 302 outside. All prior matching RETAIN
-contracts and 21 CHANGE rows remain matched (D28 7). Eight Claude-only advice
-conflicts explain the non-threefold defect count.
+The corpus compares the frozen Go contract fixtures: 1,265 operations × three
+consumers = 3,795 observations, plus 24 metadata checks. There are 963 in-slice
+operations and 302 outside. All previously matching RETAIN contracts and all
+21 CHANGE rows remain matched; eight Claude-only advice conflicts explain the
+non-threefold defect count. Live built-Go comparison is the variant run below.
 
 | Family | RETAIN match | CHANGE match | Conflict | Outside | Metadata | Total |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -151,193 +222,250 @@ conflicts explain the non-threefold defect count.
 | Total | 821 | 21 | 121 | 302 | 24 | 1289 |
 
 Categories: 2,479 matching RETAIN, 63 matching CHANGE, 347 Rust_defect and 906
-outside observations. Remaining conflicts: 121 rows. **Corpus rows flipped:
-none.** New row conflicts: 0; new consumer conflicts: 0. The raw differential,
-mismatch inventory and summary retain all unsupported/outside buckets.
+outside observations. Remaining conflicts: 121 rows. Verdict/category/exit/
+reason/advice flips: none. New row and consumer conflicts: zero. Raw reports
+retain every unsupported/outside observation.
 
 | Corpus Go-deny/Rust-permit | N | U-C | Total |
 | --- | ---: | ---: | ---: |
 | In-slice Rust defects | 168 | 123 | 291 |
-| In-slice decided changes (D16/D25) | 6 | 0 | 6 |
+| In-slice sanctioned D16/D25 changes | 6 | 0 | 6 |
 | All in slice | 174 | 123 | 297 |
 | Outside | 0 | 285 | 285 |
 | Total | 174 | 408 | 582 |
 
-## Reviewer variants, flips and sanctioned divergences
+## Every reviewer variant and every change
 
-455 input records × three consumers = 1,365 observations. The 400 reviewer
-inputs (1,200 observations) retain every Opus v11 old/new/cred/extra input and
-all six original DeepSeek harnesses plus m11, gitgrep and nested inputs.
-Overlapping forms remain separate by provenance, not independent examples.
-21 current fixture rows, six scanner controls and 28 M1.1 controls add 165
-observations. These denominators are separate from the corpus.
+625 input records × three consumers = 1,875 observations: 536 reviewer inputs
+(1,608 observations), 55 prior controls, 28 new owner/control rows and six
+tracked credential-root inputs. Provenance duplicates are preserved rather
+than treated as independent examples. Opus v11 contributes 179 records; v12
+new12/new12b/new12c/new12d/ds12 contributes 80. All nine prior DeepSeek sets
+contribute 221, and m12-harness contributes 56. The reviewer-input fixture
+preserves all shell forms for the oracle; structured events stay in the raw
+variant dataset.
 
-Inputs were read only from the reviewer directories and copied as data into
-this cache; no reviewer runner was executed or modified. The Go comparator is
-freshly built from unchanged `cmd/agent-guard`, offline with external caches.
-Pi gets lower-case names and path for Rust read/write/edit; Go receives the
-canonical file_path projection (native/core/protocol.go:52). Both exact events,
-Go stdout/stderr/exit and Rust wire/coverage/effects are preserved.
+Go is freshly built offline from unchanged cmd/agent-guard. Both exact events,
+Go stdout/stderr/exit and Rust wire/coverage/effects are stored. Pi lower-case
+read/write/edit sends path to Rust; Go receives canonical file_path, matching
+native/core/protocol.go. The same inputs run at the external 577218f evaluator
+and the final evaluator. Semantic comparison excludes timing alone. Go N is
+checker exit 0; Go D is exit 2, including syntax refusals. Raw stderr preserves
+that distinction from a protected policy denial.
 
-Reviewer permission mismatches: 147→117; combined: 210→147. Class flips: 69; full semantic-projection flips: 75. No new Go-deny/Rust-permit is introduced. The only new Go permission mismatch is the executable-qualifier regression (three consumers), now U-R under D1 rather than baseline N.
+M1.2's "No new Go-deny/Rust-permit" claim at `:182` covered only its 1,365
+observations; it did not cover Opus's later five M12-N1 forms (15 observations).
+Those forms are in the current set. The current zero-new claim is scoped to
+the 1,289 corpus rows and the separate 1,875 variant observations.
 
-| Flipped input ID (each row is three consumers) | Baseline → M1.2 | Go |
-| --- | --- | --- |
-| `Opus/v11/new.json:b-ansi-quote-desync` | N → D | D |
-| `Opus/v11/new.json:l-ls-R-docker` | D → N | N |
-| `Opus/v11/new.json:l-ls-R-config` | D → N | N |
-| `Opus/v11/extra.json:a-desync-dir` | N → D | D |
-| `Opus/v11/extra.json:a-desync-seq` | N → D | D |
-| `Opus/v11/extra.json:a-desync-home` | N → D | D |
-| `Opus/v11/extra.json:a-desync-appdata` | N → D | D |
-| `Opus/v11/extra.json:a-desync-npmrc` | N → D | D |
-| `Opus/v11/extra.json:l-ls-R-kube` | D → N | N |
-| `Opus/v11/extra.json:l-ls-R-cargo` | D → N | N |
-| `Regression/brace_text:ansi-prefix-list` | N → D | D |
-| `Regression/brace_text:ansi-quote-directory` | N → D | D |
-| `Regression/brace_text:ansi-prefix-sequence` | N → D | D |
-| `Regression/brace_text:ansi-home-list` | N → D | D |
-| `Regression/brace_text:ansi-appdata-list` | N → D | D |
-| `Regression/brace_text:ansi-npmrc-list` | N → D | D |
-| `Regression/brace_group:ansi-member-list` | N → D | D |
-| `Regression/divergence_literal:ansi-inert-divergence` | UR → N | N |
-| `Regression/divergence_closing:ansi-active-qualifier` | N → UR | N |
-| `Regression/credential_effect:list-docker` | D → N | N |
-| `Regression/credential_effect:list-kube` | D → N | N |
-| `Regression/credential_effect:list-cargo` | D → N | N |
-| `Regression/credential_effect:list-config` | D → N | N |
+| Variant measure | 577218f | M1.3 |
+| --- | ---: | ---: |
+| Combined permission mismatches | 267 | 285 |
+| Reviewer-only permission mismatches | 192 | 201 |
+| Class / semantic changes | | 114 / 114 |
+| New required refusals differing from Go | | 57 |
+| Previously differing permissions now matching Go | | 39 |
+| New Go-deny/Rust-permit | | 0 |
 
-Six more semantic observations change cause/coverage, not class, on the two
-dollar-quoted heredoc rows. Their class stays U-R through the existing Brush
-parser refusal. All current fixture/control expectations pass.
+All fixture/control expectations pass. UR regressions require the D1 executor/
+dialect coverage gap, so independent parser refusal alone cannot pass them.
+D regressions assert protected-denial reason, recovery scope, exit 2 and absent
+advice; N controls assert exit 0 and absent advice.
 
-| Sanctioned Go-deny/Rust-permit, counted separately | N | Decision |
+| Every changed input ID (each is three consumers) | 577218f → M1.3 | Go | Owner |
+| --- | --- | --- | --- |
+| `Opus/v12/new12.json:d1-dq-dollar-sq-active` | N → UR | D | D29 double-quote / nested active parameter flags |
+| `Opus/v12/new12.json:d1-dq-sq-active` | N → UR | D | D29 double-quote / nested active parameter flags |
+| `Opus/v12/new12.json:d1-qual-after-dq-dollar-sq` | N → D | N | D29 active executable qualifier |
+| `Opus/v12/new12.json:d1-qual-after-dq-sq` | N → D | N | D29 active executable qualifier |
+| `Opus/v12/new12.json:d1-procsub-after-dq-dollar-sq` | UR → D | D | D29 nested process target extraction |
+| `Opus/v12/new12.json:d1-setopt-after-dq-sq` | N → UR | N | D29 command gate / resolved glob reach |
+| `Opus/v12/new12b.json:x-eval-flag-dq-sq` | N → D | D | D29 double-quote / nested active parameter flags |
+| `Opus/v12/new12b.json:x-eval-flag-dq-dollar-sq` | N → D | D | D29 double-quote / nested active parameter flags |
+| `Opus/v12/new12b.json:x-eval-flag-unq-dq-sq` | N → D | D | D29 double-quote / nested active parameter flags |
+| `Opus/v12/new12b.json:x-qual-reply-dq-sq` | N → D | N | D29 active executable qualifier |
+| `Opus/v12/new12b.json:x-qual-plus-dq-sq` | N → UR | N | D29 active executable qualifier |
+| `Opus/v12/new12b.json:x-globsubst-dq-sq` | N → D | N | D29 command gate / resolved glob reach |
+| `Opus/v12/new12b.json:x-globsubst-control` | UR → D | N | D29 command gate / resolved glob reach |
+| `Opus/v12/new12b.json:x-procsub-dq-sq` | UR → D | D | D29 nested process target extraction |
+| `Opus/v12/new12b.json:x-qual-dq-sq-later-cmd` | N → D | N | D29 active executable qualifier |
+| `Opus/v12/new12d.json:y-var-glob-unquoted` | N → D | N | D29 command gate / resolved glob reach |
+| `D29-regression/double_context:eval-double-apostrophe` | N → D | D | D29 double-quote / nested active parameter flags |
+| `D29-regression/double_context:eval-double-dollar-apostrophe` | N → D | D | D29 double-quote / nested active parameter flags |
+| `D29-regression/double_context:eval-unquoted-after-double` | N → D | D | D29 double-quote / nested active parameter flags |
+| `D29-regression/double_context:flag-double-apostrophe` | N → UR | D | D29 double-quote / nested active parameter flags |
+| `D29-regression/double_context:flag-double-dollar-apostrophe` | N → UR | D | D29 double-quote / nested active parameter flags |
+| `D29-regression/qualifier:qualifier-balanced-statement` | N → D | N | D29 active executable qualifier |
+| `D29-regression/qualifier:qualifier-balanced-word` | N → D | N | D29 active executable qualifier |
+| `D29-regression/qualifier:qualifier-balanced-dollar` | N → D | N | D29 active executable qualifier |
+| `D29-regression/qualifier:qualifier-balanced-path` | N → D | N | D29 active executable qualifier |
+| `D29-regression/qualifier:qualifier-plus` | N → UR | N | D29 active executable qualifier |
+| `D29-regression/command_gate:setopt-extendedglob` | N → UR | N | D29 command gate / resolved glob reach |
+| `D29-regression/command_gate:setopt-globsubst` | N → D | N | D29 command gate / resolved glob reach |
+| `D29-regression/process:equals-process-apostrophe` | UR → D | D | D29 nested process target extraction |
+| `D29-regression/process:equals-process-dollar-apostrophe` | UR → D | D | D29 nested process target extraction |
+| `D29-regression/expansion_glob:resolved-star` | N → D | N | D29 command gate / resolved glob reach |
+| `D29-regression/expansion_glob:resolved-question` | N → D | N | D29 command gate / resolved glob reach |
+| `D29-regression/expansion_glob:resolved-bracket` | N → D | N | D29 command gate / resolved glob reach |
+| `D29-regression/expansion_glob:resolved-globsubst` | UR → D | N | D29 command gate / resolved glob reach |
+| `D29-regression/expansion_glob:resolved-appdata` | N → D | N | D29 command gate / resolved glob reach |
+| `D29-regression/masking:inert-comment` | D → N | N | D1/D29 inert comment |
+| `D29-regression/masking:nested-command` | N → UR | D | D29 double-quote / nested active parameter flags |
+| `D29-regression/masking:quoted-end-tag` | UR → N | N | D1/D29 inert heredoc end tag |
+
+`variant-semantic-flips.jsonl` retains all 114 changed observations, including
+wire and coverage. `variants-annotated.jsonl` assigns every remaining permission
+difference to a ruling or later owner, without dropping unchanged differences.
+
+| Sanctioned Go-deny/Rust-permit, counted separately | Observations | Decision |
 | --- | ---: | --- |
-| cat < ~ | 6 | D25 4 |
-| Signed {-1..-1} sequence | 9 | D26 2b |
-| Literal quoted shell/redirect and structured Read braces | 45 | D27 3 |
+| cat < ~ | 9 | D25 |
+| Signed sequence | 9 | D26 |
+| Literal shell/redirect/structured brace spellings | 51 | D27 |
+| Assigned PWD baseline false denial | 3 | D28 |
+
+The D25/D26/D27 count is 69; D28 contributes three separately ruled observations
+(total 72). D27's 51 comprise the prior 45 plus six later Opus literal ANSI-C/
+Gettext brace observations. Counts are provenance-specific and do not overlap
+the deferred-owner or outside counts.
 
 | Variant Go-deny/Rust-permit scope | N | U-C | Total |
 | --- | ---: | ---: | ---: |
-| In-slice deferred owners | 30 | 6 | 36 |
-| In-slice sanctioned D25/D26/D27 | 60 | 0 | 60 |
-| Existing assigned-PWD false denial (D28 4) | 3 | 0 | 3 |
-| All in slice | 93 | 6 | 99 |
-| Outside curl URL-glob (D26 3) | 0 | 6 | 6 |
-| Total | 93 | 12 | 105 |
+| In-slice deferred owners | 66 | 6 | 72 |
+| In-slice sanctioned D25/D26/D27 | 69 | 0 | 69 |
+| Assigned PWD baseline false denial (D28) | 3 | 0 | 3 |
+| All in slice | 138 | 6 | 144 |
+| Outside curl/cp | 0 | 9 | 9 |
+| Total | 138 | 15 | 153 |
 
-D27's 45 observations contain 33 shell/redirect and 12 structured observations.
-The fixture marks both halves with decision_id D27. D26's signed row is marked
-D26. These are baseline false denials under the rulings, not protection losses.
-The sanctioned counts overlap neither the deferred-owner nor outside counts.
-D28 4 also rules `PWD=/tmp; ls $PWD/Containers` Go D/Rust N a baseline
-false denial (three observations). It is listed separately: no P2 producer or
-D28 regression fixture was added before Phase B authorization. The other
-PWD row, `PWD=/tmp; ls Containers`, remains a Rust P2 loss (three observations).
-
-| Remaining permission difference | Observations | Rust / Go | Owner / ruling |
+| Every remaining permission difference | Observations | Rust / Go | Ruling / later owner |
 | --- | ---: | --- | --- |
-| Quoted brace-list member | 9 | D / N | D26 2b union / Go baseline false permit |
-| Split readings | 3 | D / N | D1/D22 union |
-| Unquoted extglob | 21 | D / N | D1/D26 union |
-| Executable qualifier with ANSI-C body | 3 | U-R / N | D1 required refusal; newly detected |
-| Dollar-quoted heredoc parser refusal | 6 | U-R / N | P3/M3, pre-existing |
-| Literal braces | 45 | N / D | D27 3 sanctioned |
-| Signed sequence | 9 | N / D | D26 2b sanctioned |
-| cat < ~ | 6 | N / D | D25 4 sanctioned |
-| Assigned PWD variable | 3 | N / D | D28 4 Go baseline false denial; producer work pending |
-| PWD vs tracked cwd | 3 | N / D | P2/M2 Rust loss; D28 read, not implemented |
-| Option-equals operandValue | 3 | N / D | P5/M4 |
-| Git grep -f pattern files | 12 | N / D | D27 4, P5/M4; add regression in M4 |
-| Bash heredoc/herestring code | 6 | U-C / D | P3/M3 |
-| Secret vars in stdin data | 12 | N / D | P6/M4 |
-| Curl file-URL globs | 6 | U-C / D | D26 3 outside; before cutover |
-| Total | 147 | | |
+| D26 2b quoted-member union | 9 | D / N | D26 |
+| D26 4 deferred operandValue | 3 | N / D | P5/M4 |
+| D26 4 deferred cwd | 3 | N / D | P2/M2; D28 state rulings |
+| D28 4 assigned PWD baseline false denial | 3 | N / D | P2/M2 producers remain pending |
+| D1/D22 split union | 3 | D / N | D1/D22 |
+| D26 4 deferred stdin shell | 6 | UC / D | P3/M3 |
+| D26 3 outside curl URL-glob loss | 6 | UC / D | curl URL-glob before cutover |
+| D26 4 deferred stdin secrets | 15 | N / D | P6/M4 |
+| D26 2b signed sequence | 9 | N / D | D26 |
+| D27 3 literal brace baseline false denial | 51 | N / D | D27 |
+| D1/D26 extglob union | 30 | D / N | D1/D26 |
+| D25 4 decided permit | 9 | N / D | D25 |
+| D27 4 deferred Git pattern file | 18 | N / D | P5/M4 |
+| D1 executable qualifier refusal | 3 | UR / N | D1 |
+| Pre-existing quoted-heredoc parser refusal | 9 | UR / N | P3/M3 pinned Brush delimiter parsing |
+| D1/D29 executable qualifier nested target | 33 | D / N | D1/D29 |
+| D1/D29 active syntax refusal | 18 | UR / N | D1/D29 |
+| Out-of-slice cp program owner | 3 | UC / D | P5 before cutover |
+| D29 5 resolved expansion Bash glob reach | 27 | D / N | D29 |
+| D29 8 structured credential root | 27 | N / D | P6/M3; regression when owner lands |
+| Total | 285 | | |
 
-Permission-equivalent Go N/Rust U-C and Go D/Rust U-R observations retain their
-coverage distinctions. The Glob tool remains outside observed coverage; no
-adapter was added. Structured Grep glob patterns and unquoted shell brace
-reach retain their controls. Full Glob-tool ownership remains open before
-cutover.
+D29 8 tracked row: structured Read of .docker, .kube, .cargo, .config and
+.config/gh, plus Grep of .config/gh, is Go D / Rust N on all consumers. Six
+current tracking inputs give 18 observations; three DeepSeek inputs duplicate
+part of that partition (nine more). Total 27. Go IsSensitiveRoot
+(native/filesystem/credentials.go:130–147) recognizes the roots; Rust lexical
+credential classes recognize file suffixes, and a structured Read has no walk.
+This is a pre-existing P6/M3 loss, not repaired here; add the regression when
+that owner lands. The external N expectations record current behavior only.
 
-## Baseline failures and exact-byte ablations
+The Go word owner's false permit for resolved Bash glob reach is explicitly
+ruled by D29 5. The escaped-heredoc Go syntax limitation is stopped under D29 6.
+Neither case directs an unapproved Go change. Other deferred differences,
+including cp, remain unchanged. Permission-equivalent coverage distinctions
+are retained. The Glob tool remains outside observed coverage.
 
-Final regressions compile against an external 5c52c9a archive. Six m1_2 tests
-fail at runtime, and the revised default-oracle m1_1 test fails separately.
-The baseline constructor gets only call-signature compatibility and retains
-its literal-only oracle; no repaired test support is copied into it.
-baseline-final-{owners,oracle}.log and baseline-final-tests.json retain the
-failing assertions. All seven repaired owner/oracle tests pass on final source;
-the literal-brace fixture already passed at baseline and records sanctioned
-behavior rather than a newly fixed mechanism.
+## Baseline failures and final exact-byte ablations
 
-Each final ablation changes one mechanism in ablation-src-v2, compiles it,
-runs the named assertion plus the full corpus and variant set, restores the
-exact original bytes by SHA-256, then reruns the assertion and reports. Final
-restored reports match the normal checked projections. No compile failure is
-counted as an ablation failure.
+The final six functional owner tests compile against an external 577218f
+archive and all fail at runtime. Only the renamed constructor call gets
+compatibility spelling; no repaired production/support owner is copied into
+that baseline. `baseline-final-regressions.log` and `baseline-final-tests.json`
+retain those failures. All ten current owner/oracle/metadata tests pass.
 
-| Mechanism | Test | Corpus changed | Variant class / semantic changes | Broken / restored |
-| --- | --- | --- | ---: | --- |
-| brace-group | `ansi_member_preserves_brace_reach` | None | 3 / 3 | 101 / 0; exact bytes |
-| brace-text | `ansi_prefix_preserves_brace_reach` | None | 36 / 36 | 101 / 0; exact bytes |
-| credential-effect | `credential_directory_walk_requires_read` | None | 24 / 24 | 101 / 0; exact bytes |
-| d1-closing | `ansi_qualifier_keeps_parenthesis_pairing` | None | 3 / 3 | 101 / 0; exact bytes |
-| d1-heredoc | `quoted_heredoc_body_is_inert_to_divergence` | None | 0 / 9 | 101 / 0; exact bytes |
-| d1-literal | `ansi_literal_is_inert_to_divergence` | None | 3 / 3 | 101 / 0; exact bytes |
-| probe-default | `glob_probe_oracle_uses_word_provenance` | None | 0 / 0 | 101 / 0; exact bytes |
-| quote-ansi | `ansi_prefix_preserves_brace_reach` | None | 45 / 45 | 101 / 0; exact bytes |
+Each final ablation uses one external source copy. It runs m1_2 and m1_3,
+requires the named assertion to fail at runtime (exit 101, no compiler error),
+builds the examples and runs the full corpus plus all 1,875 variant observations,
+restores exact original bytes by SHA-256, then repeats the assertions and both
+reports. Every restored projection equals the final normal projection. Timing
+is excluded from semantic equality. All 23 bindings match final checkout bytes.
 
-The heredoc mutation changes coverage assertions without changing class,
-because the pinned parser independently refuses the forms. The oracle mutation
-tests the required probe-order guard, not a production verdict. Their zero
-class deltas do not replace the runtime assertion. D27 2d evidence corrections
-have no production verdict mechanism; their checks are source/accounting and
-offline cargo-deny evidence rather than a simulated verdict ablation.
+| Mechanism | Named failing test | Corpus rows changed | Variant class / semantic changes | Oracle differences | Broken / restored |
+| --- | --- | --- | ---: | ---: | --- |
+| ansi | `lexer_matches_brush_word_quoting` | None | 111 / 126 | 35 | 101 / 0; exact bytes |
+| arithmetic-depth | `lexer_exposes_nested_and_heredoc_context` | None | 0 / 0 | 0 | 101 / 0; exact bytes |
+| backtick-depth | `lexer_exposes_nested_and_heredoc_context` | None | 0 / 0 | 0 | 101 / 0; exact bytes |
+| binding-glob | `resolved_unquoted_bindings_keep_bash_glob_reach` | None | 27 / 27 | 0 | 101 / 0; exact bytes |
+| brace-group | `ansi_member_preserves_brace_reach` | appdata[82], credentials[189] | 237 / 237 | 0 | 101 / 0; exact bytes |
+| brace-text | `ansi_prefix_preserves_brace_reach` | appdata[82], credentials[189], options[8], options[9], options[10], options[11] | 312 / 312 | 0 | 101 / 0; exact bytes |
+| closing | `executable_qualifiers_survive_double_quoted_apostrophes` | None | 60 / 63 | 0 | 101 / 0; exact bytes |
+| command-depth | `lexer_exposes_nested_and_heredoc_context` | None | 0 / 0 | 165 | 101 / 0; exact bytes |
+| comment | `literal_data_and_nested_code_keep_d1_masking` | None | 3 / 3 | 0 | 101 / 0; exact bytes |
+| d1-context | `literal_data_and_nested_code_keep_d1_masking` | None | 27 / 42 | 0 | 101 / 0; exact bytes |
+| double-active | `double_quotes_keep_inner_apostrophes_literal` | None | 39 / 45 | 0 | 101 / 0; exact bytes |
+| double | `lexer_matches_brush_word_quoting` | appdata[83], search[17], interpreters[36] | 150 / 177 | 4401 | 101 / 0; exact bytes |
+| escape | `lexer_exposes_nested_and_heredoc_context` | None | 0 / 0 | 66 | 101 / 0; exact bytes |
+| gettext | `lexer_matches_brush_word_quoting` | None | 0 / 0 | 106 | 101 / 0; exact bytes |
+| heredoc-body | `literal_data_and_nested_code_keep_d1_masking` | None | 3 / 18 | 897 | 101 / 0; exact bytes |
+| heredoc-delimiter | `lexer_exposes_nested_and_heredoc_context` | None | 0 / 0 | 0 | 101 / 0; exact bytes |
+| heredoc-endtag | `literal_data_and_nested_code_keep_d1_masking` | None | 3 / 3 | 203 | 101 / 0; exact bytes |
+| parameter-depth | `lexer_exposes_nested_and_heredoc_context` | None | 0 / 0 | 0 | 101 / 0; exact bytes |
+| quoted-glob | `resolved_unquoted_bindings_keep_bash_glob_reach` | None | 6 / 6 | 0 | 101 / 0; exact bytes |
+| single | `lexer_matches_brush_word_quoting` | None | 24 / 24 | 8982 | 101 / 0; exact bytes |
+| tilde | `target_tilde_uses_lexical_prefix_context` | shell[169] | 27 / 27 | 0 | 101 / 0; exact bytes |
+| unterminated-len | `unterminated_quotes_are_blocked` | None | 0 / 0 | 0 | 101 / 0; exact bytes |
+| unterminated-none | `unterminated_quotes_are_blocked` | None | 0 / 0 | 0 | 101 / 0; exact bytes |
 
-Deslop consolidated raw quote scanning, kept D1 independent of a parser arm,
-and merged the duplicate oracle test. cleanup-equivalence.json proves identical
-1,365 variant semantic projections and 1,289 corpus projections before/after
-that cleanup. precleanup-* artifacts retain the earlier successful runs but
-are superseded by final source-bound runs. invalid-marker-* preserves a
-generator's incorrect partial $H replacement; corrected inputs keep $HOME
-intact. The missing-target differential error and initial control/Clippy
-errors are diagnostic history, excluded from accepted passes.
+ANSI ablation breaks the oracle on N1 (`rust-m1-2-regressions[0..5]` and Opus
+b-ansi-quote-desync); Double ablation breaks it on M12-N1 (all five current rows
+and Opus's corresponding flags/eval inputs). Broken oracle JSON retains each
+id and byte difference. Both `unterminated-none` and `unterminated-len` fail
+`unterminated_quotes_are_blocked`; their zero corpus/variant delta shows why the
+explicit lexical contract is necessary. Some metadata mutations have no verdict
+change in this finite set; their context assertion still detects the lost field.
+All 28 new regression rows have a semantic counterexample in at least one final
+ablation, recorded in `regression-ablation-coverage.json`.
+
+Initial oracle diagnostics and the completed pretag ablations/gates are kept
+as history. They are superseded by final source-bound measurements; no diagnostic
+run or intermediate oracle failure is counted as a final pass. Span-debug
+instrumentation was removed. The final end-tag boundary regression and ablation
+close the additional owner omission found during cleanup.
 
 ## Mechanical gates and remaining acceptance
 
-| Gate | Final result | Artifact |
+| Gate | Final result | Artifact suffix |
 | --- | --- | --- |
 | cargo fmt -- --check | Pass | fmt.log |
 | cargo clippy --offline --locked --all-targets -- -D warnings | Pass | clippy.log |
-| cargo deny --offline --locked check | Advisories/bans/licenses/sources pass; five existing duplicate warnings; no fetch | deny.log |
-| Locked offline release, all targets | Pass | release.log |
-| All-target tests, no-fail-fast | 70 pass; only every_legacy_row_is_accounted_for fails (121 rows / 347 observations) | tests.log |
-| make rust-check (CARGO_NET_OFFLINE=true) | make 2 / Cargo 101; same sole strict failure | rust-check.log |
-| Packaged binary | --version 0.6.0 exit 0; no args/checker exit 1; no check performed | binary-smoke.json |
+| cargo deny --offline --locked check | Advisories/bans/licenses/sources pass; five existing duplicate warnings, no fetch | deny.log |
+| cargo build --offline --locked --release --all-targets | Pass | release.log |
+| cargo test --offline --locked --all-targets --no-fail-fast | 80 pass; only every_legacy_row_is_accounted_for fails, 121 rows / 347 observations | tests.log |
+| make rust-check, CARGO_NET_OFFLINE=true | make 2 / Cargo 101; same sole strict failure | rust-check.log |
+| Named Brush oracle | Pass, with all discrepancies/refusals recorded | oracle-final.log/json |
+| Packaged binary | --version 0.6.0 exit 0; no args/checker exit 1, no check performed | binary-smoke.json |
 
-cargo-deny's prior fetch-enabled M1.1 row is superseded by the explicit offline
-check here (E4); no claim about that old run's fetch provenance is carried into
-this result. E1 corrects Target.command, E2 scopes the old 720-observation claim,
-and E3 records D25/D26/D27 separately.
+The complete strict differential remains open at 121 conflicts. D28 tracked
+cwd/PWD/CDPATH, home and filesystem identity work awaits M2 Phase B. Heredoc
+parsing and shell/stdin execution stay P3; bindings stay P2. D29 8 root classes
+stay P6/M3. Git grep -f, operandValue, program/search roles and Target.search's
+help/version producer remain P5/P7 as assigned. D25 suffix-shape policy, App
+Data touch/scan gates, stream/content rules and directory-collapse owners remain
+pending. The stopped heredoc parser and shared tilde over-deny candidates remain
+recorded rather than ported.
 
-The complete strict differential remains open at 121 conflicts. D27 4's Git
-grep -f read owner and Target.search help-flag producer remain P5/P7 work.
-The D25 suffix shape patch, App Data touches/scan gates, wrapper/stdin/stream
-owners, operandValue, content/secret rules and directory-collapse cases remain
-pending. D28's tracked-cwd/PWD/CDPATH and identity work awaits M2 Phase B; the
-Phase A plan remains external and unchanged. The stopped escaped-heredoc Go
-syntax limitation is not adjudicated here.
+The all-target suite includes the unchanged dev/lifecycle/writer/JSONL/SSH tests.
+It is not fresh installed loading or real consumer Gate A/B acceptance. Execution
+owners, production performance and cutover remain unaccepted. The same two
+coordinator-owned reviewers must now verify M1.3, with the lexer oracle as an
+explicit attack surface. No alternate reviewer verdict is substituted.
 
-The unchanged dev/lifecycle/writer/JSONL/SSH tests pass within the all-target
-suite; their M1.1 runtime reports are historical, not fresh M1.2 measurements.
-Installed loading, real consumer Gate A, Gate B, execution owners, production
-performance and cutover remain unaccepted. No installation, permission change,
-remote write, release, paid call or real protected-data operation occurred.
-
-Changed: quote owners, Read gate, explicit oracle construction, regression
-fixtures and this source-bound evidence. Retained: distinct prefix/member,
-literal/qualifier/heredoc coverage, effect and probe-order assertions, plus
-literal-brace decision rows. Candidates left: the named deferred owners and
-coordinator-owned verifications above. Validation: final gates, regressions,
-differential and eight restored ablations as recorded. M1.2 stops here.
+Changed: one raw lexical owner replaces partial scanners; resolved unquoted
+bindings retain Bash glob reach; test-oracle intent and source-bound evidence
+are explicit. Retained: distinct executable/literal, brace/paren/tilde,
+malformed-quote, nesting/escape/heredoc and probe-order contracts. Candidates
+left: the named deferred owners, event-oracle provenance limit and required
+coordinator verifications. Validation: final gates, full corpus/variant replay
+and 23 restored ablations above. M1.3 stops here.

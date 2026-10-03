@@ -37,7 +37,7 @@ fn ssh_public_file_type_and_probe_fault() {
             ("config.work", "N"),
         ] {
             let body = serde_json::to_vec(&json!({"tool_name":"Bash", "tool_input":{"command":format!("cat {}/.ssh/{name}", fixture.home)}})).unwrap();
-            let mut probe = support::RecordingProbe::literal(&fixture);
+            let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
             let result = evaluate_with_arm(
                 Event {
                     bytes: &body,
@@ -59,7 +59,7 @@ fn ssh_public_file_type_and_probe_fault() {
         }
         let body = serde_json::to_vec(&json!({"tool_name":"Bash", "tool_input":{"command":format!("cat {}/.ssh/config", fixture.home)}})).unwrap();
         let mut probe = StatFault {
-            inner: support::RecordingProbe::literal(&fixture),
+            inner: support::RecordingProbe::literal_for_quoted_paths(&fixture),
         };
         let result = evaluate_with_arm(
             Event {
@@ -87,7 +87,7 @@ fn protected_ssh_root_does_not_deny_unrelated_public_targets() {
     )
     .unwrap();
     std::os::unix::fs::symlink(&fixture.container, format!("{}/.ssh", fixture.home)).unwrap();
-    let mut probe = support::RecordingProbe::literal(&fixture);
+    let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
     let identity = filesystem::identify(
         &format!("{}/input.txt", fixture.project),
         &fixture.project,
@@ -122,7 +122,7 @@ fn resolved_ssh_root_and_parent_inode_identity() {
     for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let context = fixture.context(&json!({"consumer":"codex", "cwd":"$P"}));
         let body = serde_json::to_vec(&json!({"tool_name":"Bash", "tool_input":{"command":format!("cat {}", root.display())}})).unwrap();
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         let result = evaluate_with_arm(
             Event {
                 bytes: &body,
@@ -143,7 +143,7 @@ fn resolved_ssh_root_and_parent_inode_identity() {
     let mut probe = ParentAlias {
         root: root.clone(),
         alias_parent: alias.parent().unwrap().to_owned(),
-        inner: support::RecordingProbe::literal(&fixture),
+        inner: support::RecordingProbe::literal_for_quoted_paths(&fixture),
     };
     let identity = filesystem::identify(
         alias.to_str().unwrap(),
@@ -175,7 +175,7 @@ fn search_compares_resolved_ssh_root_parents() {
     fs::rename(format!("{}/.ssh", fixture.home), parent.join("keys")).unwrap();
     std::os::unix::fs::symlink(parent.join("keys"), format!("{}/.ssh", fixture.home)).unwrap();
     for search in [false, true] {
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         let identity = filesystem::identify_scope(
             parent.to_str().unwrap(),
             &fixture.project,
@@ -231,7 +231,7 @@ fn private_key_spelling_stops_before_all_probes() {
         "id.PUB",
         "known_HOSTS",
     ] {
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         let identity = filesystem::identify(
             &format!("{}/.ssh/{name}", fixture.home),
             &fixture.project,

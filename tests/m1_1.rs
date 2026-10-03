@@ -20,7 +20,7 @@ fn regressions(owner: &str) {
                 "tool_input":{"command":fixture.expand(row["source"].as_str().unwrap())}
             }))
             .unwrap();
-            let mut probe = support::RecordingProbe::literal(&fixture);
+            let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
             let result = evaluate_with_arm(
                 Event {
                     bytes: &body,
@@ -56,7 +56,7 @@ fn file_urls_reach_protected_identity() {
             "file_path":format!("{prefix}{}/Library/Containers/App/data",fixture.home)
         }}))
         .unwrap();
-        let mut probe = support::RecordingProbe::literal(&fixture);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         let result = evaluate_with_arm(
             Event {
                 bytes: &bytes,
@@ -101,7 +101,7 @@ fn structured_targets_do_not_infer_shell_globs() {
     let bytes =
         serde_json::to_vec(&json!({"tool_name":"Read","tool_input":{"file_path":".e[n]v"}}))
             .unwrap();
-    let mut probe = support::RecordingProbe::literal(&fixture);
+    let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
     assert_eq!(
         support::class(&evaluate_with_arm(
             Event {
