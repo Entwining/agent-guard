@@ -224,7 +224,14 @@ impl Probe for ParentAlias {
 #[test]
 fn private_key_spelling_stops_before_all_probes() {
     let fixture = support::Fixture::new();
-    for name in ["id_rsa", "id_ed25519", "keys/id.pub"] {
+    for name in [
+        "id_rsa",
+        "id_ed25519",
+        "keys/id.pub",
+        "CONFIG",
+        "id.PUB",
+        "known_HOSTS",
+    ] {
         let mut probe = support::RecordingProbe::new(&fixture);
         let identity = filesystem::identify(
             &format!("{}/.ssh/{name}", fixture.home),

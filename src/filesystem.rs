@@ -168,6 +168,7 @@ pub fn broad_root(path: &str, home: &str) -> bool {
 }
 
 fn lexical_candidate(path: &str, home: &str) -> Option<Protection> {
+    let spelling = path;
     let path = path.to_lowercase();
     let patterned = path.contains(['*', '?', '[', '{', '(']);
     let library = format!("{home}/Library").to_lowercase();
@@ -196,7 +197,8 @@ fn lexical_candidate(path: &str, home: &str) -> Option<Protection> {
     if let Some(index) = parts.iter().position(|part| {
         *part == ".ssh" || patterned && part.starts_with('.') && glob::component(part, ".ssh")
     }) {
-        let tail = &parts[index + 1..];
+        let original: Vec<_> = spelling.split('/').collect();
+        let tail = &original[index + 1..];
         if !tail.is_empty() && (tail.len() != 1 || !ssh_public(tail[0])) {
             return Some(Protection::SshPrivate);
         }
