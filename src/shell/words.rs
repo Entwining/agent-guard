@@ -73,21 +73,15 @@ pub(super) fn expand(
 fn brace_text(raw: &str) -> (String, bool) {
     let mut text = String::new();
     let mut expands = false;
-    let mut quote = None;
-    let mut escaped = false;
     let mut cursor = 0;
     while cursor < raw.len() {
+        if let Some(end) = super::quotes::skip(raw, cursor) {
+            text.push_str(&raw[cursor..end]);
+            cursor = end;
+            continue;
+        }
         let ch = raw[cursor..].chars().next().unwrap_or_default();
-        if escaped {
-            escaped = false;
-        } else if ch == '\\' && quote != Some('\'') {
-            escaped = true;
-        } else if quote == Some(ch) {
-            quote = None;
-        } else if quote.is_none() && matches!(ch, '\'' | '"') {
-            quote = Some(ch);
-        } else if quote.is_none()
-            && ch == '{'
+        if ch == '{'
             && let Some((right, list)) = brace_group(raw, cursor)
         {
             let group = &raw[cursor..=right];
@@ -117,32 +111,27 @@ fn brace_text(raw: &str) -> (String, bool) {
 
 fn brace_group(raw: &str, left: usize) -> Option<(usize, bool)> {
     let mut depth = 0;
-    let mut quote = None;
-    let mut escaped = false;
     let mut list = false;
-    for (offset, ch) in raw[left..].char_indices() {
-        if escaped {
-            escaped = false;
-        } else if ch == '\\' && quote != Some('\'') {
-            escaped = true;
-        } else if quote == Some(ch) {
-            quote = None;
-        } else if quote.is_none() && matches!(ch, '\'' | '"') {
-            quote = Some(ch);
-        } else if quote.is_none() {
-            if ch == '{' {
-                depth += 1;
-            }
-            if ch == '}' {
-                depth -= 1;
-                if depth == 0 {
-                    return Some((left + offset, list));
-                }
-            }
-            if ch == ',' && depth == 1 {
-                list = true;
+    let mut cursor = left;
+    while cursor < raw.len() {
+        if let Some(end) = super::quotes::skip(raw, cursor) {
+            cursor = end;
+            continue;
+        }
+        let ch = raw[cursor..].chars().next().unwrap_or_default();
+        if ch == '{' {
+            depth += 1;
+        }
+        if ch == '}' {
+            depth -= 1;
+            if depth == 0 {
+                return Some((cursor, list));
             }
         }
+        if ch == ',' && depth == 1 {
+            list = true;
+        }
+        cursor += ch.len_utf8();
     }
     None
 }
@@ -405,7 +394,7 @@ fn prints_pwd(code: &str) -> bool {
     words == ["pwd"] || words == ["pwd", "-L"] || words == ["pwd", "-P"]
 }
 
-fn ansi(text: &str) -> String {
+pub(super) fn ansi(text: &str) -> String {
     let mut out = String::new();
     let mut chars = text.chars().peekable();
     while let Some(ch) = chars.next() {

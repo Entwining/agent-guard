@@ -343,7 +343,7 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                 shell_observation_entries: Cell::new(0),
             };
             let body = serde_json::to_vec(&json!({"tool_name":tool,"tool_input":input})).unwrap();
-            let mut probe = RecordingProbe::new(&fixture);
+            let mut probe = RecordingProbe::literal(&fixture);
             if id == "appdata[115]" {
                 probe.fault = Some(format!("{}/locked", fixture.project));
             }
@@ -529,7 +529,7 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                     }
                     changed_contract_match &= recovery["automatic_application_supported"] == false;
                     let recheck=serde_json::to_vec(&json!({"tool_name":got["tool"],"tool_input":got["input"],"cwd":got["cwd"]})).unwrap();
-                    let mut recheck_probe = RecordingProbe::new(&fixture);
+                    let mut recheck_probe = RecordingProbe::literal(&fixture);
                     changed_contract_match &= class(&evaluate_with_arm(
                         Event {
                             bytes: &recheck,

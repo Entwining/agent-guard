@@ -157,7 +157,7 @@ fn word_piece_record_transport() {
             &serde_json::json!({"tool_name":"Bash","tool_input":{"command":source}}),
         )
         .unwrap();
-        let mut probe = support::RecordingProbe::new(&fixture);
+        let mut probe = support::RecordingProbe::literal(&fixture);
         let result = agent_guard_rust::evaluate_with_arm(
             agent_guard_rust::Event {
                 bytes: &bytes,

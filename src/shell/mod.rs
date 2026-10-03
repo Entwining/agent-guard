@@ -1,5 +1,6 @@
 mod brush;
 mod divergence;
+mod quotes;
 mod words;
 
 use crate::{CheckError, CheckErrorKind, CoverageGap, limits::MAX_NESTING};

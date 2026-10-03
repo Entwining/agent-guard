@@ -20,7 +20,7 @@ fn regressions(owner: &str) {
                 "tool_input":{"command":fixture.expand(row["source"].as_str().unwrap())}
             }))
             .unwrap();
-            let mut probe = support::RecordingProbe::new(&fixture);
+            let mut probe = support::RecordingProbe::literal(&fixture);
             let result = evaluate_with_arm(
                 Event {
                     bytes: &body,
@@ -56,7 +56,7 @@ fn file_urls_reach_protected_identity() {
             "file_path":format!("{prefix}{}/Library/Containers/App/data",fixture.home)
         }}))
         .unwrap();
-        let mut probe = support::RecordingProbe::new(&fixture);
+        let mut probe = support::RecordingProbe::literal(&fixture);
         let result = evaluate_with_arm(
             Event {
                 bytes: &bytes,
@@ -101,7 +101,7 @@ fn structured_targets_do_not_infer_shell_globs() {
     let bytes =
         serde_json::to_vec(&json!({"tool_name":"Read","tool_input":{"file_path":".e[n]v"}}))
             .unwrap();
-    let mut probe = support::RecordingProbe::new(&fixture);
+    let mut probe = support::RecordingProbe::literal(&fixture);
     assert_eq!(
         support::class(&evaluate_with_arm(
             Event {
@@ -138,7 +138,7 @@ fn glob_probe_oracle_uses_word_provenance() {
         let word = &script.commands[0].argv[1];
         assert_eq!(word.globs, patterned);
         let target = Target::from_word(word, &fixture.project, host, Effect::Read, Walk::None);
-        let mut probe = support::RecordingProbe::for_word(&fixture, word);
+        let mut probe = support::RecordingProbe::new(&fixture, word);
         let result = filesystem::identify_target(
             &target.path,
             &fixture.project,

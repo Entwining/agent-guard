@@ -13,21 +13,14 @@ pub(super) struct Detection {
 pub(super) fn closing(source: &str, start: usize, open: u8, close: u8) -> Option<usize> {
     let bytes = source.as_bytes();
     let mut depth = 0;
-    let mut quote = 0;
     let mut index = start;
     while index < bytes.len() {
-        let byte = bytes[index];
-        if byte == b'\\' && quote != b'\'' {
-            index += 2;
+        if let Some(end) = super::quotes::skip(source, index) {
+            index = end;
             continue;
         }
-        if quote != 0 {
-            if byte == quote {
-                quote = 0;
-            }
-        } else if matches!(byte, b'\'' | b'"') {
-            quote = byte;
-        } else if byte == open {
+        let byte = bytes[index];
+        if byte == open {
             depth += 1;
         } else if byte == close {
             depth -= 1;
@@ -35,7 +28,7 @@ pub(super) fn closing(source: &str, start: usize, open: u8, close: u8) -> Option
                 return Some(index);
             }
         }
-        index += 1;
+        index += source[index..].chars().next().map_or(1, char::len_utf8);
     }
     None
 }
@@ -75,34 +68,24 @@ pub(super) fn detect(source: &str, spans: &[Range<usize>]) -> Result<Detection, 
         if tail.starts_with("<<")
             && !tail.starts_with("<<<")
             && let Some(newline) = tail.find('\n')
+            && let Some((delimiter, quoted)) =
+                super::quotes::heredoc_delimiter(tail[2..newline].trim_start_matches('-').trim())
+            && quoted
+            && !delimiter.is_empty()
+            && !delimiter.contains(char::is_whitespace)
         {
-            let delimiter = tail[2..newline].trim_start_matches('-').trim();
-            let quoted = delimiter.starts_with(['\'', '"', '\\']);
-            let delimiter = delimiter.trim_matches(['\'', '"', '\\']);
-            if !delimiter.is_empty() && !delimiter.contains(char::is_whitespace) {
-                let body_start = cursor + newline + 1;
-                let end = source[body_start..]
-                    .find(&format!("\n{delimiter}"))
-                    .map(|n| body_start + n)
-                    .unwrap_or(source.len());
-                if quoted {
-                    cursor = end;
-                    continue;
-                }
-            }
-        }
-        let byte = source.as_bytes()[cursor];
-        if byte == b'\\' {
-            cursor += 1;
-            if cursor < source.len() {
-                cursor += source[cursor..].chars().next().map_or(0, char::len_utf8);
-            }
+            let body_start = cursor + newline + 1;
+            cursor = source[body_start..]
+                .find(&format!("\n{delimiter}"))
+                .map(|n| body_start + n)
+                .unwrap_or(source.len());
             continue;
         }
-        if byte == b'\''
-            && let Some(end) = source[cursor + 1..].find('\'')
+        let byte = source.as_bytes()[cursor];
+        if (matches!(byte, b'\\' | b'\'') || tail.starts_with("$'"))
+            && let Some(end) = super::quotes::skip(source, cursor)
         {
-            cursor += end + 2;
+            cursor = end;
             continue;
         }
         if tail.starts_with("${(")

@@ -300,7 +300,7 @@ impl Inspection<'_> {
                     });
                 }
                 if target.walk != Walk::None
-                    && target.effect != Effect::Name
+                    && target.effect == Effect::Read
                     && ["/.docker", "/.kube", "/.cargo", "/.config"]
                         .iter()
                         .any(|suffix| path.ends_with(suffix))
