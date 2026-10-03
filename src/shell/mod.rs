@@ -26,6 +26,7 @@ struct Redirect {
 }
 #[derive(Debug, Clone)]
 enum Record {
+    Nested(Vec<Record>),
     Definition(String, Vec<Record>),
     Assignment(String, Word),
     LoopBinding(String, Vec<Word>),
@@ -50,6 +51,7 @@ pub struct CommandRecord {
     pub pipeline: Option<(usize, usize)>,
     pub cwd: String,
     pub variables: Vec<String>,
+    pub nested: bool,
 }
 
 #[derive(Debug, Default)]
@@ -166,21 +168,26 @@ fn observe_source(
             }
         })
         .collect();
-    let mut pending: VecDeque<_> = records.into();
+    let mut pending: VecDeque<_> = records.into_iter().map(|record| (record, false)).collect();
     let mut inspected = 0;
-    while let Some(record) = pending.pop_front() {
+    while let Some((record, nested)) = pending.pop_front() {
         inspected += 1;
         if inspected > 512 {
             output.gap(CoverageGap::InspectionBudget);
             break;
         }
         match record {
+            Record::Nested(records) => {
+                for record in records.into_iter().rev() {
+                    pending.push_front((record, true));
+                }
+            }
             Record::Definition(_, body) => {
                 // Static preflight retains Go's conservative observation of declared bodies.
                 for record in body.iter().rev() {
                     if !matches!(record,Record::Command {argv,..} if argv.first().is_some_and(|w|functions.contains_key(&w.raw)))
                     {
-                        pending.push_front(record.clone());
+                        pending.push_front((record.clone(), nested));
                     }
                 }
             }
@@ -252,7 +259,7 @@ fn observe_source(
                     .and_then(|name| functions.get(name))
                 {
                     for record in body.iter().rev() {
-                        pending.push_front(record.clone());
+                        pending.push_front((record.clone(), nested));
                     }
                     continue;
                 }
@@ -285,6 +292,7 @@ fn observe_source(
                             pipeline: pipeline.map(|id| (source_id, id)),
                             cwd: cwd.clone(),
                             variables: names.clone(),
+                            nested: nested || depth > 0,
                         });
                         if argv.first().is_some_and(|s| s == "cd")
                             && let Some(target) = argv.iter().skip(1).find(|s| !s.starts_with('-'))

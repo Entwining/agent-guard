@@ -11,7 +11,7 @@ fn main() {
     };
     for row in support::rows()
         .iter()
-        .filter(|r| r["consumer"] != "owned-writer")
+        .filter(|r| support::is_evaluator_row(r))
     {
         println!("{}", support::run(row, arm));
     }

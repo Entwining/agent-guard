@@ -1,5 +1,15 @@
-use crate::{CheckError, CheckErrorKind, Disposition, Evaluation, Outcome, Recovery, RecoveryStep};
+use crate::{
+    CheckError, CheckErrorKind, Disposition, EffectRecord, Evaluation, Outcome, Recovery,
+    RecoveryStep,
+};
 use serde_json::{Value, json};
+
+pub fn effects_value(effects: &[EffectRecord]) -> Value {
+    json!(effects.iter().map(|effect| match effect {
+        EffectRecord::ProtectedTarget { protection, write, source } => json!({"kind":"ProtectedTarget","protection":format!("{protection:?}"),"write":write,"source":format!("{source:?}")}),
+        other => json!({"kind":format!("{other:?}")}),
+    }).collect::<Vec<_>>())
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Consumer {

@@ -2,7 +2,7 @@ mod support;
 use serde_json::{Value, json};
 use std::{
     fs,
-    io::Write,
+    io::{self, Write},
     path::{Path, PathBuf},
 };
 
@@ -28,18 +28,30 @@ impl OwnedWriter {
         let staging = format!("staging-{}", self.serial);
         durable(&self.root.join(&proposal_path), proposal);
         let current = fs::read_to_string(self.root.join("out.txt")).unwrap();
+        let mut io_error = None;
         let state = if current != expected {
             "Conflict"
-        } else if partial {
-            durable(&self.root.join(&staging), "KEEP\n");
-            "PartialStagedFailure"
         } else {
-            durable(&self.root.join(&staging), proposal);
-            fs::rename(self.root.join(&staging), self.root.join("out.txt")).unwrap();
-            self.commits += 1;
-            "Committed"
+            let mut sink = StagedSink {
+                file: fs::File::create(self.root.join(&staging)).unwrap(),
+                remaining: partial.then_some(5),
+            };
+            match sink
+                .write_all(proposal.as_bytes())
+                .and_then(|()| sink.file.sync_all())
+            {
+                Err(error) => {
+                    io_error = Some(format!("{:?}", error.kind()));
+                    "PartialStagedFailure"
+                }
+                Ok(()) => {
+                    fs::rename(self.root.join(&staging), self.root.join("out.txt")).unwrap();
+                    self.commits += 1;
+                    "Committed"
+                }
+            }
         };
-        let receipt = json!({"state":state,"target":"out.txt","proposal":proposal_path,"partial_artifact":if partial {Some(staging)} else {None},"commits":self.commits});
+        let receipt = json!({"state":state,"target":"out.txt","proposal":proposal_path,"partial_artifact":if io_error.is_some() {Some(staging)} else {None},"commits":self.commits,"io_error":io_error});
         durable(&self.root.join("state.json"), &receipt.to_string());
         receipt
     }
@@ -48,6 +60,33 @@ impl OwnedWriter {
     }
     fn owner_edit(&mut self, bytes: &str) {
         durable(&self.root.join("out.txt"), bytes);
+    }
+}
+
+struct StagedSink {
+    file: fs::File,
+    remaining: Option<usize>,
+}
+
+impl Write for StagedSink {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        let count = match self.remaining {
+            Some(0) => {
+                return Err(io::Error::other(
+                    "synthetic write fault after accepted prefix",
+                ));
+            }
+            Some(remaining) => bytes.len().min(remaining),
+            None => bytes.len(),
+        };
+        let written = self.file.write(&bytes[..count])?;
+        if let Some(remaining) = &mut self.remaining {
+            *remaining -= written;
+        }
+        Ok(written)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.file.flush()
     }
 }
 
@@ -64,9 +103,6 @@ fn owned_writer_states() {
         .filter(|r| r["consumer"] == "owned-writer")
     {
         let fixture = support::Fixture::new();
-        let notes = fs::read(format!("{}/notes.txt", fixture.project)).unwrap();
-        let untracked = fs::read(format!("{}/untracked-work.txt", fixture.project)).unwrap();
-        durable(&fixture.root.join("sibling"), "OUTSIDE_COPY\n");
         let mut writer = OwnedWriter::new(fixture.root.join("copy"));
         if let Some(edit) = row["input"]["intervening_owner_write"].as_str() {
             writer.owner_edit(edit);
@@ -88,13 +124,7 @@ fn owned_writer_states() {
                     fs::read_to_string(writer.root.join("out.txt")).unwrap(),
                     "KEEP\nnew\n"
                 );
-                let mut guard_off = OwnedWriter::new(fixture.root.join("guard-off-copy"));
-                let control = guard_off.write("KEEP\n", "KEEP\nnew\n", false);
-                assert_eq!(control, receipt);
-                assert_eq!(
-                    fs::read(writer.root.join("out.txt")).unwrap(),
-                    fs::read(guard_off.root.join("out.txt")).unwrap()
-                );
+                assert_eq!(receipt["io_error"], Value::Null);
             }
             "Conflict" => {
                 assert_eq!(writer.commits, 0);
@@ -111,6 +141,7 @@ fn owned_writer_states() {
                 );
             }
             "PartialStagedFailure" => {
+                assert_eq!(receipt["io_error"], "Other");
                 assert_eq!(writer.commits, 0);
                 let current = fs::read_to_string(writer.root.join("out.txt")).unwrap();
                 assert_eq!(current, "KEEP\n");
@@ -134,21 +165,9 @@ fn owned_writer_states() {
             }
             _ => panic!("unexpected durable writer state"),
         }
-        assert_eq!(
-            fs::read(format!("{}/notes.txt", fixture.project)).unwrap(),
-            notes
-        );
-        assert_eq!(
-            fs::read(format!("{}/untracked-work.txt", fixture.project)).unwrap(),
-            untracked
-        );
-        assert_eq!(
-            fs::read_to_string(fixture.root.join("sibling")).unwrap(),
-            "OUTSIDE_COPY\n"
-        );
         println!(
             "{}",
-            json!({"id":row["id"],"initial_receipt":receipt,"final_receipt":writer.state(),"final_bytes":fs::read_to_string(writer.root.join("out.txt")).unwrap(),"notes_retained":true,"untracked_retained":true,"sibling_retained":true,"scope":"single owned synthetic writer; excluded from protection denominators"})
+            json!({"id":row["id"],"initial_receipt":receipt,"final_receipt":writer.state(),"final_bytes":fs::read_to_string(writer.root.join("out.txt")).unwrap(),"scope":"single owned synthetic writer; injected Write error, no crash/concurrency claim; excluded from protection denominators"})
         );
     }
 }

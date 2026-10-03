@@ -188,6 +188,7 @@ fn child(command: &CommandRecord, argv: &[String], cwd: &str) -> CommandRecord {
         pipeline: command.pipeline,
         cwd: cwd.to_owned(),
         variables: command.variables.clone(),
+        nested: command.nested,
     }
 }
 

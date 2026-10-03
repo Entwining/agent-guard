@@ -123,6 +123,7 @@ fn guard(request: &Request) -> Value {
         "disposition":null, "cause":null, "reason":null, "advice":[], "recovery":null,
         "exit":wire.exit, "stdout":wire.stdout, "stderr":wire.stderr,
         "evaluate_ns":evaluate_ns
+        ,"observed_effects":[]
     });
     match result {
         Err(error) => {
@@ -133,6 +134,7 @@ fn guard(request: &Request) -> Value {
             response["reason"] = json!(error.to_string());
         }
         Ok(evaluation) => {
+            response["observed_effects"] = adapters::effects_value(&evaluation.effects);
             response["coverage"] = match evaluation.coverage {
                 Coverage::SupportedPreflight => json!({"state":"SupportedPreflight"}),
                 Coverage::LimitedPreflight(gaps) => {

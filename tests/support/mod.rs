@@ -370,7 +370,22 @@ pub fn run(row: &Value, arm: Arm) -> Value {
         _ => Value::Null,
     };
     let recovery_receipt = verify_recovery(&fixture, row, &recovery, arm);
-    json!({"id":row["id"],"consumer":row["consumer"],"arm":format!("{arm:?}"),"class":class(&result),"coverage":coverage(&result),"library":format!("{result:?}"),"recovery":recovery,"recovery_receipt":recovery_receipt,"exit":wire.exit,"stdout":wire.stdout,"stderr":wire.stderr,"probe_calls":probe.calls,"shell_observation_entries":context.shell_observation_entries.get(),"operation_start_count":gate.operation_start_count,"task_result":task_result,"task_witness_scope":if matches!(&result,Ok(Evaluation {coverage:Coverage::OutsideObservedToolCoverage {..},..})) || text(row,"id").contains("dynamic-chooser") {"known-public control; original task incomplete"} else {"closed fixture operation surrogate"},"effects":witness.value(&fixture),"elapsed_ns":elapsed_ns,"lifecycle":lifecycle})
+    let observed_effects = result
+        .as_ref()
+        .map(|evaluation| agent_guard_rust::adapters::effects_value(&evaluation.effects))
+        .unwrap_or_else(|_| json!([]));
+    json!({"id":row["id"],"consumer":row["consumer"],"arm":format!("{arm:?}"),"class":class(&result),"coverage":coverage(&result),"library":format!("{result:?}"),"recovery":recovery,"recovery_receipt":recovery_receipt,"exit":wire.exit,"stdout":wire.stdout,"stderr":wire.stderr,"probe_calls":probe.calls,"shell_observation_entries":context.shell_observation_entries.get(),"operation_start_count":gate.operation_start_count,"task_result":task_result,"task_witness_scope":if matches!(&result,Ok(Evaluation {coverage:Coverage::OutsideObservedToolCoverage {..},..})) || text(row,"id").contains("dynamic-chooser") {"known-public control; original task incomplete"} else {"closed fixture operation surrogate"},"observed_effects":observed_effects,"effects":witness.value(&fixture),"elapsed_ns":elapsed_ns,"lifecycle":lifecycle,"evidence_owner":if is_lifecycle_row(row) {"harness-only"} else {"evaluator"}})
+}
+
+pub fn is_lifecycle_row(row: &Value) -> bool {
+    matches!(
+        row["fault_injection"]["owner"].as_str(),
+        Some("offline checker lifecycle" | "offline checker worker")
+    )
+}
+
+pub fn is_evaluator_row(row: &Value) -> bool {
+    row["consumer"] != "owned-writer" && !is_lifecycle_row(row)
 }
 
 #[derive(Default)]
@@ -811,7 +826,16 @@ fn worker_fault(fixture: &Fixture, kind: CheckErrorKind) -> Value {
 }
 
 pub fn assert_preflight_tuple(row: &Value, actual: &Value) {
-    let conditional = row.get("conditional_outcome").is_some() && actual["class"] == "D";
+    let conditional = row.get("conditional_outcome").is_some()
+        && actual["observed_effects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|effect| {
+                effect["protection"] == "AppData"
+                    && effect["write"] == false
+                    && effect["source"] == "Nested"
+            });
     let expected = if conditional {
         "D".to_owned()
     } else {
@@ -880,6 +904,74 @@ pub fn assert_preflight_tuple(row: &Value, actual: &Value) {
     assert_eq!(
         !actual["stdout"].as_str().unwrap().is_empty(),
         row["advice_expectation"]["expectation"] == "present"
+    );
+    assert_effect_or_failure(row, actual, conditional);
+}
+
+fn assert_effect_or_failure(row: &Value, actual: &Value, conditional: bool) {
+    let contract = if conditional {
+        &row["conditional_outcome"]["reason_contract"]
+    } else {
+        &row["reason_contract"]
+    };
+    let Some(required) = contract["effect_or_failure"].as_str() else {
+        assert_ne!(
+            contract["emission"], "required",
+            "required reason needs a semantic partition"
+        );
+        return;
+    };
+    let stderr = actual["stderr"].as_str().unwrap();
+    let effects = actual["observed_effects"].as_array().unwrap();
+    let protected = |kind: &str, write: bool| {
+        effects
+            .iter()
+            .any(|effect| effect["protection"] == kind && effect["write"] == write)
+    };
+    let gaps = actual["coverage"]["gaps"].as_array();
+    let gap = |name: &str| gaps.is_some_and(|values| values.iter().any(|value| value == name));
+    let matches = if actual["class"] == "F" {
+        actual["coverage"]["error_kind"] == required
+    } else if required.contains("App Data") {
+        protected("AppData", false)
+            && stderr.contains("App Data")
+            && (!required.contains("nested") && !required.contains("substitution")
+                || effects.iter().any(|effect| {
+                    effect["protection"] == "AppData" && effect["source"] == "Nested"
+                }))
+    } else if required.contains("SSH") || required.contains("private-key") {
+        protected("SshPrivate", required.contains("write")) && stderr.contains("private-key")
+    } else if required.contains("broad") {
+        effects.iter().any(|effect| effect["kind"] == "BroadRoot")
+            && stderr.contains("HOME")
+            && stderr.contains("excluded")
+    } else if required.contains("inline interpreter") {
+        protected("Environment", false)
+            && effects
+                .iter()
+                .any(|effect| effect["source"] == "InlineCode")
+            && stderr.contains("CodeFile")
+    } else if required.contains("hidden") {
+        effects
+            .iter()
+            .any(|effect| effect["kind"] == "HiddenContent")
+            && stderr.contains("environment")
+    } else if required.contains("environment-file") {
+        protected("Environment", false) && stderr.contains("environment")
+    } else if required.contains("Zsh") || required.contains("zsh") {
+        (gap("ExecutorDivergence") || gap("UnsupportedDialectConstruct"))
+            && stderr.contains("unsupported")
+    } else if required.contains("parse failure") || required.contains("redirection lacks") {
+        gap("UnsupportedShellSyntax") && stderr.contains("complete shell input")
+    } else if required.contains("execution owner") {
+        gap("ExecutionOwnerUnavailable") && stderr.contains("execution owner")
+    } else {
+        false
+    };
+    assert!(
+        matches,
+        "{} required effect/failure {required}: effects={} coverage={} stderr={stderr}",
+        row["id"], actual["observed_effects"], actual["coverage"]
     );
 }
 

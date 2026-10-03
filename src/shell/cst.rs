@@ -61,6 +61,15 @@ pub(super) fn records(source: &str, parsed: &str) -> Result<Parsed, CheckError> 
 
 fn walk(source: &str, node: Node<'_>, output: &mut Vec<Record>) -> Result<(), CheckError> {
     match node.kind() {
+        "command_substitution" | "process_substitution" => {
+            let mut records = Vec::new();
+            let mut cursor = node.walk();
+            for child in node.named_children(&mut cursor) {
+                walk(source, child, &mut records)?;
+            }
+            output.push(Record::Nested(records));
+            return Ok(());
+        }
         "for_statement" => {
             if let Some(variable) = node.child_by_field_name("variable") {
                 let mut cursor = node.walk();

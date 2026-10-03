@@ -248,7 +248,9 @@ fn item_record(
         }
         CommandPrefixOrSuffixItem::IoRedirect(value) => redirect(source, value, redirects, output)?,
         CommandPrefixOrSuffixItem::ProcessSubstitution(_, group) => {
-            walk_list(source, &group.list, output)?;
+            let mut records = Vec::new();
+            walk_list(source, &group.list, &mut records)?;
+            output.push(Record::Nested(records));
             argv.push(Word {
                 raw: "__observed_stream__".into(),
             });
@@ -299,7 +301,9 @@ fn redirect(
             });
         }
         IoRedirect::File(_, _, IoFileRedirectTarget::ProcessSubstitution(_, group)) => {
-            walk_list(source, &group.list, output)?
+            let mut records = Vec::new();
+            walk_list(source, &group.list, &mut records)?;
+            output.push(Record::Nested(records));
         }
         IoRedirect::HereDocument(_, doc) if doc.requires_expansion => {
             output.push(Record::Expansion(Word {

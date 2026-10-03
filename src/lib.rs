@@ -18,6 +18,29 @@ pub use policy::{Context, Event, evaluate, evaluate_with_arm};
 pub struct Evaluation {
     pub outcome: Outcome,
     pub coverage: Coverage,
+    pub effects: Vec<EffectRecord>,
+}
+
+/// Static effects identified by their owner; these are not completed I/O receipts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EffectRecord {
+    ProtectedTarget {
+        protection: filesystem::Protection,
+        write: bool,
+        source: EffectSource,
+    },
+    BroadRoot,
+    EnvironmentDump,
+    CredentialVariable,
+    HiddenContent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectSource {
+    Operand,
+    Nested,
+    InlineCode,
+    Cwd,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

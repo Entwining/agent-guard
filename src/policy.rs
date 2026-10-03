@@ -1,6 +1,6 @@
 use crate::{
-    Advice, CheckError, CheckErrorKind, Coverage, CoverageGap, Disposition, Evaluation, Outcome,
-    Reason, Recovery, RecoveryStep,
+    Advice, CheckError, CheckErrorKind, Coverage, CoverageGap, Disposition, EffectRecord,
+    EffectSource, Evaluation, Outcome, Reason, Recovery, RecoveryStep,
     adapters::{self, Consumer, Operation},
     filesystem::{self, Identity, Probe, Protection},
     limits::MAX_INPUT_BYTES,
@@ -48,6 +48,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
                 recovery: None,
             },
             coverage: Coverage::OutsideObservedToolCoverage { tool: tool.clone() },
+            effects: Vec::new(),
         });
     }
     if context.require_execution_owner {
@@ -59,6 +60,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
                 recovery: Some(recovery(context, &decoded.cwd, "execution_owner")),
             },
             coverage: Coverage::LimitedPreflight(vec![gap]),
+            effects: Vec::new(),
         });
     }
     let mut inspection = Inspection {
@@ -69,6 +71,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
         denial: None,
         advice: false,
         executable_qualifier: false,
+        effects: Vec::new(),
     };
     match &decoded.operation {
         Operation::Read(path) | Operation::Write(path) => inspection.target(
@@ -79,6 +82,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
                 name_only: false,
             },
             &decoded.cwd,
+            EffectSource::Operand,
         )?,
         Operation::Search { root, glob } => {
             let root = if root.is_empty() { &decoded.cwd } else { root };
@@ -90,6 +94,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
                     name_only: false,
                 },
                 &decoded.cwd,
+                EffectSource::Operand,
             )?;
             if !glob.is_empty() && !glob.starts_with('!') {
                 inspection.target(
@@ -100,6 +105,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
                         name_only: false,
                     },
                     &decoded.cwd,
+                    EffectSource::Operand,
                 )?;
             }
         }
@@ -122,6 +128,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
                 recovery,
             },
             coverage,
+            effects: inspection.effects,
         });
     }
     if let Some(cause) = inspection.gaps.iter().find(|g| {
@@ -161,6 +168,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
                 recovery: Some(recovery),
             },
             coverage,
+            effects: inspection.effects,
         });
     }
     if let Some(cause) = inspection.gaps.first() {
@@ -171,6 +179,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
                 recovery: None,
             },
             coverage,
+            effects: inspection.effects,
         });
     }
     let outcome = if inspection.advice {
@@ -178,7 +187,11 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
     } else {
         Outcome::NoObjection
     };
-    Ok(Evaluation { outcome, coverage })
+    Ok(Evaluation {
+        outcome,
+        coverage,
+        effects: inspection.effects,
+    })
 }
 
 struct Inspection<'a> {
@@ -189,21 +202,37 @@ struct Inspection<'a> {
     denial: Option<String>,
     advice: bool,
     executable_qualifier: bool,
+    effects: Vec<EffectRecord>,
 }
 
 impl Inspection<'_> {
+    fn effect(&mut self, effect: EffectRecord) {
+        if !self.effects.contains(&effect) {
+            self.effects.push(effect);
+        }
+    }
     fn gap(&mut self, value: CoverageGap) {
         if !self.gaps.contains(&value) {
             self.gaps.push(value);
         }
     }
-    fn target(&mut self, target: &Target, cwd: &str) -> Result<(), CheckError> {
+    fn target(
+        &mut self,
+        target: &Target,
+        cwd: &str,
+        source: EffectSource,
+    ) -> Result<(), CheckError> {
         match filesystem::identify(&target.path, cwd, &self.context.home, self.probe)? {
             Identity::Protected(kind) => {
                 let touches = kind == Protection::AppData
                     || kind == Protection::SshPrivate
                     || !target.write && !target.name_only;
                 if touches {
+                    self.effect(EffectRecord::ProtectedTarget {
+                        protection: kind,
+                        write: target.write,
+                        source,
+                    });
                     self.denial.get_or_insert_with(|| {
                         if target.write {
                             format!("write protected location; {} is excluded", kind.effect())
@@ -233,6 +262,7 @@ impl Inspection<'_> {
                         || path == resolved_home
                         || path == format!("{resolved_home}/Library"))
                 {
+                    self.effect(EffectRecord::BroadRoot);
                     self.denial.get_or_insert_with(|| {
                         format!(
                             "broad recursive root reaches protected locations; HOME {} is excluded",
@@ -246,6 +276,7 @@ impl Inspection<'_> {
                         .iter()
                         .any(|suffix| path.ends_with(suffix))
                 {
+                    self.effect(EffectRecord::HiddenContent);
                     self.denial.get_or_insert_with(|| {
                         "recursive search reaches protected credential-file contents".into()
                     });
@@ -262,6 +293,11 @@ impl Inspection<'_> {
         }
         match filesystem::identify(cwd, cwd, &self.context.home, self.probe)? {
             Identity::Protected(kind) => {
+                self.effect(EffectRecord::ProtectedTarget {
+                    protection: kind,
+                    write: false,
+                    source: EffectSource::Cwd,
+                });
                 self.denial
                     .get_or_insert_with(|| format!("protected cwd: {}", kind.effect()));
             }
@@ -291,6 +327,7 @@ impl Inspection<'_> {
                     hidden_listings.insert(pipeline);
                 }
                 if effects.consumes_listing && hidden_listings.contains(&pipeline) {
+                    self.effect(EffectRecord::HiddenContent);
                     self.denial.get_or_insert_with(||"hidden listing with a content consumer reaches protected environment files".into());
                 }
             }
@@ -298,21 +335,32 @@ impl Inspection<'_> {
                 self.gap(value);
             }
             if effects.dump {
+                self.effect(EffectRecord::EnvironmentDump);
                 self.denial
                     .get_or_insert_with(|| "extract protected environment dump".into());
             }
             if effects.variable {
+                self.effect(EffectRecord::CredentialVariable);
                 self.denial
                     .get_or_insert_with(|| "extract protected credential variable".into());
             }
             if effects.hidden_content {
+                self.effect(EffectRecord::HiddenContent);
                 self.denial.get_or_insert_with(|| {
                     "hidden recursive content search reaches protected environment files".into()
                 });
             }
             self.advice |= effects.replace_advice;
             for target in effects.targets {
-                self.target(&target, cwd)?;
+                self.target(
+                    &target,
+                    cwd,
+                    if depth > 0 || command.nested {
+                        EffectSource::Nested
+                    } else {
+                        EffectSource::Operand
+                    },
+                )?;
             }
             for code in effects.inline {
                 let previous_denial = self.denial.take();
@@ -325,6 +373,7 @@ impl Inspection<'_> {
                             name_only: false,
                         },
                         cwd,
+                        EffectSource::InlineCode,
                     )?;
                 }
                 if self.denial.is_some() {

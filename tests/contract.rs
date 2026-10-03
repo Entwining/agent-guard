@@ -2,12 +2,33 @@ mod support;
 use agent_guard_rust::shell::Arm;
 
 #[test]
+fn lifecycle_harness_only() {
+    let rows = support::rows();
+    let lifecycle: Vec<_> = rows
+        .iter()
+        .filter(|row| support::is_lifecycle_row(row))
+        .collect();
+    assert_eq!(lifecycle.len(), 9);
+    for row in lifecycle {
+        assert!(!support::is_evaluator_row(row));
+        let result = support::run(row, Arm::StructuredOnly);
+        support::assert_tuple(row, &result);
+        assert_eq!(result["evidence_owner"], "harness-only");
+        assert_eq!(result["shell_observation_entries"], 0);
+        assert_eq!(result["lifecycle"]["ready_receipt"], true);
+        assert_eq!(result["lifecycle"]["reaped"], true);
+        assert_eq!(result["lifecycle"]["completion_observed_by_wait"], true);
+        println!("{result}");
+    }
+}
+
+#[test]
 fn dev_contract() {
     let mut failures = Vec::new();
     let mut checked = 0;
     for row in support::rows()
         .iter()
-        .filter(|r| r["consumer"] != "owned-writer")
+        .filter(|r| support::is_evaluator_row(r))
     {
         for arm in [Arm::Brush, Arm::TreeSitter] {
             let result = support::run(row, arm);

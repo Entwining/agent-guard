@@ -343,6 +343,7 @@ fn listing_recursion_controls_broad_root() {
                     let Ok(Evaluation {
                         outcome: Outcome::ProtectedDenial { reason, recovery },
                         coverage,
+                        ..
                     }) = result
                     else {
                         panic!("expected broad-root denial")
