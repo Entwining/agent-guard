@@ -67,21 +67,27 @@ pub fn infer(command: &CommandRecord, cwd: &str) -> Effects {
             }
         }
         "ls" => {
-            let recursive = args.iter().any(|arg| {
-                arg == "--recursive"
-                    || arg.starts_with('-') && !arg.starts_with("--") && arg.contains('R')
-            });
+            let mut recursive = false;
+            let mut options = true;
+            let mut paths = Vec::new();
+            for arg in args {
+                if options && arg == "--" {
+                    options = false;
+                } else if options && arg.starts_with('-') && arg.len() > 1 {
+                    recursive |=
+                        arg == "--recursive" || !arg.starts_with("--") && arg.contains('R');
+                } else {
+                    paths.push(arg.as_str());
+                }
+            }
             effects.hidden_listing = args
                 .iter()
                 .any(|s| s.starts_with('-') && s.contains(['a', 'A']));
-            let paths: Vec<_> = args.iter().filter(|s| !s.starts_with('-')).collect();
+            if paths.is_empty() {
+                paths.push(cwd);
+            }
             for path in paths {
                 let mut target = read(path, recursive);
-                target.name_only = true;
-                effects.targets.push(target);
-            }
-            if effects.targets.is_empty() {
-                let mut target = read(cwd, recursive);
                 target.name_only = true;
                 effects.targets.push(target);
             }

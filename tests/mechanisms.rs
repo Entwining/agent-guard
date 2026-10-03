@@ -296,10 +296,13 @@ fn listing_recursion_controls_broad_root() {
                 for source in [
                     "ls ~",
                     "ls /",
+                    "ls ~/Library",
                     "ls -ltr ~",
                     "ls -ltr",
                     "ls",
                     "if true; then ls; fi",
+                    "ls > out.txt",
+                    "ls -- -R ~",
                 ] {
                     let mut probe = support::RecordingProbe::new(&fixture);
                     let result = check(&fixture, &ctx, &mut probe, arm, source);
@@ -313,7 +316,7 @@ fn listing_recursion_controls_broad_root() {
             }
             ctx.cwd = fixture.home.clone();
             for option in ["-R", "--recursive", "-laR", "-Rl"] {
-                for root in ["~", "~/Library", "/", ""] {
+                for root in ["~", "~/Library", "/", "", "> out.txt"] {
                     let source = format!("ls {option} {root}");
                     let mut probe = support::RecordingProbe::new(&fixture);
                     let result = check(&fixture, &ctx, &mut probe, arm, &source);
