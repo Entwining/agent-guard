@@ -91,6 +91,8 @@ impl Fixture {
             ("$P", self.project.as_str()),
             ("$H", self.home.as_str()),
             ("$E", self.root.to_str().unwrap()),
+            ("$R", self.root.to_str().unwrap()),
+            ("$U", "fixture-user"),
         ] {
             let mut cursor = 0;
             while let Some(relative) = result[cursor..].find(marker) {
@@ -198,6 +200,7 @@ impl Drop for Fixture {
 
 pub struct RecordingProbe {
     pub calls: Vec<String>,
+    pub stat_calls: Vec<String>,
     pub links: BTreeMap<String, String>,
     pub fault: Option<String>,
     pub home: String,
@@ -207,6 +210,7 @@ impl RecordingProbe {
     pub fn new(fixture: &Fixture) -> Self {
         Self {
             calls: Vec::new(),
+            stat_calls: Vec::new(),
             links: BTreeMap::new(),
             fault: None,
             home: fixture.home.clone(),
@@ -214,6 +218,18 @@ impl RecordingProbe {
     }
 }
 impl Probe for RecordingProbe {
+    fn stat(&mut self, path: &Path) -> io::Result<Option<filesystem::Metadata>> {
+        let spelling = path.to_str().unwrap().to_owned();
+        self.stat_calls.push(spelling.clone());
+        assert!(
+            filesystem::lexical(&spelling, &self.home).is_none(),
+            "protected spelling reached stat: {spelling}"
+        );
+        if self.fault.as_ref() == Some(&spelling) {
+            return Err(io::Error::from(io::ErrorKind::PermissionDenied));
+        }
+        filesystem::DiskProbe.stat(path)
+    }
     fn read_link(&mut self, path: &Path) -> io::Result<Option<PathBuf>> {
         let spelling = path.to_str().unwrap().to_owned();
         self.calls.push(spelling.clone());

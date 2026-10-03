@@ -46,6 +46,18 @@ fn infer_at(command: &CommandRecord, cwd: &str, depth: usize) -> Effects {
     else {
         return effects;
     };
+    let program = match program {
+        "egrep" | "fgrep" => "grep",
+        name => name,
+    };
+    let program = ["python", "node", "ruby", "perl", "php", "lua"]
+        .into_iter()
+        .find(|base| {
+            program.strip_prefix(base).is_some_and(|suffix| {
+                !suffix.is_empty() && suffix.chars().all(|c| c.is_ascii_digit() || c == '.')
+            })
+        })
+        .unwrap_or(program);
     let args = &command.argv[1..];
     let read = |path: &str, recursive| Target {
         path: path.to_owned(),
@@ -113,7 +125,9 @@ fn infer_at(command: &CommandRecord, cwd: &str, depth: usize) -> Effects {
             }
         }
         "xargs" | "env" => infer_wrapper(program, args, command, cwd, &mut effects, depth),
-        "fd" | "tree" | "du" | "find" => infer_listing(program, args, cwd, &mut effects),
+        "fd" | "tree" | "du" | "find" => {
+            infer_listing(program, args, command, cwd, &mut effects, depth)
+        }
         "tar" => infer_tar(args, cwd, &mut effects),
         "git" => infer_git(args, cwd, &mut effects),
         "python" | "python3" | "node" | "bun" | "ruby" | "perl" | "php" | "osascript" | "lua"
@@ -127,6 +141,14 @@ fn infer_at(command: &CommandRecord, cwd: &str, depth: usize) -> Effects {
                 effects.inline.push(code);
             }
             for (index, arg) in args.iter().enumerate() {
+                if let Some(path) = arg
+                    .strip_prefix("--env-file=")
+                    .or_else(|| arg.strip_prefix("--env-file-if-exists="))
+                {
+                    let mut target = read(path, false);
+                    target.name_only = true;
+                    effects.targets.push(target);
+                }
                 if !claimed.contains(&index) && !arg.starts_with('-') {
                     effects.targets.push(read(arg, false));
                 }
@@ -239,7 +261,7 @@ fn infer_wrapper(
             && arg == "-C"
             && let Some(path) = args.get(index + 1)
         {
-            cwd = crate::filesystem::normalize(path, &cwd, "");
+            cwd = at(path, &cwd);
         }
         if program == "xargs"
             && ["-a", "--arg-file"].contains(&arg.as_str())
@@ -262,7 +284,12 @@ fn infer_wrapper(
         effects.dump = true;
     }
     let nested = child(command, &args[index..], &cwd);
-    let result = infer_at(&nested, &cwd, depth + 1);
+    let mut result = infer_at(&nested, &cwd, depth + 1);
+    if cwd != command.cwd {
+        for target in &mut result.targets {
+            target.path = at(&target.path, &cwd);
+        }
+    }
     effects.consumes_listing = program == "xargs"
         && args.get(index).is_some_and(|name| {
             [
@@ -280,6 +307,14 @@ fn infer_wrapper(
     effects.hidden_listing |= result.hidden_listing;
     effects.hidden_content |= result.hidden_content;
     effects.replace_advice |= result.replace_advice;
+}
+
+fn at(path: &str, base: &str) -> String {
+    if path.starts_with('/') || path.starts_with('~') {
+        path.to_owned()
+    } else {
+        format!("{base}/{path}")
+    }
 }
 
 fn infer_git(args: &[String], cwd: &str, effects: &mut Effects) {
@@ -458,13 +493,55 @@ fn interpreter_code(program: &str, args: &[String]) -> (Vec<String>, Vec<usize>)
     (found, claimed)
 }
 
-fn infer_listing(program: &str, args: &[String], cwd: &str, effects: &mut Effects) {
+fn infer_listing(
+    program: &str,
+    args: &[String],
+    command: &CommandRecord,
+    cwd: &str,
+    effects: &mut Effects,
+    depth: usize,
+) {
     let mut paths = Vec::new();
+    let mut base = cwd.to_owned();
+    let mut child_at = None;
     let mut skip = false;
     let mut pattern = program != "fd";
-    for arg in args {
+    for (index, arg) in args.iter().enumerate() {
         if skip {
             skip = false;
+            continue;
+        }
+        if program == "fd" && ["-x", "-X", "--exec", "--exec-batch"].contains(&arg.as_str()) {
+            child_at = Some(index + 1);
+            break;
+        }
+        if program == "fd"
+            && (arg == "-C"
+                || arg.starts_with("--base-directory")
+                || arg.starts_with("--search-path"))
+        {
+            let path = arg
+                .split_once('=')
+                .map(|(_, value)| value)
+                .or_else(|| args.get(index + 1).map(String::as_str));
+            if let Some(path) = path {
+                if arg == "-C" || arg.starts_with("--base-directory") {
+                    base = at(path, &base);
+                } else {
+                    paths.push(at(path, &base));
+                }
+            }
+            skip = !arg.contains('=');
+            continue;
+        }
+        if program == "find" && arg == "-f" {
+            if let Some(path) = args.get(index + 1) {
+                paths.push(path.clone());
+            }
+            skip = true;
+            continue;
+        }
+        if program == "find" && arg == "--" {
             continue;
         }
         if program == "find"
@@ -491,6 +568,8 @@ fn infer_listing(program: &str, args: &[String], cwd: &str, effects: &mut Effect
             } else if program == "du" {
                 [
                     "-B",
+                    "-I",
+                    "-t",
                     "-d",
                     "--block-size",
                     "--max-depth",
@@ -499,6 +578,8 @@ fn infer_listing(program: &str, args: &[String], cwd: &str, effects: &mut Effect
                     "--files0-from",
                 ]
                 .contains(&arg.as_str())
+                    || !arg.starts_with("--")
+                        && arg.chars().last().is_some_and(|c| "dIBt".contains(c))
             } else {
                 false
             };
@@ -508,10 +589,10 @@ fn infer_listing(program: &str, args: &[String], cwd: &str, effects: &mut Effect
             pattern = true;
             continue;
         }
-        paths.push(arg.clone());
+        paths.push(at(arg, &base));
     }
     if paths.is_empty() {
-        paths.push(cwd.to_owned());
+        paths.push(base.clone());
     }
     for path in paths {
         effects.targets.push(Target {
@@ -527,6 +608,44 @@ fn infer_listing(program: &str, args: &[String], cwd: &str, effects: &mut Effect
                 || arg == "--unrestricted"
                 || arg.starts_with('-') && arg.contains(['H', 'u', 'a'])
         });
+    let children: Vec<(usize, usize)> = if let Some(index) = child_at {
+        vec![(index, args.len())]
+    } else if program == "find" {
+        args.iter()
+            .enumerate()
+            .filter(|(_, arg)| ["-exec", "-execdir", "-ok", "-okdir"].contains(&arg.as_str()))
+            .map(|(index, _)| {
+                (
+                    index + 1,
+                    args[index + 1..]
+                        .iter()
+                        .position(|arg| arg == ";" || arg == "+")
+                        .map_or(args.len(), |end| index + 1 + end),
+                )
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    for (start, end) in children {
+        let result = infer_at(&child(command, &args[start..end], &base), &base, depth + 1);
+        if effects.hidden_listing && args.get(start).is_some_and(|name| content_consumer(name)) {
+            effects.hidden_content = true;
+        }
+        effects.targets.extend(result.targets);
+        effects.gaps.extend(result.gaps);
+        effects.code.extend(result.code);
+        effects.inline.extend(result.inline);
+    }
+}
+
+fn content_consumer(name: &str) -> bool {
+    [
+        "cat", "head", "tail", "less", "more", "bat", "sed", "awk", "jq", "yq", "base64", "xxd",
+        "od", "strings", "sort", "uniq", "cut", "nl", "sh", "bash", "zsh", "python", "python3",
+        "node", "ruby", "perl", "grep", "rg", "ag", "ack",
+    ]
+    .contains(&name)
 }
 
 fn infer_tar(args: &[String], cwd: &str, effects: &mut Effects) {
@@ -595,7 +714,6 @@ fn infer_tar(args: &[String], cwd: &str, effects: &mut Effects) {
 
 fn infer_search(program: &str, args: &[String], cwd: &str, effects: &mut Effects) {
     let mut operands = Vec::new();
-    let mut patterns = Vec::new();
     let mut globs = Vec::new();
     let mut explicit = false;
     let mut names = false;
@@ -628,8 +746,9 @@ fn infer_search(program: &str, args: &[String], cwd: &str, effects: &mut Effects
                 }
                 "unrestricted" => {
                     unrestricted += 1;
-                    hidden |= unrestricted >= 2 && !no_hidden;
+                    hidden |= (program == "ag" || unrestricted >= 2) && !no_hidden;
                 }
+                "recursive" => hidden |= program == "grep",
                 _ => {}
             }
             if (if program=="rg" {"regexp file glob iglob type type-not encoding replace color colors sort sortr max-depth max-filesize pre pre-glob engine threads max-columns type-add type-clear path-separator context-separator field-context-separator field-match-separator after-context before-context context max-count ignore-file dfa-size-limit regex-size-limit hyperlink-format"} else {"regexp file include exclude exclude-dir exclude-from label context after-context before-context max-count binary-files devices directories"}).split_whitespace().any(|option|option==key)
@@ -649,7 +768,9 @@ fn infer_search(program: &str, args: &[String], cwd: &str, effects: &mut Effects
                     if ch == 'r' {
                         effects.replace_advice = true;
                     }
-                } else if ch == 'r' || ch == 'R' {
+                } else if program == "grep" && (ch == 'r' || ch == 'R')
+                    || program == "ag" && ch == 'u'
+                {
                     hidden = true;
                 }
                 if (if program == "rg" {
@@ -681,9 +802,9 @@ fn infer_search(program: &str, args: &[String], cwd: &str, effects: &mut Effects
             });
             if let Some(value) = value {
                 match key.as_str() {
+                    "d" | "directories" if program == "grep" && value == "recurse" => hidden = true,
                     "e" | "regexp" => {
                         explicit = true;
-                        patterns.push(value);
                     }
                     "f" | "file" => {
                         explicit = true;
@@ -708,7 +829,7 @@ fn infer_search(program: &str, args: &[String], cwd: &str, effects: &mut Effects
         position += 1;
     }
     if !explicit && !names && !operands.is_empty() {
-        patterns.push(operands.remove(0));
+        operands.remove(0);
     }
     if operands.is_empty() && (program != "grep" || hidden) {
         operands.push(cwd.to_owned());

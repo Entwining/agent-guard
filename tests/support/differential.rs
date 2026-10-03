@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::support::{Fixture, RecordingProbe, class, coverage};
 use agent_guard_rust::{
     Context, Event,
@@ -27,6 +28,10 @@ pub fn validate_sources() {
         (
             "tests/fixtures/rust-contract-classification.jsonl",
             "af65478c60c1a997a01d1e0bd4bd00a174c6351a998eb1f62b800a5ccb4a27c4",
+        ),
+        (
+            "tests/fixtures/rust-d22-scope.jsonl",
+            "a3e41fd04bf1daf575c7312f9a275d298203ac7493228f6517dbcbb1fccd18ac",
         ),
     ] {
         let output = Command::new("/usr/bin/shasum")
@@ -75,204 +80,112 @@ fn fixture() -> Fixture {
     fixture
 }
 
-// The selector uses only input mechanisms. Expectations never select their own denominator.
-fn outside_slice(row: &Value, fixture: &Fixture) -> Option<String> {
-    let input = row["input"].as_str().unwrap();
-    if input.contains("<<")
-        && (input.matches("<<").count() > 1
-            || input.contains("0<<")
-            || input.contains("';' .env")
-            || input.split('\n').next().unwrap_or("").contains("; cat"))
-    {
-        return Some("complex heredoc fd/multiple-command arrangement outside the pinned two-parser dev subset".into());
-    }
-    if input.contains("$R") || input.contains("$U") || row["cwd"] == "" {
-        return Some(
-            "legacy username/parent or missing-cwd binding outside trusted P1 context".into(),
-        );
-    }
-    if input.contains("/../")
-        || input.ends_with("/..")
-        || row["cwd"].as_str().unwrap().contains("/..")
-    {
-        return Some(
-            "post-link parent traversal beyond the selected lexical/readlink slice".into(),
-        );
-    }
-    if input.contains("/system/volumes/data") {
-        return Some("case-folded firmlink spelling beyond canonical lexical normalization".into());
-    }
-    for link in [
-        "public-link",
-        "key-dir-link",
-        "allowed-signers-link",
-        "config-link",
-    ] {
-        if input.contains(link) {
-            return Some(
-                "SSH public-file alias identity requires deferred stat/inode owner".into(),
-            );
-        }
-    }
-    if input.contains(".ssh")
-        && [".pub", "config", "known_hosts", "allowed_signers"]
-            .iter()
-            .any(|part| input.contains(part))
-    {
-        return Some("SSH public-file identity requires the deferred stat/inode owner".into());
-    }
+// D22 and D10 rule 4 own this table. The frozen Go observer selects effective
+// programs only; neither expected verdicts nor Rust parser output select scope.
+fn outside_slice(row: &Value, scope: &BTreeMap<String, Value>) -> Option<String> {
     if row["tool"] != "Bash" {
-        if input.contains(['*', '?', '[', '{']) {
-            return Some("API glob matching beyond the explicit-root slice".into());
-        }
-        let glob = row.get("glob").and_then(Value::as_str).unwrap_or("");
-        if input != "$H"
-            && !glob.starts_with('!')
-            && !glob.starts_with(".env")
-            && glob.contains(['*', '?', '[', '{'])
-        {
-            return Some("API glob matching beyond protected literal prefixes".into());
-        }
         return None;
     }
-    if input.contains("--include") || input.contains("\\|") {
-        return Some("workflow advice beyond the P1 replacement partition".into());
-    }
-    if input.contains("$'") || input.contains("${") && !input.contains("${(") {
-        return Some("parameter/ANSI-C expansion beyond the development word subset".into());
-    }
-    if input.split('$').skip(1).any(|part| {
-        let name: String = part
-            .chars()
-            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-            .collect();
-        ["TOKEN", "SECRET", "KEY", "PASSWORD", "CREDENTIAL"]
-            .iter()
-            .any(|key| name.to_ascii_uppercase().contains(key))
-    }) {
-        return Some(
-            "credential-variable output partition beyond the development env-dump owner".into(),
-        );
-    }
-    if input.contains("<<<")
-        || input.contains(" | sh")
-        || input.contains(" |& sh")
-        || input.contains(" | env sh")
-        || (input.contains(" | xargs")
-            || input.contains(" |& xargs")
-            || input.starts_with("xargs") && input.contains("<<"))
-            && !input.contains("--files")
-            && !input.trim_start().starts_with("printf x | xargs cat ")
-    {
-        return Some("stream-fed operand/code reconstruction beyond the dev name-list/content-consumer partition".into());
-    }
-    if input.contains("((") {
-        return Some(
-            "arithmetic command expansion beyond the development substitution partition".into(),
-        );
-    }
-    if input.split('{').skip(1).any(|part| {
-        part.split('}')
-            .next()
-            .is_some_and(|body| body.contains(',') || body.contains(".."))
-    }) {
-        return Some("brace expansion beyond the development word subset".into());
-    }
-    if input
-        .split_whitespace()
-        .next()
-        .is_some_and(|word| word.contains('='))
-        && input
-            .split(';')
-            .next()
-            .unwrap_or("")
-            .split_whitespace()
-            .count()
-            > 1
-    {
-        return Some(
-            "command-local/exported assignment scope beyond persistent dev assignments".into(),
-        );
-    }
-    let source = fixture.expand(input);
-    let observation =
-        shell::observe(&source, Arm::Brush, &fixture.home, &fixture.project, true).unwrap();
-    let supported = [
-        "cat", "rg", "ls", "printf", "echo", "git", "python", "python3", "node", "bash", "zsh",
-        "sh", "eval", "env", "printenv", "export", "true", "false", ":", "xargs",
+    let id = format!("{}[{}]", row["family"].as_str().unwrap(), row["index"]);
+    let selected = &scope[&id];
+    let programs = selected["programs"].as_array().unwrap();
+    let modelled = [
+        "cat",
+        "head",
+        "tail",
+        "less",
+        "more",
+        "bat",
+        "sort",
+        "uniq",
+        "cut",
+        "nl",
+        "base64",
+        "xxd",
+        "od",
+        "strings",
+        "rg",
+        "grep",
+        "ag",
+        "ack",
+        "fd",
+        "tree",
+        "ls",
+        "du",
+        "find",
+        "tar",
+        "git",
+        "printf",
+        "echo",
+        "print",
+        "set",
+        "declare",
+        "typeset",
+        "printenv",
+        "export",
+        "env",
+        "xargs",
+        "command",
+        "exec",
+        "nohup",
+        "timeout",
+        "nice",
+        "sudo",
+        "doas",
+        "sh",
+        "bash",
+        "zsh",
+        "dash",
+        "ksh",
+        "csh",
+        "tcsh",
+        "eval",
+        "source",
+        ".",
+        "python",
+        "python3",
+        "node",
+        "bun",
+        "ruby",
+        "perl",
+        "php",
+        "osascript",
+        "lua",
+        "deno",
+        "true",
+        "false",
+        ":",
+        "cd",
+        "unset",
+        "local",
+        "setopt",
+        "unsetopt",
+        "emulate",
     ];
-    for command in observation.commands {
-        if let Some(program) = command
-            .argv
-            .first()
-            .map(|p| p.rsplit('/').next().unwrap_or(p))
-        {
-            if !supported.contains(&program) && program != "__observed_stream__" {
-                return Some(format!("program adapter not in P1: {program}"));
-            }
-            if program == "git" && command.argv.get(1).is_none_or(|s| s != "commit") {
-                return Some("Git adapter beyond literal commit-message data".into());
-            }
-            if ["python", "python3", "node"].contains(&program)
-                && !command
-                    .argv
+    if programs.is_empty()
+        || programs.iter().any(|program| {
+            let name = program.as_str().unwrap();
+            modelled.contains(&name)
+                || ["python", "node", "ruby", "perl", "php", "lua"]
                     .iter()
-                    .any(|s| s == "-c" || s == "-e" || s == "--eval")
-            {
-                return Some(
-                    "external interpreter input selection beyond the token partition".into(),
-                );
-            }
-            if ["bash", "sh", "zsh"].contains(&program) && !command.argv.iter().any(|s| s == "-c") {
-                return Some(
-                    "shell script/stdin/wrapper invocation beyond explicit nested -c".into(),
-                );
-            }
-            if program == "env"
-                && !command.argv[1..].is_empty()
-                && !command.argv[1..].iter().any(|s| s == "-i")
-            {
-                return Some("env wrapper/options beyond the frozen env -i dump partition".into());
-            }
-            if program == "export" && command.argv[0] != "export" {
-                return Some("external executable named like a shell builtin".into());
-            }
-            if program == "export" && command.argv.iter().skip(1).any(|s| s.contains('=')) {
-                return Some(
-                    "exported-variable binding beyond persistent development assignments".into(),
-                );
-            }
-            if command.unresolved
-                && command
-                    .argv
-                    .iter()
-                    .any(|s| s.contains("__observed_stream__/"))
-            {
-                return Some("substitution-generated target names beyond independent nested-effect observation".into());
-            }
-            if program == "cat"
-                && (command
-                    .argv
-                    .iter()
-                    .skip(1)
-                    .any(|s| s == "~" || s == &fixture.home)
-                    || command
-                        .redirects
-                        .iter()
-                        .any(|(p, _)| p == "~" || p == &fixture.home))
-            {
-                return Some(
-                    "directory input selection beyond named public/protected file reads".into(),
-                );
-            }
-        }
+                    .any(|base| {
+                        name.strip_prefix(base).is_some_and(|suffix| {
+                            !suffix.is_empty()
+                                && suffix.chars().all(|c| c.is_ascii_digit() || c == '.')
+                        })
+                    })
+        })
+    {
+        return None;
     }
-    if input.contains(['*', '?', '[']) && !input.contains("<<") {
-        return Some(
-            "legacy pattern expansion beyond explicit protected prefixes and dev globs".into(),
-        );
-    }
-    None
+    Some(format!(
+        "unmodelled programs: {}",
+        programs
+            .iter()
+            .map(|p| p.as_str().unwrap())
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))
 }
 
 fn reason_partition(reason: &str) -> &'static str {
@@ -301,6 +214,14 @@ fn reason_partition(reason: &str) -> &'static str {
 }
 
 pub fn report(arm: Arm) -> Vec<Value> {
+    report_rows(arm, None)
+}
+
+pub fn selected_report(arm: Arm, ids: &[&str]) -> Vec<Value> {
+    report_rows(arm, Some(ids))
+}
+
+fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
     validate_sources();
     let legacy: Vec<Value> = include_str!("../fixtures/contract.jsonl")
         .lines()
@@ -329,8 +250,19 @@ pub fn report(arm: Arm) -> Vec<Value> {
     let mut ids = BTreeSet::new();
     let mut report = Vec::new();
     let fixture = fixture();
+    let scope: BTreeMap<String, Value> = include_str!("../fixtures/rust-d22-scope.jsonl")
+        .lines()
+        .map(|line| {
+            let row: Value = serde_json::from_str(line).unwrap();
+            (row["id"].as_str().unwrap().to_owned(), row)
+        })
+        .collect();
+    assert_eq!(scope.len(), 1265);
     for item in overlay {
         let id = item["id"].as_str().unwrap();
+        if selected.is_some_and(|ids| !ids.contains(&id)) {
+            continue;
+        }
         assert!(ids.insert(id.to_owned()));
         assert_eq!(item["status"], "labelled");
         if item["kind"] == "filesystem_link" {
@@ -350,7 +282,7 @@ pub fn report(arm: Arm) -> Vec<Value> {
         let row = &legacy[id];
         assert_eq!(item["source"]["family"], row["family"]);
         assert_eq!(item["source"]["index"], row["index"]);
-        let outside = outside_slice(row, &fixture);
+        let outside = outside_slice(row, &scope);
         let mut observations = Vec::new();
         for (name, consumer) in [
             ("claude", Consumer::Claude),
@@ -607,11 +539,12 @@ pub fn report(arm: Arm) -> Vec<Value> {
             } else {
                 "Rust_defect".into()
             };
-            observations.push(json!({"consumer":name,"expected":expected,"actual":actual_class,"coverage":coverage(&actual),"category":category,"permission_match":permission_match,"reason_match":reason_match,"advice_match":advice_match,"changed_contract_match":changed_contract_match,"recovery":recovery,"baseline_reason_partition":reason_kind,"exit":wire.exit,"stdout":wire.stdout,"stderr":wire.stderr,"probe_count":probe.calls.len()}));
+            observations.push(json!({"consumer":name,"expected":expected,"actual":actual_class,"coverage":coverage(&actual),"category":category,"permission_match":permission_match,"reason_match":reason_match,"advice_match":advice_match,"changed_contract_match":changed_contract_match,"recovery":recovery,"baseline_reason_partition":reason_kind,"go_deny_rust_permit":!old_reason.is_empty() && ["N","A","UC"].contains(&actual_class),"exit":wire.exit,"stdout":wire.stdout,"stderr":wire.stderr,"probe_count":probe.calls.len()}));
         }
         report.push(json!({"id":id,"family":row["family"],"arm":format!("{arm:?}"),"verdict":item["verdict"],"rule_id":item["rule_id"],"scope":outside,"observations":observations}));
     }
-    assert_eq!(ids.len(), 1289);
-    assert_eq!(report.len(), 1289);
+    let expected = selected.map_or(1289, <[&str]>::len);
+    assert_eq!(ids.len(), expected);
+    assert_eq!(report.len(), expected);
     report
 }

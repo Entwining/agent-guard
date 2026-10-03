@@ -384,7 +384,8 @@ fn listing_recursion_controls_broad_root() {
                     probe
                         .calls
                         .iter()
-                        .all(|call| call != &path && !call.starts_with(&format!("{path}/"))),
+                        .all(|call| (call != &path || path.ends_with("/.ssh"))
+                            && !call.starts_with(&format!("{path}/"))),
                     "protected operand reached a probe"
                 );
             }

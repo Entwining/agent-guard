@@ -120,6 +120,30 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
     } else {
         Coverage::LimitedPreflight(inspection.gaps.clone())
     };
+    let appdata = inspection.effects.iter().find(|effect| {
+        matches!(
+            effect,
+            EffectRecord::ProtectedTarget {
+                protection: Protection::AppData,
+                ..
+            }
+        )
+    });
+    if let Some(EffectRecord::ProtectedTarget { write, source, .. }) = appdata {
+        inspection.denial = Some(match source {
+            EffectSource::Cwd => "protected cwd: read protected App Data".into(),
+            EffectSource::InlineCode => {
+                "CodeFile: inline interpreter token names protected App Data".into()
+            }
+            _ if *write => "write protected location; read protected App Data is excluded".into(),
+            _ => "read protected App Data".into(),
+        });
+    } else if inspection.effects.contains(&EffectRecord::BroadRoot) {
+        inspection.denial = Some(format!(
+            "broad recursive root reaches protected locations; HOME {} is excluded",
+            context.home
+        ));
+    }
     if let Some(effect) = inspection.denial {
         let recovery = recovery(context, &decoded.cwd, &effect);
         return Ok(Evaluation {
@@ -222,7 +246,13 @@ impl Inspection<'_> {
         cwd: &str,
         source: EffectSource,
     ) -> Result<(), CheckError> {
-        match filesystem::identify(&target.path, cwd, &self.context.home, self.probe)? {
+        match filesystem::identify_scope(
+            &target.path,
+            cwd,
+            &self.context.home,
+            target.recursive,
+            self.probe,
+        )? {
             Identity::Protected(kind) => {
                 let touches = kind == Protection::AppData
                     || kind == Protection::SshPrivate
@@ -257,11 +287,7 @@ impl Inspection<'_> {
                     }
                     Identity::Protected(_) => self.context.home.clone(),
                 };
-                if target.recursive
-                    && (path == "/"
-                        || path == resolved_home
-                        || path == format!("{resolved_home}/Library"))
-                {
+                if target.recursive && filesystem::broad_root(&path, &resolved_home) {
                     self.effect(EffectRecord::BroadRoot);
                     self.denial.get_or_insert_with(|| {
                         format!(

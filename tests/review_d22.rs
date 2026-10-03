@@ -89,10 +89,10 @@ fn check_group(group: &str) {
                     }
                 }
             }
-            if let Some(expected) = case["reason"].as_str() {
-                if !reason.contains(expected) {
-                    problems.push("reason");
-                }
+            if let Some(expected) = case["reason"].as_str()
+                && !reason.contains(expected)
+            {
+                problems.push("reason");
             }
             if case["owner_action"] == true && recovery["next_step"]["kind"] != "owner_action" {
                 problems.push("owner action");
@@ -105,10 +105,10 @@ fn check_group(group: &str) {
             {
                 problems.push("inert qualifier");
             }
-            if let Some(stdout) = case["stdout"].as_str() {
-                if wire.stdout != stdout {
-                    problems.push("stdout");
-                }
+            if let Some(stdout) = case["stdout"].as_str()
+                && wire.stdout != stdout
+            {
+                problems.push("stdout");
             }
             if class == "UR"
                 && coverage["gaps"]
