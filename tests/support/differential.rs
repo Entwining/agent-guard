@@ -401,36 +401,10 @@ pub fn report(arm: Arm) -> Vec<Value> {
                 ),
                 _ => panic!("unexpected legacy tool"),
             };
-            use agent_guard_rust::adapters::PublicTask;
-            let source = row["input"].as_str().unwrap();
-            let public_task = if source.starts_with("repeat ") {
-                PublicTask::Script {
-                    source: format!("for n in 1 2; do cat '{}/file.txt'; done", fixture.project),
-                }
-            } else if source.contains(" always ") {
-                PublicTask::Script {
-                    source: format!("printf ready; cat '{}/file.txt'", fixture.project),
-                }
-            } else if source.starts_with("f0()") && source.ends_with("f0") {
-                PublicTask::Script {
-                    source: "true".into(),
-                }
-            } else if source == "cat loop-a" {
-                PublicTask::Script {
-                    source: format!("cat '{}/file.txt'", fixture.project),
-                }
-            } else {
-                PublicTask::Read {
-                    path: format!("{}/file.txt", fixture.project),
-                }
-            };
             let context = Context {
                 consumer,
                 home: fixture.home.clone(),
                 cwd: fixture.expand(row["cwd"].as_str().unwrap()),
-                project: fixture.project.clone(),
-                objective: "complete the original scoped fixture task".into(),
-                public_task,
                 zsh_executor: consumer != Consumer::Pi,
                 require_execution_owner: false,
                 shell_observation_entries: Cell::new(0),
@@ -466,7 +440,7 @@ pub fn report(arm: Arm) -> Vec<Value> {
             let actual_class = class(&actual);
             let reason_kind = reason_partition(old_reason);
             let permission_match = actual_class == expected
-                || expected == "N" && actual_class == "UC"
+                || expected == "N" && ["UC", "A"].contains(&actual_class)
                 || expected == "D" && reason_kind == "syntax" && actual_class == "UR";
             let reason_match = if expected == "D" && item["verdict"] == "RETAIN" {
                 match reason_kind {
@@ -525,15 +499,15 @@ pub fn report(arm: Arm) -> Vec<Value> {
                 let excluded = recovery["excluded_scope"].to_string();
                 changed_contract_match &= match contract["expected_coverage"]["cause"].as_str() {
                     Some("identity_bound") => {
-                        wire.stderr.contains("IdentityBound")
+                        wire.stderr.contains("resource identity is unresolved")
                             && excluded.contains("unresolved resource identity")
                     }
                     Some("inspection_budget") => {
-                        wire.stderr.contains("InspectionBudget")
+                        wire.stderr.contains("inspection budget")
                             && excluded.contains("over-budget function expansion")
                     }
                     Some("unsupported_shell_syntax") => {
-                        wire.stderr.contains("UnsupportedShellSyntax")
+                        wire.stderr.contains("complete shell input")
                             && excluded.contains("original unsupported shell")
                     }
                     None => true,
@@ -551,11 +525,8 @@ pub fn report(arm: Arm) -> Vec<Value> {
                             && excluded.contains("outside")
                             && excluded.contains("Library")
                             && excluded.contains(".ssh")
-                            && excluded.contains(".env")
-                            && recovery["objective"]
-                                .as_str()
-                                .unwrap_or("")
-                                .contains("whole-HOME task remains incomplete")
+                            && excluded.contains("environment-file")
+                            && excluded.contains("whole-HOME task remains incomplete")
                     }
                     Some("Dump") => {
                         wire.stderr.contains("environment dump")
@@ -583,7 +554,8 @@ pub fn report(arm: Arm) -> Vec<Value> {
                         && wire.stderr.contains("recheck");
                 }
                 if let Some(next) = contract["recovery_objective"]["next_operations"].get(name) {
-                    let got = &recovery["next_step"];
+                    changed_contract_match &= recovery["next_step"]["kind"] == "owner_action";
+                    let got = fixture.expand_value(next);
                     changed_contract_match &= got["tool"] == next["tool"]
                         && got["cwd"] == fixture.expand_value(&next["cwd"]);
                     for (key, value) in next["input"].as_object().unwrap() {

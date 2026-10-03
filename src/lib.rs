@@ -45,11 +45,10 @@ pub struct Reason {
     pub effect: String,
 }
 
-/// Scope and task objective survive adapter rendering; a narrower result is not whole-task success.
+/// Event scope survives rendering; choosing and proving a continuation belongs to the agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Recovery {
     pub next_step: RecoveryStep,
-    pub objective: String,
     pub preserved_scope: Vec<String>,
     pub excluded_scope: Vec<String>,
     pub automatic_application_supported: bool,

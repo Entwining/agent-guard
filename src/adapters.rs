@@ -17,72 +17,6 @@ pub enum Operation {
     Outside(String),
 }
 
-/// Caller-owned public continuation data, separate from submitted operations and verdicts.
-pub enum PublicTask {
-    Read { path: String },
-    Search { pattern: String, glob: String },
-    Write { path: String },
-    LiteralFile { path: String, content: String },
-    Redirect { path: String, content: String },
-    Emit { literal: String },
-    Script { source: String },
-    List { path: String },
-    HomeSetting,
-}
-
-fn proposed(tool: &str, input: Value, cwd: &str) -> RecoveryStep {
-    RecoveryStep::StructuredOperation {tool:tool.to_owned(),input,cwd:cwd.to_owned(),description:"Use only this explicit public scope and cwd, retain the original objective, and recheck through the same consumer before applying it.".into()}
-}
-
-fn quote(text: &str) -> String {
-    format!("'{}'", text.replace('\'', "'\\''"))
-}
-
-pub fn public_recovery(consumer: Consumer, project: &str, task: &PublicTask) -> RecoveryStep {
-    let shell = if consumer == Consumer::Pi {
-        "bash"
-    } else {
-        "Bash"
-    };
-    let proposed = |tool, input| proposed(tool, input, project);
-    match task {
-        PublicTask::Read {path}=>match consumer {
-            Consumer::Claude=>proposed("Read",json!({"file_path":path})),Consumer::Pi=>proposed("read",json!({"path":path})),Consumer::Codex=>proposed(shell,json!({"command":format!("cat {}",quote(path))})),
-        },
-        PublicTask::Search {pattern,glob}=>match consumer {
-            Consumer::Claude=>proposed("Grep",json!({"path":project,"pattern":pattern,"glob":glob})),Consumer::Pi=>proposed("grep",json!({"path":project,"pattern":pattern,"glob":glob})),Consumer::Codex=>proposed(shell,json!({"command":format!("rg -n {} -- {} {}",if glob.is_empty() {String::new()} else {format!("-g {}",quote(glob))},quote(pattern),quote(project))})),
-        },
-        PublicTask::LiteralFile {path,content}=>match consumer {
-            Consumer::Claude=>proposed("Write",json!({"file_path":path,"content":content})),Consumer::Pi=>proposed("write",json!({"path":path,"content":content})),Consumer::Codex=>RecoveryStep::OwnerAction {description:"Provide a verified, enrolled structured Write/Edit operation for literal text, then recheck it; Codex has no covered structured writer in this P1 slice.".into()},
-        },
-        PublicTask::Redirect {path,content}=>proposed(shell,json!({"command":format!("printf '%s' {} > {}",quote(content),quote(path))})),
-        PublicTask::Emit {literal}=>proposed(shell,json!({"command":if literal=="ok" {"printf ok".to_owned()} else {format!("printf '%s\\n' {}",quote(literal))}})),
-        PublicTask::Script {source}=>proposed(shell,json!({"command":source})),
-        PublicTask::List {path}=>proposed(shell,json!({"command":format!("ls {}",quote(path))})),
-        PublicTask::HomeSetting=>proposed(shell,json!({"command":"printf '%s\\n' \"$HOME\""})),
-        PublicTask::Write {..}=>RecoveryStep::OwnerAction {description:"Supply the public structured write with its original payload and recheck before applying it.".into()},
-    }
-}
-
-pub fn write_recovery(
-    consumer: Consumer,
-    project: &str,
-    task: &PublicTask,
-    event: &CanonicalEvent,
-) -> RecoveryStep {
-    if let PublicTask::Write { path } = task {
-        let mut input = event.input.clone();
-        input[if consumer == Consumer::Pi {
-            "path"
-        } else {
-            "file_path"
-        }] = json!(path);
-        proposed(&event.tool, input, project)
-    } else {
-        RecoveryStep::OwnerAction {description:"Provide the original payload at an explicit public write target, then recheck the operation.".into()}
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanonicalEvent {
     pub operation: Operation,
@@ -147,14 +81,24 @@ pub fn decode(
             ),
         }
     };
-    let cwd = value
-        .get("cwd")
+    let workdir = if consumer == Consumer::Codex
+        && ["exec_command", "functions.exec_command"].contains(&name)
+    {
+        input.get("workdir")
+    } else {
+        None
+    };
+    let cwd = workdir
+        .or_else(|| value.get("cwd"))
         .or_else(|| input.get("cwd"))
         .or_else(|| input.get("workdir"))
         .map(|v| v.as_str().ok_or_else(malformed))
         .transpose()?
         .unwrap_or(default_cwd)
         .to_owned();
+    if cwd.is_empty() || !std::path::Path::new(&cwd).is_absolute() {
+        return Err(malformed());
+    }
     let operation = match (consumer, name) {
         (Consumer::Claude, "Bash") | (Consumer::Codex, "Bash") | (Consumer::Pi, "bash") => {
             Operation::Shell(field(&input, "command")?)
@@ -218,7 +162,7 @@ pub fn recovery_value(recovery: &Recovery) -> Value {
             json!({"kind":"structured_operation","tool":tool,"input":input,"cwd":cwd,"description":description})
         }
     };
-    json!({"next_step":next,"objective":recovery.objective,"preserved_scope":recovery.preserved_scope,"excluded_scope":recovery.excluded_scope,"automatic_application_supported":recovery.automatic_application_supported})
+    json!({"next_step":next,"preserved_scope":recovery.preserved_scope,"excluded_scope":recovery.excluded_scope,"automatic_application_supported":recovery.automatic_application_supported})
 }
 
 pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wire {
@@ -271,7 +215,7 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
             Outcome::CoverageInsufficient {
                 cause, recovery, ..
             } => (
-                format!("unsupported preflight: {cause:?}"),
+                format!("unsupported preflight: {}", coverage_message(cause)),
                 recovery.as_ref(),
             ),
         },
@@ -296,5 +240,33 @@ pub fn permits_call(consumer: Consumer, wire: &Wire) -> bool {
     match consumer {
         Consumer::Claude | Consumer::Codex => wire.exit != 2,
         Consumer::Pi => wire.exit == 0,
+    }
+}
+
+fn coverage_message(cause: &crate::CoverageGap) -> &'static str {
+    use crate::CoverageGap::*;
+    match cause {
+        UnsupportedShellSyntax => {
+            "the complete shell input could not be observed; choose a supported explicit operation"
+        }
+        ExecutorDivergence => {
+            "the executor has unsupported Zsh expansion semantics; replace the active construct and recheck"
+        }
+        UnsupportedDialectConstruct => {
+            "the construct is outside the Pi Bash dialect; use Bash-compatible syntax and recheck"
+        }
+        IdentityBound => {
+            "resource identity is unresolved; have its owner repair the alias or supply a verified public target"
+        }
+        InspectionBudget => {
+            "static expansion exceeds the inspection budget; split the operation into bounded explicit calls"
+        }
+        ExecutionOwnerUnavailable => {
+            "no verified execution owner enforces the requested domain; establish that owner"
+        }
+        InterpreterChosenRead => "interpreter-chosen reads are unobserved",
+        UnresolvedTarget => "the target is unresolved",
+        UnknownProgram { .. } => "the program adapter is unavailable",
+        OutsideObservedTool { .. } => "the tool is outside observed coverage",
     }
 }

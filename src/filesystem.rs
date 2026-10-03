@@ -210,7 +210,11 @@ fn lexical_candidate(path: &str, home: &str) -> Option<Protection> {
             .iter()
             .enumerate()
             .all(|(index, part)| glob::component(parts[offset + index], &part.replace('*', "x")))
-            && glob::intersects(base, tail[tail.len() - 1])
+            && if tail.len() > 1 {
+                glob::intersects(base, tail[tail.len() - 1])
+            } else {
+                glob::component(base, &tail[0].replace('*', "x"))
+            }
         {
             return Some(Protection::Credential);
         }

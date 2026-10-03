@@ -19,13 +19,6 @@ pub struct Effects {
     pub replace_advice: bool,
     pub hidden_listing: bool,
     pub consumes_listing: bool,
-    pub search: Option<Search>,
-}
-
-#[derive(Debug)]
-pub struct Search {
-    pub pattern: String,
-    pub glob: Option<String>,
 }
 
 pub fn infer(command: &CommandRecord, cwd: &str) -> Effects {
@@ -286,7 +279,6 @@ fn infer_wrapper(
     effects.hidden_listing |= result.hidden_listing;
     effects.hidden_content |= result.hidden_content;
     effects.replace_advice |= result.replace_advice;
-    effects.search = result.search;
 }
 
 fn infer_git(args: &[String], cwd: &str, effects: &mut Effects) {
@@ -741,12 +733,6 @@ fn infer_search(program: &str, args: &[String], cwd: &str, effects: &mut Effects
                 }
             }
         }
-    }
-    if let Some(pattern) = patterns.into_iter().next() {
-        effects.search = Some(Search {
-            pattern,
-            glob: globs.into_iter().next(),
-        });
     }
 }
 

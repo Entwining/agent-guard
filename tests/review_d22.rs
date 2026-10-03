@@ -110,6 +110,15 @@ fn check_group(group: &str) {
                     problems.push("stdout");
                 }
             }
+            if class == "UR"
+                && coverage["gaps"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|gap| wire.stderr.contains(gap.as_str().unwrap()))
+            {
+                problems.push("Debug gap in wire");
+            }
             println!(
                 "{}",
                 json!({"id":case["id"],"finding":case["finding"],"arm":format!("{arm:?}"),"problems":problems,"class":class,"coverage":coverage,"reason":reason,"recovery":recovery})
@@ -135,4 +144,14 @@ fn review_program() {
 #[test]
 fn review_identity() {
     check_group("identity");
+}
+
+#[test]
+fn review_metadata() {
+    check_group("metadata");
+}
+
+#[test]
+fn review_wire() {
+    check_group("wire");
 }

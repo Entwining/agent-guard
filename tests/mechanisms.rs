@@ -165,6 +165,21 @@ fn identity_depth_bound_is_not_syntax_or_success() {
             .links
             .insert(format!("{}/loop-b", fixture.project), "loop-a".into());
         let result = check(&fixture, &ctx, &mut probe, arm, "cat loop-a");
+        let Ok(Evaluation {
+            outcome:
+                Outcome::CoverageInsufficient {
+                    recovery: Some(recovery),
+                    ..
+                },
+            ..
+        }) = &result
+        else {
+            panic!("missing identity-bound recovery");
+        };
+        assert!(
+            recovery.excluded_scope.iter().any(|scope| scope
+                == "unresolved resource identity from bounded or cyclic alias traversal")
+        );
         assert!(
             render(ctx.consumer, &result)
                 .stderr
@@ -341,13 +356,11 @@ fn listing_recursion_controls_broad_root() {
                             .iter()
                             .any(|scope| scope.contains("outside"))
                     );
-                    let next =
-                        agent_guard_rust::adapters::recovery_value(&recovery)["next_step"].clone();
-                    assert_eq!(next["cwd"], fixture.project);
                     assert_eq!(
-                        next["input"]["command"],
-                        format!("ls '{}'", fixture.project)
+                        agent_guard_rust::adapters::recovery_value(&recovery)["next_step"]["kind"],
+                        "owner_action"
                     );
+                    let next = json!({"tool":if consumer==Consumer::Pi {"bash"} else {"Bash"},"input":{"command":format!("ls '{}'",fixture.project)},"cwd":fixture.project});
                     let body = serde_json::to_vec(&json!({"tool_name":next["tool"],"tool_input":next["input"],"cwd":next["cwd"]})).unwrap();
                     let mut probe = support::RecordingProbe::new(&fixture);
                     let rechecked = evaluate_with_arm(
@@ -408,7 +421,7 @@ fn broad_root_recovery_preserves_excluded_scope() {
             scope.contains("outside")
                 && scope.contains("Library")
                 && scope.contains(".ssh")
-                && scope.contains(".env")
+                && scope.contains("environment-file")
         );
     }
 }
@@ -616,7 +629,7 @@ fn command_boundaries_preserve_protected_operands() {
 }
 
 #[test]
-fn broad_recovery_preserves_actual_search_data() {
+fn agent_continuation_preserves_chosen_search_data() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
     for arm in [Arm::Brush, Arm::TreeSitter] {
@@ -633,7 +646,24 @@ fn broad_recovery_preserves_actual_search_data() {
             _ => panic!("broad root permitted"),
         };
         let next = agent_guard_rust::adapters::recovery_value(&recovery);
-        assert_eq!(next["next_step"]["input"]["pattern"], "different phrase");
-        assert_eq!(next["next_step"]["input"]["glob"], "*.txt");
+        assert_eq!(next["next_step"]["kind"], "owner_action");
+        assert!(next.get("objective").is_none());
+        let operation = json!({"tool_name":"Grep","tool_input":{"path":fixture.project,"pattern":"different phrase","glob":"*.txt"},"cwd":fixture.project});
+        let bytes = serde_json::to_vec(&operation).unwrap();
+        let decoded = agent_guard_rust::adapters::decode(ctx.consumer, &bytes, &ctx.cwd).unwrap();
+        assert_eq!(decoded.input["pattern"], "different phrase");
+        assert_eq!(decoded.input["glob"], "*.txt");
+        let mut probe = support::RecordingProbe::new(&fixture);
+        assert_eq!(
+            support::class(&evaluate_with_arm(
+                Event {
+                    bytes: &bytes,
+                    context: &ctx,
+                    probe: &mut probe
+                },
+                arm
+            )),
+            "N"
+        );
     }
 }

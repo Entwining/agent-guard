@@ -4,7 +4,7 @@
 
 use agent_guard_rust::{
     CheckError, CheckErrorKind, Context, Coverage, CoverageGap, Disposition, Event, Outcome,
-    adapters::{self, Consumer, Operation, PublicTask},
+    adapters::{self, Consumer, Operation},
     evaluate_with_arm,
     filesystem::DiskProbe,
     shell::Arm,
@@ -76,53 +76,12 @@ fn request(value: &Value) -> Result<Request, &'static str> {
     if !metadata.is_null() && !metadata.is_object() {
         return Err("context must be an object");
     }
-    let project = if metadata.get("project").is_some() {
-        string(metadata, "project")?
-    } else {
-        format!("{home}/project")
-    };
-    let objective = if metadata.get("objective").is_some() {
-        string(metadata, "objective")?
-    } else {
-        "obtain fixture fact".into()
-    };
-    let public_task = if let Some(task) = metadata.get("public_task") {
-        match string(task, "kind")?.as_str() {
-            "Read" => PublicTask::Read {
-                path: string(task, "path")?,
-            },
-            "Search" => PublicTask::Search {
-                pattern: string(task, "pattern")?,
-                glob: string(task, "glob")?,
-            },
-            "Write" => PublicTask::Write {
-                path: string(task, "path")?,
-            },
-            "LiteralFile" => PublicTask::LiteralFile {
-                path: string(task, "path")?,
-                content: string(task, "content")?,
-            },
-            "Redirect" => PublicTask::Redirect {
-                path: string(task, "path")?,
-                content: string(task, "content")?,
-            },
-            "Emit" => PublicTask::Emit {
-                literal: string(task, "literal")?,
-            },
-            "Script" => PublicTask::Script {
-                source: string(task, "source")?,
-            },
-            "List" => PublicTask::List {
-                path: string(task, "path")?,
-            },
-            "HomeSetting" => PublicTask::HomeSetting,
-            _ => return Err("unknown public_task kind"),
-        }
-    } else {
-        PublicTask::Read {
-            path: format!("{project}/input.txt"),
-        }
-    };
+    if metadata
+        .as_object()
+        .is_some_and(|fields| fields.keys().any(|key| key != "zsh_executor"))
+    {
+        return Err("context field has no production source");
+    }
     Ok(Request {
         id,
         arm,
@@ -130,11 +89,8 @@ fn request(value: &Value) -> Result<Request, &'static str> {
             consumer,
             home,
             cwd,
-            project,
-            objective,
-            public_task,
             zsh_executor: boolean(metadata, "zsh_executor", consumer != Consumer::Pi)?,
-            require_execution_owner: boolean(metadata, "require_execution_owner", false)?,
+            require_execution_owner: false,
             shell_observation_entries: Cell::new(0),
         },
         bytes,
@@ -183,7 +139,7 @@ fn guard(request: &Request) -> Value {
                     json!({"state":"LimitedPreflight","gaps":gaps.iter().map(gap_name).collect::<Vec<_>>()})
                 }
                 Coverage::OutsideObservedToolCoverage { tool } => {
-                    json!({"state":"OutsideObservedToolCoverage","tool":tool})
+                    json!({"state":"OutsideObservedToolCoverage","tool_class":tool})
                 }
             };
             match evaluation.outcome {
@@ -350,7 +306,7 @@ mod tests {
         let mut input = Vec::new();
         for (index, id) in ids.iter().enumerate() {
             let row = rows.iter().find(|r| r["id"] == *id).unwrap();
-            let mut request = json!({"id":id,"consumer":row["consumer"],"arm":"brush","home":fixture.home,"cwd":fixture.expand(support::text(row,"cwd")),"context":{"objective":row["task_objective"]}});
+            let mut request = json!({"id":id,"consumer":row["consumer"],"arm":"brush","home":fixture.home,"cwd":fixture.expand(support::text(row,"cwd"))});
             let body = fixture.body(row);
             if index == 1 {
                 request["event"] = serde_json::from_slice(&body).unwrap();

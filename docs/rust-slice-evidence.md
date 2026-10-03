@@ -45,14 +45,18 @@ readlink checks and `adapters::render`; it never executes the submitted operatio
 Each request requires string `id`, `consumer` (`claude`, `codex`, `pi`), `arm`
 (`structured`, `brush`, `tree`), `home`, `cwd`, and exactly one `event` object or
 `event_raw` string (its UTF-8 bytes are passed unchanged). Optional trusted
-`context` supplies the library's `project`, `objective`, `public_task`,
-`zsh_executor` and `require_execution_owner`. Defaults follow the development
-profile: project `home/project`, objective `obtain fixture fact`, public Read of
-`project/input.txt`, zsh execution except Pi, and no required execution owner.
-`public_task.kind` is `Read`, `Write` or `List` with `path`; `Search` with `pattern`
-and `glob`; `LiteralFile` or `Redirect` with `path` and `content`; `Emit` with
-`literal`; `Script` with `source`; or `HomeSetting` without payload fields.
-These are caller-owned continuation metadata, never inferred from submitted input.
+`context` accepts only `zsh_executor`, a host executor fact; its default is Zsh
+except for Pi. Other context fields are rejected. The consumer/tool protocol owns
+the operation and event cwd; the host supplies HOME and fallback cwd. Both event
+and fallback cwd must be nonempty absolute paths. Codex `exec_command.workdir`
+takes precedence over envelope cwd. The interface has no task objective, project
+oracle, public-task oracle or verified execution owner.
+
+Recovery describes the event scope, excluded resources and a concrete owner
+action using those facts. The agent selects its next operation and establishes
+task equivalence. Manifest next operations are explicit agent-continuation
+witnesses in the test harness; their rechecks are harness evidence, not guard
+proposals or proof that the original whole-HOME objective completed.
 
 Default `--mode guard` emits `id`, library `outcome` name, `class`
 (`N`, `A`, `D`, `UC`, `UR`, `UO`, `F`), `coverage` (`state`, plus `gaps`, `tool` or

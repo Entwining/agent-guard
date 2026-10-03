@@ -1,21 +1,18 @@
 use crate::{
     Advice, CheckError, CheckErrorKind, Coverage, CoverageGap, Disposition, Evaluation, Outcome,
     Reason, Recovery, RecoveryStep,
-    adapters::{self, Consumer, Operation, PublicTask},
+    adapters::{self, Consumer, Operation},
     filesystem::{self, Identity, Probe, Protection},
     limits::MAX_INPUT_BYTES,
     shell::{self, Arm},
     targets::{self, Target},
 };
 
-/// Trusted offline context; tool-input fields cannot override the public continuation.
+/// Consumer and host facts. Task intent and agent continuations are not guard inputs.
 pub struct Context {
     pub consumer: Consumer,
     pub home: String,
     pub cwd: String,
-    pub project: String,
-    pub objective: String,
-    pub public_task: PublicTask,
     pub zsh_executor: bool,
     pub require_execution_owner: bool,
     pub shell_observation_entries: std::cell::Cell<usize>,
@@ -59,7 +56,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
             outcome: Outcome::CoverageInsufficient {
                 cause: gap.clone(),
                 disposition: Disposition::RequireVerifiedExecutionOwner,
-                recovery: Some(recovery(context, "execution_owner", &context.public_task)),
+                recovery: Some(recovery(context, &decoded.cwd, "execution_owner")),
             },
             coverage: Coverage::LimitedPreflight(vec![gap]),
         });
@@ -71,8 +68,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
         gaps: Vec::new(),
         denial: None,
         advice: false,
-        search: None,
-        continuation: None,
+        executable_qualifier: false,
     };
     match &decoded.operation {
         Operation::Read(path) | Operation::Write(path) => inspection.target(
@@ -106,15 +102,6 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
                     &decoded.cwd,
                 )?;
             }
-            inspection.search = Some(PublicTask::Search {
-                pattern: decoded
-                    .input
-                    .get("pattern")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or("")
-                    .to_owned(),
-                glob: glob.clone(),
-            });
         }
         Operation::Shell(source) => {
             shell::check_nesting(source)?;
@@ -128,29 +115,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
         Coverage::LimitedPreflight(inspection.gaps.clone())
     };
     if let Some(effect) = inspection.denial {
-        let task = if effect.starts_with("broad recursive") {
-            inspection
-                .search
-                .as_ref()
-                .or(inspection.continuation.as_ref())
-                .unwrap_or(&context.public_task)
-        } else if effect.starts_with("CodeFile:") {
-            &context.public_task
-        } else {
-            inspection
-                .continuation
-                .as_ref()
-                .unwrap_or(&context.public_task)
-        };
-        let mut recovery = recovery(context, &effect, task);
-        if matches!(decoded.operation, Operation::Write(_)) {
-            recovery.next_step = adapters::write_recovery(
-                context.consumer,
-                &context.project,
-                &context.public_task,
-                &decoded,
-            );
-        }
+        let recovery = recovery(context, &decoded.cwd, &effect);
         return Ok(Evaluation {
             outcome: Outcome::ProtectedDenial {
                 reason: Reason { effect },
@@ -169,7 +134,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
                 | CoverageGap::InspectionBudget
         )
     }) {
-        let mut recovery = recovery(context, "unsupported", &context.public_task);
+        let mut recovery = recovery(context, &decoded.cwd, "unsupported");
         recovery.excluded_scope.push(
             match cause {
                 CoverageGap::IdentityBound => {
@@ -183,13 +148,11 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
             }
             .into(),
         );
-        if matches!(&decoded.operation,Operation::Shell(source) if source.contains("(e:") || source.contains("(+"))
-        {
-            recovery.next_step=RecoveryStep::OwnerAction {description:"Replace executable qualifier with explicit public names/results matching this task; recheck through the same consumer.".into()};
-            recovery.excluded_scope = vec!["Zsh executable qualifier".into()];
+        if inspection.executable_qualifier {
+            recovery.next_step = RecoveryStep::OwnerAction {description:"Replace the executable qualifier with explicit public names/results selected by the agent, then recheck through the same consumer. Task equivalence remains unverified.".into()};
             recovery
-                .objective
-                .push_str(" remains incomplete until equivalence and result are demonstrated");
+                .excluded_scope
+                .push("Zsh executable qualifier".into());
         }
         return Ok(Evaluation {
             outcome: Outcome::CoverageInsufficient {
@@ -210,7 +173,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
             coverage,
         });
     }
-    let outcome = if inspection.advice && context.consumer == Consumer::Claude {
+    let outcome = if inspection.advice {
         Outcome::SoftAdvice(vec![Advice {message:"-r replaces matching text; it is not recursive search. Use an explicit project root and -n when line numbers are intended.".into()}])
     } else {
         Outcome::NoObjection
@@ -225,8 +188,7 @@ struct Inspection<'a> {
     gaps: Vec<CoverageGap>,
     denial: Option<String>,
     advice: bool,
-    search: Option<PublicTask>,
-    continuation: Option<PublicTask>,
+    executable_qualifier: bool,
 }
 
 impl Inspection<'_> {
@@ -316,6 +278,7 @@ impl Inspection<'_> {
             cwd,
             self.context.zsh_executor,
         )?;
+        self.executable_qualifier |= observation.executable_qualifier;
         for value in observation.gaps {
             self.gap(value);
         }
@@ -335,9 +298,6 @@ impl Inspection<'_> {
                 self.gap(value);
             }
             if effects.dump {
-                if self.denial.is_none() {
-                    self.continuation = Some(PublicTask::HomeSetting);
-                }
                 self.denial
                     .get_or_insert_with(|| "extract protected environment dump".into());
             }
@@ -351,17 +311,6 @@ impl Inspection<'_> {
                 });
             }
             self.advice |= effects.replace_advice;
-            if self.denial.is_none() && command.argv.first().is_some_and(|s| s == "ls") {
-                self.continuation = Some(PublicTask::List {
-                    path: self.context.project.clone(),
-                });
-            }
-            if let Some(search) = effects.search {
-                self.search.get_or_insert(PublicTask::Search {
-                    pattern: search.pattern,
-                    glob: search.glob.unwrap_or_default(),
-                });
-            }
             for target in effects.targets {
                 self.target(&target, cwd)?;
             }
@@ -398,45 +347,39 @@ impl Inspection<'_> {
     }
 }
 
-fn recovery(context: &Context, effect: &str, task: &PublicTask) -> Recovery {
-    let mut objective = context.objective.clone();
+fn recovery(context: &Context, cwd: &str, effect: &str) -> Recovery {
     let mut excluded_scope = vec![
         format!("{}/Library", context.home),
         format!("{}/.ssh", context.home),
-        format!("{}/.env", context.project),
+        "protected environment-file and credential-file contents".into(),
     ];
-    let next_step = if effect == "execution_owner" {
+    let description = if effect == "execution_owner" {
         excluded_scope = vec![
             "dynamic protected reads".into(),
             "out-of-domain writes/deletes".into(),
             "later interactive input".into(),
         ];
-        objective
-            .push_str(" remains incomplete; independent known-public work may complete separately");
-        RecoveryStep::OwnerAction {description:"Establish and validate the named execution owner before promising this domain; recheck afterward. Hook-only preflight cannot establish that guarantee.".into()}
+        "Establish and validate the named execution owner, then recheck. Hook-only preflight cannot enforce this domain."
+    } else if effect.starts_with("broad recursive") {
+        excluded_scope.insert(0, format!("HOME {} outside a separately verified public scope; a whole-HOME task remains incomplete", context.home));
+        "The agent must select an explicit public root outside the excluded HOME scope and recheck its operation through the same consumer. A narrowed result does not complete the whole-HOME task."
+    } else if effect == "extract protected environment dump" {
+        excluded_scope = vec![
+            "process environment dump".into(),
+            "protected variable values".into(),
+        ];
+        "Ask the owner to inspect the needed setting without returning protected values, or select an explicit non-secret variable and recheck."
+    } else if effect.starts_with("CodeFile:") {
+        excluded_scope.push("execution of the denied inline interpreter".into());
+        "Select a public input through a covered structured tool and recheck. Keep marker text as literal data when that is the task."
     } else {
-        if effect.starts_with("broad recursive") {
-            excluded_scope.insert(0, format!("{} outside {}", context.home, context.project));
-            objective.push_str("; only the project-scoped result may complete, a whole-HOME task remains incomplete");
-        }
-        if effect == "extract protected environment dump" {
-            excluded_scope = vec![
-                "process environment dump".into(),
-                "protected variable values".into(),
-            ];
-        }
-        if effect.starts_with("CodeFile:") {
-            excluded_scope = vec![
-                "protected file contents".into(),
-                "execution of the denied inline interpreter".into(),
-            ];
-        }
-        adapters::public_recovery(context.consumer, &context.project, task)
+        "Select an explicit public target or names-only operation outside the excluded scope, then recheck through the same consumer. The agent owns the continuation and its task equivalence."
     };
     Recovery {
-        next_step,
-        objective,
-        preserved_scope: vec![context.project.clone()],
+        next_step: RecoveryStep::OwnerAction {
+            description: description.into(),
+        },
+        preserved_scope: vec![format!("requested cwd: {cwd}")],
         excluded_scope,
         automatic_application_supported: false,
     }
