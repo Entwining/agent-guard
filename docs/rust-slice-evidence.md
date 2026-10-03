@@ -24,8 +24,8 @@ wire exit/stdout/stderr, semantic reason owners, advice, concrete recovery,
 lexical-before-probe ordering, operation starts, fixture results and child reaping.
 The 17 mechanism tests and three parser/word/span unit tests protect distinct
 boundaries. The two entry and two error tests preserve the initial failure
-contract. With the differential and owned-writer tests, `cargo test --locked`
-contains 28 tests.
+contract. With the differential, owned-writer and offline interface tests,
+`cargo test --locked` contains 29 tests.
 
 Closed operations read/write/list only owner-created synthetic files. They never
 execute submitted shell or interpreter code. The worker is a fixed test program;
@@ -33,6 +33,47 @@ its ready PID receipt, `wait` result and subsequent `try_wait` establish complet
 and reaping at the injected failure boundary. This does not establish a production
 checker deadline. W01–W03 establish single-owner state and byte preservation in
 test code, without claiming concurrent-writer or crash-recovery acceptance.
+
+## Offline evaluation interface
+
+Build `examples/evaluate.rs` with `cargo build --release --locked --example evaluate`
+and an external `CARGO_TARGET_DIR`. The packaged `agent-guard-rust-slice` remains
+version-only. The example accepts JSONL on stdin; the caller materializes all
+synthetic filesystem state. Guard mode uses `evaluate_with_arm`, real `DiskProbe`
+readlink checks and `adapters::render`; it never executes the submitted operation.
+
+Each request requires string `id`, `consumer` (`claude`, `codex`, `pi`), `arm`
+(`structured`, `brush`, `tree`), `home`, `cwd`, and exactly one `event` object or
+`event_raw` string (its UTF-8 bytes are passed unchanged). Optional trusted
+`context` supplies the library's `project`, `objective`, `public_task`,
+`zsh_executor` and `require_execution_owner`. Defaults follow the development
+profile: project `home/project`, objective `obtain fixture fact`, public Read of
+`project/input.txt`, zsh execution except Pi, and no required execution owner.
+`public_task.kind` is `Read`, `Write` or `List` with `path`; `Search` with `pattern`
+and `glob`; `LiteralFile` or `Redirect` with `path` and `content`; `Emit` with
+`literal`; `Script` with `source`; or `HomeSetting` without payload fields.
+These are caller-owned continuation metadata, never inferred from submitted input.
+
+Default `--mode guard` emits `id`, library `outcome` name, `class`
+(`N`, `A`, `D`, `UC`, `UR`, `UO`, `F`), `coverage` (`state`, plus `gaps`, `tool` or
+`error_kind` when applicable), `disposition`, `cause`, `reason`, `advice` message
+array, structured `recovery`, and exact adapter `exit`, `stdout`, `stderr`.
+Inapplicable fields are null or empty; F has no completed outcome and uses
+`BlockOnCheckError`. `evaluate_ns` includes only evaluation and wire rendering,
+excluding request decoding, context construction, response mapping and JSON I/O.
+Invalid outer JSON or fields emit only `id` (null if unavailable) and a sanitized
+`request_error` object; they never become N. Per-request rejection does not stop
+the stream; transport I/O failure exits the example unsuccessfully.
+
+`--mode parse-only` decodes the consumer envelope outside timing, then constructs
+and runs only the selected parser on the shell source. It emits `id`,
+`parse_status` (`parsed`, `parse_failed`, `parser_error`, `input_error`,
+`outside_arm_coverage`), `parse_ns` and `error_kind`. Structured-only and non-shell
+requests have no parser timing. Timing includes fresh parser construction, parsing
+and disposal, without observation lowering, policy, identity or probes. No mode
+adds threads or caches. The interface test pipes manifest-derived N/D/F requests
+through the handler, reuses the contract's preflight tuple assertions and compares
+all wire bytes and denial recovery against direct library evaluation.
 
 ## Release arm comparison
 

@@ -841,7 +841,7 @@ fn worker_fault(fixture: &Fixture, kind: CheckErrorKind) -> Value {
     json!({"pid":pid,"ready_receipt":true,"completion_observed_by_wait":true,"reaped":true,"successful":false,"wall_us":started.elapsed().as_micros()})
 }
 
-pub fn assert_tuple(row: &Value, actual: &Value) {
+pub fn assert_preflight_tuple(row: &Value, actual: &Value) {
     let conditional = row.get("conditional_outcome").is_some() && actual["class"] == "D";
     let expected = if conditional {
         "D".to_owned()
@@ -894,6 +894,11 @@ pub fn assert_tuple(row: &Value, actual: &Value) {
         !actual["stdout"].as_str().unwrap().is_empty(),
         row["advice_expectation"]["expectation"] == "present"
     );
+}
+
+pub fn assert_tuple(row: &Value, actual: &Value) {
+    assert_preflight_tuple(row, actual);
+    let class = actual["class"].as_str().unwrap();
     assert_eq!(
         actual["operation_start_count"],
         if ["N", "A", "UC"].contains(&class) {
