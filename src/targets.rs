@@ -1,12 +1,7 @@
 use crate::{CoverageGap, shell::CommandRecord};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Target {
-    pub path: String,
-    pub write: bool,
-    pub recursive: bool,
-    pub name_only: bool,
-}
+pub use crate::record::Target;
+use crate::record::{Direction, Effect, HostFacts, Via, Walk, Word};
 #[derive(Debug, Default)]
 pub struct Effects {
     pub targets: Vec<Target>,
@@ -21,23 +16,34 @@ pub struct Effects {
     pub consumes_listing: bool,
 }
 
-pub fn infer(command: &CommandRecord, cwd: &str) -> Effects {
-    infer_at(command, cwd, 0)
+pub fn infer(command: &CommandRecord, cwd: &str, host: HostFacts<'_>) -> Effects {
+    infer_at(command, cwd, host, 0)
 }
 
-fn infer_at(command: &CommandRecord, cwd: &str, depth: usize) -> Effects {
+fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usize) -> Effects {
     let mut effects = Effects::default();
     if depth > crate::limits::MAX_NESTING {
         effects.gaps.push(CoverageGap::InspectionBudget);
         return effects;
     }
-    for (path, write) in &command.redirects {
-        effects.targets.push(Target {
-            path: path.clone(),
-            write: *write,
-            recursive: false,
-            name_only: false,
-        });
+    for redirect in &command.redirects {
+        if matches!(
+            redirect.direction,
+            Direction::Heredoc | Direction::Herestring
+        ) {
+            continue;
+        }
+        let path = &redirect.target;
+        let write = redirect.direction == Direction::Out;
+        let mut target = Target::new(
+            path.clone(),
+            if write { Effect::Write } else { Effect::Read },
+            Walk::None,
+            Via::Redirect,
+        );
+        target.glob = redirect.globs;
+        target.expands = redirect.expands;
+        effects.targets.push(target);
     }
     let Some(program) = command
         .argv
@@ -59,17 +65,20 @@ fn infer_at(command: &CommandRecord, cwd: &str, depth: usize) -> Effects {
         })
         .unwrap_or(program);
     let args = &command.argv[1..];
-    let read = |path: &str, recursive| Target {
-        path: path.to_owned(),
-        write: false,
-        recursive,
-        name_only: false,
+    let read = |word: &Word, recursive| {
+        Target::from_word(
+            word,
+            cwd,
+            host,
+            Effect::Read,
+            if recursive { Walk::Visible } else { Walk::None },
+        )
     };
     match program {
         "__observed_stream__" => effects.gaps.push(CoverageGap::UnresolvedTarget),
         "printf" | "echo" | "print" => {
             effects.variable = !(program != "echo" && args.first().is_some_and(|arg| arg == "-v"))
-                && command.variables.iter().any(|name| secret_name(name));
+                && command.variables().any(|name| secret_name(name));
         }
         "true" | "false" | ":" | "setopt" | "unsetopt" | "emulate" | "cd" | "unset" | "local" => {}
         "set" => effects.dump = args.is_empty(),
@@ -88,7 +97,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, depth: usize) -> Effects {
             {
                 effects.targets.push(read(path, false));
             }
-            if command.unresolved {
+            if command.unresolved() {
                 effects.gaps.push(CoverageGap::UnresolvedTarget);
             }
         }
@@ -103,33 +112,34 @@ fn infer_at(command: &CommandRecord, cwd: &str, depth: usize) -> Effects {
                     recursive |=
                         arg == "--recursive" || !arg.starts_with("--") && arg.contains('R');
                 } else {
-                    paths.push(arg.as_str());
+                    paths.push(arg);
                 }
             }
             effects.hidden_listing = args
                 .iter()
                 .any(|s| s.starts_with('-') && s.contains(['a', 'A']));
+            let implicit = Word::literal(cwd.to_owned());
             if paths.is_empty() {
-                paths.push(cwd);
+                paths.push(&implicit);
             }
             for path in paths {
                 let mut target = read(path, recursive);
-                target.name_only = true;
+                target.effect = Effect::Name;
                 effects.targets.push(target);
             }
         }
         "rg" | "grep" | "ag" | "ack" => {
-            infer_search(program, args, cwd, &mut effects);
-            if command.unresolved {
+            infer_search(program, args, cwd, host, &mut effects);
+            if command.unresolved() {
                 effects.gaps.push(CoverageGap::UnresolvedTarget);
             }
         }
-        "xargs" | "env" => infer_wrapper(program, args, command, cwd, &mut effects, depth),
+        "xargs" | "env" => infer_wrapper(program, args, command, cwd, host, &mut effects, depth),
         "fd" | "tree" | "du" | "find" => {
-            infer_listing(program, args, command, cwd, &mut effects, depth)
+            infer_listing(program, args, command, cwd, host, &mut effects, depth)
         }
-        "tar" => infer_tar(args, cwd, &mut effects),
-        "git" => infer_git(args, cwd, &mut effects),
+        "tar" => infer_tar(args, cwd, host, &mut effects),
+        "git" => infer_git(args, cwd, host, &mut effects),
         "python" | "python3" | "node" | "bun" | "ruby" | "perl" | "php" | "osascript" | "lua"
         | "deno" => {
             effects.gaps.push(CoverageGap::InterpreterChosenRead);
@@ -145,8 +155,13 @@ fn infer_at(command: &CommandRecord, cwd: &str, depth: usize) -> Effects {
                     .strip_prefix("--env-file=")
                     .or_else(|| arg.strip_prefix("--env-file-if-exists="))
                 {
-                    let mut target = read(path, false);
-                    target.name_only = true;
+                    let target = Target::from_word(
+                        &arg.with_text(path.to_owned()),
+                        cwd,
+                        host,
+                        Effect::Name,
+                        Walk::None,
+                    );
                     effects.targets.push(target);
                 }
                 if !claimed.contains(&index) && !arg.starts_with('-') {
@@ -162,7 +177,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, depth: usize) -> Effects {
                     && s.contains('c')
             }) {
                 if let Some(code) = args.get(index + 1) {
-                    effects.code.push(code.clone());
+                    effects.code.push(code.text.clone());
                     claimed.push(index + 1);
                 }
             } else {
@@ -174,7 +189,9 @@ fn infer_at(command: &CommandRecord, cwd: &str, depth: usize) -> Effects {
                 }
             }
         }
-        "eval" => effects.code.push(args.join(" ")),
+        "eval" => effects
+            .code
+            .push(args.iter().map(Word::as_str).collect::<Vec<_>>().join(" ")),
         "printenv" => {
             effects.dump = args.is_empty();
             effects.variable = args.iter().any(|s| secret_name(s));
@@ -202,23 +219,28 @@ fn secret_name(name: &str) -> bool {
         .any(|part| name.contains(part))
 }
 
-fn child(command: &CommandRecord, argv: &[String], cwd: &str) -> CommandRecord {
+fn child(command: &CommandRecord, argv: &[Word], cwd: &str) -> CommandRecord {
     CommandRecord {
         argv: argv.to_vec(),
         redirects: Vec::new(),
-        unresolved: command.unresolved,
         pipeline: command.pipeline,
         cwd: cwd.to_owned(),
-        variables: command.variables.clone(),
         nested: command.nested,
+        program: (!argv.is_empty()).then_some(0),
+        wrappers: command.wrappers.clone(),
+        shell: command.shell,
+        flags: command.flags.clone(),
+        items: command.items.clone(),
+        stdin: command.stdin.clone(),
     }
 }
 
 fn infer_wrapper(
     program: &str,
-    args: &[String],
+    args: &[Word],
     command: &CommandRecord,
     cwd: &str,
+    host: HostFacts<'_>,
     effects: &mut Effects,
     depth: usize,
 ) {
@@ -227,7 +249,7 @@ fn infer_wrapper(
     while let Some(arg) = args.get(index) {
         if program == "env" && arg == "-S" {
             if let Some(code) = args.get(index + 1) {
-                effects.code.push(code.clone());
+                effects.code.push(code.text.clone());
             }
             return;
         }
@@ -267,12 +289,13 @@ fn infer_wrapper(
             && ["-a", "--arg-file"].contains(&arg.as_str())
             && let Some(path) = args.get(index + 1)
         {
-            effects.targets.push(Target {
-                path: path.clone(),
-                write: false,
-                recursive: false,
-                name_only: false,
-            });
+            effects.targets.push(Target::from_word(
+                path,
+                &cwd,
+                host,
+                Effect::Read,
+                Walk::None,
+            ));
         }
         index += if takes { 2 } else { 1 };
     }
@@ -284,7 +307,7 @@ fn infer_wrapper(
         effects.dump = true;
     }
     let nested = child(command, &args[index..], &cwd);
-    let mut result = infer_at(&nested, &cwd, depth + 1);
+    let mut result = infer_at(&nested, &cwd, host, depth + 1);
     if cwd != command.cwd {
         for target in &mut result.targets {
             target.path = at(&target.path, &cwd);
@@ -317,7 +340,7 @@ fn at(path: &str, base: &str) -> String {
     }
 }
 
-fn infer_git(args: &[String], cwd: &str, effects: &mut Effects) {
+fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effects) {
     let mut index = 0;
     let mut base = cwd.to_owned();
     while let Some(arg) = args.get(index).filter(|arg| arg.starts_with('-')) {
@@ -332,7 +355,7 @@ fn infer_git(args: &[String], cwd: &str, effects: &mut Effects) {
         .contains(&arg.as_str());
         let path = arg
             .strip_prefix("--work-tree=")
-            .map(str::to_owned)
+            .map(|text| arg.with_text(text.to_owned()))
             .or_else(|| {
                 if ["-C", "--work-tree"].contains(&arg.as_str()) {
                     args.get(index + 1).cloned()
@@ -342,12 +365,13 @@ fn infer_git(args: &[String], cwd: &str, effects: &mut Effects) {
             });
         if let Some(path) = path {
             base = crate::filesystem::normalize(&path, &base, "");
-            effects.targets.push(Target {
-                path: base.clone(),
-                write: false,
-                recursive: false,
-                name_only: true,
-            });
+            effects.targets.push(Target::from_word(
+                &path.with_text(base.clone()),
+                cwd,
+                host,
+                Effect::Name,
+                Walk::None,
+            ));
         }
         index += if takes { 2 } else { 1 };
     }
@@ -356,8 +380,8 @@ fn infer_git(args: &[String], cwd: &str, effects: &mut Effects) {
     };
     index += 1;
     effects.variable = sub == "credential" && args.get(index).is_some_and(|arg| arg == "fill");
-    let names="branch tag remote switch push fetch pull merge rebase cherry-pick revert reflog rev-parse describe bisect init clone submodule worktree config lfs sparse-checkout".split_whitespace().any(|name|name==sub);
-    let metadata="add rm mv restore checkout reset stash check-ignore check-attr update-index ls-files status clean commit".split_whitespace().any(|name|name==sub);
+    let names="branch tag remote switch push fetch pull merge rebase cherry-pick revert reflog rev-parse describe bisect init clone submodule worktree config lfs sparse-checkout".split_whitespace().any(|name|name==sub.as_str());
+    let metadata="add rm mv restore checkout reset stash check-ignore check-attr update-index ls-files status clean commit".split_whitespace().any(|name|name==sub.as_str());
     let keys: &[&str] = match sub.as_str() {
         "config" => &["-f", "--file", "--blob"],
         "commit" => &["-F", "--file", "--pathspec-from-file"],
@@ -376,43 +400,54 @@ fn infer_git(args: &[String], cwd: &str, effects: &mut Effects) {
                 break;
             }
             if let Some(path) = arg.strip_prefix(&format!("{key}=")) {
-                option_path = Some(path.into());
+                option_path = Some(arg.with_text(path.to_owned()));
                 break;
             }
             if !key.starts_with("--")
                 && let Some(path) = arg.strip_prefix(key).filter(|path| !path.is_empty())
             {
-                option_path = Some(path.into());
+                option_path = Some(arg.with_text(path.to_owned()));
                 break;
             }
         }
         if let Some(path) = option_path {
-            effects.targets.push(Target {
-                path: crate::filesystem::normalize(&path, &base, ""),
-                write: false,
-                recursive: false,
-                name_only: false,
-            });
+            effects.targets.push(Target::from_word(
+                &path.with_text(crate::filesystem::normalize(&path, &base, "")),
+                cwd,
+                host,
+                Effect::Read,
+                Walk::None,
+            ));
         } else if !arg.starts_with('-') {
             if !pattern {
                 pattern = true;
             } else {
-                effects.targets.push(Target {
-                    path: crate::filesystem::normalize(arg, &base, ""),
-                    write: false,
-                    recursive: !names && !metadata,
-                    name_only: names || metadata,
-                });
+                effects.targets.push(Target::from_word(
+                    &arg.with_text(crate::filesystem::normalize(arg, &base, "")),
+                    cwd,
+                    host,
+                    if names || metadata {
+                        Effect::Name
+                    } else {
+                        Effect::Read
+                    },
+                    if !names && !metadata {
+                        Walk::Visible
+                    } else {
+                        Walk::None
+                    },
+                ));
                 if !names
                     && !metadata
                     && let Some((_, path)) = arg.split_once(':')
                 {
-                    effects.targets.push(Target {
-                        path: crate::filesystem::normalize(path, &base, ""),
-                        write: false,
-                        recursive: false,
-                        name_only: false,
-                    });
+                    effects.targets.push(Target::from_word(
+                        &arg.with_text(crate::filesystem::normalize(path, &base, "")),
+                        cwd,
+                        host,
+                        Effect::Read,
+                        Walk::None,
+                    ));
                 }
             }
         }
@@ -420,7 +455,7 @@ fn infer_git(args: &[String], cwd: &str, effects: &mut Effects) {
     }
 }
 
-fn interpreter_code(program: &str, args: &[String]) -> (Vec<String>, Vec<usize>) {
+fn interpreter_code(program: &str, args: &[Word]) -> (Vec<String>, Vec<usize>) {
     let (code, value, glued) = match program {
         "python" | "python3" => ("c", "WX", true),
         "node" => ("ep", "", false),
@@ -441,7 +476,7 @@ fn interpreter_code(program: &str, args: &[String]) -> (Vec<String>, Vec<usize>)
             claimed.push(index);
             for (offset, source) in args[index + 1..].iter().enumerate() {
                 if !source.starts_with('-') {
-                    found.push(source.clone());
+                    found.push(source.text.clone());
                     claimed.push(index + 1 + offset);
                 }
             }
@@ -458,7 +493,7 @@ fn interpreter_code(program: &str, args: &[String]) -> (Vec<String>, Vec<usize>)
             } else {
                 index += 1;
                 if let Some(source) = args.get(index) {
-                    found.push(source.clone());
+                    found.push(source.text.clone());
                     claimed.push(index);
                 }
             }
@@ -480,7 +515,7 @@ fn interpreter_code(program: &str, args: &[String]) -> (Vec<String>, Vec<usize>)
                     } else {
                         index += 1;
                         if let Some(source) = args.get(index) {
-                            found.push(source.clone());
+                            found.push(source.text.clone());
                             claimed.push(index);
                         }
                     }
@@ -495,9 +530,10 @@ fn interpreter_code(program: &str, args: &[String]) -> (Vec<String>, Vec<usize>)
 
 fn infer_listing(
     program: &str,
-    args: &[String],
+    args: &[Word],
     command: &CommandRecord,
     cwd: &str,
+    host: HostFacts<'_>,
     effects: &mut Effects,
     depth: usize,
 ) {
@@ -522,13 +558,13 @@ fn infer_listing(
         {
             let path = arg
                 .split_once('=')
-                .map(|(_, value)| value)
-                .or_else(|| args.get(index + 1).map(String::as_str));
+                .map(|(_, value)| arg.with_text(value.to_owned()))
+                .or_else(|| args.get(index + 1).cloned());
             if let Some(path) = path {
                 if arg == "-C" || arg.starts_with("--base-directory") {
-                    base = at(path, &base);
+                    base = at(&path, &base);
                 } else {
-                    paths.push(at(path, &base));
+                    paths.push(path.with_text(at(&path, &base)));
                 }
             }
             skip = !arg.contains('=');
@@ -589,18 +625,19 @@ fn infer_listing(
             pattern = true;
             continue;
         }
-        paths.push(at(arg, &base));
+        paths.push(arg.with_text(at(arg, &base)));
     }
     if paths.is_empty() {
-        paths.push(base.clone());
+        paths.push(Word::literal(base.clone()));
     }
     for path in paths {
-        effects.targets.push(Target {
-            path,
-            write: false,
-            recursive: true,
-            name_only: true,
-        });
+        effects.targets.push(Target::from_word(
+            &path,
+            cwd,
+            host,
+            Effect::Name,
+            Walk::Visible,
+        ));
     }
     effects.hidden_listing = program == "find"
         || args.iter().any(|arg| {
@@ -628,7 +665,12 @@ fn infer_listing(
         Vec::new()
     };
     for (start, end) in children {
-        let result = infer_at(&child(command, &args[start..end], &base), &base, depth + 1);
+        let result = infer_at(
+            &child(command, &args[start..end], &base),
+            &base,
+            host,
+            depth + 1,
+        );
         if effects.hidden_listing && args.get(start).is_some_and(|name| content_consumer(name)) {
             effects.hidden_content = true;
         }
@@ -648,7 +690,7 @@ fn content_consumer(name: &str) -> bool {
     .contains(&name)
 }
 
-fn infer_tar(args: &[String], cwd: &str, effects: &mut Effects) {
+fn infer_tar(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effects) {
     let mut archive = None;
     let mut create = false;
     let mut extract = false;
@@ -671,7 +713,7 @@ fn infer_tar(args: &[String], cwd: &str, effects: &mut Effects) {
             index += 1;
             archive = args.get(index).cloned();
         } else if let Some(path) = arg.strip_prefix("--file=") {
-            archive = Some(path.into());
+            archive = Some(arg.with_text(path.to_owned()));
         } else if arg == "-C" || arg == "--directory" || arg == "--cd" {
             index += 1;
             if let Some(path) = args.get(index) {
@@ -683,36 +725,41 @@ fn infer_tar(args: &[String], cwd: &str, effects: &mut Effects) {
         index += 1;
     }
     if let Some(path) = archive {
-        effects.targets.push(Target {
-            path,
-            write: create,
-            recursive: false,
-            name_only: false,
-        });
+        effects.targets.push(Target::from_word(
+            &path,
+            cwd,
+            host,
+            if create { Effect::Write } else { Effect::Read },
+            Walk::None,
+        ));
     }
     for path in operands {
-        effects.targets.push(Target {
-            path: if path.starts_with('~') {
-                path
+        effects.targets.push(Target::from_word(
+            &path.with_text(if path.starts_with('~') {
+                path.text.clone()
             } else {
                 crate::filesystem::normalize(&path, &base, "")
-            },
-            write: false,
-            recursive: true,
-            name_only: false,
-        });
+            }),
+            cwd,
+            host,
+            Effect::Read,
+            Walk::Visible,
+        ));
     }
     if extract && !stdout {
-        effects.targets.push(Target {
-            path: base,
-            write: true,
-            recursive: false,
-            name_only: false,
-        });
+        effects
+            .targets
+            .push(Target::new(base, Effect::Write, Walk::None, Via::Operand));
     }
 }
 
-fn infer_search(program: &str, args: &[String], cwd: &str, effects: &mut Effects) {
+fn infer_search(
+    program: &str,
+    args: &[Word],
+    cwd: &str,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) {
     let mut operands = Vec::new();
     let mut globs = Vec::new();
     let mut explicit = false;
@@ -733,7 +780,9 @@ fn infer_search(program: &str, args: &[String], cwd: &str, effects: &mut Effects
         if options && arg.starts_with("--") {
             let (key, value) = arg[2..]
                 .split_once('=')
-                .map_or((&arg[2..], None), |(k, v)| (k, Some(v.to_owned())));
+                .map_or((&arg[2..], None), |(k, v)| {
+                    (k, Some(arg.with_text(v.to_owned())))
+                });
             match key {
                 "files" => names = true,
                 "hidden" => {
@@ -786,7 +835,7 @@ fn infer_search(program: &str, args: &[String], cwd: &str, effects: &mut Effects
                         if tail.is_empty() {
                             None
                         } else {
-                            Some(tail.trim_start_matches('=').to_owned())
+                            Some(arg.with_text(tail.trim_start_matches('=').to_owned()))
                         },
                     ));
                     break;
@@ -808,20 +857,22 @@ fn infer_search(program: &str, args: &[String], cwd: &str, effects: &mut Effects
                     }
                     "f" | "file" => {
                         explicit = true;
-                        effects.targets.push(Target {
-                            path: value,
-                            write: false,
-                            recursive: false,
-                            name_only: false,
-                        });
+                        effects.targets.push(Target::from_word(
+                            &value,
+                            cwd,
+                            host,
+                            Effect::Read,
+                            Walk::None,
+                        ));
                     }
-                    "g" | "glob" | "iglob" | "include" => globs.push(value),
-                    "ignore-file" | "exclude-from" => effects.targets.push(Target {
-                        path: value,
-                        write: false,
-                        recursive: false,
-                        name_only: false,
-                    }),
+                    "g" | "glob" | "iglob" | "include" => globs.push(value.text),
+                    "ignore-file" | "exclude-from" => effects.targets.push(Target::from_word(
+                        &value,
+                        cwd,
+                        host,
+                        Effect::Read,
+                        Walk::None,
+                    )),
                     _ => {}
                 }
             }
@@ -832,26 +883,31 @@ fn infer_search(program: &str, args: &[String], cwd: &str, effects: &mut Effects
         operands.remove(0);
     }
     if operands.is_empty() && (program != "grep" || hidden) {
-        operands.push(cwd.to_owned());
+        operands.push(Word::literal(cwd.to_owned()));
     }
     effects.hidden_listing = names && hidden;
     effects.hidden_content = hidden && !names;
     for root in operands {
-        effects.targets.push(Target {
-            path: root.clone(),
-            write: false,
-            recursive: program != "grep" || hidden,
-            name_only: names,
-        });
+        effects.targets.push(Target::from_word(
+            &root,
+            cwd,
+            host,
+            if names { Effect::Name } else { Effect::Read },
+            if program != "grep" || hidden {
+                Walk::Visible
+            } else {
+                Walk::None
+            },
+        ));
         if !names {
             for glob in &globs {
                 if !glob.starts_with('!') {
-                    effects.targets.push(Target {
-                        path: format!("{root}/{}", glob.rsplit('/').next().unwrap_or(glob)),
-                        write: false,
-                        recursive: false,
-                        name_only: false,
-                    });
+                    effects.targets.push(Target::new(
+                        format!("{}/{}", root.text, glob.rsplit('/').next().unwrap_or(glob)),
+                        Effect::Read,
+                        Walk::None,
+                        Via::Operand,
+                    ));
                 }
             }
         }

@@ -4,7 +4,6 @@ use agent_guard_rust::{
     adapters::render,
     evaluate_with_arm,
     filesystem::{self, FileKind, Identity, Metadata, Probe, Protection},
-    shell::Arm,
 };
 use serde_json::json;
 use std::{
@@ -28,7 +27,7 @@ fn ssh_public_file_type_and_probe_fault() {
         format!("{}/.ssh/config.work", fixture.home),
     )
     .unwrap();
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let context = fixture.context(&json!({"consumer":"codex", "cwd":"$P"}));
         for (name, expected) in [
             ("config.d", "D"),
@@ -120,7 +119,7 @@ fn resolved_ssh_root_and_parent_inode_identity() {
     let root = fixture.root.join("ssh-store");
     fs::rename(format!("{}/.ssh", fixture.home), &root).unwrap();
     std::os::unix::fs::symlink(&root, format!("{}/.ssh", fixture.home)).unwrap();
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let context = fixture.context(&json!({"consumer":"codex", "cwd":"$P"}));
         let body = serde_json::to_vec(&json!({"tool_name":"Bash", "tool_input":{"command":format!("cat {}", root.display())}})).unwrap();
         let mut probe = support::RecordingProbe::new(&fixture);

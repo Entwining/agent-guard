@@ -27,7 +27,7 @@ pub fn validate_sources() {
         ),
         (
             "tests/fixtures/rust-contract-classification.jsonl",
-            "af65478c60c1a997a01d1e0bd4bd00a174c6351a998eb1f62b800a5ccb4a27c4",
+            "a59ddafbc4557a901670a7e7569295257d2c37df2fb92d54c08895d24883c4e6",
         ),
         (
             "tests/fixtures/rust-d22-scope.jsonl",
@@ -336,6 +336,7 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
             let context = Context {
                 consumer,
                 home: fixture.home.clone(),
+                user: Some("fixture-user".into()),
                 cwd: fixture.expand(row["cwd"].as_str().unwrap()),
                 zsh_executor: consumer != Consumer::Pi,
                 require_execution_owner: false,
@@ -481,9 +482,20 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                     _ => true,
                 };
                 if actual_class == "F" {
-                    changed_contract_match &= wire.stderr.contains("non-sensitive probe prefix")
-                        && wire.stderr.contains("repair")
-                        && wire.stderr.contains("recheck");
+                    changed_contract_match &=
+                        match contract["expected_coverage"]["error_kind"].as_str() {
+                            Some("MalformedInput") => {
+                                wire.exit == 2
+                                    && wire.stderr.contains("invalid event input")
+                                    && wire.stderr.contains("recheck")
+                            }
+                            Some("ProbeFault") => {
+                                wire.stderr.contains("non-sensitive probe prefix")
+                                    && wire.stderr.contains("repair")
+                                    && wire.stderr.contains("recheck")
+                            }
+                            _ => false,
+                        };
                 }
                 if let Some(next) = contract["recovery_objective"]["next_operations"].get(name) {
                     changed_contract_match &= recovery["next_step"]["kind"] == "owner_action";
@@ -509,7 +521,7 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                             )
                             .unwrap();
                             changed_contract_match &=
-                                expected_commands.commands == commands.commands;
+                                expected_commands.script.commands == commands.script.commands;
                         } else {
                             changed_contract_match &=
                                 got["input"][key] == fixture.expand_value(value);

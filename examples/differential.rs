@@ -7,10 +7,12 @@ use agent_guard_rust::shell::Arm;
 fn main() {
     let arm = match std::env::args().nth(1).as_deref() {
         Some("brush") => Arm::Brush,
-        Some("tree") => Arm::TreeSitter,
-        _ => panic!("expected brush|tree"),
+        _ => panic!("expected brush"),
     };
-    for row in differential::report(arm) {
-        println!("{row}");
+    assert_eq!(arm, Arm::Brush);
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
+        for row in differential::report(arm) {
+            println!("{row}");
+        }
     }
 }

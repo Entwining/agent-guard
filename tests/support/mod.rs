@@ -152,6 +152,7 @@ impl Fixture {
         Context {
             consumer,
             home: self.home.clone(),
+            user: Some("fixture-user".into()),
             cwd: self.expand(text(row, "cwd")),
             zsh_executor: consumer != Consumer::Pi,
             require_execution_owner: row["provenance_form"] == "required_execution_domain",
@@ -222,7 +223,7 @@ impl Probe for RecordingProbe {
         let spelling = path.to_str().unwrap().to_owned();
         self.stat_calls.push(spelling.clone());
         assert!(
-            filesystem::lexical(&spelling, &self.home).is_none(),
+            filesystem::lexical_literal(&spelling, &self.home).is_none(),
             "protected spelling reached stat: {spelling}"
         );
         if self.fault.as_ref() == Some(&spelling) {
@@ -234,7 +235,7 @@ impl Probe for RecordingProbe {
         let spelling = path.to_str().unwrap().to_owned();
         self.calls.push(spelling.clone());
         assert!(
-            filesystem::lexical(&spelling, &self.home).is_none(),
+            filesystem::lexical_literal(&spelling, &self.home).is_none(),
             "protected spelling reached probe: {spelling}"
         );
         if self.fault.as_ref() == Some(&spelling) {
@@ -515,13 +516,14 @@ fn closed_operation(fixture: &Fixture, row: &Value, body: &[u8], witness: &mut W
             .map(|(_, body)| body.split("\nDOC").next().unwrap_or(body))
             .unwrap_or("");
         let body = format!("{body}\n");
-        if let Some((target, _)) = observation
+        if let Some(redirect) = observation
+            .script
             .commands
             .iter()
             .flat_map(|c| &c.redirects)
-            .find(|(_, write)| *write)
+            .find(|r| r.direction == agent_guard_rust::record::Direction::Out)
         {
-            return witness.write(target, &body);
+            return witness.write(&redirect.target, &body);
         }
         return body;
     }
@@ -529,6 +531,7 @@ fn closed_operation(fixture: &Fixture, row: &Value, body: &[u8], witness: &mut W
         return ["a", "b"].map(|s| format!("{s}\n")).concat();
     }
     if let Some(args) = observation
+        .script
         .commands
         .iter()
         .find(|c| c.argv.first().is_some_and(|s| s == "printf"))
@@ -537,7 +540,10 @@ fn closed_operation(fixture: &Fixture, row: &Value, body: &[u8], witness: &mut W
         if args.len() > 2 {
             return format!(
                 "{}{}",
-                args[2..].join(""),
+                args[2..]
+                    .iter()
+                    .map(|w| w.text.as_str())
+                    .collect::<String>(),
                 if args[1].ends_with('\n') || args[1].ends_with("\\n") {
                     "\n"
                 } else {
@@ -546,10 +552,11 @@ fn closed_operation(fixture: &Fixture, row: &Value, body: &[u8], witness: &mut W
             );
         }
         if args.len() == 2 {
-            return args[1].clone();
+            return args[1].text.clone();
         }
     }
     if let Some(args) = observation
+        .script
         .commands
         .iter()
         .find(|c| c.argv.first().is_some_and(|s| s == "git"))
@@ -565,6 +572,7 @@ fn closed_operation(fixture: &Fixture, row: &Value, body: &[u8], witness: &mut W
         );
     }
     if observation
+        .script
         .commands
         .iter()
         .any(|c| c.argv.first().is_some_and(|s| s == "ls"))
@@ -589,11 +597,12 @@ fn closed_operation(fixture: &Fixture, row: &Value, body: &[u8], witness: &mut W
         return witness.names.join("\n");
     }
     if let Some(path) = observation
+        .script
         .commands
         .iter()
         .filter(|c| c.argv.first().is_some_and(|s| s == "cat"))
         .flat_map(|c| c.argv.iter().skip(1))
-        .find(|p| p.starts_with('/') && Path::new(p).is_file())
+        .find(|p| p.starts_with('/') && Path::new(p.as_str()).is_file())
     {
         return witness.read(path);
     }
@@ -615,6 +624,7 @@ fn closed_operation(fixture: &Fixture, row: &Value, body: &[u8], witness: &mut W
             .join("\n");
     }
     if observation
+        .script
         .commands
         .iter()
         .any(|c| c.argv.first().is_some_and(|s| s == "rg"))

@@ -3,7 +3,7 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
 use agent_guard_rust::{
-    CheckError, CheckErrorKind, Context, Coverage, CoverageGap, Disposition, Event, Outcome,
+    Context, Coverage, CoverageGap, Disposition, Event, Outcome,
     adapters::{self, Consumer, Operation},
     evaluate_with_arm,
     filesystem::DiskProbe,
@@ -56,7 +56,6 @@ fn request(value: &Value) -> Result<Request, &'static str> {
     let arm = match string(value, "arm")?.as_str() {
         "structured" => Arm::StructuredOnly,
         "brush" => Arm::Brush,
-        "tree" => Arm::TreeSitter,
         _ => return Err("unknown arm"),
     };
     let home = string(value, "home")?;
@@ -76,10 +75,11 @@ fn request(value: &Value) -> Result<Request, &'static str> {
     if !metadata.is_null() && !metadata.is_object() {
         return Err("context must be an object");
     }
-    if metadata
-        .as_object()
-        .is_some_and(|fields| fields.keys().any(|key| key != "zsh_executor"))
-    {
+    if metadata.as_object().is_some_and(|fields| {
+        fields
+            .keys()
+            .any(|key| !matches!(key.as_str(), "zsh_executor" | "user"))
+    }) {
         return Err("context field has no production source");
     }
     Ok(Request {
@@ -88,6 +88,14 @@ fn request(value: &Value) -> Result<Request, &'static str> {
         context: Context {
             consumer,
             home,
+            user: metadata
+                .get("user")
+                .map(|v| {
+                    v.as_str()
+                        .map(str::to_owned)
+                        .ok_or("context user must be a string")
+                })
+                .transpose()?,
             cwd,
             zsh_executor: boolean(metadata, "zsh_executor", consumer != Consumer::Pi)?,
             require_execution_owner: false,
@@ -206,38 +214,12 @@ fn parse_only(request: &Request) -> Value {
         }
     };
     let started = Instant::now();
-    let parsed = match request.arm {
-        Arm::Brush => Ok(brush_parser::Parser::builder()
-            .build(io::Cursor::new(source.as_bytes()))
-            .parse_program()
-            .is_ok()),
-        Arm::TreeSitter => {
-            let mut parser = tree_sitter::Parser::new();
-            parser
-                .set_language(&tree_sitter_bash::LANGUAGE.into())
-                .map_err(|_| CheckError {
-                    kind: CheckErrorKind::GuardFault,
-                })
-                .and_then(|()| {
-                    parser
-                        .parse(&source, None)
-                        .map(|tree| !tree.root_node().has_error())
-                        .ok_or(CheckError {
-                            kind: CheckErrorKind::GuardFault,
-                        })
-                })
-        }
-        Arm::StructuredOnly => unreachable!(),
-    };
+    let parsed = brush_parser::Parser::builder()
+        .build(io::Cursor::new(source.as_bytes()))
+        .parse_program()
+        .is_ok();
     response["parse_ns"] = json!(started.elapsed().as_nanos());
-    response["parse_status"] = json!(match parsed {
-        Ok(true) => "parsed",
-        Ok(false) => "parse_failed",
-        Err(error) => {
-            response["error_kind"] = json!(format!("{:?}", error.kind));
-            "parser_error"
-        }
-    });
+    response["parse_status"] = json!(if parsed { "parsed" } else { "parse_failed" });
     response
 }
 
@@ -359,7 +341,7 @@ mod tests {
                     _ => panic!("unexpected dev outcome"),
                 },
                 Err(error) => {
-                    assert_eq!(error.kind, CheckErrorKind::MalformedInput);
+                    assert_eq!(error.kind, agent_guard_rust::CheckErrorKind::MalformedInput);
                     assert_eq!(response["coverage"]["error_kind"], "MalformedInput");
                     assert!(response["outcome"].is_null() && response["recovery"].is_null());
                     assert_eq!(response["disposition"], "BlockOnCheckError");
@@ -369,7 +351,7 @@ mod tests {
         }
 
         let shell = json!({"id":"parser","consumer":"claude","arm":"brush","home":fixture.home,"cwd":fixture.project,"event":{"tool_name":"Bash","tool_input":{"command":format!("cat '{}'",fixture.container)}}});
-        for arm in ["brush", "tree", "structured"] {
+        for arm in ["brush", "structured"] {
             let mut request = shell.clone();
             request["arm"] = json!(arm);
             let mut output = Vec::new();
@@ -404,6 +386,17 @@ mod tests {
                 assert!(response["parse_ns"].as_u64().is_some());
             }
         }
+        let mut host_request = shell.clone();
+        host_request["context"] = json!({"user":"fixture-user"});
+        host_request["event"]["tool_input"]["command"] =
+            json!("ls ~fixture-user/Library/Containers");
+        assert_eq!(guard(&request(&host_request).unwrap())["class"], "D");
+        host_request["context"]["user"] = json!(false);
+        assert!(request(&host_request).is_err());
+        host_request["context"] = json!({});
+        host_request["arm"] = json!("tree");
+        assert!(request(&host_request).is_err());
+
         let mut invalid = b"{\n{}\n\xff\n".to_vec();
         invalid.extend(input.split_inclusive(|byte| *byte == b'\n').next().unwrap());
         let mut output = Vec::new();

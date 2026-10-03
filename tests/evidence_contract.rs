@@ -5,7 +5,7 @@ use serde_json::json;
 #[test]
 fn reason_and_effect_partitions_reject_missing_evidence() {
     let rows = support::rows();
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         for id in [
             "S01-read-appdata-claude",
             "S04-shell-home-explicit-claude",

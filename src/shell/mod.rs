@@ -1,6 +1,6 @@
 mod brush;
-mod cst;
 mod divergence;
+mod words;
 
 use crate::{CheckError, CheckErrorKind, CoverageGap, limits::MAX_NESTING};
 use std::{
@@ -12,28 +12,38 @@ use std::{
 pub enum Arm {
     StructuredOnly,
     Brush,
-    TreeSitter,
+}
+
+/// D25: parse comparators never contribute semantic observations.
+pub const ACCEPTANCE_ARMS: &[Arm] = &[Arm::Brush];
+
+#[derive(Debug, Clone)]
+enum WordSyntax {
+    Shell,
+    Heredoc,
+    Literal,
 }
 
 #[derive(Debug, Clone)]
-struct Word {
+struct RawWord {
     raw: String,
+    syntax: WordSyntax,
 }
 #[derive(Debug, Clone)]
-struct Redirect {
-    target: Word,
-    write: bool,
+struct RawRedirect {
+    target: RawWord,
+    direction: crate::record::Direction,
 }
 #[derive(Debug, Clone)]
 enum Record {
     Nested(Vec<Record>),
     Definition(String, Vec<Record>),
-    Assignment(String, Word),
-    LoopBinding(String, Vec<Word>),
-    Expansion(Word),
+    Assignment(String, RawWord),
+    LoopBinding(String, Vec<RawWord>),
+    Expansion(RawWord),
     Command {
-        argv: Vec<Word>,
-        redirects: Vec<Redirect>,
+        argv: Vec<RawWord>,
+        redirects: Vec<RawRedirect>,
         pipeline: Option<usize>,
     },
 }
@@ -43,20 +53,11 @@ struct Parsed {
     spans: Vec<Range<usize>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CommandRecord {
-    pub argv: Vec<String>,
-    pub redirects: Vec<(String, bool)>,
-    pub unresolved: bool,
-    pub pipeline: Option<(usize, usize)>,
-    pub cwd: String,
-    pub variables: Vec<String>,
-    pub nested: bool,
-}
+pub use crate::record::{Command as CommandRecord, Redirect, Word};
 
 #[derive(Debug, Default)]
 pub struct Observation {
-    pub commands: Vec<CommandRecord>,
+    pub script: crate::record::Script,
     pub gaps: Vec<CoverageGap>,
     pub parse_successes: usize,
     pub parse_failures: usize,
@@ -97,23 +98,48 @@ pub fn observe(
     cwd: &str,
     zsh: bool,
 ) -> Result<Observation, CheckError> {
+    observe_with_user(source, arm, home, cwd, None, zsh)
+}
+
+pub fn observe_with_user(
+    source: &str,
+    arm: Arm,
+    home: &str,
+    cwd: &str,
+    user: Option<&str>,
+    zsh: bool,
+) -> Result<Observation, CheckError> {
     let mut variables = BTreeMap::from([
         ("HOME".to_owned(), vec![home.to_owned()]),
         ("PWD".to_owned(), vec![cwd.to_owned()]),
     ]);
+    let host = crate::record::HostFacts { home, user };
     let mut observation = Observation::default();
-    observe_source(source, arm, zsh, &mut variables, &mut observation, 0)?;
+    observe_source(
+        source,
+        Frontend { arm, zsh, host },
+        &mut variables,
+        &mut observation,
+        0,
+    )?;
     Ok(observation)
+}
+
+#[derive(Clone, Copy)]
+struct Frontend<'a> {
+    arm: Arm,
+    zsh: bool,
+    host: crate::record::HostFacts<'a>,
 }
 
 fn observe_source(
     source: &str,
-    arm: Arm,
-    zsh: bool,
+    frontend: Frontend<'_>,
     variables: &mut BTreeMap<String, Vec<String>>,
     output: &mut Observation,
     depth: usize,
 ) -> Result<(), CheckError> {
+    let Frontend { arm, zsh, host } = frontend;
     if depth > MAX_NESTING {
         return Err(CheckError {
             kind: CheckErrorKind::ResourceLimit,
@@ -125,7 +151,6 @@ fn observe_source(
     }
     let parse = |parsed: &str| match arm {
         Arm::Brush => brush::records(source, parsed),
-        Arm::TreeSitter => cst::records(source, parsed),
         Arm::StructuredOnly => unreachable!(),
     };
     let original = parse(source)?;
@@ -133,6 +158,7 @@ fn observe_source(
     if original.records.is_some() {
         output.parse_successes += 1;
     } else {
+        output.script.parse_failed = true;
         output.parse_failures += 1;
     }
     let detection = divergence::detect(source, &original.spans)?;
@@ -154,7 +180,13 @@ fn observe_source(
             output.gap(CoverageGap::UnsupportedShellSyntax);
         }
         for code in &detection.code {
-            observe_source(code, arm, zsh, &mut variables.clone(), output, depth + 1)?;
+            observe_source(
+                code,
+                Frontend { arm, zsh, host },
+                &mut variables.clone(),
+                output,
+                depth + 1,
+            )?;
         }
         return Ok(());
     };
@@ -192,18 +224,17 @@ fn observe_source(
                 }
             }
             Record::Assignment(name, word) => {
-                bind(name, &[word], variables, output, arm, zsh, depth)?;
+                bind(name, &[word], variables, output, frontend, depth)?;
             }
             Record::LoopBinding(name, words) => {
-                bind(name, &words, variables, output, arm, zsh, depth)?
+                bind(name, &words, variables, output, frontend, depth)?
             }
             Record::Expansion(word) => {
-                for expanded in expand_all(&word.raw, variables, output) {
+                for expanded in expand_all(&word, variables, output, host)? {
                     for nested in &expanded.nested {
                         observe_source(
                             nested,
-                            arm,
-                            zsh,
+                            Frontend { arm, zsh, host },
                             &mut variables.clone(),
                             output,
                             depth + 1,
@@ -217,27 +248,22 @@ fn observe_source(
                 pipeline,
             } => {
                 let mut alternatives = vec![Vec::new()];
-                let mut unresolved = false;
-                let mut names = Vec::new();
-                for word in argv {
+
+                for word in &argv {
                     let mut choices = Vec::new();
-                    for expanded in expand_all(&word.raw, variables, output) {
+                    for expanded in expand_all(word, variables, output, host)? {
                         for nested in &expanded.nested {
                             observe_source(
                                 nested,
-                                arm,
-                                zsh,
+                                Frontend { arm, zsh, host },
                                 &mut variables.clone(),
                                 output,
                                 depth + 1,
                             )?;
                         }
-                        unresolved |= expanded.unresolved;
-                        names.extend(expanded.variables);
                         choices.push(expanded.split);
-                        choices.push(vec![expanded.unsplit]);
+                        choices.push(vec![expanded.word]);
                     }
-                    choices.sort();
                     choices.dedup();
                     let mut next = Vec::new();
                     for argv in &alternatives {
@@ -256,7 +282,7 @@ fn observe_source(
                 if let Some(body) = alternatives
                     .first()
                     .and_then(|argv| argv.first())
-                    .and_then(|name| functions.get(name))
+                    .and_then(|name| functions.get(&name.text))
                 {
                     for record in body.iter().rev() {
                         pending.push_front((record.clone(), nested));
@@ -265,34 +291,58 @@ fn observe_source(
                 }
                 let mut targets = Vec::new();
                 for redirect in redirects {
-                    for expanded in expand_all(&redirect.target.raw, variables, output) {
+                    for expanded in expand_all(&redirect.target, variables, output, host)? {
                         for nested in &expanded.nested {
                             observe_source(
                                 nested,
-                                arm,
-                                zsh,
+                                Frontend { arm, zsh, host },
                                 &mut variables.clone(),
                                 output,
                                 depth + 1,
                             )?;
                         }
-                        unresolved |= expanded.unresolved;
-                        names.extend(expanded.variables);
-                        targets.push((expanded.unsplit, redirect.write));
+                        targets.push(Redirect::from_word(expanded.word, redirect.direction));
                     }
                 }
                 // Assign target roles to each complete argv; never flatten operands before roles.
                 let cwds = variables.get("PWD").cloned().unwrap_or_default();
                 for argv in alternatives {
                     for cwd in &cwds {
-                        output.commands.push(CommandRecord {
+                        output.script.commands.push(CommandRecord {
                             argv: argv.clone(),
                             redirects: targets.clone(),
-                            unresolved,
                             pipeline: pipeline.map(|id| (source_id, id)),
                             cwd: cwd.clone(),
-                            variables: names.clone(),
                             nested: nested || depth > 0,
+                            program: (!argv.is_empty()).then_some(0),
+                            wrappers: Vec::new(),
+                            shell: true,
+                            flags: Vec::new(),
+                            items: None,
+                            stdin: if targets.iter().any(|r| {
+                                matches!(
+                                    r.direction,
+                                    crate::record::Direction::Heredoc
+                                        | crate::record::Direction::Herestring
+                                )
+                            }) {
+                                crate::record::Stdin::Data(
+                                    targets
+                                        .iter()
+                                        .enumerate()
+                                        .filter_map(|(i, r)| {
+                                            matches!(
+                                                r.direction,
+                                                crate::record::Direction::Heredoc
+                                                    | crate::record::Direction::Herestring
+                                            )
+                                            .then_some(i)
+                                        })
+                                        .collect(),
+                                )
+                            } else {
+                                crate::record::Stdin::None
+                            },
                         });
                         if argv.first().is_some_and(|s| s == "cd")
                             && let Some(target) = argv.iter().skip(1).find(|s| !s.starts_with('-'))
@@ -306,7 +356,7 @@ fn observe_source(
                         }
                     }
                 }
-                if output.commands.len() > 512 {
+                if output.script.commands.len() > 512 {
                     output.gap(CoverageGap::InspectionBudget);
                     break;
                 }
@@ -316,33 +366,51 @@ fn observe_source(
     for name in &detection.evaluated_variables {
         if let Some(codes) = variables.get(name).cloned() {
             for code in codes {
-                observe_source(&code, arm, zsh, &mut variables.clone(), output, depth + 1)?;
+                observe_source(
+                    &code,
+                    Frontend { arm, zsh, host },
+                    &mut variables.clone(),
+                    output,
+                    depth + 1,
+                )?;
             }
         }
     }
     for code in &detection.code {
-        observe_source(code, arm, zsh, &mut variables.clone(), output, depth + 1)?;
+        observe_source(
+            code,
+            Frontend { arm, zsh, host },
+            &mut variables.clone(),
+            output,
+            depth + 1,
+        )?;
     }
     Ok(())
 }
 
 fn bind(
     name: String,
-    words: &[Word],
+    words: &[RawWord],
     variables: &mut BTreeMap<String, Vec<String>>,
     output: &mut Observation,
-    arm: Arm,
-    zsh: bool,
+    frontend: Frontend<'_>,
     depth: usize,
 ) -> Result<(), CheckError> {
+    let Frontend { arm, zsh, host } = frontend;
     let mut values = Vec::new();
     for word in words {
-        for expanded in expand_all(&word.raw, variables, output) {
+        for expanded in expand_all(word, variables, output, host)? {
             for code in &expanded.nested {
-                observe_source(code, arm, zsh, &mut variables.clone(), output, depth + 1)?;
+                observe_source(
+                    code,
+                    Frontend { arm, zsh, host },
+                    &mut variables.clone(),
+                    output,
+                    depth + 1,
+                )?;
             }
-            if !values.contains(&expanded.unsplit) {
-                values.push(expanded.unsplit);
+            if !values.contains(&expanded.word.text) {
+                values.push(expanded.word.text);
             }
         }
     }
@@ -355,13 +423,17 @@ fn bind(
 }
 
 fn expand_all(
-    raw: &str,
+    raw: &RawWord,
     variables: &BTreeMap<String, Vec<String>>,
     output: &mut Observation,
-) -> Vec<Expanded> {
+    host: crate::record::HostFacts<'_>,
+) -> Result<Vec<Expanded>, CheckError> {
     let mut contexts = vec![BTreeMap::new()];
     for (name, values) in variables {
-        if !raw.contains(&format!("${name}")) && !raw.contains(&format!("${{{name}")) {
+        if !["HOME", "PWD"].contains(&name.as_str())
+            && !raw.raw.contains(&format!("${name}"))
+            && !raw.raw.contains(&format!("${{{name}"))
+        {
             continue;
         }
         let mut next = Vec::new();
@@ -380,116 +452,14 @@ fn expand_all(
     }
     contexts
         .iter()
-        .map(|context| expand(raw, context))
+        .map(|context| words::expand(&raw.raw, &raw.syntax, context, host))
         .collect()
 }
 
 struct Expanded {
-    split: Vec<String>,
-    unsplit: String,
-    unresolved: bool,
+    split: Vec<Word>,
+    word: Word,
     nested: Vec<String>,
-    variables: Vec<String>,
-}
-
-fn expand(raw: &str, variables: &BTreeMap<String, String>) -> Expanded {
-    let mut output = String::new();
-    let mut nested = Vec::new();
-    let mut names = Vec::new();
-    let mut unresolved = false;
-    let mut quote = 0;
-    let mut split_points = false;
-    let mut cursor = 0;
-    while cursor < raw.len() {
-        let tail = &raw[cursor..];
-        let byte = raw.as_bytes()[cursor];
-        if matches!(byte, b'\'' | b'"') {
-            if quote == 0 {
-                quote = byte;
-                cursor += 1;
-                continue;
-            }
-            if quote == byte {
-                quote = 0;
-                cursor += 1;
-                continue;
-            }
-        }
-        if byte == b'\\' && quote != b'\'' {
-            cursor += 1;
-            if cursor < raw.len() {
-                let ch = raw[cursor..].chars().next().unwrap_or_default();
-                if ch != '\n' {
-                    if quote == b'"' && !matches!(ch, '$' | '`' | '"' | '\\') {
-                        output.push('\\');
-                    }
-                    output.push(ch);
-                }
-                cursor += ch.len_utf8();
-            }
-            continue;
-        }
-        if byte == b'`'
-            && quote != b'\''
-            && let Some(length) = raw[cursor + 1..].find('`')
-        {
-            nested.push(raw[cursor + 1..cursor + 1 + length].to_owned());
-            unresolved = true;
-            output.push_str("__observed_stream__");
-            cursor += length + 2;
-            continue;
-        }
-        if quote != b'\''
-            && (tail.starts_with("$(") || tail.starts_with("<(") || tail.starts_with(">("))
-            && let Some(end) = divergence::closing(raw, cursor + 1, b'(', b')')
-        {
-            nested.push(raw[cursor + 2..end].to_owned());
-            unresolved |= tail.starts_with("$(");
-            output.push_str("__observed_stream__");
-            cursor = end + 1;
-            continue;
-        }
-        if quote != b'\'' && byte == b'$' {
-            let braced = tail.starts_with("${");
-            let start = cursor + if braced { 2 } else { 1 };
-            let length = raw[start..]
-                .chars()
-                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-                .map(char::len_utf8)
-                .sum::<usize>();
-            if length > 0 {
-                let name = &raw[start..start + length];
-                names.push(name.to_owned());
-                if let Some(value) = variables.get(name) {
-                    output.push_str(value);
-                    if quote == 0 {
-                        split_points = true;
-                    }
-                } else {
-                    unresolved = true;
-                }
-                cursor = start
-                    + length
-                    + usize::from(braced && raw.as_bytes().get(start + length) == Some(&b'}'));
-                continue;
-            }
-        }
-        let ch = tail.chars().next().unwrap_or_default();
-        output.push(ch);
-        cursor += ch.len_utf8();
-    }
-    let split = if split_points {
-        output.split_whitespace().map(str::to_owned).collect()
-    } else {
-        vec![output.clone()]
-    };
-    Expanded {
-        split,
-        unsplit: output,
-        unresolved,
-        nested,
-        variables: names,
-    }
 }
 
 #[cfg(test)]
@@ -497,15 +467,17 @@ mod tests {
     use super::*;
     #[test]
     fn complete_alternative_argv() {
-        for arm in [Arm::Brush, Arm::TreeSitter] {
+        for &arm in ACCEPTANCE_ARMS {
             let obs = observe("p='public protected'; cat $p", arm, "/h", "/h/p", true).unwrap();
             assert!(
-                obs.commands
+                obs.script
+                    .commands
                     .iter()
                     .any(|c| c.argv == ["cat", "public", "protected"])
             );
             assert!(
-                obs.commands
+                obs.script
+                    .commands
                     .iter()
                     .any(|c| c.argv == ["cat", "public protected"])
             );

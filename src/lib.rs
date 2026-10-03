@@ -8,6 +8,7 @@ pub mod adapters;
 pub mod filesystem;
 pub mod limits;
 mod policy;
+pub mod record;
 pub mod shell;
 mod targets;
 

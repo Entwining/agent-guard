@@ -4,6 +4,7 @@ use crate::{
     adapters::{self, Consumer, Operation},
     filesystem::{self, Identity, Probe, Protection},
     limits::MAX_INPUT_BYTES,
+    record::{Effect, Via, Walk},
     shell::{self, Arm},
     targets::{self, Target},
 };
@@ -12,6 +13,7 @@ use crate::{
 pub struct Context {
     pub consumer: Consumer,
     pub home: String,
+    pub user: Option<String>,
     pub cwd: String,
     pub zsh_executor: bool,
     pub require_execution_owner: bool,
@@ -75,35 +77,34 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
     };
     match &decoded.operation {
         Operation::Read(path) | Operation::Write(path) => inspection.target(
-            &Target {
-                path: path.clone(),
-                recursive: false,
-                write: matches!(decoded.operation, Operation::Write(_)),
-                name_only: false,
-            },
+            &Target::new(
+                path.clone(),
+                if matches!(decoded.operation, Operation::Write(_)) {
+                    Effect::Write
+                } else {
+                    Effect::Read
+                },
+                Walk::None,
+                Via::Tool,
+            ),
             &decoded.cwd,
             EffectSource::Operand,
         )?,
         Operation::Search { root, glob } => {
             let root = if root.is_empty() { &decoded.cwd } else { root };
             inspection.target(
-                &Target {
-                    path: root.clone(),
-                    write: false,
-                    recursive: true,
-                    name_only: false,
-                },
+                &Target::new(root.clone(), Effect::Read, Walk::Visible, Via::Tool),
                 &decoded.cwd,
                 EffectSource::Operand,
             )?;
             if !glob.is_empty() && !glob.starts_with('!') {
                 inspection.target(
-                    &Target {
-                        path: format!("{root}/{}", glob.rsplit('/').next().unwrap_or(glob)),
-                        write: false,
-                        recursive: false,
-                        name_only: false,
-                    },
+                    &Target::new(
+                        format!("{root}/{}", glob.rsplit('/').next().unwrap_or(glob)),
+                        Effect::Read,
+                        Walk::None,
+                        Via::Tool,
+                    ),
                     &decoded.cwd,
                     EffectSource::Operand,
                 )?;
@@ -246,25 +247,31 @@ impl Inspection<'_> {
         cwd: &str,
         source: EffectSource,
     ) -> Result<(), CheckError> {
-        match filesystem::identify_scope(
-            &target.path,
-            cwd,
-            &self.context.home,
-            target.recursive,
-            self.probe,
-        )? {
+        let identity = if target.expands && filesystem::appdata_fragment(&target.path) {
+            Identity::Protected(Protection::AppData)
+        } else {
+            filesystem::identify_target(
+                &target.path,
+                cwd,
+                &self.context.home,
+                target.walk != Walk::None,
+                target.glob,
+                self.probe,
+            )?
+        };
+        match identity {
             Identity::Protected(kind) => {
                 let touches = kind == Protection::AppData
                     || kind == Protection::SshPrivate
-                    || !target.write && !target.name_only;
+                    || target.effect != Effect::Write && target.effect != Effect::Name;
                 if touches {
                     self.effect(EffectRecord::ProtectedTarget {
                         protection: kind,
-                        write: target.write,
+                        write: target.effect == Effect::Write,
                         source,
                     });
                     self.denial.get_or_insert_with(|| {
-                        if target.write {
+                        if target.effect == Effect::Write {
                             format!("write protected location; {} is excluded", kind.effect())
                         } else {
                             kind.effect().to_owned()
@@ -287,7 +294,7 @@ impl Inspection<'_> {
                     }
                     Identity::Protected(_) => self.context.home.clone(),
                 };
-                if target.recursive && filesystem::broad_root(&path, &resolved_home) {
+                if target.walk != Walk::None && filesystem::broad_root(&path, &resolved_home) {
                     self.effect(EffectRecord::BroadRoot);
                     self.denial.get_or_insert_with(|| {
                         format!(
@@ -296,8 +303,8 @@ impl Inspection<'_> {
                         )
                     });
                 }
-                if target.recursive
-                    && !target.name_only
+                if target.walk != Walk::None
+                    && target.effect != Effect::Name
                     && ["/.docker", "/.kube", "/.cargo", "/.config"]
                         .iter()
                         .any(|suffix| path.ends_with(suffix))
@@ -333,11 +340,12 @@ impl Inspection<'_> {
         self.context
             .shell_observation_entries
             .set(self.context.shell_observation_entries.get() + 1);
-        let observation = shell::observe(
+        let observation = shell::observe_with_user(
             source,
             self.arm,
             &self.context.home,
             cwd,
+            self.context.user.as_deref(),
             self.context.zsh_executor,
         )?;
         self.executable_qualifier |= observation.executable_qualifier;
@@ -345,9 +353,16 @@ impl Inspection<'_> {
             self.gap(value);
         }
         let mut hidden_listings = std::collections::BTreeSet::new();
-        for command in observation.commands {
+        for (command_index, command) in observation.script.commands.into_iter().enumerate() {
             let cwd = &command.cwd;
-            let effects = targets::infer(&command, cwd);
+            let effects = targets::infer(
+                &command,
+                cwd,
+                crate::record::HostFacts {
+                    home: &self.context.home,
+                    user: self.context.user.as_deref(),
+                },
+            );
             if let Some(pipeline) = command.pipeline {
                 if effects.hidden_listing {
                     hidden_listings.insert(pipeline);
@@ -377,7 +392,8 @@ impl Inspection<'_> {
                 });
             }
             self.advice |= effects.replace_advice;
-            for target in effects.targets {
+            for mut target in effects.targets {
+                target.command = Some(command_index);
                 self.target(
                     &target,
                     cwd,
@@ -392,12 +408,7 @@ impl Inspection<'_> {
                 let previous_denial = self.denial.take();
                 for path in targets::code_paths(&code) {
                     self.target(
-                        &Target {
-                            path,
-                            write: false,
-                            recursive: false,
-                            name_only: false,
-                        },
+                        &Target::new(path, Effect::Read, Walk::None, Via::Code),
                         cwd,
                         EffectSource::InlineCode,
                     )?;

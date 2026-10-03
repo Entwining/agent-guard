@@ -200,13 +200,14 @@ pub(super) fn path(pattern: &str, subject: &str) -> bool {
     false
 }
 
-pub(super) fn alternatives(pattern: &str) -> Vec<String> {
+pub(super) fn alternatives(pattern: &str, braces: bool) -> Vec<String> {
     let mut result = vec![pattern.to_owned()];
     let mut index = 0;
     while index < result.len() && result.len() < 512 {
         let source = result[index].clone();
         index += 1;
-        if let Some(left) = source.find('{')
+        if braces
+            && let Some(left) = source.find('{')
             && let Some(relative) = source[left + 1..].find('}')
         {
             let right = left + 1 + relative;

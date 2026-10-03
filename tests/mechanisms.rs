@@ -44,7 +44,7 @@ fn check(
 
 #[test]
 fn detector_success_and_failure() {
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let success =
             shell::observe("setopt SH_WORD_SPLIT; printf ok", arm, "/h", "/h/p", true).unwrap();
         assert!(success.parse_successes > 0);
@@ -62,7 +62,7 @@ fn detector_success_and_failure() {
 fn alternative_argv_union_preserves_roles() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         for source in [
             format!(
                 "p='needle {}/data.txt'; rg $p '{}'",
@@ -97,7 +97,7 @@ fn alternative_argv_union_preserves_roles() {
 fn glob_group_position_and_body() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         for group in ["+(a|b).txt", "*(.)", "!(x)", "+(e:).txt"] {
             let mut probe = support::RecordingProbe::new(&fixture);
             assert_eq!(
@@ -156,7 +156,7 @@ fn lexical_protection_precedes_probe() {
 fn identity_depth_bound_is_not_syntax_or_success() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let mut probe = support::RecordingProbe::new(&fixture);
         probe
             .links
@@ -251,7 +251,7 @@ fn probe_fault_is_not_permission() {
 fn interpreter_backslash_boundary() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let mut probe = support::RecordingProbe::new(&fixture);
         let escaped = check(
             &fixture,
@@ -277,7 +277,7 @@ fn interpreter_backslash_boundary() {
 fn name_only_listing_and_content_consumer() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         for listing in ["rg --files --hidden", "ls -a"] {
             for (tail, expected) in [
                 ("", "N"),
@@ -305,7 +305,7 @@ fn listing_recursion_controls_broad_root() {
         let mut ctx = context(&fixture);
         ctx.consumer = consumer;
         ctx.zsh_executor = consumer != Consumer::Pi;
-        for arm in [Arm::Brush, Arm::TreeSitter] {
+        for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
             for cwd in [&fixture.project, &fixture.home] {
                 ctx.cwd = cwd.clone();
                 for source in [
@@ -398,7 +398,7 @@ fn protected_cwd_is_an_independent_owner() {
     let fixture = support::Fixture::new();
     let mut ctx = context(&fixture);
     ctx.cwd = fixture.container.clone();
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let mut probe = support::RecordingProbe::new(&fixture);
         let result = check(&fixture, &ctx, &mut probe, arm, "printf ok");
         assert_eq!(support::class(&result), "D");
@@ -538,14 +538,14 @@ fn adapters_raw_and_normalized_identity() {
 
 #[test]
 fn inspection_budget_bounds_function_expansion() {
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let source = (0..9)
             .map(|i| format!("f{i}() {{ f{n}; f{n}; }}; ", n = i + 1))
             .collect::<String>()
             + "f9() { true; }; f0";
         let obs = shell::observe(&source, arm, "/h", "/h/p", true).unwrap();
         assert!(obs.gaps.contains(&CoverageGap::InspectionBudget));
-        assert!(obs.commands.len() <= 512);
+        assert!(obs.script.commands.len() <= 512);
         let fixture = support::Fixture::new();
         let ctx = context(&fixture);
         let mut probe = support::RecordingProbe::new(&fixture);
@@ -565,6 +565,7 @@ fn inspection_budget_bounds_function_expansion() {
         .unwrap();
         assert!(
             declared
+                .script
                 .commands
                 .iter()
                 .any(|c| c.argv.first().is_some_and(|s| s == "cat"))
@@ -576,7 +577,7 @@ fn inspection_budget_bounds_function_expansion() {
 fn command_boundaries_preserve_protected_operands() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         for source in [
             "cat \\\n  .env",
             "cat <<'EOF' | cat .env\npublic\nEOF",
@@ -615,7 +616,7 @@ fn command_boundaries_preserve_protected_operands() {
             );
         }
     }
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let mut probe = support::RecordingProbe::new(&fixture);
         assert_eq!(
             support::class(&check(
@@ -634,7 +635,7 @@ fn command_boundaries_preserve_protected_operands() {
 fn agent_continuation_preserves_chosen_search_data() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let mut probe = support::RecordingProbe::new(&fixture);
         let result = check(
             &fixture,

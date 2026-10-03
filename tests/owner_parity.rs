@@ -1,10 +1,9 @@
 #[path = "support/differential.rs"]
 mod differential;
 mod support;
-use agent_guard_rust::shell::Arm;
 
 fn required(ids: &[&str]) {
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let report = differential::selected_report(arm, ids);
         for id in ids {
             let row = report.iter().find(|row| row["id"] == *id).unwrap();

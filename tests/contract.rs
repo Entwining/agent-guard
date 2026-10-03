@@ -30,7 +30,7 @@ fn dev_contract() {
         .iter()
         .filter(|r| support::is_evaluator_row(r))
     {
-        for arm in [Arm::Brush, Arm::TreeSitter] {
+        for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
             let result = support::run(row, arm);
             checked += 1;
             if std::panic::catch_unwind(|| support::assert_tuple(row, &result)).is_err() {
@@ -57,7 +57,7 @@ fn metamorphic_variants() {
             .iter()
             .find(|r| r["id"] == variant["metamorphic_variant"]["base_row_id"])
             .unwrap();
-        for arm in [Arm::Brush, Arm::TreeSitter] {
+        for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
             let base_result = support::run(base, arm);
             let variant_result = support::run(variant, arm);
             for field in [

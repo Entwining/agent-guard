@@ -1,4 +1,4 @@
-use super::{Parsed, Record, Redirect, Word};
+use super::{Parsed, RawRedirect as Redirect, RawWord as Word, Record};
 use std::ops::Range;
 
 struct Source<'a> {
@@ -35,6 +35,7 @@ fn word(source: &Source<'_>, parsed: &WordAst) -> Result<Word, CheckError> {
     }
     Ok(Word {
         raw: raw.to_owned(),
+        syntax: super::WordSyntax::Shell,
     })
 }
 type WordAst = brush_parser::ast::Word;
@@ -149,6 +150,7 @@ fn walk_command(
         Command::ExtendedTest(test, redirects) => {
             output.push(Record::Expansion(Word {
                 raw: original(source, &test.loc)?.to_owned(),
+                syntax: super::WordSyntax::Shell,
             }));
             redirect_list(source, redirects.as_ref(), output)?;
         }
@@ -183,6 +185,7 @@ fn walk_compound(
             {
                 output.push(Record::Expansion(Word {
                     raw: expression.to_string(),
+                    syntax: super::WordSyntax::Shell,
                 }));
             }
             walk_list(source, &group.body.list, output)?;
@@ -217,6 +220,7 @@ fn walk_compound(
         CompoundCommand::Coprocess(group) => walk_command(source, &group.body, output, None)?,
         CompoundCommand::Arithmetic(group) => output.push(Record::Expansion(Word {
             raw: original(source, &group.loc)?.to_owned(),
+            syntax: super::WordSyntax::Shell,
         })),
     }
     Ok(())
@@ -242,6 +246,7 @@ fn item_record(
                     name.to_owned(),
                     Word {
                         raw: raw.to_owned(),
+                        syntax: super::WordSyntax::Shell,
                     },
                 ));
             }
@@ -253,6 +258,7 @@ fn item_record(
             output.push(Record::Nested(records));
             argv.push(Word {
                 raw: "__observed_stream__".into(),
+                syntax: super::WordSyntax::Shell,
             });
         }
     }
@@ -292,12 +298,16 @@ fn redirect(
         ) => {
             redirects.push(Redirect {
                 target: word(source, target)?,
-                write: !matches!(
+                direction: if matches!(
                     kind,
                     IoFileRedirectKind::Read
                         | IoFileRedirectKind::ReadAndWrite
                         | IoFileRedirectKind::DuplicateInput
-                ),
+                ) {
+                    crate::record::Direction::In
+                } else {
+                    crate::record::Direction::Out
+                },
             });
         }
         IoRedirect::File(_, _, IoFileRedirectTarget::ProcessSubstitution(_, group)) => {
@@ -305,15 +315,34 @@ fn redirect(
             walk_list(source, &group.list, &mut records)?;
             output.push(Record::Nested(records));
         }
-        IoRedirect::HereDocument(_, doc) if doc.requires_expansion => {
-            output.push(Record::Expansion(Word {
+        IoRedirect::HereDocument(_, doc) => {
+            let body = Word {
                 raw: doc.doc.value.clone(),
-            }))
+                syntax: if doc.requires_expansion {
+                    super::WordSyntax::Heredoc
+                } else {
+                    super::WordSyntax::Literal
+                },
+            };
+            if doc.requires_expansion {
+                output.push(Record::Expansion(body.clone()));
+            }
+            redirects.push(Redirect {
+                target: body,
+                direction: crate::record::Direction::Heredoc,
+            });
         }
-        IoRedirect::HereString(_, value) => output.push(Record::Expansion(word(source, value)?)),
+        IoRedirect::HereString(_, value) => {
+            let body = word(source, value)?;
+            output.push(Record::Expansion(body.clone()));
+            redirects.push(Redirect {
+                target: body,
+                direction: crate::record::Direction::Herestring,
+            });
+        }
         IoRedirect::OutputAndError(value, _) => redirects.push(Redirect {
             target: word(source, value)?,
-            write: true,
+            direction: crate::record::Direction::Out,
         }),
         _ => {}
     }

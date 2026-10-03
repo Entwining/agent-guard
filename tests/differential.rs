@@ -1,11 +1,10 @@
 #[path = "support/differential.rs"]
 mod differential;
 mod support;
-use agent_guard_rust::shell::Arm;
 
 #[test]
 fn every_legacy_row_is_accounted_for() {
-    for arm in [Arm::Brush, Arm::TreeSitter] {
+    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let report = differential::report(arm);
         let defects: Vec<_> = report
             .iter()

@@ -4,7 +4,6 @@ use agent_guard_rust::{
     adapters::{recovery_value, render},
     evaluate_with_arm,
     filesystem::DiskProbe,
-    shell::Arm,
 };
 use serde_json::{Value, json};
 
@@ -13,7 +12,7 @@ fn check_group(group: &str) {
         serde_json::from_str(include_str!("fixtures/rust-review-d22.json")).unwrap();
     let mut failures = Vec::new();
     for case in cases.iter().filter(|case| case["group"] == group) {
-        for arm in [Arm::Brush, Arm::TreeSitter] {
+        for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
             let fixture = support::Fixture::new();
             let home_alias = fixture.root.join("home-alias");
             std::os::unix::fs::symlink(&fixture.home, &home_alias).unwrap();

@@ -142,8 +142,41 @@ fn unfirmlink(path: &str) -> String {
 }
 
 pub fn lexical(path: &str, home: &str) -> Option<Protection> {
-    for candidate in glob::alternatives(path) {
-        if let Some(kind) = lexical_candidate(&candidate, home) {
+    lexical_pattern(path, home, true)
+}
+
+pub fn expand_home(path: &str, home: &str, user: Option<&str>) -> String {
+    for prefix in ["~".to_owned(), format!("~{}", user.unwrap_or("unknown"))] {
+        if path == prefix || path.starts_with(&format!("{prefix}/")) {
+            return format!("{home}{}", &path[prefix.len()..]);
+        }
+    }
+    path.to_owned()
+}
+
+pub fn lexical_literal(path: &str, home: &str) -> Option<Protection> {
+    lexical_pattern(path, home, false)
+}
+
+pub fn appdata_fragment(path: &str) -> bool {
+    let path = path.to_lowercase();
+    [
+        "containers",
+        "group containers",
+        "mobile documents",
+        "cloudstorage",
+    ]
+    .iter()
+    .any(|tree| {
+        let root = format!("/library/{tree}");
+        path.ends_with(&root) || path.contains(&format!("{root}/"))
+    })
+}
+
+fn lexical_pattern(path: &str, home: &str, patterned: bool) -> Option<Protection> {
+    // D22 retains conservative group reach; P1 quoting gates brace/glob expansion.
+    for candidate in glob::alternatives(path, patterned) {
+        if let Some(kind) = lexical_candidate(&candidate, home, patterned || candidate != path) {
             return Some(kind);
         }
     }
@@ -161,16 +194,16 @@ pub fn broad_root(path: &str, home: &str) -> bool {
             && [home.clone(), format!("{home}/library")]
                 .iter()
                 .any(|candidate| {
-                    glob::alternatives(&path)
+                    glob::alternatives(&path, true)
                         .iter()
                         .any(|pattern| glob::path(pattern, candidate))
                 })
 }
 
-fn lexical_candidate(path: &str, home: &str) -> Option<Protection> {
+fn lexical_candidate(path: &str, home: &str, patterned: bool) -> Option<Protection> {
     let spelling = path;
     let path = path.to_lowercase();
-    let patterned = path.contains(['*', '?', '[', '{', '(']);
+    let patterned = patterned && path.contains(['*', '?', '[', '{', '(']);
     let library = format!("{home}/Library").to_lowercase();
     for owner in [
         "containers",
@@ -300,12 +333,23 @@ pub fn identify_scope(
     search: bool,
     probe: &mut dyn Probe,
 ) -> Result<Identity, CheckError> {
+    identify_target(path, cwd, home, search, true, probe)
+}
+
+pub fn identify_target(
+    path: &str,
+    cwd: &str,
+    home: &str,
+    search: bool,
+    patterned: bool,
+    probe: &mut dyn Probe,
+) -> Result<Identity, CheckError> {
     let raw_path = absolute_input(path, cwd, home);
     let path = normalize(path, cwd, home);
     if path.ends_with("/.ssh") {
         return Ok(Identity::Protected(Protection::SshPrivate));
     }
-    if let Some(kind) = lexical(&path, home) {
+    if let Some(kind) = lexical_pattern(&path, home, patterned) {
         return Ok(Identity::Protected(kind));
     }
     let resolved_home = match resolve(home, home, home, None, false, probe)? {
@@ -313,7 +357,15 @@ pub fn identify_scope(
         Resolution::Bound => return Ok(Identity::Bound),
         Resolution::Protected(kind, _) => return Ok(Identity::Protected(kind)),
     };
-    let resolved = match resolve(&raw_path, cwd, home, Some(&resolved_home), false, probe)? {
+    let resolved = match resolve_pattern(
+        &raw_path,
+        cwd,
+        home,
+        Some(&resolved_home),
+        false,
+        patterned,
+        probe,
+    )? {
         Resolution::Public(path) => path,
         Resolution::Protected(kind, _) => return Ok(Identity::Protected(kind)),
         Resolution::Bound => return Ok(Identity::Bound),
@@ -480,6 +532,18 @@ fn resolve(
     allow_ssh_root: bool,
     probe: &mut dyn Probe,
 ) -> Result<Resolution, CheckError> {
+    resolve_pattern(path, cwd, home, resolved_home, allow_ssh_root, true, probe)
+}
+
+fn resolve_pattern(
+    path: &str,
+    cwd: &str,
+    home: &str,
+    resolved_home: Option<&str>,
+    allow_ssh_root: bool,
+    patterned: bool,
+    probe: &mut dyn Probe,
+) -> Result<Resolution, CheckError> {
     let mut current = absolute_input(path, cwd, home);
     for _ in 0..40 {
         if !allow_ssh_root && normalize(&current, cwd, home).ends_with("/.ssh") {
@@ -488,8 +552,8 @@ fn resolve(
                 normalize(&current, cwd, home),
             ));
         }
-        if let Some(kind) = lexical(&current, home)
-            .or_else(|| resolved_home.and_then(|home| lexical(&current, home)))
+        if let Some(kind) = lexical_pattern(&current, home, patterned)
+            .or_else(|| resolved_home.and_then(|home| lexical_pattern(&current, home, patterned)))
         {
             return Ok(Resolution::Protected(kind, normalize(&current, cwd, home)));
         }
@@ -501,11 +565,15 @@ fn resolve(
             let Some(spelling) = prefix.to_str() else {
                 return Ok(Resolution::Bound);
             };
-            if let Some(kind) = lexical(spelling, home)
-                .or_else(|| resolved_home.and_then(|home| lexical(spelling, home)))
-                .or_else(|| lexical(&normalize(spelling, cwd, home), home))
+            if let Some(kind) = lexical_pattern(spelling, home, patterned)
                 .or_else(|| {
-                    resolved_home.and_then(|home| lexical(&normalize(spelling, cwd, home), home))
+                    resolved_home.and_then(|home| lexical_pattern(spelling, home, patterned))
+                })
+                .or_else(|| lexical_pattern(&normalize(spelling, cwd, home), home, patterned))
+                .or_else(|| {
+                    resolved_home.and_then(|home| {
+                        lexical_pattern(&normalize(spelling, cwd, home), home, patterned)
+                    })
                 })
             {
                 return Ok(Resolution::Protected(kind, normalize(&current, cwd, home)));
