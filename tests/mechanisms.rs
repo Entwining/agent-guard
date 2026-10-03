@@ -165,6 +165,11 @@ fn identity_depth_bound_is_not_syntax_or_success() {
             .links
             .insert(format!("{}/loop-b", fixture.project), "loop-a".into());
         let result = check(&fixture, &ctx, &mut probe, arm, "cat loop-a");
+        assert!(
+            render(ctx.consumer, &result)
+                .stderr
+                .contains("unresolved resource identity")
+        );
         assert!(matches!(
             result,
             Ok(Evaluation {
@@ -437,6 +442,15 @@ fn inspection_budget_bounds_function_expansion() {
         let obs = shell::observe(&source, arm, "/h", "/h/p", true).unwrap();
         assert!(obs.gaps.contains(&CoverageGap::InspectionBudget));
         assert!(obs.commands.len() <= 512);
+        let fixture = support::Fixture::new();
+        let ctx = context(&fixture);
+        let mut probe = support::RecordingProbe::new(&fixture);
+        let result = check(&fixture, &ctx, &mut probe, arm, &source);
+        assert!(
+            render(ctx.consumer, &result)
+                .stderr
+                .contains("over-budget function expansion")
+        );
         let declared = shell::observe(
             "f() { cat /h/Library/Containers/c/data; }; printf ok",
             arm,

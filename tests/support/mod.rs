@@ -937,6 +937,26 @@ fn assert_observers(row: &Value, actual: &Value) {
         assert_eq!(actual["coverage"]["error_kind"], expected);
         assert!(stderr.contains("recheck") && !stderr.contains("SYNTHETIC_CANARY"));
     }
+    if class == "UR" {
+        let excluded = actual["recovery"]["excluded_scope"].to_string();
+        for (gap, required_scope) in [
+            ("IdentityBound", "unresolved resource identity"),
+            ("InspectionBudget", "over-budget function expansion"),
+            ("UnsupportedShellSyntax", "original unsupported shell"),
+        ] {
+            if actual["coverage"]["gaps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|value| value == gap)
+            {
+                assert!(
+                    excluded.contains(required_scope),
+                    "{id} recovery boundary {gap}"
+                );
+            }
+        }
+    }
     if id.contains("deadline") || id.contains("cancelled") {
         assert_eq!(actual["lifecycle"]["ready_receipt"], true);
         assert_eq!(actual["lifecycle"]["reaped"], true);

@@ -170,6 +170,19 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
         )
     }) {
         let mut recovery = recovery(context, "unsupported", &context.public_task);
+        recovery.excluded_scope.push(
+            match cause {
+                CoverageGap::IdentityBound => {
+                    "unresolved resource identity from bounded or cyclic alias traversal"
+                }
+                CoverageGap::InspectionBudget => "over-budget function expansion",
+                CoverageGap::UnsupportedShellSyntax => {
+                    "original unsupported shell syntax/control flow"
+                }
+                _ => "original unsupported executor/dialect constructs",
+            }
+            .into(),
+        );
         if matches!(&decoded.operation,Operation::Shell(source) if source.contains("(e:") || source.contains("(+"))
         {
             recovery.next_step=RecoveryStep::OwnerAction {description:"Replace executable qualifier with explicit public names/results matching this task; recheck through the same consumer.".into()};
