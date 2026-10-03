@@ -1,125 +1,121 @@
-# Offline Rust R4h M1 evidence
+# Offline Rust R4h M1.1 evidence
 
-M1 implements D24/D25's overlay revision, P0 records, P1 words and parser-arm
-status. Brush is the sole semantic acceptance arm. The 1,289-row differential
-has 121 in-slice RETAIN conflicts, down from 140 at `83ac433`; 13 word-semantic
-repairs and six adjudicated overlay corrections explain all 19 improvements.
-Every previously matching in-slice RETAIN observation and all 21 CHANGE rows
-still match. There are zero in-slice row or consumer regressions. This milestone
-does not establish Go conformance: `make rust-check` still fails at the complete
-differential, as D24 requires.
+M1.1 implements D26 2a–g against `6afdc61`. It closes the reviewed quoted Git
+pathspec regression and the reviewed P1 file-URL, nested-brace and mixed-range
+losses. The original 1,289-row corpus has **zero outcome/category flips and
+zero new row or consumer conflicts** against M1. That is a corpus claim, not
+arbitrary shell/program equivalence. M1's earlier broad zero-regression claim
+missed quoted Git pathspecs because those inputs were absent from the corpus.
 
-Go remains authoritative. The Rust trial is on no hook path, and its packaged
-`agent-guard-rust-slice` remains version-only. Production Go, executables, hooks,
-public setup, dependencies and Cargo.lock are unchanged. No holdout material was
-read. Work stops at M1; fresh DeepSeek mechanism review and fresh Opus 5.5
-cross-layer review are coordinator-owned gates before M2, not completed verdicts.
+Go stays authoritative. Production Go, executables, hooks, public setup,
+dependencies, Cargo.lock and `src/main.rs` remain unchanged. The packaged
+`agent-guard-rust-slice` supports only `--version`. No holdout material, real
+credential store, private key or declared environment file was read. Work stops
+at M1.1; M2 has not started. M1 acceptance still requires both coordinator-owned
+Opus 5.5 and DeepSeek fix-verification verdicts (D26 1).
 
 ## Source and measurement binding
 
-The starting delivery is `83ac433715a64571c7f33bf5badbd92d1e11e601`.
-Its R4g measurements were made at `b2626ef5b19d5dcbf4f8f787d396ae1f8561ded8`;
-`r4g-final-delivery-binding.json` verifies the documentation-only relationship.
-The bound parent differential SHA-256 is
-`07d75420f4cabb8e26cb2a1c25ec4d109ddeb5c98b5545b5424325a99e09c130`.
-The overlay-only first M1 commit is
-`58cefb489459c2215bd0f6a59ca82d21bf2ab618`.
+The baseline is `6afdc61a5d0c09fe37d045e5a145ac7edd91a8c3`. Its differential
+SHA-256 is `7dda35b7137b387025eed6f03042e93dfaf74f3cb5820110be01204d3d73f806`,
+verified through its measurement and final-delivery bindings. The separate
+overlay-label commit is `3c2fc0969898e71bae5a57192ddc9efc7eee8df6`, parent
+`6afdc61`. It changes four `D24 v2.8` labels to the actual `D24 v2.7` and updates
+the checker hash. Parsed overlay expectations are unchanged after replacing
+only those labels; no verdict changes are hidden in that commit.
 
-All raw artifacts and scripts named here are under
-`~/.cache/guard-fixtures/fixture-seat/`. `r4h-m1-measurement-binding.json` binds 52 Rust
-source/test/fixture/example/build inputs by SHA-256, the unchanged production
-Git objects, raw artifacts, five binaries, host/tool versions and four preserved
-plan-file hashes. Its measured parent is the overlay commit with the recorded
-M1 working-tree changes. `r4h-m1-final-delivery-binding.json` records the delivered
-commit, parent, evidence-document hash, source/raw/binary equality and final
-status. Measurement inputs must match the delivered bytes; commit identity alone
-is insufficient.
+All new raw artifacts/scripts named below are under
+`~/.cache/guard-fixtures/fixture-seat/`, with the `r4h-m1-1-` prefix. The measurement
+binding records source, fixture, raw artifact, binary and preserved-plan hashes;
+the final-delivery binding checks those bytes against the delivered commit and
+records its parent and evidence-document hash. HOME, fixtures and build/cache
+paths are synthetic or external to the checkout. No concurrency, configuration
+bypass or threshold was added. Existing event/delimiter limits are unchanged.
 
-Measurements use Darwin 27.0.0 arm64, rustc/Cargo 1.98.1 and Go 1.27.1. HOME,
-fixtures, Cargo target/cache and Go build/cache paths are synthetic or external
-to the checkout. No credential values or process-environment USER are read by
-Rust. No concurrency, cache, bypass configuration or threshold was added. The
-65,536-byte event and 64-delimiter limits remain unchanged; their separate
-calibration evidence remains in `docs/rust-slice-limits.md`.
+| Input | Current SHA-256 | Change in M1.1 |
+| --- | --- | --- |
+| Original Go corpus | `1e223c6453d6883acc88af9967beab4251ba0fc6d636a1186482b6e4b524c695` | None |
+| Filesystem setup | `b1d51062925ccbfdfae5c8ffbc3e130e25391f31b05207448ee02be8cc874b3e` | None |
+| D22 scope inventory | `a3e41fd04bf1daf575c7312f9a275d298203ac7493228f6517dbcbb1fccd18ac` | None |
+| Dev manifest | `385e395dbee8855c2985a7b6d2f92083b898e1614573ad4f7b9ac71b8597be10` | None |
+| Classification overlay | `87171281c243ebceefed14d6fbb103c5f75187239dab3c449652d3d156b63ed5` | Four provenance labels only |
+| D22 review regressions | `44d12aea41a947e0c1996071b70bb9777293bfa6b58f0b3d4bbd63060debc632` | Four quoted-group expectations revised explicitly by D26 2d |
+| M1.1 regressions | `3a30251e6159235f512dc07f3bcc947ec5bf13571b57a963a7752609ec47250f` | 21 new source cases |
 
-| Frozen input | SHA-256 |
-| --- | --- |
-| Original Go corpus | `1e223c6453d6883acc88af9967beab4251ba0fc6d636a1186482b6e4b524c695` |
-| Filesystem setup | `b1d51062925ccbfdfae5c8ffbc3e130e25391f31b05207448ee02be8cc874b3e` |
-| D22 scope inventory | `a3e41fd04bf1daf575c7312f9a275d298203ac7493228f6517dbcbb1fccd18ac` |
-| Dev manifest | `385e395dbee8855c2985a7b6d2f92083b898e1614573ad4f7b9ac71b8597be10` |
-| D22 review regressions | `4aa4102035d3bcc92ea04c7261e0dc6e6a57002d5c1415a02958903b413cfdb9` |
-| Revised overlay | `a59ddafbc4557a901670a7e7569295257d2c37df2fb92d54c08895d24883c4e6` |
+## Owner repairs and evidence boundary
 
-Only the six adjudicated overlay lines changed, with `decision_id` and D24/D25
-requirement references. The original Go corpus, scope, setup, dev labels and
-review inputs remain byte-identical.
+- Git uses the Go `git.go:95–104` owner override: pathspecs apply when the
+  subcommand's effect is not name and the subcommand is not grep. The original
+  operand's `*?[` decides Glob for both its target and its `rev:path` target,
+  including file-option targets. Shell quoting does not override Git expansion.
+  Git grep's quoted literal control remains N. Full P5 Git role parity is pending.
+- Brace interpretation follows **D1/D26's Bash/Zsh union**, not Go's sequence
+  regex alone or Brush's brace grammar alone. Mixed letter/digit ranges have
+  conservative glob reach; signed numeric reach starts with a digit or minus
+  sign, and the possible Zsh literal is retained. Quoted list members
+  still expand. The filesystem owner splits nested lists by depth, as Go Braces
+  does. Existing conservative sequence reach and the alternatives bound remain;
+  this finite variant set does not prove arbitrary brace expansion equivalence.
+- Case-insensitive `file://` stripping exists at both Go-owned boundaries:
+  absolute filesystem input and Word-to-Target projection. Each call site is
+  independently ablated. Structured and shell variants exercise both.
+- Parenthesized reach requires a patterned word. Single/double-quoted groups
+  stay literal; unquoted extglob keeps D1 union reach. Four older D22 review
+  rows (`group-env`, `group-filter-env`, `group-npmrc`, `group-ssh`) now expect N,
+  all confirmed Go N. Their fixtures explicitly cite D26; the Go corpus is intact.
+- In/Out Redirect Vars are empty; heredoc/herestring Vars remain. Target's
+  constructor defaults Glob/Search to false; structured search roots and
+  program-owned search/glob options set their own fields. `ls` records List;
+  the credential consumer preserves Go's distinction between listing and reading.
+- RecordingProbe has a word-provenance constructor. The dedicated glob-word
+  identity check uses the pattern-aware oracle and the quoted-word control uses
+  the literal oracle. Direct attempted protected probes are rejected by that
+  oracle. Other existing literal-mode callers are not claimed as a universal
+  per-target provenance trace. There is no production-only testing seam.
 
-## P0/P1 ownership
+`r4h-m1-1-shell-readings.json` independently confirms D26 with echo-only host
+Bash/Zsh commands: `{n..9}` stays literal in Bash and includes n in Zsh;
+`{+1..+1}` produces 1 in Bash and stays literal in Zsh; quoted list members
+expand in both. Go's N for `ls ~/Library/{"Containers",Public}` remains the
+coordinator-recorded baseline false-permit candidate, while Rust stays D.
 
-`src/record.rs` provides owned Word, Redirect, Items, Command, Script, Fragment
-and Target records with typed roles, directions, flags, effects, walk and via.
-Words carry Text/Raw/Expands/Globs/Vars/Role/Value/Pwd through complete alternative
-argv readings and target projection. Option values retain the originating Word's
-metadata, including independently supplied `fd --search-path` values; target
-identity receives Globs and Expands directly rather than reconstructing them
-from text. Command stores program index, wrappers, flags, items, stdin channel,
-cwd and pipeline/nesting provenance. Heredoc/herestring bodies are redirects,
-with stdin data referencing their indices instead of duplicating the body.
-Script records parse failure and can carry uninspectable fragments.
+P0 supplies typed transport, not all later owner semantics. Every currently
+unfilled or heuristic field is explicit below; fixed D26 defaults do not imply
+the later producers or consumers are ported.
 
-`src/shell/words.rs` uses pinned brush-parser 0.4.0 `word::parse`,
-`WordPiece` and `parse_brace_expansions`. The old text scanner is deleted.
-ANSI-C decoding follows Go's hex, Unicode, octal and escape mapping. Brace
-sequences become glob reach; quoted braces and glob characters remain literal.
-`~+`, `$PWD`, `$(pwd)` and backticks with `pwd -L/-P` carry cwd and Pwd metadata.
-Unknown parameter/command/arithmetic expansions preserve their spelling and set
-Expands; nested parameter fragments, indices and arithmetic retain variables
-and nested observations. Quoted heredoc data stays literal; expanding heredoc
-bodies use the heredoc parser, including literal apostrophes.
+| Record field | Current limitation | Later owner |
+| --- | --- | --- |
+| Word.role | Always Arg | P3 argv/wrappers, P5 program roles |
+| Word.value | Text clone; operandValue option/at-sign projection absent | P5 |
+| Word.pwd | Filled, not consumed as a state distinction | P2/P5 |
+| Command.cwd | Tracked cwd shares the PWD variable namespace | P2, M2 |
+| Command.program / wrappers | Some(0) / empty; no full effective-program resolution | P3/P5 |
+| Command.shell | Always true on observed command records | P3 |
+| Command.flags | Empty; adapters still infer flags from argv | P5 |
+| Command.items | None; stream/listing producer heuristics remain | P4 |
+| Command.stdin | Only None/Data; Shell/Code channels not populated | P3 |
+| Script.uninspectable | Empty | P2/P3 statement/executable-fragment owners |
+| Redirect.target for expanding heredocs | Known variables substituted; Go retains raw body | P3 |
+| Target.unresolved | Path clone rather than unresolved provenance | P5/P7 |
+| Target.command | None; no complete command association | P5 |
+| Target.sends | Always false | P5 client/upload roles |
+| Target.effect | Program-table heuristic; Git metadata still uses Name | P5/P6 |
+| Target.walk / via | Partial adapter heuristics, not the complete Go maker | P4/P5 |
+| Target.search | Explicit producers added; field still not read, SSH search uses Walk | P5/P7 |
+| Target.glob | Word transport plus explicit Git/search overrides; other owners pending | P5/P7 |
 
-USER is an immutable optional host fact in Context and the example's accepted
-context. Missing USER uses Go's `unknown` fallback; an explicitly empty USER
-stays empty. A shell USER assignment does not rebind the host fact. Account
-lookup and process-environment USER access are absent from this Rust path.
-The unresolved App Data fragment consumer follows `native/rules/appdata.go`;
-ordinary resolved App Data identity remains HOME-scoped. D22's conservative
-parenthesized-group reach remains an explicit decided layer, including quoted
-groups; P1 quoting gates ordinary brace/glob reach.
+The App Data unresolved-fragment consumer still omits Go's touches/scan gates
+(P6/M4). The credential-directory suffix branch (P6/M3), `json.load` text gap
+(P3/M3), empty-HOME Git/tar normalization (P5/M4), content-consumer and wrapper
+tables remain pending; M1.1 does not add command-spelling exceptions to them.
 
-P0 establishes the representation and current transport, not all later owner
-population. Word role assignment, Command wrapper/program resolution, flags,
-Items and executable stdin kinds, Script uninspectable fragments, Target Sends,
-detailed Via and unresolved-path provenance still belong to P2/P3/P4/P5/P6/P7.
-Current defaults are not evidence that those owners have been ported.
+## Corpus differential against M1
 
-## Parser arms and comparator
-
-Tree-sitter's semantic adapter and Arm variant are removed. All semantic
-acceptance loops use Brush, and the evaluation interface rejects `arm: tree`.
-Structured-only remains an explicit observation-limited development control,
-not an acceptance arm. Tree-sitter dependencies remain pinned and unchanged
-because `tests/parser_compare.rs` is a test-only parse comparator.
-
-The comparator accounts for 1,289 legacy/setup rows, 248 dev rows (including the
-nine existing variants), and 13 additional parse variants: 1,550 rows total.
-There are 1,397 shell parse comparisons, 243 review leads, and 41 parse-success
-disagreements. It reports parse status and checked UTF-8 statement/word spans;
-its AST traversal and grammar boundaries differ, so span differences are leads,
-not semantic failures or Go parity. Non-shell/malformed/setup rows carry explicit
-status. There are zero semantic verdicts or protection observations in this
-report. The five historical Tree-only semantic conflicts leave the denominator
-under D25; no corpus or scope row was removed.
-
-## Requirement-owned differential
-
-Scope remains the frozen Go effective-program inventory plus D22's independent
-program table; expected labels and Rust outcomes do not select it. The report
-accounts for 1,265 operations through three consumer projections (3,795
-observations), plus 24 setup-metadata checks. There are 963 in-slice operations
-and 302 outside operations (906 observations). Metadata is neither an operation
-nor an outside verdict. Historical Codex structured projections are offline
-adapter checks, not enrolled-runtime claims.
+The frozen Go effective-program inventory and D22 table still own scope:
+1,265 operations × three projections = 3,795 observations, plus 24 metadata
+checks; 963 operations are in slice and 302 outside. Every prior matching
+RETAIN observation and all 21 CHANGE rows still match their complete contracts.
+Eight Claude-only advice conflicts account for the non-threefold defect count.
 
 | Family | RETAIN match | CHANGE match | RETAIN conflict | Outside | Metadata | Total |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -136,196 +132,192 @@ adapter checks, not enrolled-runtime claims.
 | filesystem_link | 0 | 0 | 0 | 0 | 24 | 24 |
 | Total | 821 | 21 | 121 | 302 | 24 | 1289 |
 
-Consumer categories are 2,479 matching RETAIN, 63 matching CHANGE, 347
-Rust_defect and 906 outside observations. Eight Claude-only advice conflicts
-explain why defect observations are not three times conflict rows. All original
-15 CHANGE rows and the six new ones match their complete class, coverage,
-reason/advice, blocking wire, recovery boundary and continuation contracts.
-`r4h-m1-summary.json` and `r4h-m1-summarize.py` reproduce these counts.
+The current categories are 2,479 matching RETAIN, 63 matching CHANGE, 347
+Rust_defect and 906 outside observations. Remaining conflicts are 121 rows.
+**Corpus rows flipped against 6afdc61: none.** Row regressions: 0; consumer
+regressions: 0. `r4h-m1-1-summary.json` asserts these invariants; the full raw
+differential and mismatch inventory retain every source, reason/advice mismatch
+and outside bucket rather than dropping unimplemented behavior.
 
-Go-deny/Rust-permit includes N/A/U-C with a permitting consumer wire. The current
-coverage split is:
-
-| Scope/category | SupportedPreflight N | LimitedPreflight U-C | Total |
+| Go-deny/Rust-permit corpus scope | SupportedPreflight N | LimitedPreflight U-C | Total |
 | --- | ---: | ---: | ---: |
 | In-slice Rust defects | 168 | 123 | 291 |
 | In-slice decided changes | 6 | 0 | 6 |
 | All in-slice | 174 | 123 | 297 |
-| Outside programs | 0 | 285 | 285 |
+| Outside | 0 | 285 | 285 |
 | Total | 174 | 408 | 582 |
 
-The six decided permits are search[84] (D16) and appdata[64] (D25), three
-consumers each. R4g had 201 SupportedPreflight N and 129 LimitedPreflight U-C
-Rust defects (330 total), plus three decided permits. M1 reduces the defect
-escapes to 291; it does not claim protection for any of the remaining permits.
+These counts are unchanged from M1. The six decided permits are search[84]
+(D16) and appdata[64] (D25), three consumers each. clients[41] and quoted curl
+file-URL globs stay outside under D26 3, Go D / Rust U-C, and must be closed
+before any consumer cutover. Their acceptance as outside does not prove safety.
 
-There is one outside outcome delta, `clients[41]`, on all three consumers:
-Go D, prior Rust D, current Rust U-C. Its quoted curl file URL uses curl's own
-bracket-range expansion. P1 correctly preserves the shell word's Globs=false;
-the generic unmodelled-program path no longer treats it as a shell glob. Curl's
-URL-glob owner is outside P1 under D25, and its frozen bucket stays outside.
-This increases outside Go-deny/Rust-permit from 282 to 285. The zero-regression
-claim applies to acceptance-owned observations, not outside program behavior.
-`r4h-m1-outside-class-deltas.json` preserves this complete delta; the full raw
-report and summary retain every outside bucket, including zero-escape buckets.
+## Reviewer variants and moved observations
 
-## Parent failures and current passes
+All 212 inputs from the Opus variants and six DeepSeek harnesses are retained,
+including controls: 636 consumer observations. An additional 28 D26 inputs
+(21 source regressions, four revised review rows, three structured shapes) add
+84 observations, for 720 total. Reviewer permission mismatches fall 102→48;
+the combined set falls 174→54. Exactly 120 observations (40 inputs × three
+consumers) change class, all toward Go; no new permission mismatch is introduced.
+The corpus and variant denominators are separate.
 
-The following are all rows that change from a parent Rust_defect classification
-to a matching current contract. All three consumer observations agree on each
-listed class. Six are expectation corrections, not implementation repairs;
-their actual classes are unchanged. The other 13 are word-semantic repairs.
+Every input/output, Go stdout/stderr/exit and Rust class/coverage/wire is retained
+in `r4h-m1-1-variants-{baseline,final,annotated}.jsonl`. The Go binary is freshly
+built from unchanged `cmd/agent-guard`. Matching synthetic HOME/cwd/USER is used.
+For structured Pi inputs, Rust receives read/path while Go --checker receives
+its canonical Read/file_path projection, as native/core/protocol.go specifies;
+both exact events are stored. These are offline adapter checks, not Pi loading.
 
-| Row | Actual at 83ac433 | Actual at M1 | Overlay | Owner |
-| --- | --- | --- | --- | --- |
-| `appdata[48]` | N | D | RETAIN → RETAIN | P1 word semantics |
-| `appdata[64]` | N | N | RETAIN → CHANGE | D25 |
-| `appdata[83]` | D | N | RETAIN → RETAIN | P1 quoting/Globs |
-| `appdata[85]` | N | D | RETAIN → RETAIN | P1 word semantics |
-| `appdata[132]` | N | D | RETAIN → RETAIN | P1 word semantics |
-| `credentials[172]` | F | F | RETAIN → CHANGE | D24 |
-| `credentials[266]` | N | D | RETAIN → RETAIN | P1 word semantics |
-| `options[8]` | N | D | RETAIN → RETAIN | P1 word semantics |
-| `options[9]` | N | D | RETAIN → RETAIN | P1 word semantics |
-| `options[10]` | N | D | RETAIN → RETAIN | P1 word semantics |
-| `options[11]` | N | D | RETAIN → RETAIN | P1 word semantics |
-| `programs[28]` | D | D | RETAIN → CHANGE | D24 |
-| `programs[36]` | D | D | RETAIN → CHANGE | D24 |
-| `programs[39]` | D | D | RETAIN → CHANGE | D24 |
-| `cwd[15]` | N | D | RETAIN → RETAIN | P1 word semantics |
-| `cwd[39]` | UC | D | RETAIN → RETAIN | P1 word semantics |
-| `cwd[40]` | UC | D | RETAIN → RETAIN | P1 word semantics |
-| `cwd[41]` | N | D | RETAIN → RETAIN | P1 word semantics |
-| `cwd[67]` | D | D | RETAIN → CHANGE | D25 |
+The table lists every moved input ID; each row represents Claude/Codex/Pi with
+identical before/after/Go classes. Exact expanded source and all 120 observations
+are in `r4h-m1-1-variant-flips.jsonl`.
 
-`r4h-m1-differential-brush.jsonl` is the release differential.
-`r4h-m1-mismatch-inventory-brush.jsonl` retains all 121 current conflict rows
-with source, scope and complete consumer observations. The summary compares
-both row and consumer categories against the hash-bound R4g parent, asserts
-zero in-slice regressions, unchanged scope, 963 in-slice operations, all 21
-CHANGE matches and all prior matching RETAIN observations. No expectation,
-consumer, source string or advice-only mismatch is silently dropped.
-
-## Dev, review, D23 and wire checks
-
-The unchanged dev manifest has 260 rows: 239 counted evaluator cases, nine
-metamorphic variants, nine harness-only lifecycle rows and three owned-writer
-rows. Brush checks 248 evaluator rows and nine variant/base comparisons. The
-counted class vector is N 70, A 3, D 96, U-C 28, U-R 21, U-O 6, F 15. Required
-zero starts pass 138/138 counted requirements, or 144/144 including variants.
-Neither writer nor lifecycle rows enter protection denominators. Six U-C
-runtime-configuration witnesses still permit synthetic protected reads;
-execution Gate B remains open. The two non-Claude replacement-advice rows still
-have library A and quiet wire; conditional denials require the typed nested
-App Data effect, independently of the synthetic operation receipt.
-
-All 54 non-differential tests pass, including dev, variants, review regressions,
-D23, eight F kinds on three consumers, JSONL interface, lifecycle and writer
-contracts. The 87 named D22 review cases are checked through Brush. Historical
-R4g two-arm before/after evidence and 60 ablations remain in the R4g artifacts;
-they are historical records, not fresh M1 two-arm measurements.
-
-D23's five tests still pass public-looking directory denials (`.ssh/config.d`,
-`directory.pub`, `known_hosts.backup`), public regular/hard-linked controls,
-ProbeFault blocking, symlinked SSH-root identity and parent/search inode
-comparisons. App Data stays lexical-first/readlink-only. SSH stat is confined
-to the Go identity comparisons after lexical protection. Private/protected
-candidate spellings retain the following direct identity probe receipts:
-
-| Candidate | readlink | stat |
+| Input ID (all three consumers) | M1 → M1.1 | Go |
 | --- | --- | --- |
-| `$H/.ssh/id_rsa` | [] | [] |
-| `$H/.ssh/id_ed25519` | [] | [] |
-| `$H/.ssh/keys/id.pub` | [] | [] |
-| `$H/.ssh/CONFIG` | [] | [] |
-| `$H/.ssh/id.PUB` | [] | [] |
-| `$H/.ssh/known_HOSTS` | [] | [] |
+| `Opus/variants.json:brace-mixed-seq` | N → D | D |
+| `Opus/variants.json:brace-plus-seq` | D → N | N |
+| `Opus/variants2.json:pg-git-log-pathspec` | N → D | D |
+| `Opus/variants2.json:pg-git-show-pathspec` | N → D | D |
+| `Opus/variants2.json:pg-git-diff` | N → D | D |
+| `Opus/variants3.json:sv-redirect-out-var` | D → N | N |
+| `Opus/variants3.json:pg-git-show-colon` | N → D | D |
+| `DeepSeek/fs-harness.py:file-url-appdata` | N → D | D |
+| `DeepSeek/glob-harness.py:brace-deep` | N → D | D |
+| `DeepSeek/glob-harness.py:brace-env-nested` | N → D | D |
+| `DeepSeek/paren-harness.py:quoted-extglob-plus` | D → N | N |
+| `DeepSeek/paren-harness.py:quoted-extglob-star` | D → N | N |
+| `DeepSeek/paren-harness.py:quoted-paren-list` | D → N | N |
+| `DeepSeek/paren-harness.py:quoted-paren-single` | D → N | N |
+| `DeepSeek/paren-harness.py:quoted-paren-env` | D → N | N |
+| `DeepSeek/paren-harness.py:quoted-paren-env2` | D → N | N |
+| `DeepSeek/paren-harness.py:dquote-paren` | D → N | N |
+| `DeepSeek/redirect-secret.py:echo-out-secret` | D → N | N |
+| `D26/git:0` | N → D | D |
+| `D26/git:1` | N → D | D |
+| `D26/git:2` | N → D | D |
+| `D26/git:3` | N → D | D |
+| `D26/git:4` | N → D | D |
+| `D26/brace:7` | N → D | D |
+| `D26/brace:8` | D → N | N |
+| `D26/brace:9` | N → D | D |
+| `D26/brace:10` | N → D | D |
+| `D26/file_url:12` | N → D | D |
+| `D26/paren:14` | D → N | N |
+| `D26/paren:15` | D → N | N |
+| `D26/paren:16` | D → N | N |
+| `D26/redirect:18` | D → N | N |
+| `D26/redirect:19` | D → N | N |
+| `D26/review:group-env` | D → N | N |
+| `D26/review:group-filter-env` | D → N | N |
+| `D26/review:group-npmrc` | D → N | N |
+| `D26/review:group-ssh` | D → N | N |
+| `D26/structured-file-url:file://` | N → D | D |
+| `D26/structured-file-url:FiLe://` | N → D | D |
+| `D26/structured-glob:literal-bracket` | D → N | N |
 
-`r4h-m1-other-tests.log` records these receipts. A whole event can separately
-inspect its public cwd. Directory hard-link identity remains tested at the Probe
-metadata boundary; regular hard links and root aliases are real synthetic
-filesystem objects. This does not exercise real credentials or private keys.
+The remaining 54 permission differences are all explicitly classified:
 
-A built Go comparator and Rust release `examples/evaluate` additionally agree
-on permission for 30 out-of-corpus word variants across three consumers: 90/90
-observations. Three harmless unresolved-fragment controls have Go N / Rust U-C,
-explicitly permitted under the coverage contract. The variants cover ANSI-C,
-brace quoting/sequences, immutable/missing/empty USER, pwd forms, Expands,
-escapes, both heredoc modes, nested variables and independent option metadata.
-`r4h-m1-go-variants{,-requests,-rust}.jsonl`, the summary and script retain
-inputs and exact outputs. An earlier harness incorrectly represented absent Go
-USER as present-empty; its three mismatches are preserved in
-`r4h-m1-go-variants-harness-empty-vs-absent.*`. After matching Go's LookupEnv
-contract, both absent and empty cases agree without an implementation change.
-This finite variant set is not arbitrary shell or program equivalence.
+| Classification | Observations | Current vs Go | Owner/decision |
+| --- | ---: | --- | --- |
+| Quoted brace-list member | 6 | D / N | D26 2b baseline false-permit candidate |
+| Split-union reading | 3 | D / N | D1/D22 |
+| Unquoted extglob reach | 12 | D / N | D1/D26 |
+| `cat < ~` | 3 | N / D | D25 decided permit |
+| Quoted curl file-URL family | 6 | U-C / D | D26 3, outside, before cutover |
+| PWD assignment vs tracked cwd | 6 | N / D | P2/M2 |
+| `cat --file=~/.ssh/id_rsa` | 3 | N / D | P5 operandValue/M4 |
+| Bash heredoc/herestring code | 6 | U-C / D | P3 stdin shell/M3 |
+| Secret variables in stdin data | 9 | N / D | P6 secrets/M4 |
 
-## Causal ablations
+Variant Go-deny/Rust-permit falls 90→33 (24 deferred-owner, 6 outside and 3
+decided D25 observations). All D26 regression expectations pass. Go N / Rust
+U-C controls retain limited coverage, rather than being claimed as Go class
+equivalence. Earlier malformed Pi/Go structured projections are preserved as
+`*-invalid-pi-projection.jsonl` and `*-invalid-go-pi-projection.jsonl`; their
+results are superseded and excluded from the accepted counts. The first missing
+VERSION baseline archive compilation is likewise retained as a build-error log,
+not counted as a regression or ablation failure. Valid baseline runs follow it.
 
-Every new mechanism below has a compiled named-test assertion failure (101),
-a failing relevant differential row, exact-byte SHA-256 restoration and the
-same named test passing (0). Each restored full differential has 1,289 rows and
-its selected rows match. All restored file hashes equal the final measured
-source. No compile failure is counted as an ablation success.
+## Runtime baseline failures and causal ablations
 
-| Ablation ID | Named test | Differential rows that fail | Broken / restored |
-| --- | --- | --- | --- |
-| `ansi` | `ansi_c_words` | `credentials[266]` | 101 / 0; exact bytes |
-| `brace` | `brace_sequence_and_quoting` | `options[8]`, `options[9]`, `options[10]`, `options[11]` | 101 / 0; exact bytes |
-| `denominator` | `parser_acceptance_denominator` | `appdata[85]`, `credentials[266]`, `options[8]` | 101 / 0; exact bytes |
-| `expands` | `unresolved_word_fragments` | `appdata[48]`, `appdata[132]`, `cwd[15]` | 101 / 0; exact bytes |
-| `globtransport` | `brace_sequence_and_quoting` | `appdata[83]` | 101 / 0; exact bytes |
-| `nestedvars` | `unresolved_word_fragments` | `credentials[135]` | 101 / 0; exact bytes |
-| `pwd` | `pwd_word_semantics` | `cwd[39]`, `cwd[40]`, `cwd[41]` | 101 / 0; exact bytes |
-| `user` | `user_is_a_host_fact` | `appdata[85]` | 101 / 0; exact bytes |
-| `wordpieces` | `word_piece_record_transport` | `appdata[49]`, `appdata[50]`, `shell[20]` | 101 / 0; exact bytes |
+The final regression source/fixture is copied into an external 6afdc61 archive.
+All seven named integration tests and both private record-field tests compile
+and fail at runtime there, then pass on the repaired source. The parent probe
+oracle gets only a compatibility constructor that retains its literal-only
+behavior; no repaired oracle is copied into the parent. No compile failure is
+counted. `r4h-m1-1-baseline-final-{integration,fields}.log` and the tests JSON
+record the exact failing names and reasons.
 
-The denominator mutation adds StructuredOnly as a semantic acceptance arm.
-It produces 2,578 rows and fails the selected rows on that added arm; restoring
-Brush alone restores 1,289 rows and passing selected rows. Tree's removed
-semantic adapter cannot be re-enabled with a flag. This mutation demonstrates
-that the acceptance boundary is observable rather than claiming Tree parity.
+Each ablation runs in `r4h-m1-1-ablation-src/`, breaks one mechanism, runs its
+named test plus the complete corpus and variant set, restores exact bytes by
+SHA-256, and reruns the same test/reports. Every runtime failure is Cargo 101,
+every restored test is 0, and every restored report recovers the normal classes.
 
-`r4h-m1-ablate.py` implements the mutations and guaranteed byte restoration.
-For each ID, `r4h-m1-ablation-<id>-binding.json` records the exact mutations,
-source hashes, runtime test failure, failing differential observations and
-restored passes. `-broken-test.log`, `-broken-differential.jsonl`,
-`-restored-test.log` and `-restored-differential.jsonl` are the raw evidence.
-Unpopulated later-owner model fields are not claimed as completed decision
-mechanisms; their P0 shape does not substitute for later causal validation.
+| Mechanism | Named test | Corpus rows affected | Variant observations changed | Broken/restored |
+| --- | --- | --- | ---: | --- |
+| brace-list | `brace_union_and_nested_lists` | appdata[82], credentials[189] | 48 | 101 / 0; exact bytes |
+| brace-mixed | `brace_union_and_nested_lists` | None | 6 | 101 / 0; exact bytes |
+| brace-nested | `brace_union_and_nested_lists` | None | 12 | 101 / 0; exact bytes |
+| brace-signed | `brace_union_and_nested_lists` | None | 6 | 101 / 0; exact bytes |
+| file-url-absolute | `file_urls_reach_protected_identity` | None | 6 | 101 / 0; exact bytes |
+| file-url-maker | `file_urls_reach_protected_identity` | None | 6 | 101 / 0; exact bytes |
+| git | `git_owns_quoted_pathspec_globs` | None | 27 | 101 / 0; exact bytes |
+| ls-effect | `ls_records_list_effect` | None | 0 | 101 / 0; exact bytes |
+| paren | `quoted_parentheses_stay_literal` | None | 42 | 101 / 0; exact bytes |
+| probe-oracle | `glob_probe_oracle_uses_word_provenance` | None | 0 | 101 / 0; exact bytes |
+| redirect-vars | `redirect_variables_follow_direction` | None | 12 | 101 / 0; exact bytes |
+| search-field | `search_flag_has_an_explicit_owner` | None | 0 | 101 / 0; exact bytes |
+| structured-glob | `structured_targets_do_not_infer_shell_globs` | None | 3 | 101 / 0; exact bytes |
 
-## Mechanical checks and remaining owners
+Search/List are record-fidelity assertions without a current verdict change;
+the probe-oracle mutation tests a guard assertion, not a production verdict.
+Their zero variant deltas do not invalidate those explicit contracts. Other
+mechanisms have affected variant observations; list recognition also changes
+appdata[82] and credentials[189] in the original corpus when broken. D26 2g is
+an evidence/provenance correction, not a verdict mechanism, so its verification
+is parsed label-only equivalence and corpus byte equality rather than a verdict
+ablation. The scripts and thirteen `*-binding.json` files retain all exact
+mutations, source hashes, compiled failures, report deltas and restored passes.
 
-| Check | Current result | Raw evidence |
+## Gates, dev evidence and open work
+
+| Check | Final result | Artifact |
 | --- | --- | --- |
-| fmt | Pass in required check | `r4h-m1-rust-check.log` |
-| warnings-denied Clippy, all targets | Pass | `r4h-m1-clippy.log` |
-| `make rust-check` | Fails only at `every_legacy_row_is_accounted_for`: Cargo 101, make 2; 121 conflict rows | `r4h-m1-rust-check.log` |
-| Separate remaining tests | 54 pass, zero failures; does not replace the failed complete check | `r4h-m1-other-tests.log` |
-| cargo-deny | Advisories/bans/licenses/sources pass; existing duplicate-version warnings | `r4h-m1-deny.log` |
-| Locked release bins/examples | Pass | `r4h-m1-release-build.log` |
-| Parse comparator | 1,550 rows, zero semantic observations | `r4h-m1-parse-comparator{.log,.jsonl}` |
-| Packaged binary | `--version` succeeds; no arguments fail with no check performed | `r4h-m1-version{,-only-no-args}.log` |
-| Dependencies, lock, production and four plan files | Byte/object-identical to parent | Measurement and final-delivery bindings |
+| fmt | Pass | `r4h-m1-1-rust-check.log` |
+| warnings-denied Clippy, all targets | Pass | `r4h-m1-1-clippy.log` and rust-check log |
+| Locked release, all targets | Pass | `r4h-m1-1-final-release.log` |
+| cargo-deny with fetch enabled | Advisories/bans/licenses/sources pass; five existing duplicate warnings | `r4h-m1-1-final-deny.log` |
+| All tests, no-fail-fast | 63 pass; only complete differential fails (121 rows / 347 observations) | `r4h-m1-1-final-tests.log` |
+| make rust-check | make 2 / Cargo 101, only `every_legacy_row_is_accounted_for` | `r4h-m1-1-rust-check.log` |
+| Parse-only comparator | 1,550 rows, 1,397 comparisons, 243 leads, zero semantic observations | `r4h-m1-1-parse-comparator{.jsonl,-final.log}` |
+| Packaged binary | version 0.6.0, exit 0; no args/checker exit 1, no check performed | `r4h-m1-1-binary-smoke.json` |
+| SSH D23 tests/probes | Five pass; six protected/private spellings have empty readlink/stat call lists | `r4h-m1-1-ssh-probes.log` |
 
-The remaining 121 conflicts require later semantic owners, not row exemptions:
-P2/P7 statement scope, bindings/cwd and physical resolution (M2); P6 lexical
-credentials plus P3 wrapper/stdin and P4 stream producers (M3); P5 target roles
-and P6 advice/secrets rules (M4). `cwd[26]` still needs Go's bounded-directory
-collapse. `programs[29]`, `programs[44]` and other Git/tar/reader role differences
-remain Rust defects. `shell[175]` still treats a long git commit message as a
-path and returns ProbeFault; it is a target-role defect, not ResourceLimit.
-Go-permit RETAIN rows such as appdata[81], credentials[20]/[206], shell[0],
-programs[42]/[64] and cwd[20,22,23,24,57] remain defects; appdata[83] now matches.
+Brush remains the sole semantic acceptance arm. Tree-sitter remains only a
+parse-comparator dependency; moving it awaits the comparator-removal decision.
+The five historical Tree-only conflict rows match on Brush and no Brush row
+leaves the denominator. Parse spans remain review leads, not semantic evidence.
 
-The old scanner and Tree semantic path are deleted. Later-owner patches remain
-explicitly pending: the credential-directory suffix branch in `src/policy.rs`
-(P6 lexical owner, M3), `json.load` text gap in `src/targets.rs` (P3 interpreter
-owner, M3), and Git/tar normalization with empty HOME in `src/targets.rs`
-(P5 role owner, M4). Existing content-consumer and wrapper tables likewise await
-their owners. They were not expanded into additional command-shape exceptions.
+The dev manifest is unchanged: 239 counted cases + nine metamorphic variants +
+nine lifecycle-only + three writer rows = 260. The fresh 248-row evaluator report
+has the unchanged counted vector N70/A3/D96/U-C28/U-R21/U-O6/F15, and required
+zero starts remain 138/138 (144/144 with variants). Lifecycle/writer tests are
+separate from protection denominators. Six U-C runtime-configuration witnesses
+still permit synthetic protected reads: Gate B is open. The 87 revised D22
+cases, JSONL interface, F-kind blocking, lifecycle and writer checks pass.
 
-Fresh milestone reviews, complete Go conformance, installed protocol/hook
-loading, real consumer Gate A, Gate B/configuration reads, execution owners,
-arbitrary-writer preservation, production performance acceptance and Go cutover
-remain open. No M2 work, install, registration, TCC/permission change, remote
-write, release or real protected-data experiment was performed.
+No real protected-data read/probe, installation, hook registration, TCC or
+permission change, remote write, release, paid API call or cutover occurred.
+The four untracked Rust plan files are preserved. Deslop cleanup consolidated
+the Git add owner and the quote/depth brace scan; the distinct runtime, field,
+oracle and provenance tests are retained. Candidates left are the explicitly
+deferred owners above, not additional fixes made in this round.
+
+The 121 corpus conflicts still require P2/P7 statement/cwd/identity work (M2),
+P3/P4 wrapper/stdin/stream and P6 credentials (M3), and P5 roles plus P6
+advice/secrets (M4), including cwd[26] directory collapse. App Data fragment
+touches/scan gates remain P6/M4. The current protection evidence is offline;
+complete Go conformance, both M1 fix verifications, installed protocol/loading,
+Gate A, Gate B, execution owners, arbitrary-writer preservation, production
+performance and consumer cutover remain unaccepted. M1.1 stops here.

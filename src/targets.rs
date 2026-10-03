@@ -124,7 +124,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             }
             for path in paths {
                 let mut target = read(path, recursive);
-                target.effect = Effect::Name;
+                target.effect = Effect::List;
                 effects.targets.push(target);
             }
         }
@@ -382,6 +382,32 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
     effects.variable = sub == "credential" && args.get(index).is_some_and(|arg| arg == "fill");
     let names="branch tag remote switch push fetch pull merge rebase cherry-pick revert reflog rev-parse describe bisect init clone submodule worktree config lfs sparse-checkout".split_whitespace().any(|name|name==sub.as_str());
     let metadata="add rm mv restore checkout reset stash check-ignore check-attr update-index ls-files status clean commit".split_whitespace().any(|name|name==sub.as_str());
+    let pathspec = !names && sub != "grep";
+    let add = |path: &str, word: &Word, effect: Effect, walk: Walk, effects: &mut Effects| {
+        let glob = pathspec && path.contains(['*', '?', '[']);
+        let mut target = Target::from_word(
+            &word.with_text(crate::filesystem::normalize(path, &base, "")),
+            cwd,
+            host,
+            effect,
+            walk,
+        );
+        target.glob = glob;
+        effects.targets.push(target);
+        if effect == Effect::Read
+            && let Some((_, path)) = path.split_once(':')
+        {
+            let mut target = Target::from_word(
+                &word.with_text(crate::filesystem::normalize(path, &base, "")),
+                cwd,
+                host,
+                effect,
+                Walk::None,
+            );
+            target.glob = glob;
+            effects.targets.push(target);
+        }
+    };
     let keys: &[&str] = match sub.as_str() {
         "config" => &["-f", "--file", "--blob"],
         "commit" => &["-F", "--file", "--pathspec-from-file"],
@@ -411,21 +437,14 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
             }
         }
         if let Some(path) = option_path {
-            effects.targets.push(Target::from_word(
-                &path.with_text(crate::filesystem::normalize(&path, &base, "")),
-                cwd,
-                host,
-                Effect::Read,
-                Walk::None,
-            ));
+            add(&path, &path, Effect::Read, Walk::None, effects);
         } else if !arg.starts_with('-') {
             if !pattern {
                 pattern = true;
             } else {
-                effects.targets.push(Target::from_word(
-                    &arg.with_text(crate::filesystem::normalize(arg, &base, "")),
-                    cwd,
-                    host,
+                add(
+                    arg,
+                    arg,
                     if names || metadata {
                         Effect::Name
                     } else {
@@ -436,19 +455,8 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
                     } else {
                         Walk::None
                     },
-                ));
-                if !names
-                    && !metadata
-                    && let Some((_, path)) = arg.split_once(':')
-                {
-                    effects.targets.push(Target::from_word(
-                        &arg.with_text(crate::filesystem::normalize(path, &base, "")),
-                        cwd,
-                        host,
-                        Effect::Read,
-                        Walk::None,
-                    ));
-                }
+                    effects,
+                );
             }
         }
         index += 1;
@@ -882,13 +890,14 @@ fn infer_search(
     if !explicit && !names && !operands.is_empty() {
         operands.remove(0);
     }
-    if operands.is_empty() && (program != "grep" || hidden) {
+    let implicit = operands.is_empty() && (program != "grep" || hidden);
+    if implicit {
         operands.push(Word::literal(cwd.to_owned()));
     }
     effects.hidden_listing = names && hidden;
     effects.hidden_content = hidden && !names;
     for root in operands {
-        effects.targets.push(Target::from_word(
+        let mut target = Target::from_word(
             &root,
             cwd,
             host,
@@ -898,16 +907,20 @@ fn infer_search(
             } else {
                 Walk::None
             },
-        ));
+        );
+        target.search = implicit && !args.iter().any(|arg| arg == "--help" || arg == "-h");
+        effects.targets.push(target);
         if !names {
             for glob in &globs {
                 if !glob.starts_with('!') {
-                    effects.targets.push(Target::new(
+                    let mut target = Target::new(
                         format!("{}/{}", root.text, glob.rsplit('/').next().unwrap_or(glob)),
                         Effect::Read,
                         Walk::None,
                         Via::Operand,
-                    ));
+                    );
+                    target.glob = true;
+                    effects.targets.push(target);
                 }
             }
         }
@@ -958,4 +971,43 @@ pub fn code_paths(code: &str) -> Vec<String> {
         }
     }
     paths
+}
+
+#[cfg(test)]
+mod record_tests {
+    use super::*;
+    fn targets(source: &str) -> Vec<Target> {
+        let host = HostFacts {
+            home: "/h",
+            user: Some("fixture-user"),
+        };
+        let script = crate::shell::observe_with_user(
+            source,
+            crate::shell::Arm::Brush,
+            host.home,
+            "/p",
+            host.user,
+            false,
+        )
+        .unwrap()
+        .script;
+        infer(&script.commands[0], "/p", host).targets
+    }
+    #[test]
+    fn ls_records_list_effect() {
+        for source in ["ls .env", "ls -R public"] {
+            assert!(
+                targets(source)
+                    .iter()
+                    .all(|target| target.effect == Effect::List)
+            );
+        }
+    }
+    #[test]
+    fn search_flag_has_an_explicit_owner() {
+        assert!(targets("rg needle")[0].search);
+        assert!(!targets("rg needle public")[0].search);
+        assert!(!targets("rg --help")[0].search);
+        assert!(!targets("git log -p public")[0].search);
+    }
 }

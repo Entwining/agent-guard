@@ -205,6 +205,7 @@ pub struct RecordingProbe {
     pub links: BTreeMap<String, String>,
     pub fault: Option<String>,
     pub home: String,
+    pub patterned: bool,
 }
 
 impl RecordingProbe {
@@ -215,6 +216,20 @@ impl RecordingProbe {
             links: BTreeMap::new(),
             fault: None,
             home: fixture.home.clone(),
+            patterned: false,
+        }
+    }
+    pub fn for_word(fixture: &Fixture, word: &agent_guard_rust::record::Word) -> Self {
+        Self {
+            patterned: word.globs,
+            ..Self::new(fixture)
+        }
+    }
+    fn protected(&self, spelling: &str) -> bool {
+        if self.patterned {
+            filesystem::lexical(spelling, &self.home).is_some()
+        } else {
+            filesystem::lexical_literal(spelling, &self.home).is_some()
         }
     }
 }
@@ -223,7 +238,7 @@ impl Probe for RecordingProbe {
         let spelling = path.to_str().unwrap().to_owned();
         self.stat_calls.push(spelling.clone());
         assert!(
-            filesystem::lexical_literal(&spelling, &self.home).is_none(),
+            !self.protected(&spelling),
             "protected spelling reached stat: {spelling}"
         );
         if self.fault.as_ref() == Some(&spelling) {
@@ -235,7 +250,7 @@ impl Probe for RecordingProbe {
         let spelling = path.to_str().unwrap().to_owned();
         self.calls.push(spelling.clone());
         assert!(
-            filesystem::lexical_literal(&spelling, &self.home).is_none(),
+            !self.protected(&spelling),
             "protected spelling reached probe: {spelling}"
         );
         if self.fault.as_ref() == Some(&spelling) {

@@ -200,28 +200,73 @@ pub(super) fn path(pattern: &str, subject: &str) -> bool {
     false
 }
 
-pub(super) fn alternatives(pattern: &str, braces: bool) -> Vec<String> {
+fn brace_members(source: &str) -> Option<(usize, usize, Vec<&str>)> {
+    let mut escaped = false;
+    for (left, ch) in source.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        if ch != '{' {
+            continue;
+        }
+        let mut depth = 1;
+        let mut start = left + 1;
+        let mut members = Vec::new();
+        let mut escaped = false;
+        for (offset, ch) in source[left + 1..].char_indices() {
+            let position = left + 1 + offset;
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        if !members.is_empty() {
+                            members.push(&source[start..position]);
+                            return Some((left, position, members));
+                        }
+                        break;
+                    }
+                }
+                ',' if depth == 1 => {
+                    members.push(&source[start..position]);
+                    start = position + 1;
+                }
+                _ => {}
+            }
+        }
+    }
+    None
+}
+
+pub(super) fn alternatives(pattern: &str, patterned: bool) -> Vec<String> {
     let mut result = vec![pattern.to_owned()];
     let mut index = 0;
     while index < result.len() && result.len() < 512 {
         let source = result[index].clone();
         index += 1;
-        if braces
-            && let Some(left) = source.find('{')
-            && let Some(relative) = source[left + 1..].find('}')
-        {
-            let right = left + 1 + relative;
-            let body = &source[left + 1..right];
-            if body.contains(',') {
-                for part in body.split(',') {
-                    let next = format!("{}{}{}", &source[..left], part, &source[right + 1..]);
-                    if !result.contains(&next) {
-                        result.push(next);
-                    }
+        if patterned && let Some((left, right, members)) = brace_members(&source) {
+            for part in members {
+                let next = format!("{}{}{}", &source[..left], part, &source[right + 1..]);
+                if !result.contains(&next) {
+                    result.push(next);
                 }
             }
         }
-        if let Some(left) = source.find('(')
+        if patterned
+            && let Some(left) = source.find('(')
             && let Some(relative) = source[left + 1..].find(')')
         {
             let right = left + 1 + relative;

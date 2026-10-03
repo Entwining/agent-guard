@@ -122,12 +122,24 @@ fn absolute_input(path: &str, cwd: &str, home: &str) -> String {
     } else {
         path.to_owned()
     };
+    let expanded = strip_file_url(&expanded);
     let joined = if expanded.starts_with('/') {
-        expanded
+        expanded.to_owned()
     } else {
         format!("{cwd}/{expanded}")
     };
     unfirmlink(&joined)
+}
+
+pub(crate) fn strip_file_url(path: &str) -> &str {
+    if path
+        .get(..7)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"))
+    {
+        &path[7..]
+    } else {
+        path
+    }
 }
 
 fn unfirmlink(path: &str) -> String {

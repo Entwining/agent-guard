@@ -103,7 +103,11 @@ impl Redirect {
             target: word.text,
             globs: word.globs,
             expands: word.expands,
-            vars: word.vars,
+            vars: if matches!(direction, Direction::Heredoc | Direction::Herestring) {
+                word.vars
+            } else {
+                Vec::new()
+            },
         }
     }
 }
@@ -223,8 +227,9 @@ impl Target {
         } else {
             crate::filesystem::expand_home(&word.text, host.home, host.user)
         };
+        let input = crate::filesystem::strip_file_url(&input);
         let path = if input.starts_with('/') {
-            input
+            input.to_owned()
         } else {
             format!("{cwd}/{input}")
         };
@@ -235,17 +240,16 @@ impl Target {
         }
     }
     pub fn new(path: String, effect: Effect, walk: Walk, via: Via) -> Self {
-        let glob = path.contains(['*', '?', '[', '{', '(']);
         Self {
             unresolved: path.clone(),
             path,
-            glob,
+            glob: false,
             effect,
             walk,
             via,
             expands: false,
             sends: false,
-            search: walk != Walk::None,
+            search: false,
             command: None,
         }
     }

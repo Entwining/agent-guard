@@ -92,22 +92,18 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
         )?,
         Operation::Search { root, glob } => {
             let root = if root.is_empty() { &decoded.cwd } else { root };
-            inspection.target(
-                &Target::new(root.clone(), Effect::Read, Walk::Visible, Via::Tool),
-                &decoded.cwd,
-                EffectSource::Operand,
-            )?;
+            let mut target = Target::new(root.clone(), Effect::Read, Walk::Visible, Via::Tool);
+            target.search = true;
+            inspection.target(&target, &decoded.cwd, EffectSource::Operand)?;
             if !glob.is_empty() && !glob.starts_with('!') {
-                inspection.target(
-                    &Target::new(
-                        format!("{root}/{}", glob.rsplit('/').next().unwrap_or(glob)),
-                        Effect::Read,
-                        Walk::None,
-                        Via::Tool,
-                    ),
-                    &decoded.cwd,
-                    EffectSource::Operand,
-                )?;
+                let mut target = Target::new(
+                    format!("{root}/{}", glob.rsplit('/').next().unwrap_or(glob)),
+                    Effect::Read,
+                    Walk::None,
+                    Via::Tool,
+                );
+                target.glob = true;
+                inspection.target(&target, &decoded.cwd, EffectSource::Operand)?;
             }
         }
         Operation::Shell(source) => {
@@ -263,7 +259,7 @@ impl Inspection<'_> {
             Identity::Protected(kind) => {
                 let touches = kind == Protection::AppData
                     || kind == Protection::SshPrivate
-                    || target.effect != Effect::Write && target.effect != Effect::Name;
+                    || !matches!(target.effect, Effect::Write | Effect::Name | Effect::List);
                 if touches {
                     self.effect(EffectRecord::ProtectedTarget {
                         protection: kind,

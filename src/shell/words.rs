@@ -2,10 +2,7 @@ use super::Expanded;
 use crate::{CheckError, CheckErrorKind, record::Word};
 use brush_parser::{
     ParserOptions,
-    word::{
-        self, BraceExpressionMember, BraceExpressionOrText, Parameter, ParameterExpr, TildeExpr,
-        WordPiece, WordPieceWithSource,
-    },
+    word::{self, Parameter, ParameterExpr, TildeExpr, WordPiece, WordPieceWithSource},
 };
 use std::collections::BTreeMap;
 
@@ -28,12 +25,7 @@ pub(super) fn expand(
     let (input, braces) = if heredoc {
         (raw.to_owned(), false)
     } else {
-        match word::parse_brace_expansions(raw, &options).map_err(|_| CheckError {
-            kind: CheckErrorKind::GuardFault,
-        })? {
-            Some(parts) => brace_text(&parts),
-            None => (raw.to_owned(), false),
-        }
+        brace_text(raw)
     };
     let pieces = if heredoc {
         word::parse_heredoc(&input, &options)
@@ -78,42 +70,109 @@ pub(super) fn expand(
     Ok(out)
 }
 
-fn brace_text(parts: &[BraceExpressionOrText]) -> (String, bool) {
+fn brace_text(raw: &str) -> (String, bool) {
     let mut text = String::new();
     let mut expands = false;
-    for part in parts {
-        match part {
-            BraceExpressionOrText::Text(value) => text.push_str(value),
-            BraceExpressionOrText::Expr(members) => {
-                expands = true;
-                if members.len() == 1
-                    && matches!(
-                        members[0],
-                        BraceExpressionMember::NumberSequence { .. }
-                            | BraceExpressionMember::CharSequence { .. }
-                    )
-                {
-                    // Go models a sequence's reach as a glob rather than enumerating it.
-                    text.push('*');
+    let mut quote = None;
+    let mut escaped = false;
+    let mut cursor = 0;
+    while cursor < raw.len() {
+        let ch = raw[cursor..].chars().next().unwrap_or_default();
+        if escaped {
+            escaped = false;
+        } else if ch == '\\' && quote != Some('\'') {
+            escaped = true;
+        } else if quote == Some(ch) {
+            quote = None;
+        } else if quote.is_none() && matches!(ch, '\'' | '"') {
+            quote = Some(ch);
+        } else if quote.is_none()
+            && ch == '{'
+            && let Some((right, list)) = brace_group(raw, cursor)
+        {
+            let group = &raw[cursor..=right];
+            if raw[..cursor].ends_with('$') {
+                text.push_str(group);
+            } else {
+                let body = &raw[cursor + 1..right];
+                let (inner, nested) = brace_text(body);
+                if let Some(sequence) = brace_sequence(body) {
+                    text.push_str(&sequence);
+                    expands = true;
                 } else {
                     text.push('{');
-                    for (index, member) in members.iter().enumerate() {
-                        if index > 0 {
-                            text.push(',');
-                        }
-                        match member {
-                            BraceExpressionMember::Child(children) => {
-                                text.push_str(&brace_text(children).0)
-                            }
-                            _ => text.push('*'),
-                        }
-                    }
+                    text.push_str(&inner);
                     text.push('}');
+                    expands |= nested || list;
                 }
+            }
+            cursor = right + 1;
+            continue;
+        }
+        text.push(ch);
+        cursor += ch.len_utf8();
+    }
+    (text, expands)
+}
+
+fn brace_group(raw: &str, left: usize) -> Option<(usize, bool)> {
+    let mut depth = 0;
+    let mut quote = None;
+    let mut escaped = false;
+    let mut list = false;
+    for (offset, ch) in raw[left..].char_indices() {
+        if escaped {
+            escaped = false;
+        } else if ch == '\\' && quote != Some('\'') {
+            escaped = true;
+        } else if quote == Some(ch) {
+            quote = None;
+        } else if quote.is_none() && matches!(ch, '\'' | '"') {
+            quote = Some(ch);
+        } else if quote.is_none() {
+            if ch == '{' {
+                depth += 1;
+            }
+            if ch == '}' {
+                depth -= 1;
+                if depth == 0 {
+                    return Some((left + offset, list));
+                }
+            }
+            if ch == ',' && depth == 1 {
+                list = true;
             }
         }
     }
-    (text, expands)
+    None
+}
+
+fn brace_sequence(body: &str) -> Option<String> {
+    let parts: Vec<_> = body.split("..").collect();
+    if !(2..=3).contains(&parts.len()) || parts.get(2).is_some_and(|s| s.parse::<i128>().is_err()) {
+        return None;
+    }
+    if let (Ok(start), Ok(end)) = (parts[0].parse::<i128>(), parts[1].parse::<i128>()) {
+        if parts[..2].iter().any(|part| part.starts_with(['+', '-'])) {
+            // Signed numeric reach cannot consume an empty string or a letter.
+            // A leading plus may also stay literal in zsh (D1/D26).
+            let reach = if start == end {
+                start.to_string()
+            } else {
+                "[-0-9]*".into()
+            };
+            return Some(format!("{{{reach},{{{body}}}}}"));
+        }
+        return Some("*".into());
+    }
+    if parts[..2]
+        .iter()
+        .all(|part| part.len() == 1 && part.as_bytes()[0].is_ascii_alphanumeric())
+    {
+        // Zsh accepts mixed letter/digit endpoints; Bash may leave them literal.
+        return Some("*".into());
+    }
+    None
 }
 
 fn fill(
