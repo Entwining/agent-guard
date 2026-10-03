@@ -4,6 +4,7 @@ use std::ops::Range;
 #[derive(Default)]
 pub(super) struct Detection {
     pub divergent: bool,
+    pub executable_qualifier: bool,
     pub masked: String,
     pub code: Vec<String>,
     pub evaluated_variables: Vec<String>,
@@ -143,6 +144,7 @@ pub(super) fn detect(source: &str, spans: &[Range<usize>]) -> Result<Detection, 
                 );
             if qualifier(body, trailing) {
                 result.divergent = true;
+                result.executable_qualifier = true;
                 if let Some(code) = body.strip_prefix("e:").and_then(|s| s.strip_suffix(':')) {
                     result.code.push(code.trim_matches(['\'', '"']).to_owned());
                 }
@@ -158,8 +160,7 @@ pub(super) fn detect(source: &str, spans: &[Range<usize>]) -> Result<Detection, 
                     .as_bytes()
                     .get(name.len())
                     .is_none_or(u8::is_ascii_whitespace)
-        }) && (source[..cursor].trim_end().is_empty()
-            || source[..cursor].trim_end().ends_with([';', '\n', '|', '(']))
+        }) && statement_boundary(&source[..cursor])
         {
             result.divergent = true;
         }
@@ -169,6 +170,16 @@ pub(super) fn detect(source: &str, spans: &[Range<usize>]) -> Result<Detection, 
         kind: CheckErrorKind::GuardFault,
     })?;
     Ok(result)
+}
+
+fn statement_boundary(prefix: &str) -> bool {
+    let prefix = prefix.trim_end_matches([' ', '\t']);
+    prefix.is_empty()
+        || prefix.ends_with([';', '\n', '|', '&', '(', '{'])
+        || prefix
+            .split_whitespace()
+            .last()
+            .is_some_and(|word| ["then", "do", "else"].contains(&word))
 }
 
 #[cfg(test)]

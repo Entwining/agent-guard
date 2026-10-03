@@ -28,6 +28,7 @@ struct Redirect {
 enum Record {
     Definition(String, Vec<Record>),
     Assignment(String, Word),
+    LoopBinding(String, Vec<Word>),
     Expansion(Word),
     Command {
         argv: Vec<Word>,
@@ -47,6 +48,7 @@ pub struct CommandRecord {
     pub redirects: Vec<(String, bool)>,
     pub unresolved: bool,
     pub pipeline: Option<(usize, usize)>,
+    pub cwd: String,
 }
 
 #[derive(Debug, Default)]
@@ -55,6 +57,7 @@ pub struct Observation {
     pub gaps: Vec<CoverageGap>,
     pub parse_successes: usize,
     pub parse_failures: usize,
+    pub executable_qualifier: bool,
 }
 
 impl Observation {
@@ -92,8 +95,8 @@ pub fn observe(
     zsh: bool,
 ) -> Result<Observation, CheckError> {
     let mut variables = BTreeMap::from([
-        ("HOME".to_owned(), home.to_owned()),
-        ("PWD".to_owned(), cwd.to_owned()),
+        ("HOME".to_owned(), vec![home.to_owned()]),
+        ("PWD".to_owned(), vec![cwd.to_owned()]),
     ]);
     let mut observation = Observation::default();
     observe_source(source, arm, zsh, &mut variables, &mut observation, 0)?;
@@ -104,7 +107,7 @@ fn observe_source(
     source: &str,
     arm: Arm,
     zsh: bool,
-    variables: &mut BTreeMap<String, String>,
+    variables: &mut BTreeMap<String, Vec<String>>,
     output: &mut Observation,
     depth: usize,
 ) -> Result<(), CheckError> {
@@ -130,6 +133,7 @@ fn observe_source(
         output.parse_failures += 1;
     }
     let detection = divergence::detect(source, &original.spans)?;
+    output.executable_qualifier |= detection.executable_qualifier;
     if detection.divergent {
         output.gap(if zsh {
             CoverageGap::ExecutorDivergence
@@ -180,16 +184,23 @@ fn observe_source(
                 }
             }
             Record::Assignment(name, word) => {
-                let expanded = expand(&word.raw, variables);
-                for nested in &expanded.nested {
-                    observe_source(nested, arm, zsh, &mut variables.clone(), output, depth + 1)?;
-                }
-                variables.insert(name, expanded.unsplit);
+                bind(name, &[word], variables, output, arm, zsh, depth)?;
+            }
+            Record::LoopBinding(name, words) => {
+                bind(name, &words, variables, output, arm, zsh, depth)?
             }
             Record::Expansion(word) => {
-                let expanded = expand(&word.raw, variables);
-                for nested in &expanded.nested {
-                    observe_source(nested, arm, zsh, &mut variables.clone(), output, depth + 1)?;
+                for expanded in expand_all(&word.raw, variables, output) {
+                    for nested in &expanded.nested {
+                        observe_source(
+                            nested,
+                            arm,
+                            zsh,
+                            &mut variables.clone(),
+                            output,
+                            depth + 1,
+                        )?;
+                    }
                 }
             }
             Record::Command {
@@ -197,26 +208,46 @@ fn observe_source(
                 redirects,
                 pipeline,
             } => {
-                let mut split = Vec::new();
-                let mut unsplit = Vec::new();
+                let mut alternatives = vec![Vec::new()];
                 let mut unresolved = false;
                 for word in argv {
-                    let expanded = expand(&word.raw, variables);
-                    for nested in &expanded.nested {
-                        observe_source(
-                            nested,
-                            arm,
-                            zsh,
-                            &mut variables.clone(),
-                            output,
-                            depth + 1,
-                        )?;
+                    let mut choices = Vec::new();
+                    for expanded in expand_all(&word.raw, variables, output) {
+                        for nested in &expanded.nested {
+                            observe_source(
+                                nested,
+                                arm,
+                                zsh,
+                                &mut variables.clone(),
+                                output,
+                                depth + 1,
+                            )?;
+                        }
+                        unresolved |= expanded.unresolved;
+                        choices.push(expanded.split);
+                        choices.push(vec![expanded.unsplit]);
                     }
-                    unresolved |= expanded.unresolved;
-                    split.extend(expanded.split);
-                    unsplit.push(expanded.unsplit);
+                    choices.sort();
+                    choices.dedup();
+                    let mut next = Vec::new();
+                    for argv in &alternatives {
+                        for choice in &choices {
+                            let mut argv = argv.clone();
+                            argv.extend(choice.clone());
+                            next.push(argv);
+                        }
+                    }
+                    if next.len() > 512 {
+                        output.gap(CoverageGap::InspectionBudget);
+                        next.truncate(512);
+                    }
+                    alternatives = next;
                 }
-                if let Some(body) = split.first().and_then(|name| functions.get(name)) {
+                if let Some(body) = alternatives
+                    .first()
+                    .and_then(|argv| argv.first())
+                    .and_then(|name| functions.get(name))
+                {
                     for record in body.iter().rev() {
                         pending.push_front(record.clone());
                     }
@@ -224,34 +255,43 @@ fn observe_source(
                 }
                 let mut targets = Vec::new();
                 for redirect in redirects {
-                    let expanded = expand(&redirect.target.raw, variables);
-                    for nested in &expanded.nested {
-                        observe_source(
-                            nested,
-                            arm,
-                            zsh,
-                            &mut variables.clone(),
-                            output,
-                            depth + 1,
-                        )?;
+                    for expanded in expand_all(&redirect.target.raw, variables, output) {
+                        for nested in &expanded.nested {
+                            observe_source(
+                                nested,
+                                arm,
+                                zsh,
+                                &mut variables.clone(),
+                                output,
+                                depth + 1,
+                            )?;
+                        }
+                        unresolved |= expanded.unresolved;
+                        targets.push((expanded.unsplit, redirect.write));
                     }
-                    unresolved |= expanded.unresolved;
-                    targets.push((expanded.unsplit, redirect.write));
                 }
                 // Assign target roles to each complete argv; never flatten operands before roles.
-                output.commands.push(CommandRecord {
-                    argv: split.clone(),
-                    redirects: targets.clone(),
-                    unresolved,
-                    pipeline: pipeline.map(|id| (source_id, id)),
-                });
-                if split != unsplit {
-                    output.commands.push(CommandRecord {
-                        argv: unsplit,
-                        redirects: targets,
-                        unresolved,
-                        pipeline: pipeline.map(|id| (source_id, id)),
-                    });
+                let cwds = variables.get("PWD").cloned().unwrap_or_default();
+                for argv in alternatives {
+                    for cwd in &cwds {
+                        output.commands.push(CommandRecord {
+                            argv: argv.clone(),
+                            redirects: targets.clone(),
+                            unresolved,
+                            pipeline: pipeline.map(|id| (source_id, id)),
+                            cwd: cwd.clone(),
+                        });
+                        if argv.first().is_some_and(|s| s == "cd")
+                            && let Some(target) = argv.iter().skip(1).find(|s| !s.starts_with('-'))
+                        {
+                            let next =
+                                crate::filesystem::normalize(target, cwd, &variables["HOME"][0]);
+                            let dirs = variables.entry("PWD".into()).or_default();
+                            if !dirs.contains(&next) {
+                                dirs.push(next);
+                            }
+                        }
+                    }
                 }
                 if output.commands.len() > 512 {
                     output.gap(CoverageGap::InspectionBudget);
@@ -261,14 +301,74 @@ fn observe_source(
         }
     }
     for name in &detection.evaluated_variables {
-        if let Some(code) = variables.get(name).cloned() {
-            observe_source(&code, arm, zsh, &mut variables.clone(), output, depth + 1)?;
+        if let Some(codes) = variables.get(name).cloned() {
+            for code in codes {
+                observe_source(&code, arm, zsh, &mut variables.clone(), output, depth + 1)?;
+            }
         }
     }
     for code in &detection.code {
         observe_source(code, arm, zsh, &mut variables.clone(), output, depth + 1)?;
     }
     Ok(())
+}
+
+fn bind(
+    name: String,
+    words: &[Word],
+    variables: &mut BTreeMap<String, Vec<String>>,
+    output: &mut Observation,
+    arm: Arm,
+    zsh: bool,
+    depth: usize,
+) -> Result<(), CheckError> {
+    let mut values = Vec::new();
+    for word in words {
+        for expanded in expand_all(&word.raw, variables, output) {
+            for code in &expanded.nested {
+                observe_source(code, arm, zsh, &mut variables.clone(), output, depth + 1)?;
+            }
+            if !values.contains(&expanded.unsplit) {
+                values.push(expanded.unsplit);
+            }
+        }
+    }
+    if values.len() > 512 {
+        output.gap(CoverageGap::InspectionBudget);
+        values.truncate(512);
+    }
+    variables.insert(name, values);
+    Ok(())
+}
+
+fn expand_all(
+    raw: &str,
+    variables: &BTreeMap<String, Vec<String>>,
+    output: &mut Observation,
+) -> Vec<Expanded> {
+    let mut contexts = vec![BTreeMap::new()];
+    for (name, values) in variables {
+        if !raw.contains(&format!("${name}")) && !raw.contains(&format!("${{{name}")) {
+            continue;
+        }
+        let mut next = Vec::new();
+        'combinations: for context in &contexts {
+            for value in values {
+                if next.len() == 512 {
+                    output.gap(CoverageGap::InspectionBudget);
+                    break 'combinations;
+                }
+                let mut context = context.clone();
+                context.insert(name.clone(), value.clone());
+                next.push(context);
+            }
+        }
+        contexts = next;
+    }
+    contexts
+        .iter()
+        .map(|context| expand(raw, context))
+        .collect()
 }
 
 struct Expanded {

@@ -146,7 +146,10 @@ fn walk_command(
             redirect_list(source, function.body.1.as_ref(), &mut body)?;
             output.push(Record::Definition(function.fname.value.clone(), body));
         }
-        Command::ExtendedTest(_, redirects) => {
+        Command::ExtendedTest(test, redirects) => {
+            output.push(Record::Expansion(Word {
+                raw: original(source, &test.loc)?.to_owned(),
+            }));
             redirect_list(source, redirects.as_ref(), output)?;
         }
     }
@@ -162,17 +165,28 @@ fn walk_compound(
         CompoundCommand::BraceGroup(group) => walk_list(source, &group.list, output)?,
         CompoundCommand::Subshell(group) => walk_list(source, &group.list, output)?,
         CompoundCommand::ForClause(group) => {
-            if let Some(values) = &group.values
-                && let Some(value) = values.first()
-            {
-                output.push(Record::Assignment(
+            if let Some(values) = &group.values {
+                output.push(Record::LoopBinding(
                     group.variable_name.clone(),
-                    word(source, value)?,
+                    values
+                        .iter()
+                        .map(|value| word(source, value))
+                        .collect::<Result<_, _>>()?,
                 ));
             }
             walk_list(source, &group.body.list, output)?;
         }
-        CompoundCommand::ArithmeticForClause(group) => walk_list(source, &group.body.list, output)?,
+        CompoundCommand::ArithmeticForClause(group) => {
+            for expression in [&group.initializer, &group.condition, &group.updater]
+                .into_iter()
+                .flatten()
+            {
+                output.push(Record::Expansion(Word {
+                    raw: expression.to_string(),
+                }));
+            }
+            walk_list(source, &group.body.list, output)?;
+        }
         CompoundCommand::IfClause(group) => {
             walk_list(source, &group.condition, output)?;
             walk_list(source, &group.then, output)?;
@@ -190,14 +204,20 @@ fn walk_compound(
             walk_list(source, &group.1.list, output)?;
         }
         CompoundCommand::CaseClause(group) => {
+            output.push(Record::Expansion(word(source, &group.value)?));
             for case in &group.cases {
+                for pattern in &case.patterns {
+                    output.push(Record::Expansion(word(source, pattern)?));
+                }
                 if let Some(body) = &case.cmd {
                     walk_list(source, body, output)?;
                 }
             }
         }
         CompoundCommand::Coprocess(group) => walk_command(source, &group.body, output, None)?,
-        CompoundCommand::Arithmetic(_) => {}
+        CompoundCommand::Arithmetic(group) => output.push(Record::Expansion(Word {
+            raw: original(source, &group.loc)?.to_owned(),
+        })),
     }
     Ok(())
 }
@@ -272,7 +292,9 @@ fn redirect(
                 target: word(source, target)?,
                 write: !matches!(
                     kind,
-                    IoFileRedirectKind::Read | IoFileRedirectKind::DuplicateInput
+                    IoFileRedirectKind::Read
+                        | IoFileRedirectKind::ReadAndWrite
+                        | IoFileRedirectKind::DuplicateInput
                 ),
             });
         }

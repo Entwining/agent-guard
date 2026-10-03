@@ -11,6 +11,16 @@ fn text<'a>(source: &'a str, node: Node<'_>) -> Result<&'a str, CheckError> {
 pub(super) fn records(source: &str, parsed: &str) -> Result<Parsed, CheckError> {
     // bash 0.25 treats # after an escaped newline as a comment even within an existing word.
     let mut bytes = parsed.as_bytes().to_vec();
+    // The pinned grammar rejects <> and a final escaped newline. Keep byte offsets intact.
+    for index in 0..bytes.len().saturating_sub(1) {
+        if bytes[index..].starts_with(b"<>") {
+            bytes[index + 1] = b' ';
+        }
+    }
+    if bytes.ends_with(b"\\\n") {
+        let length = bytes.len();
+        bytes[length - 2..].fill(b' ');
+    }
     for index in 1..bytes.len().saturating_sub(2) {
         if bytes[index] == b'\\'
             && bytes[index + 1] == b'\n'
@@ -51,6 +61,27 @@ pub(super) fn records(source: &str, parsed: &str) -> Result<Parsed, CheckError> 
 
 fn walk(source: &str, node: Node<'_>, output: &mut Vec<Record>) -> Result<(), CheckError> {
     match node.kind() {
+        "for_statement" => {
+            if let Some(variable) = node.child_by_field_name("variable") {
+                let mut cursor = node.walk();
+                let values = node
+                    .children_by_field_name("value", &mut cursor)
+                    .map(|value| {
+                        text(source, value).map(|raw| Word {
+                            raw: raw.to_owned(),
+                        })
+                    })
+                    .collect::<Result<_, _>>()?;
+                output.push(Record::LoopBinding(
+                    text(source, variable)?.to_owned(),
+                    values,
+                ));
+            }
+            if let Some(body) = node.child_by_field_name("body") {
+                walk(source, body, output)?;
+            }
+            return Ok(());
+        }
         "declaration_command" => {
             let keyword = node.child(0).ok_or(CheckError {
                 kind: CheckErrorKind::GuardFault,
@@ -201,7 +232,7 @@ fn file_redirect(
             target: Word {
                 raw: text(source, target)?.to_owned(),
             },
-            write: raw.contains('>'),
+            write: raw.contains('>') && !raw.contains("<>"),
         });
     }
     Ok(())
