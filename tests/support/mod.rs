@@ -328,16 +328,13 @@ pub struct Gate {
 }
 
 impl Gate {
-    pub fn run_unchecked_for_negative(&mut self, operation: impl FnOnce() -> String) -> String {
-        self.operation_start_count += 1;
-        operation()
-    }
     pub fn run(
         &mut self,
-        result: &Result<Evaluation, CheckError>,
+        consumer: Consumer,
+        wire: &agent_guard_rust::adapters::Wire,
         operation: impl FnOnce() -> String,
     ) -> Option<String> {
-        if matches!(class(result), "N" | "A" | "UC") {
+        if agent_guard_rust::adapters::permits_call(consumer, wire) {
             self.operation_start_count += 1;
             Some(operation())
         } else {
@@ -384,7 +381,7 @@ pub fn run(row: &Value, arm: Arm) -> Value {
         operation_start_count: 0,
     };
     let mut witness = Witness::default();
-    let task_result = gate.run(&result, || {
+    let task_result = gate.run(context.consumer, &wire, || {
         closed_operation(&fixture, row, &body, &mut witness)
     });
     if let Some(task_result) = &task_result {
@@ -677,7 +674,8 @@ fn verify_recovery(fixture: &Fixture, row: &Value, recovery: &Value, arm: Arm) -
     let mut gate = Gate {
         operation_start_count: 0,
     };
-    let task_result = gate.run(&result, || {
+    let wire = render(context.consumer, &result);
+    let task_result = gate.run(context.consumer, &wire, || {
         closed_operation(fixture, row, &body, &mut witness)
     });
     assert_eq!(gate.operation_start_count, 1);
@@ -874,9 +872,7 @@ pub fn assert_preflight_tuple(row: &Value, actual: &Value) {
         }
     }
     let class = actual["class"].as_str().unwrap();
-    let expected_exit = if class == "F" {
-        3
-    } else if ["D", "UR", "UO"].contains(&class) {
+    let expected_exit = if ["F", "D", "UR", "UO"].contains(&class) {
         2
     } else {
         0

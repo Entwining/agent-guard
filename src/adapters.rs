@@ -229,13 +229,23 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
     };
     let (reason, recovery) = match result {
         Err(error) => {
-            wire.exit = 3;
+            wire.exit = 2;
             wire.stderr = format!(
-                "Check incomplete: {error}. {}, then recheck without raw input logging.\n",
-                if error.kind == CheckErrorKind::ProbeFault {
-                    "Have the owner repair access to the non-sensitive probe prefix"
-                } else {
-                    "Reduce input/nesting to the frozen supported bound or repair the checker"
+                "DENIED: call blocked because the check is incomplete: {error}. {}; recheck before executing the call.\n",
+                match error.kind {
+                    CheckErrorKind::MalformedInput =>
+                        "Repair the event schema and supply an absolute cwd",
+                    CheckErrorKind::InputFailure => "Restore the event input transport",
+                    CheckErrorKind::GuardFault =>
+                        "Have the checker owner repair the failed checker",
+                    CheckErrorKind::ProbeFault =>
+                        "Have the owner repair access to the non-sensitive probe prefix",
+                    CheckErrorKind::ResourceLimit => "Reduce input/nesting to the supported bound",
+                    CheckErrorKind::Deadline =>
+                        "Have the execution owner resolve the timed-out check and account for its children",
+                    CheckErrorKind::Cancelled =>
+                        "Have the execution owner finish cancellation and reap the children",
+                    CheckErrorKind::BrokenEnrollment => "Restore and verify consumer enrollment",
                 }
             );
             return wire;
@@ -279,4 +289,12 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
         detail
     );
     wire
+}
+
+/// Consumers authorize a call from the hook wire, never from an internal verdict label.
+pub fn permits_call(consumer: Consumer, wire: &Wire) -> bool {
+    match consumer {
+        Consumer::Claude | Consumer::Codex => wire.exit != 2,
+        Consumer::Pi => wire.exit == 0,
+    }
 }

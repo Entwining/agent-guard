@@ -222,13 +222,13 @@ fn probe_fault_is_not_permission() {
         operation_start_count: 0,
     };
     assert!(
-        gate.run(&restored, || std::fs::read_to_string(format!(
-            "{}/input.txt",
-            fixture.project
-        ))
-        .unwrap())
-            .unwrap()
-            .contains("needle")
+        gate.run(
+            ctx.consumer,
+            &agent_guard_rust::adapters::render(ctx.consumer, &restored),
+            || std::fs::read_to_string(format!("{}/input.txt", fixture.project)).unwrap()
+        )
+        .unwrap()
+        .contains("needle")
     );
 }
 
@@ -450,13 +450,16 @@ fn gate_a_zero_starts_and_bypass_negative() {
     let mut gate = support::Gate {
         operation_start_count: 0,
     };
-    assert!(gate.run(&result, operation).is_none());
+    let wire = agent_guard_rust::adapters::render(ctx.consumer, &result);
+    assert!(gate.run(ctx.consumer, &wire, operation).is_none());
     assert_eq!(gate.operation_start_count, 0);
     assert_eq!(read_count.get(), 0);
     let mut bypass = support::Gate {
         operation_start_count: 0,
     };
-    bypass.run_unchecked_for_negative(operation);
+    let mut broken_wire = wire;
+    broken_wire.exit = 0;
+    assert!(bypass.run(ctx.consumer, &broken_wire, operation).is_some());
     assert_eq!(read_count.get(), 1);
     let rejected = std::panic::catch_unwind(|| assert_eq!(bypass.operation_start_count, 0));
     assert!(rejected.is_err());
