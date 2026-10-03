@@ -253,13 +253,29 @@ impl Inspection<'_> {
             }
             Identity::Bound => self.gap(CoverageGap::IdentityBound),
             Identity::Public(path) => {
+                let resolved_home = match filesystem::identify(
+                    &self.context.home,
+                    &self.context.home,
+                    &self.context.home,
+                    self.probe,
+                )? {
+                    Identity::Public(path) => path,
+                    Identity::Bound => {
+                        self.gap(CoverageGap::IdentityBound);
+                        return Ok(());
+                    }
+                    Identity::Protected(_) => self.context.home.clone(),
+                };
                 if target.recursive
                     && (path == "/"
-                        || path == self.context.home
-                        || path == format!("{}/Library", self.context.home))
+                        || path == resolved_home
+                        || path == format!("{resolved_home}/Library"))
                 {
                     self.denial.get_or_insert_with(|| {
-                        "broad recursive root reaches protected locations".into()
+                        format!(
+                            "broad recursive root reaches protected locations; HOME {} is excluded",
+                            self.context.home
+                        )
                     });
                 }
                 if target.recursive
@@ -282,12 +298,13 @@ impl Inspection<'_> {
                 kind: CheckErrorKind::ResourceLimit,
             });
         }
-        if let Some(kind) = filesystem::lexical(
-            &filesystem::normalize(cwd, cwd, &self.context.home),
-            &self.context.home,
-        ) {
-            self.denial
-                .get_or_insert_with(|| format!("protected cwd: {}", kind.effect()));
+        match filesystem::identify(cwd, cwd, &self.context.home, self.probe)? {
+            Identity::Protected(kind) => {
+                self.denial
+                    .get_or_insert_with(|| format!("protected cwd: {}", kind.effect()));
+            }
+            Identity::Bound => self.gap(CoverageGap::IdentityBound),
+            Identity::Public(_) => {}
         }
         self.context
             .shell_observation_entries
@@ -304,6 +321,7 @@ impl Inspection<'_> {
         }
         let mut hidden_listings = std::collections::BTreeSet::new();
         for command in observation.commands {
+            let cwd = &command.cwd;
             let effects = targets::infer(&command, cwd);
             if let Some(pipeline) = command.pipeline {
                 if effects.hidden_listing {

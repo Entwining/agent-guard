@@ -84,5 +84,6 @@
 {"id":"find-home","finding":["M4"],"group":"program","command":"find ~ -name x","class":"D"},
 {"id":"du-home","finding":["M4"],"group":"program","command":"du -a ~","class":"D"},
 {"id":"tar-appdata","finding":["M4"],"group":"program","command":"tar czf out.tar ~/Library","class":"D"},
-{"id":"cd-state","finding":["M4"],"group":"program","command":"cd ~/Library; cd Containers/com.example.fixture; cat data.txt","class":"D"}
+{"id":"cd-state","finding":["M4"],"group":"program","command":"cd ~/Library; cd Containers/com.example.fixture; cat data.txt","class":"D"},
+{"id":"xargs-count-separated","finding":["M2","F15"],"group":"program","command":"rg --files --hidden | xargs -n 1 cat","class":"D"}
 ]

@@ -49,6 +49,7 @@ pub struct CommandRecord {
     pub unresolved: bool,
     pub pipeline: Option<(usize, usize)>,
     pub cwd: String,
+    pub variables: Vec<String>,
 }
 
 #[derive(Debug, Default)]
@@ -210,6 +211,7 @@ fn observe_source(
             } => {
                 let mut alternatives = vec![Vec::new()];
                 let mut unresolved = false;
+                let mut names = Vec::new();
                 for word in argv {
                     let mut choices = Vec::new();
                     for expanded in expand_all(&word.raw, variables, output) {
@@ -224,6 +226,7 @@ fn observe_source(
                             )?;
                         }
                         unresolved |= expanded.unresolved;
+                        names.extend(expanded.variables);
                         choices.push(expanded.split);
                         choices.push(vec![expanded.unsplit]);
                     }
@@ -267,6 +270,7 @@ fn observe_source(
                             )?;
                         }
                         unresolved |= expanded.unresolved;
+                        names.extend(expanded.variables);
                         targets.push((expanded.unsplit, redirect.write));
                     }
                 }
@@ -280,6 +284,7 @@ fn observe_source(
                             unresolved,
                             pipeline: pipeline.map(|id| (source_id, id)),
                             cwd: cwd.clone(),
+                            variables: names.clone(),
                         });
                         if argv.first().is_some_and(|s| s == "cd")
                             && let Some(target) = argv.iter().skip(1).find(|s| !s.starts_with('-'))
@@ -376,11 +381,13 @@ struct Expanded {
     unsplit: String,
     unresolved: bool,
     nested: Vec<String>,
+    variables: Vec<String>,
 }
 
 fn expand(raw: &str, variables: &BTreeMap<String, String>) -> Expanded {
     let mut output = String::new();
     let mut nested = Vec::new();
+    let mut names = Vec::new();
     let mut unresolved = false;
     let mut quote = 0;
     let mut split_points = false;
@@ -444,6 +451,7 @@ fn expand(raw: &str, variables: &BTreeMap<String, String>) -> Expanded {
                 .sum::<usize>();
             if length > 0 {
                 let name = &raw[start..start + length];
+                names.push(name.to_owned());
                 if let Some(value) = variables.get(name) {
                     output.push_str(value);
                     if quote == 0 {
@@ -472,6 +480,7 @@ fn expand(raw: &str, variables: &BTreeMap<String, String>) -> Expanded {
         unsplit: output,
         unresolved,
         nested,
+        variables: names,
     }
 }
 

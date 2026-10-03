@@ -126,3 +126,13 @@ fn check_group(group: &str) {
 fn review_shell() {
     check_group("shell");
 }
+
+#[test]
+fn review_program() {
+    check_group("program");
+}
+
+#[test]
+fn review_identity() {
+    check_group("identity");
+}

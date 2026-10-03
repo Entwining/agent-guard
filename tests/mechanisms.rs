@@ -366,7 +366,13 @@ fn listing_recursion_controls_broad_root() {
                 let mut probe = support::RecordingProbe::new(&fixture);
                 let result = check(&fixture, &ctx, &mut probe, arm, &format!("ls '{path}'"));
                 assert_eq!(support::class(&result), "D", "{path}");
-                assert!(probe.calls.is_empty());
+                assert!(
+                    probe
+                        .calls
+                        .iter()
+                        .all(|call| call != &path && !call.starts_with(&format!("{path}/"))),
+                    "protected operand reached a probe"
+                );
             }
         }
     }

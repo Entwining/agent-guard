@@ -1,5 +1,7 @@
 //! Lexical checks precede every readlink-only identity probe.
 
+mod glob;
+
 use crate::{CheckError, CheckErrorKind};
 use std::{
     io,
@@ -80,7 +82,8 @@ pub fn normalize(path: &str, cwd: &str, home: &str) -> String {
             part => clean.push(part.as_os_str()),
         }
     }
-    let clean = clean.to_string_lossy();
+    // Inputs are UTF-8; components preserve those bytes without lossy OS conversion.
+    let clean = clean.to_str().unwrap_or("");
     clean
         .strip_prefix("/System/Volumes/Data")
         .filter(|tail| tail.starts_with('/'))
@@ -89,7 +92,17 @@ pub fn normalize(path: &str, cwd: &str, home: &str) -> String {
 }
 
 pub fn lexical(path: &str, home: &str) -> Option<Protection> {
+    for candidate in glob::alternatives(path) {
+        if let Some(kind) = lexical_candidate(&candidate, home) {
+            return Some(kind);
+        }
+    }
+    None
+}
+
+fn lexical_candidate(path: &str, home: &str) -> Option<Protection> {
     let path = path.to_lowercase();
+    let patterned = path.contains(['*', '?', '[', '{', '(']);
     let library = format!("{home}/Library").to_lowercase();
     for owner in [
         "containers",
@@ -98,27 +111,51 @@ pub fn lexical(path: &str, home: &str) -> Option<Protection> {
         "cloudstorage",
     ] {
         let root = format!("{library}/{owner}");
-        if path == root || path.starts_with(&format!("{root}/")) {
+        let p: Vec<_> = path.split('/').collect();
+        let r: Vec<_> = root.split('/').collect();
+        if path == root
+            || path.starts_with(&format!("{root}/"))
+            || patterned
+                && (glob::path(&path, &root)
+                    || p.len() > r.len()
+                        && r.iter().enumerate().all(|(index, part)| {
+                            p[index] == "**" || glob::component(p[index], part)
+                        }))
+        {
             return Some(Protection::AppData);
         }
     }
     let parts: Vec<&str> = path.split('/').collect();
-    if parts.contains(&".ssh") {
-        return Some(Protection::SshPrivate);
+    if let Some(index) = parts.iter().position(|part| {
+        *part == ".ssh" || patterned && part.starts_with('.') && glob::component(part, ".ssh")
+    }) {
+        let tail = &parts[index + 1..];
+        if !tail.is_empty()
+            && (tail.len() != 1
+                || !(tail[0] == "config"
+                    || tail[0].starts_with("config.")
+                    || tail[0].ends_with(".pub")
+                    || tail[0] == "allowed_signers"
+                    || tail[0].starts_with("known_hosts")))
+        {
+            return Some(Protection::SshPrivate);
+        }
     }
     let base = parts.last().copied().unwrap_or("");
     if base == ".env.example" || base == ".env.age" {
         return None;
     }
-    if parts
-        .iter()
-        .any(|part| *part == ".env" || part.starts_with(".env.") || part.starts_with(".env*"))
-    {
+    if parts.iter().any(|part| {
+        *part == ".env"
+            || part.starts_with(".env.")
+            || patterned
+                && !part.trim_matches(['*', '?']).is_empty()
+                && (glob::component(part, ".env") || glob::component(part, ".env.x"))
+    }) {
         return Some(Protection::Environment);
     }
-    if parts
-        .iter()
-        .any(|p| matches!(*p, ".aws" | ".gnupg" | "private-keys-v1.d"))
+    if parts.iter().any(|p| *p == "private-keys-v1.d")
+        || [".aws", ".gnupg"].contains(&base)
         || [".npmrc", ".netrc", ".git-credentials", ".pypirc", ".pgpass"].contains(&base)
         || base.starts_with(".zprofile")
         || base.starts_with(".zsh_history")
@@ -137,6 +174,47 @@ pub fn lexical(path: &str, home: &str) -> Option<Protection> {
     {
         return Some(Protection::Credential);
     }
+    if !patterned {
+        return None;
+    }
+    const SENSITIVE: &[&str] = &[
+        "**/.npmrc",
+        "**/.zprofile*",
+        "**/.zsh_history*",
+        "**/*.pem",
+        "**/*.key",
+        "**/auth.json*",
+        "**/.credentials.json*",
+        "**/.aws/credentials*",
+        "**/.netrc",
+        "**/.git-credentials",
+        "**/.docker/config.json",
+        "**/.kube/config",
+        "**/.pypirc",
+        "**/.pgpass",
+        "**/.cargo/credentials*",
+        "**/.config/gh/hosts.yml",
+        "**/private-keys-v1.d",
+        "**/private-keys-v1.d/**",
+    ];
+    for listed in SENSITIVE {
+        if glob::path(listed, &path) {
+            return Some(Protection::Credential);
+        }
+        let tail: Vec<_> = listed.trim_start_matches("**/").split('/').collect();
+        if tail.len() > parts.len() || base.trim_matches(['*', '?']).is_empty() {
+            continue;
+        }
+        let offset = parts.len() - tail.len();
+        if tail[..tail.len() - 1]
+            .iter()
+            .enumerate()
+            .all(|(index, part)| glob::component(parts[offset + index], &part.replace('*', "x")))
+            && glob::intersects(base, tail[tail.len() - 1])
+        {
+            return Some(Protection::Credential);
+        }
+    }
     None
 }
 
@@ -146,9 +224,33 @@ pub fn identify(
     home: &str,
     probe: &mut dyn Probe,
 ) -> Result<Identity, CheckError> {
+    let path = normalize(path, cwd, home);
+    if path.ends_with("/.ssh") {
+        return Ok(Identity::Protected(Protection::SshPrivate));
+    }
+    if let Some(kind) = lexical(&path, home) {
+        return Ok(Identity::Protected(kind));
+    }
+    let resolved_home = match resolve(home, home, home, None, probe)? {
+        Identity::Public(path) => path,
+        Identity::Bound => return Ok(Identity::Bound),
+        Identity::Protected(kind) => return Ok(Identity::Protected(kind)),
+    };
+    resolve(&path, cwd, home, Some(&resolved_home), probe)
+}
+
+fn resolve(
+    path: &str,
+    cwd: &str,
+    home: &str,
+    resolved_home: Option<&str>,
+    probe: &mut dyn Probe,
+) -> Result<Identity, CheckError> {
     let mut current = normalize(path, cwd, home);
     for _ in 0..40 {
-        if let Some(kind) = lexical(&current, home) {
+        if let Some(kind) = lexical(&current, home)
+            .or_else(|| resolved_home.and_then(|home| lexical(&current, home)))
+        {
             return Ok(Identity::Protected(kind));
         }
         let mut prefix = PathBuf::new();
@@ -156,8 +258,12 @@ pub fn identify(
         let mut resolved = None;
         for (index, part) in parts.iter().enumerate() {
             prefix.push(part.as_os_str());
-            let spelling = prefix.to_string_lossy();
-            if let Some(kind) = lexical(&spelling, home) {
+            let Some(spelling) = prefix.to_str() else {
+                return Ok(Identity::Bound);
+            };
+            if let Some(kind) = lexical(spelling, home)
+                .or_else(|| resolved_home.and_then(|home| lexical(spelling, home)))
+            {
                 return Ok(Identity::Protected(kind));
             }
             if spelling.contains(['*', '?', '[', '(']) {
@@ -176,7 +282,10 @@ pub fn identify(
                 for remaining in &parts[index + 1..] {
                     joined.push(remaining.as_os_str());
                 }
-                resolved = Some(normalize(&joined.to_string_lossy(), cwd, home));
+                let Some(joined) = joined.to_str() else {
+                    return Ok(Identity::Bound);
+                };
+                resolved = Some(normalize(joined, cwd, home));
                 break;
             }
         }
