@@ -26,7 +26,7 @@ pub fn validate_sources() {
         ),
         (
             "tests/fixtures/rust-contract-classification.jsonl",
-            "4b7862970eb9ef42810559a14396ebc6f520caddfa56cbe4faa59c838b4bcecc",
+            "af65478c60c1a997a01d1e0bd4bd00a174c6351a998eb1f62b800a5ccb4a27c4",
         ),
     ] {
         let output = Command::new("/usr/bin/shasum")
@@ -351,48 +351,6 @@ pub fn report(arm: Arm) -> Vec<Value> {
         assert_eq!(item["source"]["family"], row["family"]);
         assert_eq!(item["source"]["index"], row["index"]);
         let outside = outside_slice(row, &fixture);
-        let cwd = fixture.expand(row["cwd"].as_str().unwrap());
-        let protected_cwd = agent_guard_rust::filesystem::lexical(
-            &agent_guard_rust::filesystem::normalize(&cwd, &cwd, &fixture.home),
-            &fixture.home,
-        )
-        .is_some();
-        let broad_listing = row["tool"] == "Bash"
-            && shell::observe(
-                &fixture.expand(row["input"].as_str().unwrap()),
-                Arm::Brush,
-                &fixture.home,
-                &cwd,
-                true,
-            )
-            .unwrap()
-            .commands
-            .iter()
-            .any(|command| {
-                if !command
-                    .argv
-                    .first()
-                    .is_some_and(|program| program.rsplit('/').next() == Some("ls"))
-                {
-                    return false;
-                }
-                let mut roots: Vec<_> = command
-                    .argv
-                    .iter()
-                    .skip(1)
-                    .filter(|arg| !arg.starts_with('-'))
-                    .cloned()
-                    .collect();
-                if roots.is_empty() {
-                    roots.push(cwd.clone());
-                }
-                roots.iter().any(|root| {
-                    let root = agent_guard_rust::filesystem::normalize(root, &cwd, &fixture.home);
-                    root == "/"
-                        || root == fixture.home
-                        || root == format!("{}/Library", fixture.home)
-                })
-            });
         let mut observations = Vec::new();
         for (name, consumer) in [
             ("claude", Consumer::Claude),
@@ -607,6 +565,16 @@ pub fn report(arm: Arm) -> Vec<Value> {
                     Some("AppData") => {
                         wire.stderr.contains("App Data") && excluded.contains("Library")
                     }
+                    Some("ProtectedCwd") => {
+                        wire.stderr.contains("protected cwd:")
+                            && excluded.contains("Library")
+                            && excluded.contains(".ssh")
+                            && match contract["reason_contract"]["protected_resource"].as_str() {
+                                Some("AppData") => wire.stderr.contains("App Data"),
+                                Some("SSH") => wire.stderr.contains("private-key"),
+                                _ => false,
+                            }
+                    }
                     _ => true,
                 };
                 if actual_class == "F" {
@@ -656,14 +624,8 @@ pub fn report(arm: Arm) -> Vec<Value> {
                     )) == "N";
                 }
             }
-            let baseline_conflict = expected == "N"
-                && actual_class == "D"
-                && (protected_cwd && wire.stderr.contains("protected cwd:")
-                    || broad_listing && wire.stderr.contains("broad recursive"));
             let category = if let Some(reason) = &outside {
                 format!("out_of_slice: {reason}")
-            } else if baseline_conflict {
-                "baseline_defect".into()
             } else if permission_match && reason_match && advice_match && changed_contract_match {
                 if item["verdict"] == "CHANGE" {
                     "intended_change".into()
@@ -673,7 +635,7 @@ pub fn report(arm: Arm) -> Vec<Value> {
             } else {
                 "Rust_defect".into()
             };
-            observations.push(json!({"consumer":name,"expected":expected,"actual":actual_class,"coverage":coverage(&actual),"category":category,"permission_match":permission_match,"reason_match":reason_match,"advice_match":advice_match,"changed_contract_match":changed_contract_match,"recovery":recovery,"baseline_reason_partition":reason_kind,"baseline_conflict_rule":if baseline_conflict {Some(if wire.stderr.contains("protected cwd:") {"D17 protected cwd"} else {"D16 HOME/Library listing"})} else {None},"exit":wire.exit,"stdout":wire.stdout,"stderr":wire.stderr,"probe_count":probe.calls.len()}));
+            observations.push(json!({"consumer":name,"expected":expected,"actual":actual_class,"coverage":coverage(&actual),"category":category,"permission_match":permission_match,"reason_match":reason_match,"advice_match":advice_match,"changed_contract_match":changed_contract_match,"recovery":recovery,"baseline_reason_partition":reason_kind,"exit":wire.exit,"stdout":wire.stdout,"stderr":wire.stderr,"probe_count":probe.calls.len()}));
         }
         report.push(json!({"id":id,"family":row["family"],"arm":format!("{arm:?}"),"verdict":item["verdict"],"rule_id":item["rule_id"],"scope":outside,"observations":observations}));
     }
