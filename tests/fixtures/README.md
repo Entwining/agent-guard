@@ -54,3 +54,33 @@ D16 settles project-rooted name-only hidden listings as N with SupportedPrefligh
 Only the twelve S20 input-byte/nesting boundary/excess recipes remain unresolved; their numeric bounds have not been calibrated or frozen. Calibration belongs to the implementation packet. Each recipe denotes one frontier case. Materialize its concrete event and freeze its numeric bound before acceptance: supported boundary yields the ordinary result, one-unit excess yields F. No candidate threshold or Go output resolves these rows automatically.
 
 Dispatch/harness partitions (outside-tool coverage, malformed event, probe fault, resource bounds, later input and required execution owner) are dev-only in P1. Adversarial partitions are scored separately. Identical preflight inputs must carry identical outcome classes. These allocation rules do not establish held-out coverage or authorize reading a held-out set.
+
+## Rust contract classification overlay
+
+`rust-contract-classification.jsonl` joins the unchanged legacy inputs to the Rust requirement rulings. It contains one record per `contract.jsonl` family/index (1,265), then one per `filesystem.json` link path (24), in Luna's order. It is data for future Rust contract tests; no evaluator currently loads it. Go continues to consume its original expectations. Do not overwrite those expectations or use Go output to select Rust labels.
+
+| Field | Contract |
+| --- | --- |
+| `id`, `kind` | Legacy `family[index]` with `kind=contract`, or the exact relative link path with `kind=filesystem_link`. IDs are unique across all 1,289 records. |
+| `rule_id`, `original_classification` | Luna's unchanged selection rule and `retain` / `re-adjudicate` provenance. These are selectors, not Rust outcomes. |
+| `verdict`, `status`, `consumers` | Final `RETAIN` / `CHANGE`, `status=labelled`; each contract applies to `claude,codex,pi`, links to no consumer wire. No metamorphic variants exist in this overlay. |
+| `source` | Original fixture path plus family/index, or link_path/target. Link records preserve setup metadata, not a verdict about an operation on the link. Legacy tool/input fields use the original fixture vocabulary; canonical consumer event projection remains the adapter's owner. |
+| `requirement_sources` | Luna selection, deepseek-adjudication, decisions v2.2, and applicable coordinator rulings. C1–C4 apply over the adjudication; C5 final replaces proposed C5. |
+| `expectation_source` | RETAIN only: original contract `expected` object, including all consumers' reason/advice expectations, or the unchanged link source. No duplicate output strings. |
+| `new_expectation` | CHANGE only: `outcome_class`, `expected_coverage`, `reason_contract`, `advice_expectation`, and `recovery_objective`. It replaces the old expectation for Rust only. |
+| `expected_coverage` | SupportedPreflight for identified effects/name-only listing; LimitedPreflight with the actual syntax, inspection-budget or identity gap for U-R; NotCompleted/ProbeFault for F. Outcome/coverage are semantic fixture labels, not proof the current Rust types/evaluator implement every gap. |
+| `reason_contract` | Required semantic cause and concrete alternative elements for D/U-R/F; absent for N. A resource bound is not a syntax error, and an EACCES fault is not permission. |
+| `advice_expectation` | Explicit absent advice for every consumer on all thirteen CHANGE records. RETAIN advice comes from the original consumer expectation. |
+| `recovery_objective` | Rechecked canonical operations under `next_operations` keyed by consumer, a concrete `owner_action`, or the original permitted listing; task result, excluded scope and automatic-application support stay explicit. The synthetic search continuation uses pattern `x` and preserves the original glob; it establishes project scope, not a match or completion of a whole-HOME request. |
+
+The 142 re-adjudicated contract records resolve to CHANGE 13 / RETAIN 129. R1 contributes another 1,123 RETAIN records; all 24 links are RETAIN, including FS2 project/loop-a. Overall: CHANGE 13 / RETAIN 1,276. R2f keeps all 25 CodeFile denials under C5 final. C1 keeps protected-cwd denials; C2 keeps the known conservative env -i denials without a speculative dump-rule refinement.
+
+The source hashes bind this classification to exact inputs:
+
+| Input | SHA-256 |
+| --- | --- |
+| `tests/fixtures/contract.jsonl` | `1e223c6453d6883acc88af9967beab4251ba0fc6d636a1186482b6e4b524c695` |
+| `tests/fixtures/filesystem.json` | `b1d51062925ccbfdfae5c8ffbc3e130e25391f31b05207448ee02be8cc874b3e` |
+| `fixture-reference/r3/luna-classification.jsonl` | `960f64d997e266c8dc0024458182825e5514926d82cf92abdf29eff18492c057` |
+
+A fixture consumer must reject missing/duplicate IDs, source-hash drift, rule-id drift or a verdict outside the final adjudication before using the overlay. Classification does not claim P1 implementation, installed protocol, hook loading, execution confinement or write-preservation acceptance.
