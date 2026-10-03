@@ -67,17 +67,21 @@ pub fn infer(command: &CommandRecord, cwd: &str) -> Effects {
             }
         }
         "ls" => {
+            let recursive = args.iter().any(|arg| {
+                arg == "--recursive"
+                    || arg.starts_with('-') && !arg.starts_with("--") && arg.contains('R')
+            });
             effects.hidden_listing = args
                 .iter()
                 .any(|s| s.starts_with('-') && s.contains(['a', 'A']));
             let paths: Vec<_> = args.iter().filter(|s| !s.starts_with('-')).collect();
             for path in paths {
-                let mut target = read(path, true);
+                let mut target = read(path, recursive);
                 target.name_only = true;
                 effects.targets.push(target);
             }
             if effects.targets.is_empty() {
-                let mut target = read(cwd, true);
+                let mut target = read(cwd, recursive);
                 target.name_only = true;
                 effects.targets.push(target);
             }

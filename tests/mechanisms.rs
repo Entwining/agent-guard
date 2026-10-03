@@ -263,32 +263,109 @@ fn name_only_listing_and_content_consumer() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
     for arm in [Arm::Brush, Arm::TreeSitter] {
-        for (tail, expected) in [
-            ("", "N"),
-            (" | xargs cat", "D"),
-            ("; xargs cat input.txt", "N"),
-        ] {
-            let mut probe = support::RecordingProbe::new(&fixture);
-            let result = check(
-                &fixture,
-                &ctx,
-                &mut probe,
-                arm,
-                &format!("rg --files --hidden '{}'{}", fixture.project, tail),
-            );
-            assert_eq!(support::class(&result), expected, "{tail}");
+        for listing in ["rg --files --hidden", "ls -a"] {
+            for (tail, expected) in [
+                ("", "N"),
+                (" | xargs cat", "D"),
+                ("; xargs cat input.txt", "N"),
+            ] {
+                let mut probe = support::RecordingProbe::new(&fixture);
+                let result = check(
+                    &fixture,
+                    &ctx,
+                    &mut probe,
+                    arm,
+                    &format!("{listing} '{}'{}", fixture.project, tail),
+                );
+                assert_eq!(support::class(&result), expected, "{listing}{tail}");
+            }
         }
-        let mut probe = support::RecordingProbe::new(&fixture);
-        assert_eq!(
-            support::class(&check(
-                &fixture,
-                &ctx,
-                &mut probe,
-                arm,
-                &format!("ls '{}'", fixture.home)
-            )),
-            "D"
-        );
+    }
+}
+
+#[test]
+fn listing_recursion_controls_broad_root() {
+    let fixture = support::Fixture::new();
+    for consumer in [Consumer::Claude, Consumer::Codex, Consumer::Pi] {
+        let mut ctx = context(&fixture);
+        ctx.consumer = consumer;
+        ctx.zsh_executor = consumer != Consumer::Pi;
+        for arm in [Arm::Brush, Arm::TreeSitter] {
+            for cwd in [&fixture.project, &fixture.home] {
+                ctx.cwd = cwd.clone();
+                for source in [
+                    "ls ~",
+                    "ls /",
+                    "ls -ltr ~",
+                    "ls -ltr",
+                    "ls",
+                    "if true; then ls; fi",
+                ] {
+                    let mut probe = support::RecordingProbe::new(&fixture);
+                    let result = check(&fixture, &ctx, &mut probe, arm, source);
+                    assert_eq!(
+                        support::class(&result),
+                        "N",
+                        "{consumer:?} {arm:?} {source} in {cwd}"
+                    );
+                    assert_eq!(result.unwrap().coverage, Coverage::SupportedPreflight);
+                }
+            }
+            ctx.cwd = fixture.home.clone();
+            for option in ["-R", "--recursive", "-laR", "-Rl"] {
+                for root in ["~", "~/Library", "/", ""] {
+                    let source = format!("ls {option} {root}");
+                    let mut probe = support::RecordingProbe::new(&fixture);
+                    let result = check(&fixture, &ctx, &mut probe, arm, &source);
+                    assert_eq!(
+                        support::class(&result),
+                        "D",
+                        "{consumer:?} {arm:?} {source}"
+                    );
+                    let Ok(Evaluation {
+                        outcome: Outcome::ProtectedDenial { reason, recovery },
+                        coverage,
+                    }) = result
+                    else {
+                        panic!("expected broad-root denial")
+                    };
+                    assert_eq!(coverage, Coverage::SupportedPreflight);
+                    assert!(reason.effect.contains("broad recursive"));
+                    assert!(!recovery.automatic_application_supported);
+                    assert!(
+                        recovery
+                            .excluded_scope
+                            .iter()
+                            .any(|scope| scope.contains("outside"))
+                    );
+                    let next =
+                        agent_guard_rust::adapters::recovery_value(&recovery)["next_step"].clone();
+                    assert_eq!(next["cwd"], fixture.project);
+                    assert_eq!(
+                        next["input"]["command"],
+                        format!("ls '{}'", fixture.project)
+                    );
+                    let body = serde_json::to_vec(&json!({"tool_name":next["tool"],"tool_input":next["input"],"cwd":next["cwd"]})).unwrap();
+                    let mut probe = support::RecordingProbe::new(&fixture);
+                    let rechecked = evaluate_with_arm(
+                        Event {
+                            bytes: &body,
+                            context: &ctx,
+                            probe: &mut probe,
+                        },
+                        arm,
+                    );
+                    assert_eq!(support::class(&rechecked), "N");
+                }
+            }
+            ctx.cwd = fixture.project.clone();
+            for path in [format!("{}/.ssh", fixture.home), fixture.container.clone()] {
+                let mut probe = support::RecordingProbe::new(&fixture);
+                let result = check(&fixture, &ctx, &mut probe, arm, &format!("ls '{path}'"));
+                assert_eq!(support::class(&result), "D", "{path}");
+                assert!(probe.calls.is_empty());
+            }
+        }
     }
 }
 
