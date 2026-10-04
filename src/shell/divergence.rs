@@ -7,7 +7,9 @@ pub(super) struct Detection {
     pub executable_qualifier: bool,
     pub masked: String,
     pub code: Vec<String>,
+    pub code_regions: Vec<(Range<usize>, String)>,
     pub evaluated_variables: Vec<String>,
+    pub evaluated_regions: Vec<(Range<usize>, String)>,
     pub parameter_spans: Vec<Range<usize>>,
     pub array_tail_spans: Vec<Range<usize>>,
 }
@@ -71,6 +73,9 @@ pub(super) fn detect_lexed(
                 && flags.contains('e')
             {
                 result.evaluated_variables.push(name.to_owned());
+                result
+                    .evaluated_regions
+                    .push((cursor..end + 1, name.to_owned()));
             }
             mask(&mut masked, cursor..end + 1);
             cursor = end + 1;
@@ -83,6 +88,9 @@ pub(super) fn detect_lexed(
         {
             result.divergent = true;
             result.code.push(source[cursor + 2..end].to_owned());
+            result
+                .code_regions
+                .push((cursor..end + 1, source[cursor + 2..end].to_owned()));
             mask(&mut masked, cursor..end + 1);
             cursor = end + 1;
             continue;
@@ -119,6 +127,7 @@ pub(super) fn detect_lexed(
                         code
                     };
                     result.code.push(code.to_owned());
+                    result.code_regions.push((cursor..end + 1, code.to_owned()));
                 }
             }
             // Ordinary extglob/filter groups retain their original operand spelling.

@@ -1,5 +1,41 @@
 # Offline Rust migration evidence
 
+## M2 statement scopes and binding joins
+
+Rulings 33 and 35 replace the flattened binding table with a bounded statement
+evaluator. Assignment-only and declaration bindings persist; command prefixes
+are visible during eligible calls and restored afterwards, including captured
+return states. Function locals restore the caller's value, plain assignments
+remain global, and callees read the innermost active binding. Function
+definitions retain an isolated conservative observation and direct calls replay
+in caller scope.
+
+If, case, loop, and/or, and command-alternative exits merge binding candidates.
+Brace groups propagate; subshells, substitutions and background jobs isolate.
+The last pipeline element contributes a candidate under the Bash/Zsh union.
+Known HOME bindings feed parameter and tilde expansion. Compound loop/test
+words produce generic Use targets. Their credential content-read gate and
+SSH identity probe eligibility are direct dependencies of those records:
+Use does not read credential contents or request SSH stat metadata; App Data
+still uses lexical protection and readlink alone.
+
+The model conservatively refuses binding-changing eval, function/prefix eval
+interactions, prefix eval local shadows, dependent sequential prefix RHS,
+declaration-builtin shadow precedence, prefixed or complex loop exits, recursive
+calls, unknown loop-carried state, and dynamic binding membership. Known eval
+without binding mutation retains existing support. Tests name each fallback;
+these are follow-ups, not completed shell execution semantics. Bound exhaustion
+uses InspectionBudget and never permits the original operation.
+
+Static scope fixtures cover all three consumers, with safe echo/printf witnesses
+in Bash 3.2 and Zsh 5.9. Mechanism ablations compile outside the checkout, fail a
+named assertion, restore exact bytes and pass the same assertion, with corpus
+and variant observations for mutant and restore. The raw evidence is under
+`~/.cache/guard-fixtures/fixture-seat/r5-m2-phase-b/`. Go remains unchanged; its observed
+binding losses and false denials remain cutover backlog. Ruling 34's additional
+arithmetic sinks, the full cwd tracker and physical resolver are later commit
+groups within M2. M2 acceptance and runtime cutover remain open.
+
 ## M2 bounded arithmetic bindings
 
 M1 is accepted at `ff95842`; M2 Phase B is in progress. Ruling 16 routes
@@ -414,9 +450,9 @@ observable partitions are:
 | Six unterminated quote forms (syntax-only) | Refused | Refused | Go also exit 2; Rust malformed blocking path |
 | Quoted heredoc end tag | DATA only | DATA only | Tag is inert; following active flags still U-R |
 
-## P0 record limits (E1 corrected)
+## Historical P0 record limits (E1 corrected, at M1.3)
 
-| Field | Current producer / limit | Later owner |
+| Field | Producer / limit at M1.3 | Later owner |
 | --- | --- | --- |
 | Word.role | Always Arg | P3/P5 |
 | Word.value | Text clone; operandValue projection absent | P5 |

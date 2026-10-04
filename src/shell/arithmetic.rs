@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 pub(super) struct Evaluation {
     pub code: Vec<String>,
     pub bounded: bool,
+    pub names: Vec<String>,
     visits: usize,
 }
 
@@ -85,6 +86,9 @@ fn visit(
                 cursor += 1;
             }
             let name = &expression[start..cursor];
+            if !result.names.iter().any(|n| n == name) {
+                result.names.push(name.to_owned());
+            }
             if let Some(values) = bindings.get(name) {
                 if running.len() >= MAX_NESTING || running.iter().any(|n| n == name) {
                     result.bounded = true;

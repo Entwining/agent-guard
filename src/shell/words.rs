@@ -340,7 +340,13 @@ fn fill(
             }
             WordPiece::TildeExpansion(tilde) => {
                 let value = match tilde {
-                    TildeExpr::Home => Some(host.home),
+                    TildeExpr::Home => {
+                        out.word.vars.push("HOME".into());
+                        variables
+                            .get("HOME")
+                            .map(String::as_str)
+                            .or(Some(host.home))
+                    }
                     TildeExpr::UserHome(user) if user == host.user.unwrap_or("unknown") => {
                         Some(host.home)
                     }
@@ -388,11 +394,10 @@ fn fill(
                     merge_fragment(out, inner, piece.start_index + offset);
                 }
                 if let Some(value) = plain.and_then(|name| {
-                    if name == "HOME" {
-                        Some(host.home)
-                    } else {
-                        variables.get(name).map(String::as_str)
-                    }
+                    variables
+                        .get(name)
+                        .map(String::as_str)
+                        .or_else(|| (name == "HOME").then_some(host.home))
                 }) {
                     out.word.pwd |= plain.is_some_and(|name| name == "PWD");
                     out.word.text.push_str(value);

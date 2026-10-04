@@ -282,7 +282,10 @@ fn assignment_subscript_forwards_code() {
     )
     .unwrap();
     assert!(
-        data.script.commands.is_empty(),
+        data.script
+            .commands
+            .iter()
+            .all(|c| c.program.is_none() && !c.nested),
         "assignment data is not executed code"
     );
 }

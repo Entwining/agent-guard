@@ -45,9 +45,26 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         target.expands = redirect.expands;
         effects.targets.push(target);
     }
+    if command.function {
+        return effects;
+    }
+    if command.program.is_none() {
+        for word in &command.argv {
+            if !matches!(
+                word.role,
+                crate::record::Role::Precommand | crate::record::Role::Assign
+            ) {
+                effects
+                    .targets
+                    .push(Target::from_word(word, cwd, host, Effect::Use, Walk::None));
+            }
+        }
+        return effects;
+    }
+    let index = command.program.unwrap_or(0);
     let Some(program) = command
         .argv
-        .first()
+        .get(index)
         .map(|s| s.rsplit('/').next().unwrap_or(s))
     else {
         return effects;
@@ -64,7 +81,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             })
         })
         .unwrap_or(program);
-    let args = &command.argv[1..];
+    let args = &command.argv[index + 1..];
     let read = |word: &Word, recursive| {
         Target::from_word(
             word,
@@ -80,7 +97,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.variable = !(program != "echo" && args.first().is_some_and(|arg| arg == "-v"))
                 && command.variables().any(|name| secret_name(name));
         }
-        "true" | "false" | ":" | "cd" | "unset" | "local" => {}
+        "true" | "false" | ":" | "cd" | "unset" | "local" | "break" | "continue" | "return" => {}
         "setopt" | "unsetopt" | "emulate" => effects.gaps.push(CoverageGap::ExecutorDivergence),
         "set" => effects.dump = args.is_empty(),
         "typeset" | "declare" => {
@@ -222,6 +239,7 @@ fn secret_name(name: &str) -> bool {
 
 fn child(command: &CommandRecord, argv: &[Word], cwd: &str) -> CommandRecord {
     CommandRecord {
+        function: false,
         argv: argv.to_vec(),
         redirects: Vec::new(),
         pipeline: command.pipeline,
@@ -977,6 +995,82 @@ pub fn code_paths(code: &str) -> Vec<String> {
 #[cfg(test)]
 mod record_tests {
     use super::*;
+    #[test]
+    fn control_flow_builtins_are_not_unmodelled_programs() {
+        let host = HostFacts {
+            home: "/h",
+            user: None,
+        };
+        for source in ["break", "continue", "return", "D=public true"] {
+            let observation =
+                crate::shell::observe(source, crate::shell::Arm::Brush, host.home, "/p", true)
+                    .unwrap();
+            let command = observation
+                .script
+                .commands
+                .iter()
+                .find(|c| c.program.is_some())
+                .unwrap();
+            let effects = infer(command, &command.cwd, host);
+            assert!(effects.targets.is_empty(), "{source}: {effects:?}");
+            assert!(effects.gaps.is_empty(), "{source}: {effects:?}");
+        }
+    }
+    #[test]
+    fn compound_use_records_have_the_use_effect() {
+        let packet: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/rust-m2-scopes.json")).unwrap();
+        let host = HostFacts {
+            home: "/h",
+            user: None,
+        };
+        for row in packet["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["partition"] == "use")
+        {
+            let observation = crate::shell::observe(
+                row["source"].as_str().unwrap(),
+                crate::shell::Arm::Brush,
+                host.home,
+                "/h/p",
+                true,
+            )
+            .unwrap();
+            let command = observation
+                .script
+                .commands
+                .iter()
+                .find(|command| command.program.is_none() && !command.argv.is_empty())
+                .unwrap();
+            let effects = infer(command, &command.cwd, host);
+            assert_eq!(effects.targets.len(), 1);
+            assert_eq!(effects.targets[0].effect, Effect::Use);
+            assert_eq!(effects.targets[0].unresolved, command.argv[0].text);
+        }
+        let row = packet["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == "assignment-data-control")
+            .unwrap();
+        let observation = crate::shell::observe(
+            row["source"].as_str().unwrap(),
+            crate::shell::Arm::Brush,
+            host.home,
+            "/h/p",
+            true,
+        )
+        .unwrap();
+        let assignment = observation
+            .script
+            .commands
+            .iter()
+            .find(|command| command.program.is_none() && !command.argv.is_empty())
+            .unwrap();
+        assert!(infer(assignment, &assignment.cwd, host).targets.is_empty());
+    }
     fn targets(source: &str) -> Vec<Target> {
         let host = HostFacts {
             home: "/h",

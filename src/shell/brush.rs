@@ -1,13 +1,21 @@
-use super::{Parsed, RawRedirect as Redirect, RawWord as Word, Record};
+use super::{Operator, Parsed, RawRedirect as Redirect, RawWord as Word, Statement};
 use std::ops::Range;
 
 struct Source<'a> {
     text: &'a str,
     offsets: Vec<usize>,
     lexical: super::lexer::Lexed<'a>,
+    expansions: Vec<(Range<usize>, super::RawExpansion)>,
 }
 
 impl Source<'_> {
+    fn expansions(&self, range: &Range<usize>) -> Vec<super::RawExpansion> {
+        self.expansions
+            .iter()
+            .filter(|(r, _)| range.start <= r.start && r.end <= range.end)
+            .map(|(_, e)| e.clone())
+            .collect()
+    }
     fn range(&self, span: &SourceSpan) -> Result<Range<usize>, CheckError> {
         let start = self.offsets.get(span.start.index).copied();
         let end = self.offsets.get(span.end.index).copied();
@@ -37,6 +45,12 @@ fn word(source: &Source<'_>, parsed: &WordAst) -> Result<Word, CheckError> {
     Ok(Word {
         raw: raw.to_owned(),
         syntax: super::WordSyntax::Shell,
+        expansions: parsed
+            .loc
+            .as_ref()
+            .map(|span| source.range(span))
+            .transpose()?
+            .map_or_else(Vec::new, |range| source.expansions(&range)),
     })
 }
 type WordAst = brush_parser::ast::Word;
@@ -55,9 +69,23 @@ pub(super) fn records(source: &str, parsed: &str) -> Result<Parsed, CheckError> 
             kind: CheckErrorKind::ResourceLimit,
         });
     }
+    let detection = super::divergence::detect_lexed(source, &[], &lexical)?;
+    let mut expansions = detection
+        .code_regions
+        .into_iter()
+        .map(|(r, c)| (r, super::RawExpansion::Code(c)))
+        .chain(
+            detection
+                .evaluated_regions
+                .into_iter()
+                .map(|(r, n)| (r, super::RawExpansion::Variable(n))),
+        )
+        .collect::<Vec<_>>();
+    expansions.sort_by_key(|(r, _)| r.start);
     let source = Source {
         text: source,
         lexical,
+        expansions,
         offsets: parsed
             .char_indices()
             .map(|(i, _)| i)
@@ -94,40 +122,79 @@ pub(super) fn records(source: &str, parsed: &str) -> Result<Parsed, CheckError> 
 fn walk_list(
     source: &Source<'_>,
     list: &CompoundList,
-    output: &mut Vec<Record>,
+    output: &mut Vec<Statement>,
 ) -> Result<(), CheckError> {
     for item in &list.0 {
-        for (_, pipeline) in &item.0 {
-            let group = if pipeline.seq.len() > 1 {
-                pipeline
-                    .location()
-                    .map(|span| source.range(&span))
-                    .transpose()?
-                    .map(|span| span.start)
-            } else {
-                None
+        let mut statement = walk_pipeline(source, &item.0.first)?;
+        for next in &item.0.additional {
+            let (operator, pipeline) = match next {
+                AndOr::And(pipeline) => (Operator::And, pipeline),
+                AndOr::Or(pipeline) => (Operator::Or, pipeline),
             };
-            for command in &pipeline.seq {
-                walk_command(source, command, output, group)?;
-            }
+            statement = Statement::Binary(
+                operator,
+                Box::new(statement),
+                Box::new(walk_pipeline(source, pipeline)?),
+            );
         }
+        output.push(if matches!(item.1, SeparatorOperator::Async) {
+            Statement::Async(vec![statement])
+        } else {
+            statement
+        });
     }
     Ok(())
+}
+
+fn walk_pipeline(source: &Source<'_>, pipeline: &Pipeline) -> Result<Statement, CheckError> {
+    let id = if pipeline.seq.len() > 1 {
+        pipeline
+            .location()
+            .map(|s| source.range(&s))
+            .transpose()?
+            .map(|s| s.start)
+    } else {
+        None
+    };
+    let mut commands = Vec::new();
+    for command in &pipeline.seq {
+        let mut records = Vec::new();
+        walk_command(source, command, &mut records, id)?;
+        commands.push(if records.len() == 1 {
+            records.remove(0)
+        } else {
+            Statement::Group(records)
+        });
+    }
+    let mut commands = commands.into_iter();
+    let mut statement = commands.next().unwrap_or(Statement::Group(Vec::new()));
+    for command in commands {
+        statement = Statement::Binary(Operator::Pipe, Box::new(statement), Box::new(command));
+    }
+    Ok(statement)
 }
 
 fn walk_command(
     source: &Source<'_>,
     command: &Command,
-    output: &mut Vec<Record>,
+    output: &mut Vec<Statement>,
     pipeline: Option<usize>,
 ) -> Result<(), CheckError> {
     match command {
         Command::Simple(simple) => {
+            let mut assignments = Vec::new();
             let mut argv = Vec::new();
             let mut redirects = Vec::new();
             if let Some(prefix) = &simple.prefix {
                 for item in &prefix.0 {
-                    item_record(source, item, &mut argv, &mut redirects, output)?;
+                    item_record(
+                        source,
+                        item,
+                        &mut argv,
+                        &mut redirects,
+                        &mut assignments,
+                        output,
+                    )?;
                 }
             }
             if let Some(name) = &simple.word_or_name {
@@ -135,11 +202,19 @@ fn walk_command(
             }
             if let Some(suffix) = &simple.suffix {
                 for item in &suffix.0 {
-                    item_record(source, item, &mut argv, &mut redirects, output)?;
+                    item_record(
+                        source,
+                        item,
+                        &mut argv,
+                        &mut redirects,
+                        &mut assignments,
+                        output,
+                    )?;
                 }
             }
-            if !argv.is_empty() || !redirects.is_empty() {
-                output.push(Record::Command {
+            if !assignments.is_empty() || !argv.is_empty() || !redirects.is_empty() {
+                output.push(Statement::Command {
+                    assignments,
                     argv,
                     redirects,
                     pipeline,
@@ -147,18 +222,18 @@ fn walk_command(
             }
         }
         Command::Compound(compound, redirects) => {
-            walk_compound(source, compound, output)?;
             redirect_list(source, redirects.as_ref(), output)?;
+            walk_compound(source, compound, output)?;
         }
         Command::Function(function) => {
             let mut body = Vec::new();
             walk_compound(source, &function.body.0, &mut body)?;
             redirect_list(source, function.body.1.as_ref(), &mut body)?;
-            output.push(Record::Definition(function.fname.value.clone(), body));
+            output.push(Statement::Definition(function.fname.value.clone(), body));
         }
         Command::ExtendedTest(test, redirects) => {
-            test_words(source, &test.expr, output)?;
             redirect_list(source, redirects.as_ref(), output)?;
+            test_words(source, &test.expr, output)?;
         }
     }
     Ok(())
@@ -167,22 +242,50 @@ fn walk_command(
 fn walk_compound(
     source: &Source<'_>,
     command: &CompoundCommand,
-    output: &mut Vec<Record>,
+    output: &mut Vec<Statement>,
 ) -> Result<(), CheckError> {
     match command {
-        CompoundCommand::BraceGroup(group) => walk_list(source, &group.list, output)?,
-        CompoundCommand::Subshell(group) => walk_list(source, &group.list, output)?,
+        CompoundCommand::BraceGroup(group) => {
+            let mut body = Vec::new();
+            walk_list(source, &group.list, &mut body)?;
+            output.push(Statement::Group(body));
+        }
+        CompoundCommand::Subshell(group) => {
+            let mut body = Vec::new();
+            walk_list(source, &group.list, &mut body)?;
+            output.push(Statement::Subshell(body));
+        }
         CompoundCommand::ForClause(group) => {
-            if let Some(values) = &group.values {
-                output.push(Record::LoopBinding(
-                    group.variable_name.clone(),
-                    values
-                        .iter()
-                        .map(|value| word(source, value))
-                        .collect::<Result<_, _>>()?,
-                ));
-            }
-            walk_list(source, &group.body.list, output)?;
+            // brush 0.4 uses None for both an omitted list and an explicit empty list.
+            let start = source.range(&group.loc)?.start;
+            let end = source.range(&group.body.loc)?.start;
+            let explicit_in = source.text[start..end]
+                .match_indices("in")
+                .any(|(offset, _)| {
+                    let index = start + offset;
+                    source.lexical.context(index).word_syntax()
+                        && index > start
+                        && super::lexer::shell_blank(source.text.as_bytes()[index - 1])
+                        && source
+                            .text
+                            .as_bytes()
+                            .get(index + 2)
+                            .is_some_and(|b| super::lexer::shell_blank(*b) || *b == b';')
+                });
+            let header = group
+                .values
+                .iter()
+                .flatten()
+                .map(|v| word(source, v))
+                .collect::<Result<_, _>>()?;
+            let mut body = Vec::new();
+            walk_list(source, &group.body.list, &mut body)?;
+            output.push(Statement::Loop {
+                variable: Some(group.variable_name.clone()),
+                header,
+                body,
+                empty: explicit_in && group.values.as_ref().is_none_or(Vec::is_empty),
+            });
         }
         CompoundCommand::ArithmeticForClause(group) => {
             let range = source.range(&group.loc)?;
@@ -191,46 +294,90 @@ fn walk_compound(
                 && let Some(right) = source.lexical.closing(left, b'(', b')')
                 && right < range.end
             {
-                output.push(Record::Expansion(Word {
+                output.push(Statement::Expansion(Word {
                     raw: source.text[left + 2..right - 1].to_owned(),
                     syntax: super::WordSyntax::Arithmetic,
+                    expansions: source.expansions(&(left + 2..right - 1)),
                 }));
             } else {
-                output.push(Record::UnsupportedSyntax);
+                output.push(Statement::UnsupportedSyntax);
             }
-            walk_list(source, &group.body.list, output)?;
+            let mut body = Vec::new();
+            walk_list(source, &group.body.list, &mut body)?;
+            output.push(Statement::Loop {
+                variable: None,
+                header: Vec::new(),
+                body,
+                empty: false,
+            });
         }
         CompoundCommand::IfClause(group) => {
-            walk_list(source, &group.condition, output)?;
-            walk_list(source, &group.then, output)?;
+            let mut condition = Vec::new();
+            walk_list(source, &group.condition, &mut condition)?;
+            let mut then = Vec::new();
+            walk_list(source, &group.then, &mut then)?;
+            let mut otherwise = Vec::new();
             if let Some(elses) = &group.elses {
-                for branch in elses {
-                    if let Some(condition) = &branch.condition {
-                        walk_list(source, condition, output)?;
+                for branch in elses.iter().rev() {
+                    let mut body = Vec::new();
+                    walk_list(source, &branch.body, &mut body)?;
+                    if let Some(test) = &branch.condition {
+                        let mut condition = Vec::new();
+                        walk_list(source, test, &mut condition)?;
+                        otherwise = vec![Statement::Conditional {
+                            condition,
+                            then: body,
+                            otherwise,
+                        }];
+                    } else {
+                        otherwise = body;
                     }
-                    walk_list(source, &branch.body, output)?;
                 }
             }
+            output.push(Statement::Conditional {
+                condition,
+                then,
+                otherwise,
+            });
         }
         CompoundCommand::WhileClause(group) | CompoundCommand::UntilClause(group) => {
-            walk_list(source, &group.0, output)?;
-            walk_list(source, &group.1.list, output)?;
+            let mut body = Vec::new();
+            walk_list(source, &group.0, &mut body)?;
+            walk_list(source, &group.1.list, &mut body)?;
+            output.push(Statement::Loop {
+                variable: None,
+                header: Vec::new(),
+                body,
+                empty: false,
+            });
         }
         CompoundCommand::CaseClause(group) => {
-            output.push(Record::Expansion(word(source, &group.value)?));
+            let mut words = vec![word(source, &group.value)?];
+            let mut branches = Vec::new();
+            let mut exhaustive = false;
             for case in &group.cases {
                 for pattern in &case.patterns {
-                    output.push(Record::Expansion(word(source, pattern)?));
+                    let w = word(source, pattern)?;
+                    exhaustive |= w.raw == "*";
+                    words.push(w);
                 }
-                if let Some(body) = &case.cmd {
-                    walk_list(source, body, output)?;
+                let mut body = Vec::new();
+                if let Some(commands) = &case.cmd {
+                    walk_list(source, commands, &mut body)?;
                 }
+                branches.push(body);
             }
+            output.push(Statement::Case {
+                words,
+                branches,
+                exhaustive,
+            });
         }
         CompoundCommand::Coprocess(group) => walk_command(source, &group.body, output, None)?,
-        CompoundCommand::Arithmetic(group) => output.push(Record::Expansion(Word {
+        CompoundCommand::Arithmetic(group) => output.push(Statement::Expansion(Word {
             raw: group.expr.value.clone(),
             syntax: super::WordSyntax::Arithmetic,
+            expansions: source.expansions(&source.range(&group.loc)?),
         })),
     }
     Ok(())
@@ -239,7 +386,7 @@ fn walk_compound(
 fn test_words(
     source: &Source<'_>,
     expr: &ExtendedTestExpr,
-    output: &mut Vec<Record>,
+    output: &mut Vec<Statement>,
 ) -> Result<(), CheckError> {
     match expr {
         ExtendedTestExpr::And(a, b) | ExtendedTestExpr::Or(a, b) => {
@@ -249,14 +396,14 @@ fn test_words(
         ExtendedTestExpr::Not(e) | ExtendedTestExpr::Parenthesized(e) => {
             test_words(source, e, output)?
         }
-        ExtendedTestExpr::UnaryTest(_, w) => output.push(Record::Expansion(word(source, w)?)),
+        ExtendedTestExpr::UnaryTest(_, w) => output.push(Statement::Use(word(source, w)?)),
         ExtendedTestExpr::BinaryTest(predicate, a, b) => {
             for w in [a, b] {
                 let mut value = word(source, w)?;
                 if matches!(predicate, BinaryPredicate::ArithmeticEqualTo) {
                     value.syntax = super::WordSyntax::Arithmetic;
                 }
-                output.push(Record::Expansion(value));
+                output.push(Statement::Use(value));
             }
         }
     }
@@ -268,7 +415,8 @@ fn item_record(
     item: &CommandPrefixOrSuffixItem,
     argv: &mut Vec<Word>,
     redirects: &mut Vec<Redirect>,
-    output: &mut Vec<Record>,
+    assignments: &mut Vec<(String, Word)>,
+    output: &mut Vec<Statement>,
 ) -> Result<(), CheckError> {
     match item {
         CommandPrefixOrSuffixItem::Word(value) => argv.push(word(source, value)?),
@@ -289,12 +437,13 @@ fn item_record(
                     let index = value.raw.get(left + 1..right).ok_or(CheckError {
                         kind: CheckErrorKind::GuardFault,
                     })?;
-                    output.push(Record::Expansion(Word {
+                    output.push(Statement::Expansion(Word {
                         raw: index.to_owned(),
                         syntax: super::WordSyntax::Arithmetic,
+                        expansions: value.expansions.clone(),
                     }));
                 } else {
-                    output.push(Record::UnsupportedSyntax);
+                    output.push(Statement::UnsupportedSyntax);
                 }
             }
             if !argv.is_empty() {
@@ -314,20 +463,22 @@ fn item_record(
                         Word {
                             raw: raw.to_owned(),
                             syntax: super::WordSyntax::Shell,
+                            expansions: value.expansions.clone(),
                         },
                     )
                 };
-                output.push(Record::Assignment(name, target));
+                assignments.push((name, target));
             }
         }
         CommandPrefixOrSuffixItem::IoRedirect(value) => redirect(source, value, redirects, output)?,
         CommandPrefixOrSuffixItem::ProcessSubstitution(_, group) => {
             let mut records = Vec::new();
             walk_list(source, &group.list, &mut records)?;
-            output.push(Record::Nested(records));
+            output.push(Statement::Substitution(records));
             argv.push(Word {
                 raw: "__observed_stream__".into(),
                 syntax: super::WordSyntax::Shell,
+                expansions: Vec::new(),
             });
         }
     }
@@ -337,14 +488,15 @@ fn item_record(
 fn redirect_list(
     source: &Source<'_>,
     list: Option<&RedirectList>,
-    output: &mut Vec<Record>,
+    output: &mut Vec<Statement>,
 ) -> Result<(), CheckError> {
     if let Some(list) = list {
         let mut redirects = Vec::new();
         for value in &list.0 {
             redirect(source, value, &mut redirects, output)?;
         }
-        output.push(Record::Command {
+        output.push(Statement::Command {
+            assignments: Vec::new(),
             argv: Vec::new(),
             redirects,
             pipeline: None,
@@ -357,7 +509,7 @@ fn redirect(
     source: &Source<'_>,
     value: &IoRedirect,
     redirects: &mut Vec<Redirect>,
-    output: &mut Vec<Record>,
+    output: &mut Vec<Statement>,
 ) -> Result<(), CheckError> {
     match value {
         IoRedirect::File(
@@ -382,23 +534,23 @@ fn redirect(
         IoRedirect::File(_, _, IoFileRedirectTarget::ProcessSubstitution(_, group)) => {
             let mut records = Vec::new();
             walk_list(source, &group.list, &mut records)?;
-            output.push(Record::Nested(records));
+            output.push(Statement::Substitution(records));
         }
         IoRedirect::HereDocument(_, doc) => {
             let Some(span) = &doc.doc.loc else {
-                output.push(Record::UnsupportedSyntax);
+                output.push(Statement::UnsupportedSyntax);
                 return Ok(());
             };
             let span = source.range(span)?;
             let Some((range, quoted, strip_tabs)) = source.lexical.heredoc_body(span.start) else {
-                output.push(Record::UnsupportedSyntax);
+                output.push(Statement::UnsupportedSyntax);
                 return Ok(());
             };
             if range.end > span.end
                 || *quoted == doc.requires_expansion
                 || *strip_tabs != doc.remove_tabs
             {
-                output.push(Record::UnsupportedSyntax);
+                output.push(Statement::UnsupportedSyntax);
             }
             let raw = source.text.get(range.clone()).ok_or(CheckError {
                 kind: CheckErrorKind::GuardFault,
@@ -411,10 +563,11 @@ fn redirect(
                 raw.to_owned()
             };
             if raw != doc.doc.value {
-                output.push(Record::UnsupportedSyntax);
+                output.push(Statement::UnsupportedSyntax);
             }
             let body = Word {
                 raw,
+                expansions: source.expansions(range),
                 syntax: if !quoted {
                     super::WordSyntax::Heredoc
                 } else {
@@ -422,7 +575,7 @@ fn redirect(
                 },
             };
             if !quoted {
-                output.push(Record::Expansion(body.clone()));
+                output.push(Statement::Expansion(body.clone()));
             }
             redirects.push(Redirect {
                 target: body,
@@ -431,7 +584,7 @@ fn redirect(
         }
         IoRedirect::HereString(_, value) => {
             let body = word(source, value)?;
-            output.push(Record::Expansion(body.clone()));
+            output.push(Statement::Expansion(body.clone()));
             redirects.push(Redirect {
                 target: body,
                 direction: crate::record::Direction::Herestring,
@@ -451,6 +604,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn explicit_empty_for_list_is_not_positional_arguments() {
+        let raw = "for n in; do echo public; done";
+        let parsed = records(raw, raw).unwrap().records.unwrap();
+        assert!(matches!(&parsed[0], Statement::Loop { empty: true, .. }));
+        let raw = "for n; do echo public; done";
+        let parsed = records(raw, raw).unwrap().records.unwrap();
+        assert!(matches!(&parsed[0], Statement::Loop { empty: false, .. }));
+    }
+
+    #[test]
     fn missing_subscript_closer_is_unsupported_not_fault() {
         // Same-width original/AST disagreement injects the lexical missing closer
         // at the production assignment owner without changing its fault channel.
@@ -460,7 +623,11 @@ mod tests {
                 .records
                 .unwrap()
                 .iter()
-                .any(|record| { matches!(record, Record::UnsupportedSyntax) })
+                .flat_map(|record| match record {
+                    Statement::Group(body) => body.as_slice(),
+                    other => std::slice::from_ref(other),
+                })
+                .any(|record| { matches!(record, Statement::UnsupportedSyntax) })
         );
     }
 
@@ -470,8 +637,12 @@ mod tests {
         let parsed = records(raw, raw).unwrap().records.unwrap();
         let bodies: Vec<_> = parsed
             .iter()
+            .flat_map(|record| match record {
+                Statement::Group(body) => body.as_slice(),
+                other => std::slice::from_ref(other),
+            })
             .filter_map(|record| match record {
-                Record::Expansion(word) => Some(word.raw.as_str()),
+                Statement::Expansion(word) => Some(word.raw.as_str()),
                 _ => None,
             })
             .collect();
@@ -504,6 +675,7 @@ mod tests {
         assert!(changed);
         let source = Source {
             text: raw,
+            expansions: Vec::new(),
             offsets: raw
                 .char_indices()
                 .map(|(i, _)| i)
@@ -516,12 +688,12 @@ mod tests {
         assert!(
             output
                 .iter()
-                .any(|r| matches!(r, Record::UnsupportedSyntax))
+                .any(|r| matches!(r, Statement::UnsupportedSyntax))
         );
         assert!(
             output
                 .iter()
-                .any(|r| matches!(r, Record::Expansion(word) if word.raw == "public\n"))
+                .any(|r| matches!(r, Statement::Expansion(word) if word.raw == "public\n"))
         );
     }
 }

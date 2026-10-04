@@ -136,6 +136,7 @@ pub enum Flag {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Command {
+    pub function: bool,
     pub argv: Vec<Word>,
     pub redirects: Vec<Redirect>,
     pub cwd: String,

@@ -145,6 +145,7 @@ fn glob_probe_oracle_uses_word_provenance() {
             &fixture.home,
             false,
             patterned,
+            Effect::Read,
             &mut probe,
         )
         .unwrap();

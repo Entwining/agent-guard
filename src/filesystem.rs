@@ -345,7 +345,15 @@ pub fn identify_scope(
     search: bool,
     probe: &mut dyn Probe,
 ) -> Result<Identity, CheckError> {
-    identify_target(path, cwd, home, search, true, probe)
+    identify_target(
+        path,
+        cwd,
+        home,
+        search,
+        true,
+        crate::record::Effect::Read,
+        probe,
+    )
 }
 
 pub fn identify_target(
@@ -354,6 +362,7 @@ pub fn identify_target(
     home: &str,
     search: bool,
     patterned: bool,
+    effect: crate::record::Effect,
     probe: &mut dyn Probe,
 ) -> Result<Identity, CheckError> {
     let raw_path = absolute_input(path, cwd, home);
@@ -387,10 +396,15 @@ pub fn identify_target(
     if search && broad_root(&resolved, &resolved_home) {
         return Ok(Identity::Public(resolved));
     }
-    match ssh_denied(&path, &resolved, cwd, home, &resolved_home, search, probe)? {
-        Some(true) => return Ok(Identity::Protected(Protection::SshPrivate)),
-        None => return Ok(Identity::Bound),
-        Some(false) => {}
+    if matches!(
+        effect,
+        crate::record::Effect::Read | crate::record::Effect::Write | crate::record::Effect::List
+    ) {
+        match ssh_denied(&path, &resolved, cwd, home, &resolved_home, search, probe)? {
+            Some(true) => return Ok(Identity::Protected(Protection::SshPrivate)),
+            None => return Ok(Identity::Bound),
+            Some(false) => {}
+        }
     }
     Ok(Identity::Public(resolved))
 }

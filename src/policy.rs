@@ -252,14 +252,18 @@ impl Inspection<'_> {
                 &self.context.home,
                 target.walk != Walk::None,
                 target.glob,
+                target.effect,
                 self.probe,
             )?
         };
         match identity {
             Identity::Protected(kind) => {
                 let touches = kind == Protection::AppData
-                    || kind == Protection::SshPrivate
-                    || !matches!(target.effect, Effect::Write | Effect::Name | Effect::List);
+                    || kind == Protection::SshPrivate && target.effect != Effect::Use
+                    || !matches!(
+                        target.effect,
+                        Effect::Write | Effect::Name | Effect::List | Effect::Use
+                    );
                 if touches {
                     self.effect(EffectRecord::ProtectedTarget {
                         protection: kind,

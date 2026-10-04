@@ -33,7 +33,9 @@ fn argv(source: &str) -> Vec<agent_guard_rust::record::Word> {
     .unwrap()
     .script
     .commands
-    .remove(0)
+    .into_iter()
+    .find(|command| command.program.is_some())
+    .unwrap()
     .argv
 }
 
