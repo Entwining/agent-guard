@@ -12,7 +12,7 @@ pub mod record;
 pub mod shell;
 mod targets;
 
-pub use policy::{Context, Event, evaluate, evaluate_with_arm};
+pub use policy::{Context, Event, evaluate, evaluate_with_arm, evaluate_with_catalog};
 
 /// A completed preflight decision retains coverage independently of whether the call proceeds.
 #[derive(Debug, Clone, PartialEq, Eq)]

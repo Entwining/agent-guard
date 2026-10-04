@@ -31,6 +31,23 @@ pub fn evaluate(event: Event<'_>) -> Result<Evaluation, CheckError> {
 }
 
 pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, CheckError> {
+    evaluate_with_catalog_loader(event, arm, filesystem::FirmlinkTable::load)
+}
+
+/// Typed host metadata for isolated evaluations; hook request input has no catalog field.
+pub fn evaluate_with_catalog(
+    event: Event<'_>,
+    arm: Arm,
+    catalog: filesystem::FirmlinkTable,
+) -> Result<Evaluation, CheckError> {
+    evaluate_with_catalog_loader(event, arm, || Ok(catalog))
+}
+
+fn evaluate_with_catalog_loader(
+    event: Event<'_>,
+    arm: Arm,
+    load: impl FnOnce() -> Result<filesystem::FirmlinkTable, CheckError>,
+) -> Result<Evaluation, CheckError> {
     let Event {
         bytes,
         context,
@@ -65,9 +82,11 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
             effects: Vec::new(),
         });
     }
+    let catalog = load()?;
     let mut inspection = Inspection {
         context,
         probe,
+        resolver: filesystem::Resolver::new(&context.home, &catalog),
         arm,
         gaps: Vec::new(),
         denial: None,
@@ -78,7 +97,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
     match &decoded.operation {
         Operation::Read(path) | Operation::Write(path) => inspection.target(
             &Target::new(
-                path.clone(),
+                filesystem::absolute_input(path, &decoded.cwd, &context.home),
                 if matches!(decoded.operation, Operation::Write(_)) {
                     Effect::Write
                 } else {
@@ -92,6 +111,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
         )?,
         Operation::Search { root, glob } => {
             let root = if root.is_empty() { &decoded.cwd } else { root };
+            let root = filesystem::absolute_input(root, &decoded.cwd, &context.home);
             let mut target = Target::new(root.clone(), Effect::Read, Walk::Visible, Via::Tool);
             target.search = true;
             inspection.target(&target, &decoded.cwd, EffectSource::Operand)?;
@@ -218,6 +238,7 @@ pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, Check
 struct Inspection<'a> {
     context: &'a Context,
     probe: &'a mut dyn Probe,
+    resolver: filesystem::Resolver<'a>,
     arm: Arm,
     gaps: Vec<CoverageGap>,
     denial: Option<String>,
@@ -243,27 +264,21 @@ impl Inspection<'_> {
         cwd: &str,
         source: EffectSource,
     ) -> Result<(), CheckError> {
+        let mut target = target.clone();
         let identity = if target.expands && filesystem::appdata_fragment(&target.path) {
             Identity::Protected(Protection::AppData)
         } else {
-            filesystem::identify_target(
-                &target.path,
-                cwd,
-                &self.context.home,
-                target.walk != Walk::None,
-                target.glob,
-                target.effect,
-                self.probe,
-            )?
+            self.resolver.target(&mut target, cwd, self.probe)?
         };
         match identity {
             Identity::Protected(kind) => {
-                let touches = kind == Protection::AppData
-                    || kind == Protection::SshPrivate && target.effect != Effect::Use
-                    || !matches!(
-                        target.effect,
-                        Effect::Write | Effect::Name | Effect::List | Effect::Use
-                    );
+                let touches = match kind {
+                    Protection::AppData => target.effect != Effect::Name || target.glob,
+                    Protection::SshPrivate => {
+                        matches!(target.effect, Effect::Read | Effect::Write | Effect::List)
+                    }
+                    _ => target.effect == Effect::Read,
+                };
                 if touches {
                     self.effect(EffectRecord::ProtectedTarget {
                         protection: kind,
@@ -281,12 +296,7 @@ impl Inspection<'_> {
             }
             Identity::Bound => self.gap(CoverageGap::IdentityBound),
             Identity::Public(path) => {
-                let resolved_home = match filesystem::identify(
-                    &self.context.home,
-                    &self.context.home,
-                    &self.context.home,
-                    self.probe,
-                )? {
+                let resolved_home = match self.resolver.home(self.probe)? {
                     Identity::Public(path) => path,
                     Identity::Bound => {
                         self.gap(CoverageGap::IdentityBound);
@@ -324,7 +334,8 @@ impl Inspection<'_> {
                 kind: CheckErrorKind::ResourceLimit,
             });
         }
-        match filesystem::identify(cwd, cwd, &self.context.home, self.probe)? {
+        let mut target = Target::new(cwd.to_owned(), Effect::Read, Walk::None, Via::Cwd);
+        match self.resolver.target(&mut target, cwd, self.probe)? {
             Identity::Protected(kind) => {
                 self.effect(EffectRecord::ProtectedTarget {
                     protection: kind,
@@ -414,7 +425,12 @@ impl Inspection<'_> {
                 let previous_denial = self.denial.take();
                 for path in targets::code_paths(&code) {
                     self.target(
-                        &Target::new(path, Effect::Read, Walk::None, Via::Code),
+                        &Target::new(
+                            filesystem::absolute_input(&path, cwd, &self.context.home),
+                            Effect::Read,
+                            Walk::None,
+                            Via::Code,
+                        ),
                         cwd,
                         EffectSource::InlineCode,
                     )?;
@@ -474,5 +490,68 @@ fn recovery(context: &Context, cwd: &str, effect: &str) -> Recovery {
         preserved_scope: vec![format!("requested cwd: {cwd}")],
         excluded_scope,
         automatic_application_supported: false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct NoProbe {
+        calls: usize,
+    }
+    impl Probe for NoProbe {
+        fn read_link(
+            &mut self,
+            _: &std::path::Path,
+        ) -> std::io::Result<Option<std::path::PathBuf>> {
+            self.calls += 1;
+            Ok(None)
+        }
+        fn stat(&mut self, _: &std::path::Path) -> std::io::Result<Option<filesystem::Metadata>> {
+            self.calls += 1;
+            Ok(None)
+        }
+    }
+
+    #[test]
+    fn catalog_initialization_fault_blocks_supported_request() {
+        let context = Context {
+            consumer: Consumer::Claude,
+            home: "/h".into(),
+            user: None,
+            cwd: "/project".into(),
+            zsh_executor: true,
+            require_execution_owner: false,
+            shell_observation_entries: std::cell::Cell::new(0),
+        };
+        let mut probe = NoProbe { calls: 0 };
+        let loads = std::cell::Cell::new(0);
+        let result = evaluate_with_catalog_loader(
+            Event {
+                bytes: br#"{"tool_name":"Read","tool_input":{"file_path":"public"}}"#,
+                context: &context,
+                probe: &mut probe,
+            },
+            Arm::Brush,
+            || {
+                loads.set(loads.get() + 1);
+                Err(CheckError {
+                    kind: CheckErrorKind::ProbeFault,
+                })
+            },
+        );
+        assert!(matches!(
+            result,
+            Err(CheckError {
+                kind: CheckErrorKind::ProbeFault
+            })
+        ));
+        let wire = adapters::render(context.consumer, &result);
+        assert_eq!(wire.exit, 2);
+        assert!(wire.stdout.is_empty() && wire.stderr.contains("filesystem probe failed"));
+        assert_eq!(probe.calls, 0);
+        assert_eq!(loads.get(), 1);
+        assert_eq!(context.shell_observation_entries.get(), 0);
     }
 }

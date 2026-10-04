@@ -1,5 +1,57 @@
 # Offline Rust migration evidence
 
+## M2 ordered filesystem identity and direct roles
+
+Target construction keeps a clean Path and raw Unresolved. One ordered component
+walker consumes Unresolved, retains Data-volume parent transitions, resolves
+relative links against the physical prefix, and counts successful links only.
+The ninth link exceeds Go's eight-link budget. A lexical check precedes every
+readlink; App Data resolution never uses stat. SSH retains its separate checked
+metadata owner and its private-spelling zero-probe contract.
+
+The immutable `/usr/share/firmlinks` catalog is loaded once per supported
+evaluation, including its real initialization-error boundary. The typed test
+entry accepts a host catalog; JSON input has no override. Catalog parsing uses
+the second TAB column, case-folded exact keys and LF separators that retain CR
+bytes. No HOME identity cache is added. Glob/Expands provenance selects fixed
+prefix resolution; literal punctuation, Name without Glob, and Tool globs keep
+their owning contracts.
+
+The generic Name gate requires ruling 37's adapter roles: du/find/fd scan roots
+and rg file roots are List, interpreter environment-file options are Use, Git
+directory options are Enter, and Git metadata operands are Meta. Their Go
+owners are `native/targets/programs.go:58`, `:81`, `:95`, `:96`,
+`native/targets/search.go:17` and `native/targets/git.go:42`, `:57`.
+Other option grammars and program roles remain at P3/P5/P6. Independent role
+ablations expose 18 previously matched rows / 54 consumer observations; the
+earlier 14/42 and 17/51 estimates were incomplete. The restored differential
+loses no previously matched row.
+
+Against `75edd80`, P7 closes appdata[109], appdata[111], cwd[68], and the direct
+Git-role dependency programs[44]. The corpus retains all 21 CHANGE contracts
+with 90 defect rows / 254 consumer conflicts remaining. No new F appears;
+three existing fault rows / nine observations remain explicit. The 636
+req4–req20 observations have nine explained field changes and no new N, U-C or
+F. Full field differences include probe-count changes; they are not all verdict
+changes. The 28-row packet supplies 84 wire projections, and 30 synthetic
+layout rows distinguish the identity mechanisms.
+
+Fifty-six final mechanism receipts compile, fail a named assertion, restore
+all source bytes and pass the identical assertion. Every mutant and restore
+runs the full corpus and all six M2 packets / 876 projections, with zero
+restoration drift. The observation summary is
+`e7d892688f1f3f6960344354dbe8ad6e968b3a7a4bde57cc09fe6742bf14e6a5`;
+the ablation summary is
+`d1588fc4449948359ff1938c8bd0646d9d2d8b61c33a1203801e1f2cda1066a3`,
+under `~/.cache/guard-fixtures/fixture-seat/r5-m2-phase-b/`.
+
+The release suite completes 252 tests and fails only the exact strict
+90/254 differential. The debug dev contract exposes a cwd-group stack
+regression at its existing 64-level nesting boundary, also reproduced at
+`75edd80`; a separate P2 correction is required. These observations do not
+accept M2 or establish installed loading or cutover. Go and production hooks
+remain unchanged, and the packaged Rust entry remains version-only.
+
 ## M2 tracked directories and PWD data
 
 The directory owner separates a raw physical prefix from its logical tail and
@@ -26,8 +78,10 @@ open. The full physical/firmlink owner and directory-target roles await P7.
 The frozen cwd packet contains 51 rows and 153 consumer projections. Thirty-two
 mechanism ablations compile, fail a named assertion, restore every source byte
 and pass. Each mutant and restore runs the full corpus and all five M2 packets
-(792 consumer projections); every restore has zero field drift. The final suite
-passes 236 tests and fails only the unchanged strict legacy-conformance test.
+(792 consumer projections); every restore has zero field drift. The recorded
+suite completes 236 passing tests, fails the strict legacy-conformance test,
+and aborts the debug dev contract at its nesting boundary. The earlier report's
+claim that only strict conformance failed omitted that abort.
 fmt, warnings-denied Clippy, the locked dependency check and release build pass.
 These are offline source observations, not installed loading or cutover proof.
 

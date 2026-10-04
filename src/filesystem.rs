@@ -1,6 +1,9 @@
 //! Lexical checks precede identity probes. Stat is confined to SSH identity.
 
 mod glob;
+mod links;
+
+pub use links::FirmlinkTable;
 
 use crate::{CheckError, CheckErrorKind};
 use std::{
@@ -58,13 +61,14 @@ impl Probe for DiskProbe {
     fn read_link(&mut self, path: &Path) -> io::Result<Option<PathBuf>> {
         match std::fs::read_link(path) {
             Ok(target) => Ok(Some(target)),
+            // Darwin ENAMETOOLONG shares Go's benign non-link contract.
             Err(error)
                 if matches!(
                     error.kind(),
                     io::ErrorKind::NotFound
                         | io::ErrorKind::InvalidInput
                         | io::ErrorKind::NotADirectory
-                ) =>
+                ) || error.raw_os_error() == Some(63) =>
             {
                 Ok(None)
             }
@@ -114,7 +118,7 @@ pub fn normalize(path: &str, cwd: &str, home: &str) -> String {
     unfirmlink(clean.to_str().unwrap_or(""))
 }
 
-fn absolute_input(path: &str, cwd: &str, home: &str) -> String {
+pub(crate) fn absolute_input(path: &str, cwd: &str, home: &str) -> String {
     let expanded = if let Some(tail) = path.strip_prefix("~/") {
         format!("{home}/{tail}")
     } else if path == "~" {
@@ -123,12 +127,11 @@ fn absolute_input(path: &str, cwd: &str, home: &str) -> String {
         path.to_owned()
     };
     let expanded = strip_file_url(&expanded);
-    let joined = if expanded.starts_with('/') {
+    if expanded.starts_with('/') {
         expanded.to_owned()
     } else {
         format!("{cwd}/{expanded}")
-    };
-    unfirmlink(&joined)
+    }
 }
 
 pub(crate) fn strip_file_url(path: &str) -> &str {
@@ -144,7 +147,9 @@ pub(crate) fn strip_file_url(path: &str) -> &str {
 
 fn unfirmlink(path: &str) -> String {
     let prefix = "/system/volumes/data";
-    if path.to_ascii_lowercase().starts_with(prefix)
+    if path.eq_ignore_ascii_case(prefix) {
+        "/".to_owned()
+    } else if path.to_ascii_lowercase().starts_with(prefix)
         && path.as_bytes().get(prefix.len()) == Some(&b'/')
     {
         path[prefix.len()..].to_owned()
@@ -365,48 +370,119 @@ pub fn identify_target(
     effect: crate::record::Effect,
     probe: &mut dyn Probe,
 ) -> Result<Identity, CheckError> {
-    let raw_path = absolute_input(path, cwd, home);
-    let path = normalize(path, cwd, home);
-    if path.ends_with("/.ssh") {
-        return Ok(Identity::Protected(Protection::SshPrivate));
-    }
-    if let Some(kind) = lexical_pattern(&path, home, patterned) {
-        return Ok(Identity::Protected(kind));
-    }
-    let resolved_home = match resolve(home, home, home, None, false, probe)? {
-        Resolution::Public(path) => path,
-        Resolution::Bound => return Ok(Identity::Bound),
-        Resolution::Protected(kind, _) => return Ok(Identity::Protected(kind)),
-    };
-    let resolved = match resolve_pattern(
-        &raw_path,
-        cwd,
-        home,
-        Some(&resolved_home),
-        false,
-        patterned,
-        probe,
-    )? {
-        Resolution::Public(path) => path,
-        Resolution::Protected(kind, _) => return Ok(Identity::Protected(kind)),
-        Resolution::Bound => return Ok(Identity::Bound),
-    };
-    // Broad traversal is already denied by its owner; do not replace its HOME
-    // scope with a subordinate SSH reason or perform unnecessary stat probes.
-    if search && broad_root(&resolved, &resolved_home) {
-        return Ok(Identity::Public(resolved));
-    }
-    if matches!(
+    let table = FirmlinkTable::load()?;
+    let mut resolver = Resolver::new(home, &table);
+    let mut target = crate::record::Target::new(
+        absolute_input(path, cwd, home),
         effect,
-        crate::record::Effect::Read | crate::record::Effect::Write | crate::record::Effect::List
-    ) {
-        match ssh_denied(&path, &resolved, cwd, home, &resolved_home, search, probe)? {
-            Some(true) => return Ok(Identity::Protected(Protection::SshPrivate)),
-            None => return Ok(Identity::Bound),
-            Some(false) => {}
-        }
+        if search {
+            crate::record::Walk::Visible
+        } else {
+            crate::record::Walk::None
+        },
+        crate::record::Via::Operand,
+    );
+    target.glob = patterned;
+    resolver.target(&mut target, cwd, probe)
+}
+
+pub(crate) struct Resolver<'a> {
+    home: &'a str,
+    table: &'a FirmlinkTable,
+}
+
+impl<'a> Resolver<'a> {
+    pub(crate) fn new(home: &'a str, table: &'a FirmlinkTable) -> Self {
+        Self { home, table }
     }
-    Ok(Identity::Public(resolved))
+
+    pub(crate) fn home(&mut self, probe: &mut dyn Probe) -> Result<Identity, CheckError> {
+        Ok(
+            match resolve(self.home, self.home, self.home, None, self.table, probe)? {
+                Resolution::Public(path) => {
+                    Identity::Public(normalize(&path, self.home, self.home))
+                }
+                Resolution::Protected(kind, _) => Identity::Protected(kind),
+                Resolution::Bound => Identity::Bound,
+            },
+        )
+    }
+
+    pub(crate) fn target(
+        &mut self,
+        target: &mut crate::record::Target,
+        cwd: &str,
+        probe: &mut dyn Probe,
+    ) -> Result<Identity, CheckError> {
+        use crate::record::{Effect, Via, Walk};
+        let raw = absolute_input(&target.unresolved, cwd, self.home);
+        let path = normalize(&raw, cwd, self.home);
+        if path.ends_with("/.ssh") {
+            return Ok(Identity::Protected(Protection::SshPrivate));
+        }
+        if let Some(kind) = lexical_pattern(&path, self.home, target.glob) {
+            return Ok(Identity::Protected(kind));
+        }
+        if target.effect == Effect::Name && !target.glob || target.via == Via::Tool && target.glob {
+            return Ok(Identity::Public(path));
+        }
+        let resolved_home = match self.home(probe)? {
+            Identity::Public(path) => path,
+            other => return Ok(other),
+        };
+        let resolved = match resolve_pattern(
+            &raw,
+            cwd,
+            self.home,
+            Some(&resolved_home),
+            target.glob || target.expands,
+            self.table,
+            probe,
+        )? {
+            Resolution::Public(resolved) => {
+                if resolved != raw {
+                    target.path = resolved.clone();
+                    target.unresolved = resolved.clone();
+                    resolved
+                } else {
+                    path.clone()
+                }
+            }
+            Resolution::Protected(kind, resolved) => {
+                target.path = resolved.clone();
+                target.unresolved = resolved;
+                return Ok(Identity::Protected(kind));
+            }
+            Resolution::Bound => return Ok(Identity::Bound),
+        };
+        if let Some(kind) = lexical_pattern(&resolved, self.home, target.glob)
+            .or_else(|| lexical_pattern(&resolved, &resolved_home, target.glob))
+        {
+            return Ok(Identity::Protected(kind));
+        }
+        // The broad-root owner wins before subordinate SSH metadata comparisons.
+        let search = target.walk != Walk::None;
+        if search && broad_root(&resolved, &resolved_home) {
+            return Ok(Identity::Public(resolved));
+        }
+        if matches!(target.effect, Effect::Read | Effect::Write | Effect::List) {
+            match ssh_denied(
+                &path,
+                &resolved,
+                cwd,
+                self.home,
+                &resolved_home,
+                search,
+                self.table,
+                probe,
+            )? {
+                Some(true) => return Ok(Identity::Protected(Protection::SshPrivate)),
+                None => return Ok(Identity::Bound),
+                Some(false) => {}
+            }
+        }
+        Ok(Identity::Public(resolved))
+    }
 }
 
 fn near(candidate: &str, root: &str, search: bool) -> bool {
@@ -458,6 +534,7 @@ fn same_file(
     Ok(matches!((x, y), (Some(x), Some(y)) if (x.device, x.inode) == (y.device, y.inode)))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn ssh_denied(
     target: &str,
     resolved: &str,
@@ -465,10 +542,12 @@ fn ssh_denied(
     home: &str,
     resolved_home: &str,
     search: bool,
+    table: &FirmlinkTable,
     probe: &mut dyn Probe,
 ) -> Result<Option<bool>, CheckError> {
     let ssh = format!("{home}/.ssh");
-    let (root, protected_root) = match resolve(&ssh, cwd, home, Some(resolved_home), true, probe)? {
+    let (root, protected_root) = match resolve(&ssh, cwd, home, Some(resolved_home), table, probe)?
+    {
         Resolution::Public(root) => (root, false),
         Resolution::Protected(_, root) => (root, true),
         Resolution::Bound => return Ok(None),
@@ -555,10 +634,17 @@ fn resolve(
     cwd: &str,
     home: &str,
     resolved_home: Option<&str>,
-    allow_ssh_root: bool,
+    table: &FirmlinkTable,
     probe: &mut dyn Probe,
 ) -> Result<Resolution, CheckError> {
-    resolve_pattern(path, cwd, home, resolved_home, allow_ssh_root, true, probe)
+    links::follow(
+        &absolute_input(path, cwd, home),
+        home,
+        resolved_home,
+        false,
+        table,
+        probe,
+    )
 }
 
 fn resolve_pattern(
@@ -566,71 +652,266 @@ fn resolve_pattern(
     cwd: &str,
     home: &str,
     resolved_home: Option<&str>,
-    allow_ssh_root: bool,
     patterned: bool,
+    table: &FirmlinkTable,
     probe: &mut dyn Probe,
 ) -> Result<Resolution, CheckError> {
-    let mut current = absolute_input(path, cwd, home);
-    for _ in 0..40 {
-        if !allow_ssh_root && normalize(&current, cwd, home).ends_with("/.ssh") {
-            return Ok(Resolution::Protected(
-                Protection::SshPrivate,
-                normalize(&current, cwd, home),
-            ));
-        }
-        if let Some(kind) = lexical_pattern(&current, home, patterned)
-            .or_else(|| resolved_home.and_then(|home| lexical_pattern(&current, home, patterned)))
+    let absolute = absolute_input(path, cwd, home);
+    if patterned {
+        let segments: Vec<_> = absolute.split('/').collect();
+        if let Some(index) = segments
+            .iter()
+            .position(|part| part.contains(['*', '?', '[', '{', '$', '`']))
         {
-            return Ok(Resolution::Protected(kind, normalize(&current, cwd, home)));
-        }
-        let mut prefix = PathBuf::new();
-        let parts: Vec<_> = Path::new(&current).components().collect();
-        let mut resolved = None;
-        for (index, part) in parts.iter().enumerate() {
-            prefix.push(part.as_os_str());
-            let Some(spelling) = prefix.to_str() else {
-                return Ok(Resolution::Bound);
-            };
-            if let Some(kind) = lexical_pattern(spelling, home, patterned)
-                .or_else(|| {
-                    resolved_home.and_then(|home| lexical_pattern(spelling, home, patterned))
-                })
-                .or_else(|| lexical_pattern(&normalize(spelling, cwd, home), home, patterned))
-                .or_else(|| {
-                    resolved_home.and_then(|home| {
-                        lexical_pattern(&normalize(spelling, cwd, home), home, patterned)
-                    })
-                })
-            {
-                return Ok(Resolution::Protected(kind, normalize(&current, cwd, home)));
-            }
-            if spelling.contains(['*', '?', '[', '(']) {
-                break;
-            }
-            let target = probe.read_link(&prefix).map_err(|_| CheckError {
-                kind: CheckErrorKind::ProbeFault,
-            })?;
-            if let Some(target) = target {
-                let base = prefix.parent().unwrap_or(Path::new("/"));
-                let mut joined = if target.is_absolute() {
-                    target
-                } else {
-                    base.join(target)
-                };
-                for remaining in &parts[index + 1..] {
-                    joined.push(remaining.as_os_str());
+            let prefix = segments[..index].join("/");
+            let prefix = if prefix.is_empty() { "/" } else { &prefix };
+            return match links::follow(prefix, home, resolved_home, patterned, table, probe)? {
+                Resolution::Public(resolved) if resolved == prefix => {
+                    Ok(Resolution::Public(absolute))
                 }
-                let Some(joined) = joined.to_str() else {
-                    return Ok(Resolution::Bound);
-                };
-                resolved = Some(absolute_input(joined, cwd, home));
-                break;
-            }
-        }
-        match resolved {
-            Some(next) => current = next,
-            None => return Ok(Resolution::Public(normalize(&current, cwd, home))),
+                Resolution::Public(resolved) => Ok(Resolution::Public(format!(
+                    "{}/{}",
+                    resolved.trim_end_matches('/'),
+                    segments[index..].join("/")
+                ))),
+                other => Ok(other),
+            };
         }
     }
-    Ok(Resolution::Bound)
+    links::follow(&absolute, home, resolved_home, patterned, table, probe)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::record::{Effect, HostFacts, Target, Via, Walk, Word};
+    use std::collections::BTreeMap;
+
+    #[derive(Default)]
+    struct Mock {
+        links: BTreeMap<String, String>,
+        calls: Vec<String>,
+    }
+    impl Probe for Mock {
+        fn read_link(&mut self, path: &Path) -> io::Result<Option<PathBuf>> {
+            let path = path.to_str().unwrap();
+            assert!(
+                lexical_literal(path, "/h").is_none(),
+                "protected probe: {path}"
+            );
+            self.calls.push(path.into());
+            Ok(self.links.get(path).map(PathBuf::from))
+        }
+        fn stat(&mut self, _: &Path) -> io::Result<Option<Metadata>> {
+            panic!("unexpected stat");
+        }
+    }
+
+    #[test]
+    fn catalog_controls_physical_parent_transition() {
+        let packet: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/rust-m2-filesystem.json"))
+                .unwrap();
+        for row in packet["paths"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r.get("catalog").is_some() && r["operation"] != "shell")
+        {
+            let table = FirmlinkTable::from_text(row["catalog"].as_str().unwrap());
+            let mut resolver = Resolver::new("/h", &table);
+            let mut probe = Mock {
+                links: row
+                    .get("links")
+                    .map(|v| serde_json::from_value(v.clone()).unwrap())
+                    .unwrap_or_default(),
+                calls: Vec::new(),
+            };
+            let mut target = Target::new(
+                row["path"].as_str().unwrap().into(),
+                Effect::Use,
+                Walk::None,
+                Via::Operand,
+            );
+            let result = resolver
+                .target(
+                    &mut target,
+                    row["cwd"].as_str().unwrap_or("/project"),
+                    &mut probe,
+                )
+                .unwrap();
+            if let Some(kind) = row["protected"].as_str() {
+                assert!(
+                    matches!(result, Identity::Protected(p) if format!("{p:?}") == kind),
+                    "{}: {result:?}",
+                    row["id"]
+                );
+            } else {
+                assert_eq!(
+                    result,
+                    Identity::Public(row["public"].as_str().unwrap().into()),
+                    "{}",
+                    row["id"]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn target_preserves_raw_input_and_updates_both_linked_fields() {
+        let mut word = Word::literal("../item".into());
+        word.expands = true;
+        let mut target = Target::from_word(
+            &word,
+            "/System/Volumes/Data/a/link/./tail",
+            HostFacts {
+                home: "/h",
+                user: None,
+            },
+            Effect::Use,
+            Walk::Visible,
+        );
+        assert_eq!(target.path, "/a/link/item");
+        assert_eq!(
+            target.unresolved,
+            "/System/Volumes/Data/a/link/./tail/../item"
+        );
+        target.command = Some(3);
+        target.sends = true;
+        target.search = true;
+        let table = FirmlinkTable::from_text("");
+        let mut resolver = Resolver::new("/h", &table);
+        let mut probe = Mock {
+            links: BTreeMap::from([("/System/Volumes/Data/a/link".into(), "/public".into())]),
+            calls: Vec::new(),
+        };
+        assert_eq!(
+            resolver
+                .target(&mut target, "/project", &mut probe)
+                .unwrap(),
+            Identity::Public("/public/item".into())
+        );
+        assert_eq!(target.path, "/public/item");
+        assert_eq!(target.unresolved, target.path);
+        assert!(target.expands && target.sends && target.search);
+        assert_eq!(
+            (target.effect, target.walk, target.via, target.command),
+            (Effect::Use, Walk::Visible, Via::Operand, Some(3))
+        );
+    }
+
+    #[test]
+    fn shell_frontend_removes_only_dot_segments() {
+        let result = crate::shell::observe(
+            "printf public",
+            crate::shell::Arm::Brush,
+            "/h",
+            "/a/./link/../tail",
+            true,
+        )
+        .unwrap();
+        assert_eq!(result.script.commands[0].cwd, "/a/link/../tail");
+    }
+
+    #[test]
+    fn literal_name_and_tool_glob_skip_identity() {
+        let table = FirmlinkTable::from_text("");
+        let mut resolver = Resolver::new("/h", &table);
+        let mut probe = Mock::default();
+        for (effect, via, glob) in [
+            (Effect::Name, Via::Operand, false),
+            (Effect::Read, Via::Tool, true),
+        ] {
+            let mut target = Target::new("/public/link/*".into(), effect, Walk::None, via);
+            target.glob = glob;
+            assert_eq!(
+                resolver
+                    .target(&mut target, "/project", &mut probe)
+                    .unwrap(),
+                Identity::Public("/public/link/*".into())
+            );
+        }
+        assert!(probe.calls.is_empty());
+    }
+
+    #[test]
+    fn evaluation_keeps_no_follow_input() {
+        let table = FirmlinkTable::from_text("");
+        let mut resolver = Resolver::new("/h", &table);
+        let mut probe = Mock::default();
+        for path in ["/a/./item", "/b/../item"] {
+            let mut target = Target::new(path.into(), Effect::Use, Walk::None, Via::Operand);
+            let unresolved = target.unresolved.clone();
+            let clean = target.path.clone();
+            let identity = resolver
+                .target(&mut target, "/project", &mut probe)
+                .unwrap();
+            assert_eq!(identity, Identity::Public(clean.clone()));
+            assert_eq!(target.path, clean);
+            assert_eq!(target.unresolved, unresolved);
+        }
+        assert_eq!(probe.calls.iter().filter(|p| p.as_str() == "/h").count(), 2);
+        assert!(probe.calls.iter().all(|p| !p.contains("/./")));
+    }
+
+    #[test]
+    fn disk_readlink_errno_partitions_match_go() {
+        let mut probe = DiskProbe;
+        let root = PathBuf::from(std::env::var("CARGO_TARGET_DIR").unwrap())
+            .parent()
+            .unwrap()
+            .join("fs-errno");
+        std::fs::create_dir_all(&root).unwrap();
+        let file = root.join("ordinary");
+        std::fs::write(&file, "public").unwrap();
+        for path in [
+            file.clone(),
+            root.join("absent"),
+            file.join("child"),
+            root.join("x".repeat(1024)),
+        ] {
+            assert_eq!(probe.read_link(&path).unwrap(), None, "{}", path.display());
+        }
+    }
+
+    #[test]
+    fn expands_without_glob_follows_only_public_prefix() {
+        let packet: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/rust-m2-filesystem.json"))
+                .unwrap();
+        let row = packet["paths"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == "expands-only-suffix")
+            .unwrap();
+        let mut word = Word::literal(row["path"].as_str().unwrap().into());
+        word.expands = true;
+        let mut target = Target::from_word(
+            &word,
+            "/project",
+            HostFacts {
+                home: "/h",
+                user: None,
+            },
+            Effect::Use,
+            Walk::None,
+        );
+        let table = FirmlinkTable::from_text("");
+        let mut resolver = Resolver::new("/h", &table);
+        let mut probe = Mock {
+            links: serde_json::from_value(row["links"].clone()).unwrap(),
+            calls: Vec::new(),
+        };
+        assert_eq!(
+            resolver
+                .target(&mut target, "/project", &mut probe)
+                .unwrap(),
+            Identity::Public(row["public"].as_str().unwrap().into())
+        );
+        assert_eq!(
+            probe.calls.last().unwrap(),
+            row["last_probe"].as_str().unwrap()
+        );
+    }
 }

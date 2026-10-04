@@ -248,13 +248,13 @@ fn identity_depth_bound_is_not_syntax_or_success() {
                 .iter()
                 .filter(|p| p.ends_with("loop-a") || p.ends_with("loop-b"))
                 .count(),
-            40
+            9
         );
         let mut public = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        for index in 0..39 {
+        for index in 0..8 {
             public.links.insert(
                 format!("{}/link-{index}", fixture.project),
-                if index == 38 {
+                if index == 7 {
                     "input.txt".into()
                 } else {
                     format!("link-{}", index + 1)

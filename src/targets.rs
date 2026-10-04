@@ -36,7 +36,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         let path = &redirect.target;
         let write = redirect.direction == Direction::Out;
         let mut target = Target::new(
-            path.clone(),
+            crate::filesystem::absolute_input(path, cwd, host.home),
             if write { Effect::Write } else { Effect::Read },
             Walk::None,
             Via::Redirect,
@@ -97,7 +97,27 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.variable = !(program != "echo" && args.first().is_some_and(|arg| arg == "-v"))
                 && command.variables().any(|name| secret_name(name));
         }
-        "true" | "false" | ":" | "cd" | "unset" | "local" | "break" | "continue" | "return" => {}
+        "true" | "false" | ":" | "unset" | "local" | "break" | "continue" | "return" => {}
+        "cd" | "pushd" | "popd" => {
+            let mut options = true;
+            for word in args {
+                if options && word == "--" {
+                    options = false;
+                } else if !options || !word.starts_with('-') {
+                    effects.targets.push(Target::from_word(
+                        word,
+                        cwd,
+                        host,
+                        if program == "cd" {
+                            Effect::Name
+                        } else {
+                            Effect::Enter
+                        },
+                        Walk::None,
+                    ));
+                }
+            }
+        }
         "setopt" | "unsetopt" | "emulate" => effects.gaps.push(CoverageGap::ExecutorDivergence),
         "set" => effects.dump = args.is_empty(),
         "typeset" | "declare" => {
@@ -177,7 +197,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
                         &arg.with_text(path.to_owned()),
                         cwd,
                         host,
-                        Effect::Name,
+                        Effect::Use,
                         Walk::None,
                     );
                     effects.targets.push(target);
@@ -388,7 +408,7 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
                 &path.with_text(base.clone()),
                 cwd,
                 host,
-                Effect::Name,
+                Effect::Enter,
                 Walk::None,
             ));
         }
@@ -464,7 +484,9 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
                 add(
                     arg,
                     arg,
-                    if names || metadata {
+                    if metadata {
+                        Effect::Meta
+                    } else if names {
                         Effect::Name
                     } else {
                         Effect::Read
@@ -662,7 +684,11 @@ fn infer_listing(
             &path,
             cwd,
             host,
-            Effect::Name,
+            if program == "tree" {
+                Effect::Name
+            } else {
+                Effect::List
+            },
             Walk::Visible,
         ));
     }
@@ -920,7 +946,13 @@ fn infer_search(
             &root,
             cwd,
             host,
-            if names { Effect::Name } else { Effect::Read },
+            if names && program == "rg" {
+                Effect::List
+            } else if names {
+                Effect::Name
+            } else {
+                Effect::Read
+            },
             if program != "grep" || hidden {
                 Walk::Visible
             } else {
@@ -933,7 +965,11 @@ fn infer_search(
             for glob in &globs {
                 if !glob.starts_with('!') {
                     let mut target = Target::new(
-                        format!("{}/{}", root.text, glob.rsplit('/').next().unwrap_or(glob)),
+                        crate::filesystem::absolute_input(
+                            &format!("{}/{}", root.text, glob.rsplit('/').next().unwrap_or(glob)),
+                            cwd,
+                            host.home,
+                        ),
                         Effect::Read,
                         Walk::None,
                         Via::Operand,
@@ -1104,5 +1140,30 @@ mod record_tests {
         assert!(!targets("rg needle public")[0].search);
         assert!(!targets("rg --help")[0].search);
         assert!(!targets("git log -p public")[0].search);
+    }
+
+    #[test]
+    fn p7_role_dependencies_follow_go_owners() {
+        let packet: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/rust-m2-filesystem.json"))
+                .unwrap();
+        for row in packet["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["role"].is_string())
+        {
+            let target = targets(row["source"].as_str().unwrap())
+                .into_iter()
+                .find(|t| t.path.starts_with("/h/Library/Containers"))
+                .unwrap();
+            assert_eq!(
+                format!("{:?}", target.effect),
+                row["role"].as_str().unwrap(),
+                "{}: {}",
+                row["id"],
+                row["owner"]
+            );
+        }
     }
 }

@@ -202,6 +202,7 @@ pub enum Effect {
     Read,
     Write,
     Name,
+    Meta,
     List,
     Enter,
     Use,
@@ -268,7 +269,7 @@ impl Target {
     pub fn new(path: String, effect: Effect, walk: Walk, via: Via) -> Self {
         Self {
             unresolved: path.clone(),
-            path,
+            path: crate::filesystem::normalize(&path, "/", "/"),
             glob: false,
             effect,
             walk,
