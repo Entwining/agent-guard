@@ -33,7 +33,7 @@
   {"id":"f2-scalar","source":"a=1 setopt extendedglob","owner":"adapter","expected":"UR","reason":"dialect"},
   {"id":"f2-scalar-unsetopt","source":"a=1 unsetopt nomatch","owner":"adapter","expected":"UR","reason":"dialect"},
   {"id":"f2-ctrl-semi","source":"a=(x); setopt extendedglob","owner":"adapter","expected":"UR","reason":"dialect"},
-  {"id":"f2-ctrl-subshell","source":"(echo hi) setopt extendedglob","owner":"adapter","expected":"UR","reason":"dialect"},
+  {"id":"f2-ctrl-subshell","source":"(echo hi) setopt extendedglob","owner":"adapter","expected":"UR","reason":"syntax"},
   {"id":"g12-builtin-setopt","source":"builtin setopt extendedglob","owner":"adapter","expected":"UC","reason":"unknown"},
   {"id":"g12-command-setopt","source":"command setopt extendedglob","owner":"adapter","expected":"UC","reason":"unknown"},
   {"id":"g12-noglob-setopt","source":"noglob setopt extendedglob","owner":"adapter","expected":"UC","reason":"unknown"},

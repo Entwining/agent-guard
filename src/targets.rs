@@ -80,7 +80,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.variable = !(program != "echo" && args.first().is_some_and(|arg| arg == "-v"))
                 && command.variables().any(|name| secret_name(name));
         }
-        "true" | "false" | ":" | "setopt" | "unsetopt" | "emulate" | "cd" | "unset" | "local" => {}
+        "true" | "false" | ":" | "cd" | "unset" | "local" => {}
+        "setopt" | "unsetopt" | "emulate" => effects.gaps.push(CoverageGap::ExecutorDivergence),
         "set" => effects.dump = args.is_empty(),
         "typeset" | "declare" => {
             effects.dump = args.is_empty()

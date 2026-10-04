@@ -369,7 +369,13 @@ impl Inspection<'_> {
                 }
             }
             for value in effects.gaps {
-                self.gap(value);
+                self.gap(
+                    if value == CoverageGap::ExecutorDivergence && !self.context.zsh_executor {
+                        CoverageGap::UnsupportedDialectConstruct
+                    } else {
+                        value
+                    },
+                );
             }
             if effects.dump {
                 self.effect(EffectRecord::EnvironmentDump);

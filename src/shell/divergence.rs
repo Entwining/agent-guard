@@ -123,18 +123,6 @@ pub(super) fn detect_lexed(
             cursor = end + 1;
             continue;
         }
-        if context.unquoted()
-            && ["setopt", "unsetopt", "emulate"].iter().any(|name| {
-                tail.starts_with(name)
-                    && tail
-                        .as_bytes()
-                        .get(name.len())
-                        .is_none_or(u8::is_ascii_whitespace)
-            })
-            && statement_boundary(&source[..cursor])
-        {
-            result.divergent = true;
-        }
         cursor += source[cursor..].chars().next().map_or(1, char::len_utf8);
     }
     result.masked = String::from_utf8(masked).map_err(|_| CheckError {
@@ -155,16 +143,6 @@ fn assignment_prefix(source: &str, end: usize, lexical: &super::lexer::Lexed<'_>
             (b.is_ascii_alphabetic() || b == b'_' || (i > 0 && b.is_ascii_digit()))
                 && lexical.context(start + i).unquoted()
         })
-}
-
-fn statement_boundary(prefix: &str) -> bool {
-    let prefix = prefix.trim_end_matches([' ', '\t']);
-    prefix.is_empty()
-        || prefix.ends_with([';', '\n', '|', '&', '(', '{'])
-        || prefix
-            .split_whitespace()
-            .last()
-            .is_some_and(|word| ["then", "do", "else"].contains(&word))
 }
 
 #[cfg(test)]

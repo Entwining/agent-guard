@@ -140,6 +140,11 @@ fn raw_detector_retirement_keeps_nested_command() {
 }
 
 #[test]
+fn accepted_parser_refusals_keep_syntax_cause_and_recovery() {
+    rows("parse-refusal");
+}
+
+#[test]
 fn lexical_substitution_body_keeps_protected_next_line() {
     rows("forwarding");
 }

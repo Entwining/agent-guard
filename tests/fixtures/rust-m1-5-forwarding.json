@@ -13,5 +13,8 @@
   {"id":"g14-subscript","source":"a[$(echo hi # )\ncat .env)]=1","owner":"forwarding","expected":"D","reason":"environment"},
   {"id":"g14-nested","source":"echo $(echo $(echo hi # )\ncat .env))","owner":"forwarding","expected":"D","reason":"environment"},
   {"id":"g14-brace-cmt","source":"echo $(echo hi # })\ncat .env)","owner":"forwarding","expected":"D","reason":"environment"},
-  {"id":"g14-subshell","source":"(echo hi # )\ncat .env)","owner":"forwarding","expected":"D","reason":"environment"}
+  {"id":"g14-subshell","source":"(echo hi # )\ncat .env)","owner":"forwarding","expected":"D","reason":"environment"},
+  {"id":"accepted-conditional-refusal","source":"[[ a = a # \nsetopt extendedglob]]","owner":"parse-refusal","expected":"UR","reason":"syntax"},
+  {"id":"accepted-empty-heredoc-refusal","source":"cat <<''\nsetopt extendedglob","owner":"parse-refusal","expected":"UR","reason":"syntax"},
+  {"id":"accepted-unfinished-heredoc-refusal","source":"cat <<A\nbody\nA \nsetopt extendedglob","owner":"parse-refusal","expected":"UR","reason":"syntax"}
 ]
