@@ -148,6 +148,74 @@ fn mechanism_rows(owner: &str) {
                 failures.push(json!({"id":row["id"],"consumer":consumer,"expected":row["expected"],"actual":support::class(&result),"result":format!("{result:?}"),"wire":format!("{wire:?}")}));
             }
             assert!(wire.stdout.is_empty());
+            match &result.as_ref().unwrap().outcome {
+                agent_guard_rust::Outcome::NoObjection => assert!(wire.stderr.is_empty()),
+                agent_guard_rust::Outcome::ProtectedDenial { reason, recovery } => {
+                    let environmental = matches!(
+                        row["id"].as_str().unwrap(),
+                        "A102-herestring-eval"
+                            | "A043-herestring-direct"
+                            | "A056-subscript-assign"
+                            | "g1-plain-unquoted"
+                            | "coverage-sibling"
+                            | "coverage-nested-effect"
+                            | "coverage-eval-queue"
+                            | "coverage-qualifier-queue"
+                            | "qualifier-nested-quotes"
+                    );
+                    assert!(
+                        reason.effect.contains(if environmental {
+                            "environment"
+                        } else {
+                            "private-key"
+                        }),
+                        "{row}: {reason:?}"
+                    );
+                    assert!(wire.stderr.contains(&reason.effect));
+                    assert!(!recovery.excluded_scope.is_empty());
+                    assert!(!recovery.automatic_application_supported);
+                    assert!(wire.stderr.contains("recheck"));
+                }
+                agent_guard_rust::Outcome::CoverageInsufficient {
+                    cause, recovery, ..
+                } => {
+                    if row["expected"] == "UC" {
+                        assert_eq!(cause, &CoverageGap::UnresolvedTarget);
+                        assert!(recovery.is_none());
+                        assert!(wire.stderr.is_empty());
+                    } else {
+                        let syntax = matches!(
+                            row["id"].as_str().unwrap(),
+                            "s3-idx-atZ"
+                                | "s6-arith-atZ"
+                                | "s9-legacy-atZ"
+                                | "c3-top-atZ"
+                                | "l3-trim-quoted-nested"
+                                | "l4-default-nested"
+                                | "l5-top-quoted-nested"
+                        );
+                        assert_eq!(
+                            cause,
+                            &if syntax {
+                                CoverageGap::UnsupportedShellSyntax
+                            } else if consumer == "pi" {
+                                CoverageGap::UnsupportedDialectConstruct
+                            } else {
+                                CoverageGap::ExecutorDivergence
+                            },
+                            "{row}"
+                        );
+                        let recovery = recovery.as_ref().unwrap();
+                        assert!(!recovery.excluded_scope.is_empty());
+                        assert!(!recovery.automatic_application_supported);
+                        assert!(
+                            wire.stderr.contains("unsupported") && wire.stderr.contains("recheck")
+                        );
+                        assert!(!wire.stderr.contains("checker failed"));
+                    }
+                }
+                other => panic!("unexpected advice/outcome: {row}: {other:?}"),
+            }
         }
     }
     println!("{}", json!({"owner":owner,"failures":failures}));
@@ -349,14 +417,42 @@ fn manifest_observations() {
 #[test]
 fn original_parameter_regions_have_supported_or_refused_coverage() {
     use agent_guard_rust::shell;
-    for body in [
-        "${v@Z}",
-        "${v[${v@Z}]}",
-        "${v:-${v@Z}}",
-        "${v:-${(f)v}}",
-        "$((${v@Z}))",
-        "$[${v@Z}]",
-        "\"${${v}}\"",
+    for (body, expected, cause) in [
+        (
+            "${v@Z}",
+            vec![(0..6, false)],
+            CoverageGap::UnsupportedShellSyntax,
+        ),
+        (
+            "${v[${v@Z}]}",
+            vec![(0..12, true), (4..10, false)],
+            CoverageGap::UnsupportedShellSyntax,
+        ),
+        (
+            "${v:-${v@Z}}",
+            vec![(0..12, false), (5..11, false)],
+            CoverageGap::UnsupportedShellSyntax,
+        ),
+        (
+            "${v:-${(f)v}}",
+            vec![(0..13, false), (5..12, false)],
+            CoverageGap::ExecutorDivergence,
+        ),
+        (
+            "$((${v@Z}))",
+            vec![(3..9, false)],
+            CoverageGap::UnsupportedShellSyntax,
+        ),
+        (
+            "$[${v@Z}]",
+            vec![(2..8, false)],
+            CoverageGap::UnsupportedShellSyntax,
+        ),
+        (
+            "\"${${v}}\"",
+            vec![(1..8, false), (3..7, true)],
+            CoverageGap::UnsupportedShellSyntax,
+        ),
     ] {
         let source = format!("echo {body}");
         let observation = shell::observe(
@@ -367,36 +463,28 @@ fn original_parameter_regions_have_supported_or_refused_coverage() {
             true,
         )
         .unwrap();
-        let refused: Vec<_> = observation
-            .word_coverage
-            .iter()
-            .filter(|w| w.unsupported)
-            .collect();
-        assert!(
-            !refused.is_empty(),
-            "unrecognized active region must be explicit: {source}"
+        assert_eq!(observation.gaps, [cause], "word refusal cause: {source}");
+        assert_eq!(observation.word_coverage.len(), 1, "{source}");
+        let word = &observation.word_coverage[0];
+        assert!(word.unsupported);
+        assert_eq!(
+            word.parameters
+                .iter()
+                .map(|r| (r.range.clone(), r.supported))
+                .collect::<Vec<_>>(),
+            expected,
+            "per-region support and span: {word:?}"
         );
-        assert!(
-            observation.gaps.iter().any(|gap| matches!(
-                gap,
-                CoverageGap::UnsupportedShellSyntax | CoverageGap::ExecutorDivergence
-            )),
-            "unsupported coverage must block: {source}"
-        );
-        for word in refused {
+        for (region, (_, supported)) in word.parameters.iter().zip(expected) {
             assert_eq!(
-                word.parameters.len(),
-                word.raw.match_indices("${").count(),
-                "source-region coverage: {word:?}"
+                region.refusal_cause(),
+                if supported {
+                    None
+                } else {
+                    Some(CoverageGap::UnsupportedShellSyntax)
+                },
+                "per-region cause: {word:?}"
             );
-            for region in &word.parameters {
-                let spelling = word.raw.get(region.range.clone()).unwrap();
-                assert!(
-                    spelling.starts_with("${"),
-                    "original bounded region: {word:?}"
-                );
-            }
-            assert!(word.parameters.iter().any(|r| !r.supported));
         }
     }
     for source in [
@@ -425,6 +513,27 @@ fn original_parameter_regions_have_supported_or_refused_coverage() {
             "supported/literal control: {source}"
         );
     }
+    let source = "echo '${inactive}' ${v@Z}";
+    let observation = shell::observe(
+        source,
+        Arm::Brush,
+        "/synthetic/home",
+        "/synthetic/home/project",
+        true,
+    )
+    .unwrap();
+    assert_eq!(observation.gaps, [CoverageGap::UnsupportedShellSyntax]);
+    assert_eq!(observation.word_coverage.len(), 1);
+    let active = &observation.word_coverage[0];
+    assert_eq!(active.raw, "${v@Z}");
+    assert_eq!(
+        active
+            .parameters
+            .iter()
+            .map(|r| (r.range.clone(), r.refusal_cause()))
+            .collect::<Vec<_>>(),
+        [(0..6, Some(CoverageGap::UnsupportedShellSyntax))]
+    );
 }
 
 #[test]

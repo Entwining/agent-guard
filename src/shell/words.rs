@@ -398,18 +398,13 @@ fn fill(
                 }
             }
             WordPiece::CommandSubstitution(_) | WordPiece::BackquotedCommandSubstitution(_) => {
-                let backquote = matches!(piece.piece, WordPiece::BackquotedCommandSubstitution(_));
-                let left = piece.start_index + usize::from(!backquote);
-                let Some(right) = lexical.closing(
-                    left,
-                    if backquote { b'`' } else { b'(' },
-                    if backquote { b'`' } else { b')' },
-                ) else {
+                let Some(body) = lexical.substitution_body(piece.start_index) else {
                     out.unsupported = true;
                     out.word.expands = true;
                     continue;
                 };
-                let code = &raw[left + 1..right];
+                let right = body.end;
+                let code = &raw[body];
                 out.nested.push(code.to_owned());
                 if right + 1 != piece.end_index {
                     covered = right + 1;

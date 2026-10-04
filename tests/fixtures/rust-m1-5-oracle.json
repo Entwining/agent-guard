@@ -1,0 +1,11 @@
+[
+  "echo $((1 # \nprintf %s \"${(f)v}\"))",
+  "echo $((1 # \nv='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"))",
+  "echo $(echo hi # )\ncat =(cat ~/.ssh/id_rsa))",
+  "echo $(echo hi # )\nprintf %s \"${(f)v}\")",
+  "echo $(echo hi # )\nprintf %s *(e:'cat ~/.ssh/id_rsa':))",
+  "echo $(echo hi # )\nsetopt extendedglob)",
+  "echo $(echo hi # )\nsetopt extendedglob; printf %s \"${(f)v}\")",
+  "echo $(echo hi # )\nv='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\")",
+  "echo $(echo hi\t# )\nsetopt extendedglob)"
+]

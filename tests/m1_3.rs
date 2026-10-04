@@ -130,6 +130,8 @@ fn unterminated_quotes_are_blocked() {
 
 #[derive(Default)]
 struct Oracle {
+    token_length_mismatches: Vec<Value>,
+    substitution_end_limits: Vec<Value>,
     disagreements: Vec<Value>,
     span_disagreements: Vec<Value>,
     word_refusals: Vec<Value>,
@@ -149,7 +151,11 @@ impl Oracle {
         base: usize,
         id: &str,
     ) {
+        let mut covered = 0;
         for p in pieces {
+            if p.end_index <= covered {
+                continue;
+            }
             let mode = match &p.piece {
                 WordPiece::SingleQuotedText(_) => Quote::Single,
                 WordPiece::AnsiCQuotedText(_) => Quote::AnsiC,
@@ -157,7 +163,7 @@ impl Oracle {
                 WordPiece::GettextDoubleQuotedSequence(_) => Quote::Gettext,
                 _ => parent,
             };
-            let range = p.start_index..p.end_index;
+            let range = p.start_index.max(covered)..p.end_index;
             assert!(
                 raw.get(range.clone()).is_some(),
                 "Brush piece offsets: {id}"
@@ -173,7 +179,24 @@ impl Oracle {
                 &p.piece,
                 WordPiece::DoubleQuotedSequence(_) | WordPiece::GettextDoubleQuotedSequence(_)
             );
+            let mismatched_end = if matches!(
+                p.piece,
+                WordPiece::CommandSubstitution(_) | WordPiece::BackquotedCommandSubstitution(_)
+            ) {
+                lexical
+                    .substitution_body(base + p.start_index)
+                    .filter(|body| body.end + 1 != base + p.end_index)
+            } else {
+                None
+            };
+            if let Some(body) = &mismatched_end {
+                self.substitution_end_limits.push(json!({"id":id,"word":raw,"brush_span":[base+p.start_index,base+p.end_index],"lexer_body":[body.start,body.end],"disposition":"Brush word substitution ends before the lexer region; production forwards the original lexical body (ruling 30)"}));
+                covered = body.end + 1 - base;
+            }
             for i in range.clone() {
+                if mismatched_end.is_some() && i + 1 == range.end {
+                    continue;
+                }
                 if (opaque || sequence) && i != range.start && i + 1 != range.end {
                     continue;
                 }
@@ -276,9 +299,9 @@ impl Oracle {
             }
             let actual_end = offsets[span.end.index];
             if let Some(actual) = source.get(local..actual_end)
-                && actual.contains("$(")
-                && actual.contains(" #")
+                && raw.len() != actual_end - local
             {
+                self.token_length_mismatches.push(json!({"id":id,"byte":base+local,"brush_token":raw,"original_span":actual,"brush_length":raw.len(),"original_length":actual_end-local}));
                 raw = actual;
             }
             for byte in local..(local + raw.len()).min(source.len()) {
@@ -516,7 +539,7 @@ fn lexer_matches_brush_word_quoting() {
     }
     println!(
         "{}",
-        json!({"oracle_inputs":inputs.len(),"fixture_files":files.len(),"tokenized":tokenized,"parsed_programs":parsed_programs,"word_parses":oracle.words,"nested_scripts":oracle.nested_scripts,"compared_bytes":oracle.compared,"tokenizer_refusals":skipped.len(),"tokenizer_refused_inputs":skipped,"known_limits":known_limits,"span_disagreements":oracle.span_disagreements,"word_refusals":oracle.word_refusals,"nested_refusals":oracle.nested_refusals,"disagreements":oracle.disagreements})
+        json!({"oracle_inputs":inputs.len(),"fixture_files":files.len(),"tokenized":tokenized,"parsed_programs":parsed_programs,"word_parses":oracle.words,"nested_scripts":oracle.nested_scripts,"compared_bytes":oracle.compared,"tokenizer_refusals":skipped.len(),"tokenizer_refused_inputs":skipped,"known_limits":known_limits,"span_disagreements":oracle.span_disagreements,"token_length_mismatches":oracle.token_length_mismatches,"substitution_end_limits":oracle.substitution_end_limits,"word_refusals":oracle.word_refusals,"nested_refusals":oracle.nested_refusals,"disagreements":oracle.disagreements})
     );
     assert!(oracle.nested_refusals.is_empty());
     assert!(
@@ -530,6 +553,51 @@ fn lexer_matches_brush_word_quoting() {
         "lexer / Brush disagreement count: {}",
         oracle.disagreements.len()
     );
+}
+
+#[test]
+fn token_length_mismatch_compares_eight_opus_sources_and_tab_variant() {
+    let sources: Vec<String> =
+        serde_json::from_str(include_str!("fixtures/rust-m1-5-oracle.json")).unwrap();
+    assert_eq!(sources.len(), 9);
+    for (index, source) in sources.iter().enumerate() {
+        let lexical = Lexed::scan(source).unwrap();
+        let tokens =
+            brush_parser::uncached_tokenize_str(source, &brush_parser::TokenizerOptions::default())
+                .unwrap();
+        let program = brush_parser::Parser::builder()
+            .build(std::io::Cursor::new(source.as_bytes()))
+            .parse_program()
+            .ok();
+        let mut oracle = Oracle::default();
+        oracle.compare_tokens(
+            source,
+            tokens,
+            program.as_ref(),
+            &lexical,
+            0,
+            &format!("opus-{index}"),
+        );
+        assert!(
+            !oracle.token_length_mismatches.is_empty(),
+            "the original token span must compare: {source}"
+        );
+        assert!(
+            oracle.compared > 0 && oracle.disagreements.is_empty(),
+            "{source}: {:?}",
+            oracle.disagreements
+        );
+        if !source.starts_with("echo $((") {
+            assert!(
+                !oracle.substitution_end_limits.is_empty(),
+                "Brush's end limit must remain visible: {source}"
+            );
+        }
+        println!(
+            "{}",
+            json!({"source":source,"token_length_mismatches":oracle.token_length_mismatches,"substitution_end_limits":oracle.substitution_end_limits,"compared_bytes":oracle.compared})
+        );
+    }
 }
 
 #[test]

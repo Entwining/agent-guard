@@ -74,6 +74,12 @@ pub struct ParameterRegion {
     pub supported: bool,
 }
 
+impl ParameterRegion {
+    pub fn refusal_cause(&self) -> Option<CoverageGap> {
+        (!self.supported).then_some(CoverageGap::UnsupportedShellSyntax)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct WordCoverage {
     pub raw: String,

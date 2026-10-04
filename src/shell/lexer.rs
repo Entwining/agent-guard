@@ -103,6 +103,21 @@ impl<'a> Lexed<'a> {
             .iter()
             .find(|(range, _, _)| range.start == start)
     }
+    pub fn substitution_body(&self, start: usize) -> Option<Range<usize>> {
+        if !self.context(start).active() {
+            return None;
+        }
+        let tail = self.source.get(start..)?;
+        let (left, delimiter) = if tail.starts_with("$(") && !tail.starts_with("$((") {
+            (start + 1, b')')
+        } else if tail.starts_with('`') {
+            (start, b'`')
+        } else {
+            return None;
+        };
+        let right = self.closing(left, if delimiter == b')' { b'(' } else { b'`' }, delimiter)?;
+        Some(left + 1..right)
+    }
     pub fn array_tail_spans(&self) -> Vec<Range<usize>> {
         let mut spans = Vec::new();
         for (left, byte) in self.source.bytes().enumerate() {
