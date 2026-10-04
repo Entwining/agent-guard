@@ -1,5 +1,47 @@
 # Offline Rust migration evidence
 
+## M2 final scope and nesting completion
+
+The accepted M1 baseline `ff95842` has 121 defect rows and 347 consumer
+conflicts. M2 closes 30 of the 31 planned rows; appdata[20] remains deferred
+under D28. Ruling 37 also closes the direct Git-role dependency programs[44].
+The final full differential has 90 defect rows and 254 consumer conflicts,
+loses no previously matching observation, and retains all 21 CHANGE contracts.
+There is no new F; the three existing fault rows remain explicit. Matching U-C
+permissions remain distinct from SupportedPreflight.
+
+The cwd group's larger recursive statement frame caused the existing 64-level
+debug nesting contract to abort. Moving compound-statement temporaries out of
+the recursively entered simple-command function preserves its command logic
+and lowers the measured debug frame from 25,072 to 11,120 bytes. The original
+64-level permit and 65-level refusal now complete for all three consumers on
+the default test stack. A child observer captures fatal overflow as a named
+assertion failure and reaps the child; it changes no production execution or
+nesting limit. Restoring the old function compiles and fails that assertion;
+exact-byte restoration passes. Both release observation matrices are identical.
+
+Final debug validation completes 253 passing tests. The sole failure is strict
+conformance at exactly 90/254; `make rust-check` stops at that same failure.
+Formatting, warnings-denied Clippy, the locked dependency check and the release
+build pass. The final observation summary is
+`a626fdb4057a603e15e8312c12b8406f6be6f8a89abb085d940f33f1003b474c`.
+
+The final causal evidence contains 187 receipts: 130 rerun against their
+exact historical group commits, 56 bound to the final P7 source, and one for
+the stack correction. Each mutant compiles, fails its named assertion,
+restores every input byte and passes the identical assertion. Every mutant
+and restore runs the 1,289-row corpus and all six M2 packets, with 876 wire
+projections and zero restoration drift. Historical source bindings are checked
+against Git blobs, rather than inferred from the final checkout. The redundant
+here-string gate was removed with separate context/observation equivalence
+evidence, rather than counted as a causal receipt.
+
+Raw logs and source bindings remain under
+`~/.cache/guard-fixtures/fixture-seat/r5-m2-phase-b/`. These checks complete the offline
+implementation packet; the coordinator's fresh Opus 5.5 and DeepSeek acceptance
+is still required. Go and production hooks remain unchanged, the packaged
+Rust entry remains version-only, and installed loading and cutover are unverified.
+
 ## M2 ordered filesystem identity and direct roles
 
 Target construction keeps a clean Path and raw Unresolved. One ordered component
@@ -46,9 +88,9 @@ the ablation summary is
 under `~/.cache/guard-fixtures/fixture-seat/r5-m2-phase-b/`.
 
 The release suite completes 252 tests and fails only the exact strict
-90/254 differential. The debug dev contract exposes a cwd-group stack
+90/254 differential. The debug dev contract at this snapshot exposes a cwd-group stack
 regression at its existing 64-level nesting boundary, also reproduced at
-`75edd80`; a separate P2 correction is required. These observations do not
+`75edd80`; the separate P2 correction above resolves it. These observations do not
 accept M2 or establish installed loading or cutover. Go and production hooks
 remain unchanged, and the packaged Rust entry remains version-only.
 

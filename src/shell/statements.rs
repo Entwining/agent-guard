@@ -295,6 +295,287 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         source_id: usize,
         nested: bool,
     ) -> Result<(), CheckError> {
+        // Keep compound temporaries off the recursively entered command frame.
+        let Statement::Command {
+            assignments,
+            argv,
+            redirects,
+            pipeline,
+        } = statement
+        else {
+            return self.compound_statement(statement, scope, depth, source_id, nested);
+        };
+        let mut prefixes = Vec::new();
+        let mut assignment_scope = scope.clone();
+        let mut command_bindings = BTreeMap::new();
+        for (name, raw) in assignments {
+            let values = self.expand(raw, &mut assignment_scope, depth)?;
+            for value in &values {
+                self.armed_references(&value.word.text, &mut assignment_scope, depth)?;
+            }
+            if !argv.is_empty()
+                && values
+                    .iter()
+                    .any(|v| v.word.vars.iter().any(|n| command_bindings.contains_key(n)))
+            {
+                self.output.gap(CoverageGap::UnsupportedShellSyntax);
+            }
+            let binding = values
+                .iter()
+                .map(|v| {
+                    if v.word.expands {
+                        None
+                    } else {
+                        Some(v.word.text.clone())
+                    }
+                })
+                .collect::<Vec<_>>();
+            assignment_scope.assign(name.clone(), binding.clone());
+            if argv.is_empty() {
+                scope.assign(name.clone(), binding.clone());
+            } else {
+                command_bindings.insert(name.clone(), binding);
+            }
+            let mut word = values
+                .first()
+                .map(|v| v.word.clone())
+                .unwrap_or_else(|| crate::record::Word::literal(String::new()));
+            word.text = format!("{name}={}", word.text);
+            for range in &mut word.cwd_ranges {
+                range.start += name.len() + 1;
+                range.end += name.len() + 1;
+            }
+            word.value = word.text.clone();
+            word.role = if argv.is_empty() {
+                Role::Precommand
+            } else {
+                Role::Assign
+            };
+            prefixes.push(word);
+        }
+        let mut alternatives = vec![prefixes];
+        for raw in argv {
+            let declaration = argv.first().is_some_and(|w| {
+                matches!(w.raw.as_str(), "export" | "local" | "declare" | "typeset")
+            });
+            let mut choices = Vec::new();
+            if declaration && let Some((name, value)) = assignment(&raw.raw) {
+                for expanded in self.expand(
+                    &RawWord {
+                        raw: value.into(),
+                        syntax: WordSyntax::Shell,
+                        expansions: raw.expansions.clone(),
+                    },
+                    scope,
+                    depth,
+                )? {
+                    let mut word = expanded.word;
+                    word.text = format!("{name}={}", word.text);
+                    for range in &mut word.cwd_ranges {
+                        range.start += name.len() + 1;
+                        range.end += name.len() + 1;
+                    }
+                    word.value = word.text.clone();
+                    word.raw = raw.raw.clone();
+                    choices.push(vec![word]);
+                }
+            } else {
+                for expanded in self.expand(raw, scope, depth)? {
+                    choices.push(expanded.split);
+                    choices.push(vec![expanded.word]);
+                }
+            }
+            choices.dedup();
+            let mut next = Vec::new();
+            for previous in &alternatives {
+                for choice in &choices {
+                    if next.len() == 512 {
+                        self.output.gap(CoverageGap::InspectionBudget);
+                        break;
+                    }
+                    let mut argv = previous.clone();
+                    argv.extend(choice.clone());
+                    next.push(argv);
+                }
+            }
+            alternatives = next;
+        }
+        let mut targets = Vec::new();
+        for redirect in redirects {
+            for expanded in self.expand(&redirect.target, scope, depth)? {
+                targets.push(crate::record::Redirect::from_word(
+                    expanded.word,
+                    redirect.direction,
+                ));
+            }
+        }
+        let entry = scope.clone();
+        let mut exits = Vec::new();
+        for argv in alternatives {
+            let mut branch = entry.clone();
+            let scope = &mut branch;
+            let program = (!argv[assignments.len()..].is_empty()).then_some(assignments.len());
+            let prior = command_bindings
+                .keys()
+                .map(|name| (name.clone(), scope.bindings.get(name).cloned()))
+                .collect::<BTreeMap<_, _>>();
+            let return_start = scope.returns.len();
+            for (name, values) in &command_bindings {
+                scope.assign(name.clone(), values.clone());
+            }
+            if let Some(index) = program {
+                for word in &argv[index + 1..] {
+                    self.armed_word(word, scope, depth)?;
+                }
+            }
+            if let Some(index) = program.filter(|i| !self.functions.contains_key(&argv[*i].text)) {
+                if argv[index].expands && !self.functions.is_empty() {
+                    self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                }
+                if argv[index] == "let" {
+                    for word in &argv[index + 1..] {
+                        self.arithmetic(&word.text, scope, depth)?;
+                    }
+                }
+                self.declaration(&argv[index..], scope);
+                match argv[index].text.as_str() {
+                    "break" | "continue" => {
+                        let state = scope.state();
+                        let level = if argv.len() == index + 1 {
+                            Some(1)
+                        } else if argv.len() == index + 2 {
+                            argv[index + 1].text.parse::<usize>().ok()
+                        } else {
+                            None
+                        };
+                        if level == Some(1)
+                            && prior.is_empty()
+                            && let Some(exits) = scope.loops.last_mut()
+                        {
+                            exits.push(state);
+                        } else {
+                            self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                        }
+                    }
+                    "return" => {
+                        if scope.frames.is_empty() {
+                            self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                        } else {
+                            scope.returns.push(scope.state());
+                        }
+                    }
+                    "eval" => {
+                        if argv[index + 1..].iter().any(|word| word.expands) {
+                            self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                        } else {
+                            let before = scope.state();
+                            self.source(
+                                &argv[index + 1..]
+                                    .iter()
+                                    .map(|word| word.text.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(" "),
+                                scope,
+                                depth + 1,
+                            )?;
+                            // Binding-changing eval and function/prefix interactions need a fuller model.
+                            if !scope.frames.is_empty()
+                                || !prior.is_empty()
+                                || scope.state() != before
+                            {
+                                self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                            }
+                        }
+                    }
+                    "read" => {
+                        for word in &argv[index + 1..] {
+                            if identifier(&word.text) {
+                                scope.assign(word.text.clone(), vec![None]);
+                            }
+                        }
+                        self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                    }
+                    _ => {}
+                }
+            }
+            let command = Command {
+                function: program.is_some_and(|i| self.functions.contains_key(&argv[i].text)),
+                argv,
+                redirects: targets.clone(),
+                cwd: scope.directory.current.render(),
+                program,
+                wrappers: Vec::new(),
+                shell: true,
+                flags: Vec::new(),
+                items: None,
+                stdin: Stdin::None,
+                pipeline: pipeline.map(|id| (source_id, id)),
+                nested,
+            };
+            self.emit(command.clone(), scope);
+            if let Some(name) = program
+                .and_then(|i| command.argv.get(i))
+                .map(|w| w.text.clone())
+                && let Some(function) = self.functions.get(&name).cloned()
+            {
+                if matches!(name.as_str(), "local" | "declare" | "typeset" | "export") {
+                    self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                }
+                if self.running.contains(&name) || self.function_runs == 256 {
+                    self.output.gap(CoverageGap::InspectionBudget);
+                } else {
+                    self.function_runs += 1;
+                    self.running.insert(name.clone());
+                    let caller_returns = std::mem::take(&mut scope.returns);
+                    let caller_loops = std::mem::take(&mut scope.loops);
+                    let caller_failures = scope.directory.failures.take();
+                    scope.enter_function();
+                    self.run(&function.body, scope, depth + 1, function.source_id, nested)?;
+                    let returns = std::mem::take(&mut scope.returns);
+                    let mut candidates = vec![scope.clone()];
+                    candidates.extend(returns.into_iter().map(|state| scope.with_state(state)));
+                    for candidate in &mut candidates {
+                        candidate.leave_function();
+                    }
+                    scope.leave_function();
+                    self.merge_bindings(scope, &candidates);
+                    scope.returns = caller_returns;
+                    scope.loops = caller_loops;
+                    scope.directory.failures = caller_failures;
+                    self.running.remove(&name);
+                }
+            }
+            if !command.function {
+                self.track(&command, scope);
+            }
+            if !prior.is_empty() {
+                restore_prefix(&mut scope.bindings, &prior);
+                for state in scope.returns.iter_mut().skip(return_start) {
+                    restore_prefix(&mut state.bindings, &prior);
+                }
+            }
+            exits.push(branch);
+        }
+        if let Some(first) = exits.first() {
+            scope.directory = first.directory.clone();
+            if let Some(failures) = &mut scope.directory.failures {
+                for branch in exits.iter().skip(1) {
+                    failures.extend(branch.directory.failures.clone().unwrap_or_default());
+                }
+            }
+        }
+        self.merge_directories(scope, &exits);
+        self.merge_bindings(scope, &exits);
+        Ok(())
+    }
+    fn compound_statement(
+        &mut self,
+        statement: &Statement,
+        scope: &mut Scope,
+        depth: usize,
+        source_id: usize,
+        nested: bool,
+    ) -> Result<(), CheckError> {
         match statement {
             Statement::UnsupportedSyntax => self.output.gap(CoverageGap::UnsupportedShellSyntax),
             Statement::Group(body) => self.run(body, scope, depth + 1, source_id, nested)?,
@@ -508,278 +789,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             Statement::Expansion(word) => {
                 self.expand(word, scope, depth)?;
             }
-            Statement::Command {
-                assignments,
-                argv,
-                redirects,
-                pipeline,
-            } => {
-                let mut prefixes = Vec::new();
-                let mut assignment_scope = scope.clone();
-                let mut command_bindings = BTreeMap::new();
-                for (name, raw) in assignments {
-                    let values = self.expand(raw, &mut assignment_scope, depth)?;
-                    for value in &values {
-                        self.armed_references(&value.word.text, &mut assignment_scope, depth)?;
-                    }
-                    if !argv.is_empty()
-                        && values
-                            .iter()
-                            .any(|v| v.word.vars.iter().any(|n| command_bindings.contains_key(n)))
-                    {
-                        self.output.gap(CoverageGap::UnsupportedShellSyntax);
-                    }
-                    let binding = values
-                        .iter()
-                        .map(|v| {
-                            if v.word.expands {
-                                None
-                            } else {
-                                Some(v.word.text.clone())
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                    assignment_scope.assign(name.clone(), binding.clone());
-                    if argv.is_empty() {
-                        scope.assign(name.clone(), binding.clone());
-                    } else {
-                        command_bindings.insert(name.clone(), binding);
-                    }
-                    let mut word = values
-                        .first()
-                        .map(|v| v.word.clone())
-                        .unwrap_or_else(|| crate::record::Word::literal(String::new()));
-                    word.text = format!("{name}={}", word.text);
-                    for range in &mut word.cwd_ranges {
-                        range.start += name.len() + 1;
-                        range.end += name.len() + 1;
-                    }
-                    word.value = word.text.clone();
-                    word.role = if argv.is_empty() {
-                        Role::Precommand
-                    } else {
-                        Role::Assign
-                    };
-                    prefixes.push(word);
-                }
-                let mut alternatives = vec![prefixes];
-                for raw in argv {
-                    let declaration = argv.first().is_some_and(|w| {
-                        matches!(w.raw.as_str(), "export" | "local" | "declare" | "typeset")
-                    });
-                    let mut choices = Vec::new();
-                    if declaration && let Some((name, value)) = assignment(&raw.raw) {
-                        for expanded in self.expand(
-                            &RawWord {
-                                raw: value.into(),
-                                syntax: WordSyntax::Shell,
-                                expansions: raw.expansions.clone(),
-                            },
-                            scope,
-                            depth,
-                        )? {
-                            let mut word = expanded.word;
-                            word.text = format!("{name}={}", word.text);
-                            for range in &mut word.cwd_ranges {
-                                range.start += name.len() + 1;
-                                range.end += name.len() + 1;
-                            }
-                            word.value = word.text.clone();
-                            word.raw = raw.raw.clone();
-                            choices.push(vec![word]);
-                        }
-                    } else {
-                        for expanded in self.expand(raw, scope, depth)? {
-                            choices.push(expanded.split);
-                            choices.push(vec![expanded.word]);
-                        }
-                    }
-                    choices.dedup();
-                    let mut next = Vec::new();
-                    for previous in &alternatives {
-                        for choice in &choices {
-                            if next.len() == 512 {
-                                self.output.gap(CoverageGap::InspectionBudget);
-                                break;
-                            }
-                            let mut argv = previous.clone();
-                            argv.extend(choice.clone());
-                            next.push(argv);
-                        }
-                    }
-                    alternatives = next;
-                }
-                let mut targets = Vec::new();
-                for redirect in redirects {
-                    for expanded in self.expand(&redirect.target, scope, depth)? {
-                        targets.push(crate::record::Redirect::from_word(
-                            expanded.word,
-                            redirect.direction,
-                        ));
-                    }
-                }
-                let entry = scope.clone();
-                let mut exits = Vec::new();
-                for argv in alternatives {
-                    let mut branch = entry.clone();
-                    let scope = &mut branch;
-                    let program =
-                        (!argv[assignments.len()..].is_empty()).then_some(assignments.len());
-                    let prior = command_bindings
-                        .keys()
-                        .map(|name| (name.clone(), scope.bindings.get(name).cloned()))
-                        .collect::<BTreeMap<_, _>>();
-                    let return_start = scope.returns.len();
-                    for (name, values) in &command_bindings {
-                        scope.assign(name.clone(), values.clone());
-                    }
-                    if let Some(index) = program {
-                        for word in &argv[index + 1..] {
-                            self.armed_word(word, scope, depth)?;
-                        }
-                    }
-                    if let Some(index) =
-                        program.filter(|i| !self.functions.contains_key(&argv[*i].text))
-                    {
-                        if argv[index].expands && !self.functions.is_empty() {
-                            self.output.gap(CoverageGap::UnsupportedShellSyntax);
-                        }
-                        if argv[index] == "let" {
-                            for word in &argv[index + 1..] {
-                                self.arithmetic(&word.text, scope, depth)?;
-                            }
-                        }
-                        self.declaration(&argv[index..], scope);
-                        match argv[index].text.as_str() {
-                            "break" | "continue" => {
-                                let state = scope.state();
-                                let level = if argv.len() == index + 1 {
-                                    Some(1)
-                                } else if argv.len() == index + 2 {
-                                    argv[index + 1].text.parse::<usize>().ok()
-                                } else {
-                                    None
-                                };
-                                if level == Some(1)
-                                    && prior.is_empty()
-                                    && let Some(exits) = scope.loops.last_mut()
-                                {
-                                    exits.push(state);
-                                } else {
-                                    self.output.gap(CoverageGap::UnsupportedShellSyntax);
-                                }
-                            }
-                            "return" => {
-                                if scope.frames.is_empty() {
-                                    self.output.gap(CoverageGap::UnsupportedShellSyntax);
-                                } else {
-                                    scope.returns.push(scope.state());
-                                }
-                            }
-                            "eval" => {
-                                if argv[index + 1..].iter().any(|word| word.expands) {
-                                    self.output.gap(CoverageGap::UnsupportedShellSyntax);
-                                } else {
-                                    let before = scope.state();
-                                    self.source(
-                                        &argv[index + 1..]
-                                            .iter()
-                                            .map(|word| word.text.as_str())
-                                            .collect::<Vec<_>>()
-                                            .join(" "),
-                                        scope,
-                                        depth + 1,
-                                    )?;
-                                    // Binding-changing eval and function/prefix interactions need a fuller model.
-                                    if !scope.frames.is_empty()
-                                        || !prior.is_empty()
-                                        || scope.state() != before
-                                    {
-                                        self.output.gap(CoverageGap::UnsupportedShellSyntax);
-                                    }
-                                }
-                            }
-                            "read" => {
-                                for word in &argv[index + 1..] {
-                                    if identifier(&word.text) {
-                                        scope.assign(word.text.clone(), vec![None]);
-                                    }
-                                }
-                                self.output.gap(CoverageGap::UnsupportedShellSyntax);
-                            }
-                            _ => {}
-                        }
-                    }
-                    let command = Command {
-                        function: program
-                            .is_some_and(|i| self.functions.contains_key(&argv[i].text)),
-                        argv,
-                        redirects: targets.clone(),
-                        cwd: scope.directory.current.render(),
-                        program,
-                        wrappers: Vec::new(),
-                        shell: true,
-                        flags: Vec::new(),
-                        items: None,
-                        stdin: Stdin::None,
-                        pipeline: pipeline.map(|id| (source_id, id)),
-                        nested,
-                    };
-                    self.emit(command.clone(), scope);
-                    if let Some(name) = program
-                        .and_then(|i| command.argv.get(i))
-                        .map(|w| w.text.clone())
-                        && let Some(function) = self.functions.get(&name).cloned()
-                    {
-                        if matches!(name.as_str(), "local" | "declare" | "typeset" | "export") {
-                            self.output.gap(CoverageGap::UnsupportedShellSyntax);
-                        }
-                        if self.running.contains(&name) || self.function_runs == 256 {
-                            self.output.gap(CoverageGap::InspectionBudget);
-                        } else {
-                            self.function_runs += 1;
-                            self.running.insert(name.clone());
-                            let caller_returns = std::mem::take(&mut scope.returns);
-                            let caller_loops = std::mem::take(&mut scope.loops);
-                            let caller_failures = scope.directory.failures.take();
-                            scope.enter_function();
-                            self.run(&function.body, scope, depth + 1, function.source_id, nested)?;
-                            let returns = std::mem::take(&mut scope.returns);
-                            let mut candidates = vec![scope.clone()];
-                            candidates
-                                .extend(returns.into_iter().map(|state| scope.with_state(state)));
-                            for candidate in &mut candidates {
-                                candidate.leave_function();
-                            }
-                            scope.leave_function();
-                            self.merge_bindings(scope, &candidates);
-                            scope.returns = caller_returns;
-                            scope.loops = caller_loops;
-                            scope.directory.failures = caller_failures;
-                            self.running.remove(&name);
-                        }
-                    }
-                    if !command.function {
-                        self.track(&command, scope);
-                    }
-                    if !prior.is_empty() {
-                        restore_prefix(&mut scope.bindings, &prior);
-                        for state in scope.returns.iter_mut().skip(return_start) {
-                            restore_prefix(&mut state.bindings, &prior);
-                        }
-                    }
-                    exits.push(branch);
-                }
-                if let Some(first) = exits.first() {
-                    scope.directory = first.directory.clone();
-                    if let Some(failures) = &mut scope.directory.failures {
-                        for branch in exits.iter().skip(1) {
-                            failures.extend(branch.directory.failures.clone().unwrap_or_default());
-                        }
-                    }
-                }
-                self.merge_directories(scope, &exits);
-                self.merge_bindings(scope, &exits);
+            Statement::Command { .. } => {
+                self.statement(statement, scope, depth, source_id, nested)?;
             }
         }
         Ok(())
