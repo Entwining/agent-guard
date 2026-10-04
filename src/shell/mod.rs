@@ -326,11 +326,15 @@ fn expand_scoped(
             });
         }
         for expression in &expanded.arithmetic {
+            evaluator.armed_references(expression, scope, depth)?;
             for code in evaluator.arithmetic_code(expression, scope)? {
                 if !expanded.nested.contains(&code) {
                     expanded.nested.push(code);
                 }
             }
+        }
+        for expression in &expanded.references {
+            evaluator.armed_references(expression, scope, depth)?;
         }
         for code in &expanded.nested {
             evaluator.source(code, &mut scope.isolated(), depth + 1)?;
@@ -345,6 +349,7 @@ struct Expanded {
     word: Word,
     nested: Vec<String>,
     arithmetic: Vec<String>,
+    references: Vec<String>,
     parameters: Vec<ParameterRegion>,
     unsupported: bool,
 }

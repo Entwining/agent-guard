@@ -21,6 +21,64 @@ pub(super) fn evaluate(
     Ok(result)
 }
 
+pub(super) enum Arming {
+    Inert,
+    Armed(Vec<String>),
+    Unresolved,
+}
+
+pub(super) fn armed(value: &str) -> Arming {
+    let (lexical, error) = Lexed::parameter_fragment(
+        value,
+        Context {
+            arithmetic_depth: 1,
+            ..Context::default()
+        },
+    );
+    if error == Some(super::lexer::LexError::Nesting) {
+        return Arming::Unresolved;
+    }
+    let mut code = Vec::new();
+    for (left, byte) in value.bytes().enumerate() {
+        if byte != b'[' || !lexical.context(left).active() {
+            continue;
+        }
+        let mut start = left;
+        while start > 0
+            && (value.as_bytes()[start - 1].is_ascii_alphanumeric()
+                || value.as_bytes()[start - 1] == b'_')
+        {
+            start -= 1;
+        }
+        if start == left
+            || !(value.as_bytes()[start].is_ascii_alphabetic() || value.as_bytes()[start] == b'_')
+        {
+            continue;
+        }
+        let right = lexical.closing(left, b'[', b']');
+        let mut offset = left + 1;
+        while offset < right.unwrap_or(value.len()) {
+            if let Some(body) = lexical.substitution_body(offset) {
+                if right.is_none() {
+                    return Arming::Unresolved;
+                }
+                let source = value[body.clone()].to_owned();
+                if !code.contains(&source) {
+                    code.push(source);
+                }
+                offset = body.end + 1;
+            } else {
+                offset += 1;
+            }
+        }
+    }
+    if code.is_empty() {
+        Arming::Inert
+    } else {
+        Arming::Armed(code)
+    }
+}
+
 fn visit(
     expression: &str,
     bindings: &BTreeMap<String, Vec<String>>,
@@ -111,4 +169,31 @@ fn visit(
             .len_utf8();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn armed_classifier_refuses_its_own_lexer_bound() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/rust-m2-arith-sinks.json"
+        ))
+        .unwrap();
+        let row = fixture["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == "armed-lexer-bound")
+            .unwrap();
+        let value = row["source"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("x='")
+            .unwrap()
+            .strip_suffix("'; echo x")
+            .unwrap();
+        assert!(matches!(armed(value), Arming::Unresolved));
+    }
 }

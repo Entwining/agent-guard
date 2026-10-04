@@ -22,6 +22,7 @@ pub(super) fn expand(
             word,
             nested: Vec::new(),
             arithmetic: Vec::new(),
+            references: Vec::new(),
             parameters: Vec::new(),
             unsupported: false,
         });
@@ -47,6 +48,7 @@ pub(super) fn expand(
         split: Vec::new(),
         nested: Vec::new(),
         arithmetic: Vec::new(),
+        references: Vec::new(),
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -239,6 +241,7 @@ fn fragment(
         split: Vec::new(),
         nested: Vec::new(),
         arithmetic: Vec::new(),
+        references: Vec::new(),
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -285,6 +288,7 @@ fn merge_fragment(out: &mut Expanded, inner: Expanded, offset: usize) {
     out.word.vars.extend(inner.word.vars);
     out.nested.extend(inner.nested);
     out.arithmetic.extend(inner.arithmetic);
+    out.references.extend(inner.references);
 }
 
 fn fill(
@@ -359,6 +363,15 @@ fn fill(
                 out.word.text.push_str(value.unwrap_or(spelling));
             }
             WordPiece::ParameterExpansion(expr) => {
+                if let Some(Parameter::NamedWithIndex { index, .. }) = parameter(expr) {
+                    out.references.push(index.clone());
+                }
+                if let ParameterExpr::Substring { offset, length, .. } = expr {
+                    out.references.push(offset.value.clone());
+                    if let Some(length) = length {
+                        out.references.push(length.value.clone());
+                    }
+                }
                 let plain = if let ParameterExpr::Parameter {
                     parameter: Parameter::Named(name),
                     indirect: false,

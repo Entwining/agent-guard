@@ -114,6 +114,7 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
         split: Vec::new(),
         nested: Vec::new(),
         arithmetic: Vec::new(),
+        references: Vec::new(),
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -234,6 +235,7 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
         split: Vec::new(),
         nested: Vec::new(),
         arithmetic: Vec::new(),
+        references: Vec::new(),
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -268,6 +270,7 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
         split: Vec::new(),
         nested: Vec::new(),
         arithmetic: Vec::new(),
+        references: Vec::new(),
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -301,6 +304,7 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
         split: Vec::new(),
         nested: Vec::new(),
         arithmetic: Vec::new(),
+        references: Vec::new(),
         parameters: Vec::new(),
         unsupported: false,
     };

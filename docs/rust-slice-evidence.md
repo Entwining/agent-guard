@@ -1,5 +1,41 @@
 # Offline Rust migration evidence
 
+## M2 math-armed binding references
+
+Ruling 36 corrects ruling 34's numeric printf and shift controls: their Zsh
+witnesses execute the bound subscript when the named array exists. The binding
+owner now uses the lexer to mark values containing substitution or backquote
+code inside a named subscript. A later bare-name argument, assignment value,
+arithmetic expression or subscript reference observes that code through the
+existing nested queue and the current scope's candidate bindings. The mechanism
+does not enumerate builtin sinks or track numeric attributes.
+
+The accepted conservative cost also denies bare-name references in echo,
+listing, ordinary functions and non-math comparisons when the binding is armed.
+This includes a shadowed let function that previously permitted: the scope
+owner still models the function, while ruling 36 owns the conservative reference.
+Non-armed values and ordinary value expansion remain unchanged. The existing
+recursion/work bounds still refuse incomplete observation; inherited environment
+values remain a cutover-blocking limit. Go remains unchanged.
+
+Static contract rows include the Bash contexts from ruling 34 and Zsh exit,
+return, repeat, print, integer and float witnesses. Host readings use synthetic
+HOME and echo/printf markers; checker counterparts are fixture data. Mechanism
+receipts distinguish lexical arming, general references and their original
+parameter-expression producers, with exact archive restoration and all consumer
+projections. Runtime loading and cutover remain separately unaccepted.
+
+The frozen packet has 70 contract rows, 210 consumer projections and 112 safe
+host readings. Eleven mechanism ablations compile, fail their named assertions,
+restore exactly and pass. The 1,289-row corpus and 22,377-observation manifest
+remain unchanged against the signed scope parent `ef99205`; all 21 CHANGE
+contracts pass and there is no new F. Strict conformance still reports 115 rows
+and 329 consumer conflicts. The binding observation summary is SHA-256
+`1b10cc19a3d9f93f0ef8d4d95ccd608bf38acb591a96ef73c5f4d76b8036b881`;
+the ablation summary is
+`194f539d8cb674dca1c74d0542e22575e7284a809295d272a572ab6949b48ae2`.
+Both reside under `~/.cache/guard-fixtures/fixture-seat/r5-m2-phase-b/`.
+
 ## M2 statement scopes and binding joins
 
 Rulings 33 and 35 replace the flattened binding table with a bounded statement
@@ -38,11 +74,11 @@ groups within M2. M2 acceptance and runtime cutover remain open.
 
 ## M2 bounded arithmetic bindings
 
-M1 is accepted at `ff95842`; M2 Phase B is in progress. Ruling 16 routes
-current lexical binding values only through arithmetic expansion, parameter
-arithmetic expansion, arithmetic commands, `let`, assignment subscripts and
-numeric equality tests. The arithmetic owner follows identifiers and observes
-checked subscript substitution bodies; ordinary variable strings never become
+M1 is accepted at `ff95842`; M2 Phase B is in progress. Ruling 16 originally
+routed lexical bindings through arithmetic expansion, parameter arithmetic,
+arithmetic commands, `let`, assignment subscripts and numeric equality tests.
+Ruling 36 extends the binding owner as described above. It follows identifiers
+and observes checked subscript substitution bodies; ordinary variable strings never become
 general shell source. Rebinding replaces the prior value. Recursive cycles,
 depth above 64 and more than 512 expression visits produce InspectionBudget.
 The work bound covers repeated references even in an acyclic binding graph.

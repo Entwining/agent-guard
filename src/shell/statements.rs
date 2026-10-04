@@ -496,6 +496,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 let mut command_bindings = BTreeMap::new();
                 for (name, raw) in assignments {
                     let values = self.expand(raw, &mut assignment_scope, depth)?;
+                    for value in &values {
+                        self.armed_references(&value.word.text, &mut assignment_scope, depth)?;
+                    }
                     if !argv.is_empty()
                         && values
                             .iter()
@@ -598,6 +601,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     let return_start = scope.returns.len();
                     for (name, values) in &command_bindings {
                         scope.assign(name.clone(), values.clone());
+                    }
+                    if let Some(index) = program {
+                        for word in &argv[index + 1..] {
+                            self.armed_word(word, scope, depth)?;
+                        }
                     }
                     if let Some(index) =
                         program.filter(|i| !self.functions.contains_key(&argv[*i].text))
@@ -881,6 +889,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         scope: &mut Scope,
         depth: usize,
     ) -> Result<(), CheckError> {
+        self.armed_references(expression, scope, depth)?;
         let code = self.arithmetic_code(expression, scope)?;
         for code in code {
             self.source(&code, &mut scope.isolated(), depth + 1)?;
@@ -905,6 +914,90 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             self.output.gap(CoverageGap::UnsupportedShellSyntax);
         }
         Ok(evaluation.code)
+    }
+    fn armed_word(
+        &mut self,
+        word: &crate::record::Word,
+        scope: &mut Scope,
+        depth: usize,
+    ) -> Result<(), CheckError> {
+        if identifier(&word.text) {
+            return self.armed_reference(&word.text, scope, depth);
+        }
+        if let Some((name, value)) = word.text.split_once('=') {
+            let name = name.strip_suffix('+').unwrap_or(name);
+            if identifier(name) || indexed_name(name).is_some() {
+                self.armed_references(value, scope, depth)?;
+                if let Some(index) = indexed_name(name) {
+                    self.armed_references(index, scope, depth)?;
+                }
+            }
+        } else if word.vars.is_empty()
+            && let Some(index) = indexed_name(&word.text)
+        {
+            self.armed_references(index, scope, depth)?;
+        }
+        Ok(())
+    }
+    pub fn armed_references(
+        &mut self,
+        expression: &str,
+        scope: &mut Scope,
+        depth: usize,
+    ) -> Result<(), CheckError> {
+        let names = match super::arithmetic::evaluate(expression, &BTreeMap::new()) {
+            Ok(evaluation) => evaluation.names,
+            Err(error) if error.kind == crate::CheckErrorKind::ResourceLimit => {
+                self.output.gap(CoverageGap::InspectionBudget);
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        };
+        for name in names {
+            self.armed_reference(&name, scope, depth)?;
+        }
+        Ok(())
+    }
+    fn armed_reference(
+        &mut self,
+        name: &str,
+        scope: &mut Scope,
+        depth: usize,
+    ) -> Result<(), CheckError> {
+        let Some(binding) = scope.bindings.get(name) else {
+            return Ok(());
+        };
+        let mut sources = Vec::new();
+        for value in &binding.values {
+            let Some(value) = value else {
+                self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                continue;
+            };
+            match super::arithmetic::armed(value) {
+                super::arithmetic::Arming::Armed(code) => {
+                    for source in code {
+                        if !sources.contains(&source) {
+                            sources.push(source);
+                        }
+                    }
+                }
+                super::arithmetic::Arming::Inert => {}
+                super::arithmetic::Arming::Unresolved => {
+                    self.output.gap(CoverageGap::InspectionBudget);
+                }
+            }
+        }
+        if !sources.is_empty() {
+            for source in self.arithmetic_code(name, scope)? {
+                if !sources.contains(&source) {
+                    sources.push(source);
+                }
+            }
+            for source in sources {
+                self.source(&source, &mut scope.isolated(), depth + 1)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -934,6 +1027,12 @@ pub(super) fn identifier(name: &str) -> bool {
 }
 fn assignment(raw: &str) -> Option<(&str, &str)> {
     raw.split_once('=').filter(|(n, _)| identifier(n))
+}
+
+fn indexed_name(name: &str) -> Option<&str> {
+    let (variable, tail) = name.split_once('[')?;
+    identifier(variable).then_some(())?;
+    tail.strip_suffix(']')
 }
 
 #[cfg(test)]
