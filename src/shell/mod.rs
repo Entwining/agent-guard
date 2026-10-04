@@ -38,6 +38,7 @@ struct RawRedirect {
 }
 #[derive(Debug, Clone)]
 enum Record {
+    UnsupportedSyntax,
     Nested(Vec<Record>),
     Definition(String, Vec<Record>),
     Assignment(String, RawWord),
@@ -237,6 +238,7 @@ fn observe_source(
             break;
         }
         match record {
+            Record::UnsupportedSyntax => output.gap(CoverageGap::UnsupportedShellSyntax),
             Record::Nested(records) => {
                 for record in records.into_iter().rev() {
                     pending.push_front((record, true));

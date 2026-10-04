@@ -51,7 +51,7 @@ fn rows(owner: &str) {
                     assert!(wire.stderr.contains(&reason.effect));
                     assert!(!recovery.excluded_scope.is_empty());
                     assert!(wire.stderr.contains("recheck"));
-                    if owner == "forwarding" {
+                    if matches!(owner, "forwarding" | "framing-sweep") {
                         let protection = if row["reason"] == "private-key" {
                             agent_guard_rust::filesystem::Protection::SshPrivate
                         } else {
@@ -142,6 +142,11 @@ fn raw_detector_retirement_keeps_nested_command() {
 #[test]
 fn accepted_parser_refusals_keep_syntax_cause_and_recovery() {
     rows("parse-refusal");
+}
+
+#[test]
+fn forwarded_heredoc_and_arithmetic_for_use_original_regions() {
+    rows("framing-sweep");
 }
 
 #[test]

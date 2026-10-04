@@ -20,6 +20,7 @@ pub struct Context {
     pub parameter_depth: usize,
     pub backtick_depth: usize,
     pub arithmetic_depth: usize,
+    pub command_syntax: bool,
     pub escaped: bool,
     pub heredoc: Option<bool>,
     pub heredoc_delimiter: bool,
@@ -57,6 +58,7 @@ pub enum LexError {
 pub struct Lexed<'a> {
     source: &'a str,
     context: Vec<Context>,
+    heredocs: Vec<(Range<usize>, bool, bool)>,
 }
 
 pub fn initial_quote(source: &str) -> Quote {
@@ -73,24 +75,6 @@ impl<'a> Lexed<'a> {
     pub fn scan(source: &'a str) -> Result<Self, LexError> {
         Self::with_context(source, Context::default())
     }
-    pub(super) fn heredoc(source: &'a str) -> Result<Self, LexError> {
-        Self::with_context(
-            source,
-            Context {
-                heredoc: Some(false),
-                ..Context::default()
-            },
-        )
-    }
-    pub(super) fn arithmetic(source: &'a str) -> Result<Self, LexError> {
-        Self::with_context(
-            source,
-            Context {
-                arithmetic_depth: 1,
-                ..Context::default()
-            },
-        )
-    }
     pub(super) fn parameter_fragment(
         source: &'a str,
         context: Context,
@@ -98,6 +82,7 @@ impl<'a> Lexed<'a> {
         let mut lexed = Self {
             source,
             context: vec![context; source.len()],
+            heredocs: Vec::new(),
         };
         let mut cursor = 0;
         let error = lexed.region(&mut cursor, context, None, 0).err();
@@ -112,6 +97,11 @@ impl<'a> Lexed<'a> {
     }
     pub fn context(&self, byte: usize) -> Context {
         self.context.get(byte).copied().unwrap_or_default()
+    }
+    pub(super) fn heredoc_body(&self, start: usize) -> Option<&(Range<usize>, bool, bool)> {
+        self.heredocs
+            .iter()
+            .find(|(range, _, _)| range.start == start)
     }
     pub fn array_tail_spans(&self) -> Vec<Range<usize>> {
         let mut spans = Vec::new();
@@ -313,6 +303,7 @@ impl<'a> Lexed<'a> {
                 let inner = Context {
                     quote: Quote::Unquoted,
                     arithmetic_depth: context.arithmetic_depth + 1,
+                    command_syntax: false,
                     heredoc: None,
                     ..context
                 };
@@ -334,6 +325,7 @@ impl<'a> Lexed<'a> {
                 let inner = Context {
                     quote: Quote::Unquoted,
                     arithmetic_depth: context.arithmetic_depth + 1,
+                    command_syntax: false,
                     heredoc: None,
                     ..context
                 };
@@ -356,16 +348,8 @@ impl<'a> Lexed<'a> {
                         Quote::Unquoted
                     },
                     command_depth: context.command_depth + usize::from(!parameter && !backtick),
-                    parameter_depth: if parameter {
-                        context.parameter_depth + 1
-                    } else {
-                        0
-                    },
-                    arithmetic_depth: if parameter {
-                        context.arithmetic_depth
-                    } else {
-                        0
-                    },
+                    parameter_depth: context.parameter_depth + usize::from(parameter),
+                    command_syntax: !parameter,
                     backtick_depth: context.backtick_depth + usize::from(backtick),
                     heredoc: None,
                     ..context
@@ -395,8 +379,8 @@ impl<'a> Lexed<'a> {
                 }
                 if byte == b'#'
                     && word_start
-                    && context.parameter_depth == 0
-                    && context.arithmetic_depth == 0
+                    && (context.command_syntax
+                        || (context.parameter_depth == 0 && context.arithmetic_depth == 0))
                 {
                     let right = tail.find('\n').map_or(self.source.len(), |n| *cursor + n);
                     self.mark(
@@ -410,8 +394,8 @@ impl<'a> Lexed<'a> {
                     continue;
                 }
                 if tail.starts_with("<<<")
-                    && context.parameter_depth == 0
-                    && context.arithmetic_depth == 0
+                    && (context.command_syntax
+                        || (context.parameter_depth == 0 && context.arithmetic_depth == 0))
                 {
                     self.mark(*cursor..*cursor + 3, context);
                     *cursor += 3;
@@ -419,8 +403,8 @@ impl<'a> Lexed<'a> {
                     continue;
                 }
                 if tail.starts_with("<<")
-                    && context.parameter_depth == 0
-                    && context.arithmetic_depth == 0
+                    && (context.command_syntax
+                        || (context.parameter_depth == 0 && context.arithmetic_depth == 0))
                 {
                     let opening = *cursor;
                     let strip_tabs = tail.starts_with("<<-");
@@ -478,6 +462,8 @@ impl<'a> Lexed<'a> {
                         line = right + 1;
                     }
                     let body_end = found.map_or(self.source.len(), |(left, _)| left);
+                    self.heredocs
+                        .push((body_start..body_end, quoted, strip_tabs));
                     let body_context = Context {
                         heredoc: Some(quoted),
                         ..context
@@ -487,6 +473,15 @@ impl<'a> Lexed<'a> {
                         let body = &self.source[body_start..body_end];
                         let nested = Lexed::with_context(body, body_context)?;
                         self.context[body_start..body_end].copy_from_slice(&nested.context);
+                        self.heredocs.extend(nested.heredocs.into_iter().map(
+                            |(range, quoted, strip)| {
+                                (
+                                    range.start + body_start..range.end + body_start,
+                                    quoted,
+                                    strip,
+                                )
+                            },
+                        ));
                     }
                     *cursor = found.map_or(self.source.len(), |(_, right)| {
                         right + usize::from(right < self.source.len())

@@ -51,16 +51,23 @@ pub(super) fn expand(
     out.word.raw = raw.to_owned();
     out.word.globs = braces;
     let mut splitting = false;
-    let lexical = if heredoc {
-        super::lexer::Lexed::heredoc(&input)
-    } else if arithmetic {
-        super::lexer::Lexed::arithmetic(&input)
-    } else {
-        super::lexer::Lexed::scan(&input)
+    let (lexical, error) = super::lexer::Lexed::parameter_fragment(
+        &input,
+        super::lexer::Context {
+            heredoc: heredoc.then_some(false),
+            arithmetic_depth: usize::from(arithmetic),
+            ..super::lexer::Context::default()
+        },
+    );
+    match error {
+        Some(super::lexer::LexError::Nesting) => {
+            return Err(CheckError {
+                kind: CheckErrorKind::ResourceLimit,
+            });
+        }
+        Some(super::lexer::LexError::Unterminated { .. }) => out.unsupported = true,
+        None => {}
     }
-    .map_err(|_| CheckError {
-        kind: CheckErrorKind::GuardFault,
-    })?;
     out.parameters = parameter_regions(&input, &lexical);
     fill(
         &input,
@@ -105,9 +112,15 @@ pub(super) fn expand(
 }
 
 fn brace_text(raw: &str) -> Result<(String, bool), CheckError> {
-    let lexical = super::lexer::Lexed::scan(raw).map_err(|_| CheckError {
-        kind: CheckErrorKind::GuardFault,
-    })?;
+    let lexical = match super::lexer::Lexed::scan(raw) {
+        Ok(lexical) => lexical,
+        Err(super::lexer::LexError::Unterminated { .. }) => return Ok((raw.to_owned(), false)),
+        Err(super::lexer::LexError::Nesting) => {
+            return Err(CheckError {
+                kind: CheckErrorKind::ResourceLimit,
+            });
+        }
+    };
     let mut text = String::new();
     let mut expands = false;
     let mut cursor = 0;
@@ -413,6 +426,13 @@ fn fill(
                 }
             }
             WordPiece::ArithmeticExpression(expr) => {
+                let (open, close) = if spelling.starts_with("$[") {
+                    (b'[', b']')
+                } else {
+                    (b'(', b')')
+                };
+                out.unsupported |= lexical.closing(piece.start_index + 1, open, close)
+                    != Some(piece.end_index - 1);
                 let inner = fragment(
                     &expr.value,
                     super::lexer::Context {

@@ -4,6 +4,7 @@ use std::ops::Range;
 struct Source<'a> {
     text: &'a str,
     offsets: Vec<usize>,
+    lexical: super::lexer::Lexed<'a>,
 }
 
 impl Source<'_> {
@@ -47,8 +48,16 @@ fn original<'a>(source: &'a Source<'_>, span: &SourceSpan) -> Result<&'a str, Ch
 }
 
 pub(super) fn records(source: &str, parsed: &str) -> Result<Parsed, CheckError> {
+    let (lexical, error) =
+        super::lexer::Lexed::parameter_fragment(source, super::lexer::Context::default());
+    if error == Some(super::lexer::LexError::Nesting) {
+        return Err(CheckError {
+            kind: CheckErrorKind::ResourceLimit,
+        });
+    }
     let source = Source {
         text: source,
+        lexical,
         offsets: parsed
             .char_indices()
             .map(|(i, _)| i)
@@ -179,14 +188,18 @@ fn walk_compound(
             walk_list(source, &group.body.list, output)?;
         }
         CompoundCommand::ArithmeticForClause(group) => {
-            for expression in [&group.initializer, &group.condition, &group.updater]
-                .into_iter()
-                .flatten()
+            let range = source.range(&group.loc)?;
+            let header = original(source, &group.loc)?;
+            if let Some(left) = header.find("((").map(|i| i + range.start)
+                && let Some(right) = source.lexical.closing(left, b'(', b')')
+                && right < range.end
             {
                 output.push(Record::Expansion(Word {
-                    raw: expression.to_string(),
-                    syntax: super::WordSyntax::Shell,
+                    raw: source.text[left + 2..right - 1].to_owned(),
+                    syntax: super::WordSyntax::Arithmetic,
                 }));
+            } else {
+                output.push(Record::UnsupportedSyntax);
             }
             walk_list(source, &group.body.list, output)?;
         }
@@ -239,19 +252,26 @@ fn item_record(
             let value = word(source, value)?;
             if let AssignmentName::ArrayElementName(name, _) = &assignment.name {
                 let left = name.len();
-                let lexical = super::lexer::Lexed::scan(&value.raw).map_err(|_| CheckError {
-                    kind: CheckErrorKind::GuardFault,
-                })?;
-                let right = lexical.closing(left, b'[', b']').ok_or(CheckError {
-                    kind: CheckErrorKind::GuardFault,
-                })?;
-                let index = value.raw.get(left + 1..right).ok_or(CheckError {
-                    kind: CheckErrorKind::GuardFault,
-                })?;
-                output.push(Record::Expansion(Word {
-                    raw: index.to_owned(),
-                    syntax: super::WordSyntax::Arithmetic,
-                }));
+                let (lexical, error) = super::lexer::Lexed::parameter_fragment(
+                    &value.raw,
+                    super::lexer::Context::default(),
+                );
+                if error == Some(super::lexer::LexError::Nesting) {
+                    return Err(CheckError {
+                        kind: CheckErrorKind::ResourceLimit,
+                    });
+                }
+                if let Some(right) = lexical.closing(left, b'[', b']') {
+                    let index = value.raw.get(left + 1..right).ok_or(CheckError {
+                        kind: CheckErrorKind::GuardFault,
+                    })?;
+                    output.push(Record::Expansion(Word {
+                        raw: index.to_owned(),
+                        syntax: super::WordSyntax::Arithmetic,
+                    }));
+                } else {
+                    output.push(Record::UnsupportedSyntax);
+                }
             }
             if !argv.is_empty() {
                 argv.push(value);
@@ -341,15 +361,43 @@ fn redirect(
             output.push(Record::Nested(records));
         }
         IoRedirect::HereDocument(_, doc) => {
+            let Some(span) = &doc.doc.loc else {
+                output.push(Record::UnsupportedSyntax);
+                return Ok(());
+            };
+            let span = source.range(span)?;
+            let Some((range, quoted, strip_tabs)) = source.lexical.heredoc_body(span.start) else {
+                output.push(Record::UnsupportedSyntax);
+                return Ok(());
+            };
+            if range.end > span.end
+                || *quoted == doc.requires_expansion
+                || *strip_tabs != doc.remove_tabs
+            {
+                output.push(Record::UnsupportedSyntax);
+            }
+            let raw = source.text.get(range.clone()).ok_or(CheckError {
+                kind: CheckErrorKind::GuardFault,
+            })?;
+            let raw = if *strip_tabs {
+                raw.split_inclusive('\n')
+                    .map(|line| line.trim_start_matches('\t'))
+                    .collect::<String>()
+            } else {
+                raw.to_owned()
+            };
+            if raw != doc.doc.value {
+                output.push(Record::UnsupportedSyntax);
+            }
             let body = Word {
-                raw: doc.doc.value.clone(),
-                syntax: if doc.requires_expansion {
+                raw,
+                syntax: if !quoted {
                     super::WordSyntax::Heredoc
                 } else {
                     super::WordSyntax::Literal
                 },
             };
-            if doc.requires_expansion {
+            if !quoted {
                 output.push(Record::Expansion(body.clone()));
             }
             redirects.push(Redirect {
@@ -372,4 +420,70 @@ fn redirect(
         _ => {}
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arithmetic_for_forwards_one_original_header_region() {
+        let raw = "for ((i=0; i<1; i++)); do echo public; done";
+        let parsed = records(raw, raw).unwrap().records.unwrap();
+        let bodies: Vec<_> = parsed
+            .iter()
+            .filter_map(|record| match record {
+                Record::Expansion(word) => Some(word.raw.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(bodies, ["i=0; i<1; i++"]);
+    }
+
+    #[test]
+    fn heredoc_text_mismatch_is_refused_and_original_body_is_forwarded() {
+        let raw = "cat <<TAG\npublic\nTAG";
+        let mut program = brush_parser::Parser::builder()
+            .build(std::io::Cursor::new(raw.as_bytes()))
+            .parse_program()
+            .unwrap();
+        let command = &mut program.complete_commands[0].0[0].0.first.seq[0];
+        let Command::Simple(simple) = command else {
+            panic!("simple command expected")
+        };
+        let mut changed = false;
+        for item in simple
+            .prefix
+            .iter_mut()
+            .flat_map(|p| &mut p.0)
+            .chain(simple.suffix.iter_mut().flat_map(|p| &mut p.0))
+        {
+            if let CommandPrefixOrSuffixItem::IoRedirect(IoRedirect::HereDocument(_, doc)) = item {
+                doc.doc.value = "changed parser text\n".into();
+                changed = true;
+            }
+        }
+        assert!(changed);
+        let source = Source {
+            text: raw,
+            offsets: raw
+                .char_indices()
+                .map(|(i, _)| i)
+                .chain(std::iter::once(raw.len()))
+                .collect(),
+            lexical: super::super::lexer::Lexed::scan(raw).unwrap(),
+        };
+        let mut output = Vec::new();
+        walk_command(&source, command, &mut output, None).unwrap();
+        assert!(
+            output
+                .iter()
+                .any(|r| matches!(r, Record::UnsupportedSyntax))
+        );
+        assert!(
+            output
+                .iter()
+                .any(|r| matches!(r, Record::Expansion(word) if word.raw == "public\n"))
+        );
+    }
 }

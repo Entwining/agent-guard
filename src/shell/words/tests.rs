@@ -144,3 +144,82 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
     assert_eq!(wire.exit, 2);
     assert!(wire.stderr.contains("checker failed"));
 }
+
+#[test]
+fn brush_accepted_word_lexer_refusal_is_unsupported() {
+    let raw = "`echo $'broken`";
+    assert!(word::parse(raw, &ParserOptions::default()).is_ok());
+    assert!(matches!(
+        Lexed::scan(raw),
+        Err(crate::shell::lexer::LexError::Unterminated { .. })
+    ));
+    let expanded = expand(
+        raw,
+        &crate::shell::WordSyntax::Shell,
+        &BTreeMap::new(),
+        crate::record::HostFacts {
+            home: "/synthetic/home",
+            user: None,
+        },
+    )
+    .unwrap();
+    assert!(
+        expanded.unsupported,
+        "a known word parser disagreement is unsupported, not a checker fault"
+    );
+}
+
+#[test]
+fn outer_early_closer_has_its_own_unsupported_region() {
+    let raw = "${v:-${w@Z}}";
+    let expanded = expand(
+        raw,
+        &crate::shell::WordSyntax::Shell,
+        &BTreeMap::new(),
+        crate::record::HostFacts {
+            home: "/synthetic/home",
+            user: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        expanded
+            .parameters
+            .iter()
+            .map(|r| (r.range.clone(), r.supported))
+            .collect::<Vec<_>>(),
+        vec![(0..12, false), (5..11, false)]
+    );
+}
+
+#[test]
+fn arithmetic_piece_end_is_checked_against_lexer() {
+    let raw = "$((1))";
+    let mut pieces = word::parse(raw, &ParserOptions::default()).unwrap();
+    pieces[0].end_index -= 1;
+    let lexical = Lexed::scan(raw).unwrap();
+    let mut out = Expanded {
+        word: Word::literal(String::new()),
+        split: Vec::new(),
+        nested: Vec::new(),
+        parameters: Vec::new(),
+        unsupported: false,
+    };
+    fill(
+        raw,
+        &pieces,
+        &lexical,
+        &BTreeMap::new(),
+        crate::record::HostFacts {
+            home: "/synthetic/home",
+            user: None,
+        },
+        &mut out,
+        &mut false,
+    )
+    .unwrap();
+    assert!(
+        out.unsupported,
+        "an in-bounds Brush end disagreement is unsupported"
+    );
+}

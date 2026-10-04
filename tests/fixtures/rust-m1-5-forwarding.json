@@ -16,5 +16,10 @@
   {"id":"g14-subshell","source":"(echo hi # )\ncat .env)","owner":"forwarding","expected":"D","reason":"environment"},
   {"id":"accepted-conditional-refusal","source":"[[ a = a # \nsetopt extendedglob]]","owner":"parse-refusal","expected":"UR","reason":"syntax"},
   {"id":"accepted-empty-heredoc-refusal","source":"cat <<''\nsetopt extendedglob","owner":"parse-refusal","expected":"UR","reason":"syntax"},
-  {"id":"accepted-unfinished-heredoc-refusal","source":"cat <<A\nbody\nA \nsetopt extendedglob","owner":"parse-refusal","expected":"UR","reason":"syntax"}
+  {"id":"accepted-unfinished-heredoc-refusal","source":"cat <<A\nbody\nA \nsetopt extendedglob","owner":"parse-refusal","expected":"UR","reason":"syntax"},
+  {"id":"sweep-heredoc-public","source":"cat <<TAG\npublic\nTAG","owner":"framing-sweep","expected":"N","reason":"none"},
+  {"id":"sweep-heredoc-inert","source":"cat <<'TAG'\n$(cat .env)\nTAG","owner":"framing-sweep","expected":"N","reason":"none"},
+  {"id":"sweep-heredoc-expanded","source":"cat <<TAG\n$(echo hi # )\ncat .env)\nTAG","owner":"framing-sweep","expected":"D","reason":"environment"},
+  {"id":"sweep-for-expanded","source":"for ((i=$(echo hi # )\ncat .env); i<1; i++)); do echo public; done","owner":"framing-sweep","expected":"D","reason":"environment"},
+  {"id":"sweep-for-public","source":"for ((i=0; i<1; i++)); do echo public; done","owner":"framing-sweep","expected":"N","reason":"none"}
 ]
