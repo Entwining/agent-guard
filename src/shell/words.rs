@@ -276,6 +276,7 @@ fn fill(
     out: &mut Expanded,
     splitting: &mut bool,
 ) -> Result<(), CheckError> {
+    let mut covered = 0;
     for piece in pieces {
         let context = lexical.context(piece.start_index);
         let quoted = !context.unquoted() || context.heredoc.is_some();
@@ -285,6 +286,19 @@ fn fill(
             .ok_or(CheckError {
                 kind: CheckErrorKind::GuardFault,
             })?;
+        if piece.end_index <= covered {
+            continue;
+        }
+        if piece.start_index < covered {
+            if matches!(piece.piece, WordPiece::Text(_)) {
+                out.word
+                    .text
+                    .push_str(&raw[covered..piece.end_index].replace("\\\n", ""));
+            } else {
+                out.unsupported = true;
+            }
+            continue;
+        }
         match &piece.piece {
             WordPiece::Text(text) => {
                 out.word.text.push_str(&text.replace("\\\n", ""));
@@ -370,16 +384,31 @@ fn fill(
                     out.word.expands = true;
                 }
             }
-            WordPiece::CommandSubstitution(code)
-            | WordPiece::BackquotedCommandSubstitution(code) => {
-                out.nested.push(code.clone());
-                if prints_pwd(code) {
+            WordPiece::CommandSubstitution(_) | WordPiece::BackquotedCommandSubstitution(_) => {
+                let backquote = matches!(piece.piece, WordPiece::BackquotedCommandSubstitution(_));
+                let left = piece.start_index + usize::from(!backquote);
+                let Some(right) = lexical.closing(
+                    left,
+                    if backquote { b'`' } else { b'(' },
+                    if backquote { b'`' } else { b')' },
+                ) else {
+                    out.unsupported = true;
+                    out.word.expands = true;
+                    continue;
+                };
+                let code = &raw[left + 1..right];
+                out.nested.push(code.to_owned());
+                if right + 1 != piece.end_index {
+                    covered = right + 1;
+                    out.word.expands = true;
+                }
+                if prints_pwd(code) && right + 1 == piece.end_index {
                     out.word.pwd = true;
                     if let Some(cwd) = variables.get("PWD") {
                         out.word.text.push_str(cwd);
                     }
                 } else {
-                    out.word.text.push_str(spelling);
+                    out.word.text.push_str(&raw[piece.start_index..right + 1]);
                     out.word.expands = true;
                 }
             }

@@ -1,0 +1,17 @@
+[
+  {"id":"g13-cmt-env","source":"echo $(echo hi # )\ncat .env)","owner":"forwarding","expected":"D","reason":"environment"},
+  {"id":"g13-cmt-key","source":"echo $(echo hi # )\ncat ~/.ssh/id_rsa)","owner":"forwarding","expected":"D","reason":"private-key"},
+  {"id":"g13-cmt-noparen-env","source":"echo $(echo hi # x\ncat .env)","owner":"forwarding","expected":"D","reason":"environment"},
+  {"id":"g13-cmt-setopt","source":"echo $(echo hi # )\nsetopt extendedglob)","owner":"raw-retirement","expected":"UR","reason":"dialect"},
+  {"id":"g13-bq-env","source":"echo `echo hi # )\ncat .env`","owner":"forwarding","expected":"D","reason":"environment"},
+  {"id":"g13-arith-cmt","source":"echo $(( 1 # )\n))","owner":"forwarding","expected":"UR","reason":"syntax"},
+  {"id":"g13-ctrl-plain","source":"echo $(echo hi\ncat .env)","owner":"forwarding","expected":"D","reason":"environment"},
+  {"id":"g14-procsub","source":"cat <(echo hi # )\ncat .env)","owner":"forwarding","expected":"D","reason":"environment"},
+  {"id":"g14-dq-cmdsub","source":"echo \"$(echo hi # )\ncat .env)\"","owner":"forwarding","expected":"D","reason":"environment"},
+  {"id":"g14-assign","source":"v=$(echo hi # )\ncat .env)","owner":"forwarding","expected":"D","reason":"environment"},
+  {"id":"g14-param-default","source":"echo ${v:-$(echo hi # )\ncat .env)}","owner":"forwarding","expected":"D","reason":"environment"},
+  {"id":"g14-subscript","source":"a[$(echo hi # )\ncat .env)]=1","owner":"forwarding","expected":"D","reason":"environment"},
+  {"id":"g14-nested","source":"echo $(echo $(echo hi # )\ncat .env))","owner":"forwarding","expected":"D","reason":"environment"},
+  {"id":"g14-brace-cmt","source":"echo $(echo hi # })\ncat .env)","owner":"forwarding","expected":"D","reason":"environment"},
+  {"id":"g14-subshell","source":"(echo hi # )\ncat .env)","owner":"forwarding","expected":"D","reason":"environment"}
+]

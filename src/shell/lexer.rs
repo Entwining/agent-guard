@@ -113,6 +113,60 @@ impl<'a> Lexed<'a> {
     pub fn context(&self, byte: usize) -> Context {
         self.context.get(byte).copied().unwrap_or_default()
     }
+    pub fn array_tail_spans(&self) -> Vec<Range<usize>> {
+        let mut spans = Vec::new();
+        for (left, byte) in self.source.bytes().enumerate() {
+            let base = self.context(left);
+            if byte != b'('
+                || !base.unquoted()
+                || base.parameter_depth != 0
+                || base.arithmetic_depth != 0
+            {
+                continue;
+            }
+            let prefix = &self.source[..left];
+            let Some(name) = prefix
+                .strip_suffix('=')
+                .map(|s| s.strip_suffix('+').unwrap_or(s))
+            else {
+                continue;
+            };
+            let start = name
+                .rfind(|c: char| c.is_ascii_whitespace() || ";|&<>()".contains(c))
+                .map_or(0, |i| i + 1);
+            let name = &name[start..];
+            if name.is_empty()
+                || !name.bytes().enumerate().all(|(i, b)| {
+                    (b.is_ascii_alphabetic() || b == b'_' || (i > 0 && b.is_ascii_digit()))
+                        && self.context(start + i).unquoted()
+                })
+            {
+                continue;
+            }
+            let Some(right) = self.closing(left, b'(', b')') else {
+                continue;
+            };
+            if self
+                .source
+                .as_bytes()
+                .get(right + 1)
+                .is_none_or(|b| b.is_ascii_whitespace() || b";|&<>)".contains(b))
+            {
+                continue;
+            }
+            let mut end = right + 1;
+            while end < self.source.len() {
+                let context = self.context(end);
+                let byte = self.source.as_bytes()[end];
+                if context == base && (byte.is_ascii_whitespace() || b";|&<>)".contains(&byte)) {
+                    break;
+                }
+                end = self.next(end);
+            }
+            spans.push(right..end);
+        }
+        spans
+    }
     pub(super) fn closing(&self, start: usize, open: u8, close: u8) -> Option<usize> {
         let base = self.context(start);
         let mut depth: usize = 0;
@@ -126,6 +180,9 @@ impl<'a> Lexed<'a> {
                 || context.arithmetic_depth != base.arithmetic_depth
             {
                 continue;
+            }
+            if open == close && byte == close && offset > 0 {
+                return Some(start + offset);
             }
             if byte == open {
                 depth += 1;
@@ -299,7 +356,16 @@ impl<'a> Lexed<'a> {
                         Quote::Unquoted
                     },
                     command_depth: context.command_depth + usize::from(!parameter && !backtick),
-                    parameter_depth: context.parameter_depth + usize::from(parameter),
+                    parameter_depth: if parameter {
+                        context.parameter_depth + 1
+                    } else {
+                        0
+                    },
+                    arithmetic_depth: if parameter {
+                        context.arithmetic_depth
+                    } else {
+                        0
+                    },
                     backtick_depth: context.backtick_depth + usize::from(backtick),
                     heredoc: None,
                     ..context

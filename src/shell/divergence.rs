@@ -40,6 +40,7 @@ pub(super) fn detect_lexed(
         }
     }
     let mut result = Detection {
+        divergent: !lexical.array_tail_spans().is_empty(),
         masked: source.to_owned(),
         ..Detection::default()
     };
@@ -146,7 +147,9 @@ fn assignment_prefix(source: &str, end: usize, lexical: &super::lexer::Lexed<'_>
     let start = source[..end]
         .rfind(|c: char| c.is_ascii_whitespace() || ";|&()".contains(c))
         .map_or(0, |i| i + 1);
-    let name = &source[start..end];
+    let name = source[start..end]
+        .strip_suffix('+')
+        .unwrap_or(&source[start..end]);
     !name.is_empty()
         && name.bytes().enumerate().all(|(i, b)| {
             (b.is_ascii_alphabetic() || b == b'_' || (i > 0 && b.is_ascii_digit()))
