@@ -44,15 +44,61 @@ fn check(
 
 #[test]
 fn detector_success_and_failure() {
+    let fixture = support::Fixture::new();
+    let ctx = context(&fixture);
     for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let success =
             shell::observe("setopt SH_WORD_SPLIT; printf ok", arm, "/h", "/h/p", true).unwrap();
         assert!(success.parse_successes > 0);
-        assert!(success.gaps.contains(&CoverageGap::ExecutorDivergence));
+        assert!(success.gaps.is_empty());
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
+        let result = check(
+            &fixture,
+            &ctx,
+            &mut probe,
+            arm,
+            "setopt SH_WORD_SPLIT; printf ok",
+        )
+        .unwrap();
+        assert!(matches!(
+            result.outcome,
+            Outcome::CoverageInsufficient {
+                cause: CoverageGap::ExecutorDivergence,
+                disposition: Disposition::RejectUnsupportedSyntax,
+                ..
+            }
+        ));
+        let wire = render(ctx.consumer, &Ok(result));
+        assert_eq!(wire.exit, 2);
+        assert!(wire.stdout.is_empty() && wire.stderr.contains("recheck"));
         let failure =
             shell::observe("setopt SH_WORD_SPLIT; cat >", arm, "/h", "/h/p", true).unwrap();
         assert!(failure.parse_failures > 0);
-        assert!(failure.gaps.contains(&CoverageGap::ExecutorDivergence));
+        assert_eq!(failure.gaps, [CoverageGap::UnsupportedShellSyntax]);
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
+        let result = check(
+            &fixture,
+            &ctx,
+            &mut probe,
+            arm,
+            "setopt SH_WORD_SPLIT; cat >",
+        )
+        .unwrap();
+        assert!(matches!(
+            result.outcome,
+            Outcome::CoverageInsufficient {
+                cause: CoverageGap::UnsupportedShellSyntax,
+                disposition: Disposition::RejectUnsupportedSyntax,
+                ..
+            }
+        ));
+        let wire = render(ctx.consumer, &Ok(result));
+        assert_eq!(wire.exit, 2);
+        assert!(
+            wire.stdout.is_empty()
+                && wire.stderr.contains("recheck")
+                && !wire.stderr.contains("checker failed")
+        );
         let inert = shell::observe("printf '%s' '${(f)v}'", arm, "/h", "/h/p", true).unwrap();
         assert!(inert.gaps.is_empty());
     }

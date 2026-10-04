@@ -21,5 +21,6 @@
   {"id":"sweep-heredoc-inert","source":"cat <<'TAG'\n$(cat .env)\nTAG","owner":"framing-sweep","expected":"N","reason":"none"},
   {"id":"sweep-heredoc-expanded","source":"cat <<TAG\n$(echo hi # )\ncat .env)\nTAG","owner":"framing-sweep","expected":"D","reason":"environment"},
   {"id":"sweep-for-expanded","source":"for ((i=$(echo hi # )\ncat .env); i<1; i++)); do echo public; done","owner":"framing-sweep","expected":"D","reason":"environment"},
-  {"id":"sweep-for-public","source":"for ((i=0; i<1; i++)); do echo public; done","owner":"framing-sweep","expected":"N","reason":"none"}
+  {"id":"sweep-for-public","source":"for ((i=0; i<1; i++)); do echo public; done","owner":"framing-sweep","expected":"N","reason":"none"},
+  {"id":"sweep-empty-heredoc","source":"cat <<''\n\necho public","owner":"framing-sweep","expected":"N","reason":"none"}
 ]

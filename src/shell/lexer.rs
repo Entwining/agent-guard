@@ -444,7 +444,7 @@ impl<'a> Lexed<'a> {
                         depth,
                     )?;
                     word_start = false;
-                    if *cursor > delimiter_start && !delimiter.is_empty() {
+                    if *cursor > delimiter_start {
                         documents.push_back((delimiter, quoted, strip_tabs));
                     }
                     continue;

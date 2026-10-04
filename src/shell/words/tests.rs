@@ -139,6 +139,36 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
         ["cat .env"],
         "independently observed code survives the operational fault"
     );
+    let context = crate::Context {
+        consumer: crate::adapters::Consumer::Claude,
+        home: "/synthetic/home".into(),
+        user: None,
+        cwd: "/synthetic/home/project".into(),
+        zsh_executor: true,
+        require_execution_owner: false,
+        shell_observation_entries: std::cell::Cell::new(0),
+    };
+    let bytes =
+        serde_json::to_vec(&json!({"tool_name":"Bash","tool_input":{"command":out.nested[0]}}))
+            .unwrap();
+    let denial = crate::evaluate(crate::Event {
+        bytes: &bytes,
+        context: &context,
+        probe: &mut crate::filesystem::DiskProbe,
+    })
+    .unwrap();
+    assert!(matches!(
+        denial.outcome,
+        crate::Outcome::ProtectedDenial { .. }
+    ));
+    assert_eq!(
+        denial.effects,
+        [crate::EffectRecord::ProtectedTarget {
+            protection: crate::filesystem::Protection::Environment,
+            write: false,
+            source: crate::EffectSource::Operand,
+        }]
+    );
     let result: Result<crate::Evaluation, CheckError> = Err(error);
     let wire = crate::adapters::render(crate::adapters::Consumer::Claude, &result);
     assert_eq!(wire.exit, 2);

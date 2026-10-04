@@ -1,6 +1,78 @@
 # Offline Rust migration evidence
 
-## M1.4 lexical framing, parameter coverage and visible nested effects
+## M1.5 substitution boundaries and adapter-owned divergence
+
+The baseline is `aaf179abaefee26f243736bbb524de71ab4ec2e4`. Binding rulings
+are `r5/m1-5-rulings.md` (24–29) and `r5/m1-5-rulings-b.md` (30).
+Raw evidence lives under `~/.cache/guard-fixtures/fixture-seat/r4h-m1-5-final/`;
+`sol-m1-5-report-final.md` contains every changed observation, receipt and
+owner/scope backlog row. Go remains authoritative, the packaged Rust entry
+remains version-only, and M2 Phase B has not started. Coordinator checks and
+fresh Opus plus DeepSeek acceptance are pending.
+
+Brush 0.4.0 closes a word substitution at a comment's `)` or `}` and previously
+forwarded only that truncated body. The lexer now owns command/backquote body
+bounds in original bytes. Following Brush pieces within that lexical body
+cannot become literal word text. Command grammar inside parameter or arithmetic
+contexts preserves physical nesting depths while enabling its own comments and
+heredocs. The boundary sweep also replaces arithmetic-for serialization and
+heredoc AST text with original lexical regions; mismatched boundaries produce
+explicit unsupported coverage. A quoted empty heredoc delimiter remains a real
+delimiter, with its own red regression and ablation.
+
+Array-assignment closers followed by a word byte have a lexical divergence
+span. This preserves the Bash literal-`#` reading while refusing the incompatible
+host reading. `setopt`, `unsetopt` and `emulate` now add the dialect gap at the
+program adapter, covering assignments, negation, timing and redirection prefixes.
+The raw command-shape detector is retired. Parser/lexer `Unterminated`
+disagreements become U-R; genuine span, resource, checker and probe faults remain F.
+
+| Check | Final M1.5 observation |
+| --- | --- |
+| Original manifest | Same 7,459 inputs / 22,377 observations and 49 matching provenance hashes; exact original materialized request bytes |
+| Manifest changes | 147 semantic changes: 84 class changes and 63 same-class changes |
+| Review replay | req4–req14 plus 74 three-consumer regression rows: 346 observations, 142 semantic changes |
+| Protection | No new wire permit except 36 ruled literal/non-command false refusals; required blocking rows pass |
+| Recovery | No new F, including no U-R-to-F |
+| Full corpus | 1,289 records / 3,795 observations; zero semantic changes after normalizing only synthetic run PID paths |
+| Legacy conflicts | Exactly the same 121 parents / 347 observations; frozen owner/scope backlog retained |
+| Temporary raw-detector oracle | 36 accepted raw-only permits in the manifest, zero in the review replay, zero raw hits in the corpus |
+| Brush oracle | 199,301 compared bytes, zero unknown disagreements, 20 counted substitution-end limits, 856 token-length mismatches, 575 span mappings |
+| Oracle exclusions | 267 tokenizer refusals and one frozen F3 limit; no word/nested refusals |
+| Mechanism evidence | 13 compile-success / named failure / exact-byte restore / passing rerun receipts |
+| Full test suite | 117 pass; only `every_legacy_row_is_accounted_for` fails |
+| Mechanical checks | fmt, Clippy, release build and cargo-deny pass offline; existing duplicate dependency warnings remain |
+| make rust-check | make 2 / Cargo 101 at the unchanged strict differential; not fully green |
+
+The final oracle key uses measured token-length mismatch, including the eight
+actual Opus inputs and the tab variant. It records Brush substitution-end limits
+rather than hiding them with replacement body text. Applying this observer to
+aaf179a also counts those limits: a zero quote-context disagreement count does
+not prove that production forwarded complete code. The earlier 16,036-to-zero
+claim included narrowing that hid the body loss; it was not entirely owner fixes.
+
+V2 has the actual `${v:-${w@Z}}` witness: its outer region's support, cause and
+span detect removal of the closer check. V3 has a pinned-grammar capture argument,
+not a natural fragment-Err runtime witness; malformed captures, PEG backtracking,
+other parser options and future versions remain unproved. The defensive refusal
+branch stays, without a fabricated entry point. Region fixtures assert each own
+span and cause and distinguish inactive single-quoted `${` text. Count-only
+manifest observers remain separate from class pins.
+
+| Cutover blocker recorded without Go repair | Owner |
+| --- | --- |
+| Go permits `a=(x)#$(cat .env)z` and the backquote form although Bash executes the substitution | Go shell framing / target inference before cutover |
+| Go permits F1 quoted/commented heredoc qualifier and option-changing builtin rows that Zsh executes | Go shell framing / qualifier owner before cutover |
+| Go permits scalar-prefixed, negated and redirected option-changing builtins | Go program adapter before cutover |
+| `builtin setopt`, `command setopt`, `noglob setopt` remain UnknownProgram U-C in Rust and permit in Go | P2/P5 precommand-wrapper owner |
+
+The original 121-row backlog is unchanged; these cutover blockers are a separately
+bound supplement. Existing arithmetic binding, inherited environment and CDPATH
+limits remain outside P1. No Go source, dependency, hook, installation, machine
+permission or public protocol entry changed, and no submitted protected command
+was executed. All new probes and host witnesses use synthetic data.
+
+## Historical M1.4 lexical framing, parameter coverage and visible nested effects
 
 The baseline is `61e29334db08835f100a8e5bfc398b0c96834691`. The binding scope
 is `r5/m1-4-rulings-final.md`, SHA-256
@@ -14,7 +86,10 @@ All raw evidence is external under
 complete changed-observation table, the 121-row owner/scope backlog and every
 mechanism receipt. `changed-observations.jsonl` preserves complete before,
 after and Go records; `changed-observations.md` shows all changed fields.
-Only evaluator timing is excluded. `corpus-changed-observations.json` records
+Only evaluator timing is excluded. These are historical packet measurements,
+not acceptance of M1. The raw-shape token remapping also hid a pre-existing
+substitution body loss, corrected in M1.5 above.
+`corpus-changed-observations.json` records
 every full-corpus delta, and `oracle-before-after.json` retains every original
 oracle discrepancy and final disposition.
 
@@ -68,7 +143,7 @@ quoted assignment data stays inert.
 | New wire permits | 252 false-refusal/fault corrections; all are Go permits |
 | Protection regression | No D-to-permit, no new Go-deny/Rust-permit |
 | Recovery regression | No U-R-to-F |
-| Brush oracle | 16,036 parent disagreements become zero; 198,731 compared bytes |
+| Historical Brush oracle | 16,036 parent disagreements became zero under the then-current token remapping; 198,731 compared bytes. This did not verify substitution body forwarding |
 | Oracle limits | 267 tokenizer refusals and one retained F3 known limit; no word/nested refusals |
 | Mechanism ablations | 16 compile-success / named runtime failure / exact-byte restore / passing rerun receipts |
 | Full test suite | 103 pass; only `every_legacy_row_is_accounted_for` fails |
