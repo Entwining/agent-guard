@@ -475,17 +475,6 @@ fn original_parameter_regions_have_supported_or_refused_coverage() {
             expected,
             "per-region support and span: {word:?}"
         );
-        for (region, (_, supported)) in word.parameters.iter().zip(expected) {
-            assert_eq!(
-                region.refusal_cause(),
-                if supported {
-                    None
-                } else {
-                    Some(CoverageGap::UnsupportedShellSyntax)
-                },
-                "per-region cause: {word:?}"
-            );
-        }
     }
     for source in [
         "echo ${v:-${w:-x}}",
@@ -530,9 +519,9 @@ fn original_parameter_regions_have_supported_or_refused_coverage() {
         active
             .parameters
             .iter()
-            .map(|r| (r.range.clone(), r.refusal_cause()))
+            .map(|r| (r.range.clone(), r.supported))
             .collect::<Vec<_>>(),
-        [(0..6, Some(CoverageGap::UnsupportedShellSyntax))]
+        [(0..6, false)]
     );
 }
 

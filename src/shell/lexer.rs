@@ -3,6 +3,10 @@
 use crate::limits::MAX_NESTING;
 use std::{collections::VecDeque, ops::Range};
 
+pub(super) fn shell_blank(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t' | b'\n')
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Quote {
     #[default]
@@ -137,7 +141,7 @@ impl<'a> Lexed<'a> {
                 continue;
             };
             let start = name
-                .rfind(|c: char| c.is_ascii_whitespace() || ";|&<>()".contains(c))
+                .rfind(|c: char| c.is_ascii() && shell_blank(c as u8) || ";|&<>()".contains(c))
                 .map_or(0, |i| i + 1);
             let name = &name[start..];
             if name.is_empty()
@@ -155,7 +159,7 @@ impl<'a> Lexed<'a> {
                 .source
                 .as_bytes()
                 .get(right + 1)
-                .is_none_or(|b| b.is_ascii_whitespace() || b";|&<>)".contains(b))
+                .is_none_or(|b| shell_blank(*b) || b";|&<>)".contains(b))
             {
                 continue;
             }
@@ -163,7 +167,26 @@ impl<'a> Lexed<'a> {
             while end < self.source.len() {
                 let context = self.context(end);
                 let byte = self.source.as_bytes()[end];
-                if context == base && (byte.is_ascii_whitespace() || b";|&<>)".contains(&byte)) {
+                if context == base {
+                    let tail = &self.source[end..];
+                    let opening = if tail.starts_with("$(")
+                        || tail.starts_with("<(")
+                        || tail.starts_with(">(")
+                    {
+                        Some(end + 1)
+                    } else if byte == b'(' {
+                        Some(end)
+                    } else {
+                        None
+                    };
+                    if let Some(opening) = opening
+                        && let Some(closing) = self.closing(opening, b'(', b')')
+                    {
+                        end = closing + 1;
+                        continue;
+                    }
+                }
+                if context == base && (shell_blank(byte) || b";|&<>)".contains(&byte)) {
                     break;
                 }
                 end = self.next(end);
@@ -409,8 +432,7 @@ impl<'a> Lexed<'a> {
                     continue;
                 }
                 if tail.starts_with("<<<")
-                    && (context.command_syntax
-                        || (context.parameter_depth == 0 && context.arithmetic_depth == 0))
+                    && (context.parameter_depth == 0 && context.arithmetic_depth == 0)
                 {
                     self.mark(*cursor..*cursor + 3, context);
                     *cursor += 3;
@@ -525,7 +547,7 @@ impl<'a> Lexed<'a> {
                     parens = parens.saturating_sub(1);
                     word_start = !word_groups.pop().unwrap_or(false);
                 } else {
-                    word_start = byte.is_ascii_whitespace() || b";|&<>".contains(&byte);
+                    word_start = shell_blank(byte) || b";|&<>".contains(&byte);
                 }
                 if end == Some(b'}') && byte == b'{' {
                     braces += 1;
@@ -554,7 +576,7 @@ impl<'a> Lexed<'a> {
         let mut quoted = false;
         while *cursor < self.source.len() {
             let byte = self.source.as_bytes()[*cursor];
-            if byte.is_ascii_whitespace() || b";|&<>()".contains(&byte) {
+            if shell_blank(byte) || b";|&<>()".contains(&byte) {
                 break;
             }
             let quote = initial_quote(&self.source[*cursor..]);

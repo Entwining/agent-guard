@@ -427,6 +427,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn missing_subscript_closer_is_unsupported_not_fault() {
+        // Same-width original/AST disagreement injects the lexical missing closer
+        // at the production assignment owner without changing its fault channel.
+        let parsed = records("a[1 =public", "a[1]=public").unwrap();
+        assert!(
+            parsed
+                .records
+                .unwrap()
+                .iter()
+                .any(|record| { matches!(record, Record::UnsupportedSyntax) })
+        );
+    }
+
+    #[test]
     fn arithmetic_for_forwards_one_original_header_region() {
         let raw = "for ((i=0; i<1; i++)); do echo public; done";
         let parsed = records(raw, raw).unwrap().records.unwrap();

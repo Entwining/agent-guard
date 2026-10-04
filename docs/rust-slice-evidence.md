@@ -51,12 +51,14 @@ aaf179a also counts those limits: a zero quote-context disagreement count does
 not prove that production forwarded complete code. The earlier 16,036-to-zero
 claim included narrowing that hid the body loss; it was not entirely owner fixes.
 
-V2 has the actual `${v:-${w@Z}}` witness: its outer region's support, cause and
+V2 has the actual `${v:-${w@Z}}` witness: its outer region's support and
 span detect removal of the closer check. V3 has a pinned-grammar capture argument,
 not a natural fragment-Err runtime witness; malformed captures, PEG backtracking,
 other parser options and future versions remain unproved. The defensive refusal
 branch stays, without a fabricated entry point. Region fixtures assert each own
-span and cause and distinguish inactive single-quoted `${` text. Count-only
+span and support and distinguish inactive single-quoted `${` text. Refusal causes
+belong to the complete observation; a region's support bit does not establish
+its own cause. Count-only
 manifest observers remain separate from class pins.
 
 | Cutover blocker recorded without Go repair | Owner |
@@ -64,13 +66,30 @@ manifest observers remain separate from class pins.
 | Go permits `a=(x)#$(cat .env)z` and the backquote form although Bash executes the substitution | Go shell framing / target inference before cutover |
 | Go permits F1 quoted/commented heredoc qualifier and option-changing builtin rows that Zsh executes | Go shell framing / qualifier owner before cutover |
 | Go permits scalar-prefixed, negated and redirected option-changing builtins | Go program adapter before cutover |
-| `builtin setopt`, `command setopt`, `noglob setopt` remain UnknownProgram U-C in Rust and permit in Go | P2/P5 precommand-wrapper owner |
+| `builtin`, `command`, `noglob`, `nice`, `nohup`, `exec`, `repeat`, `! time`, `command -p`, `builtin -`, `nocorrect` preceding option-changing builtins remain UnknownProgram U-C in Rust and permit in Go | P3 precommand-wrapper owner; shared Go exit 0 gaps |
 
 The original 121-row backlog is unchanged; these cutover blockers are a separately
 bound supplement. Existing arithmetic binding, inherited environment and CDPATH
 limits remain outside P1. No Go source, dependency, hook, installation, machine
 permission or public protocol entry changed, and no submitted protected command
 was executed. All new probes and host witnesses use synthetic data.
+
+M2 Step 0 closes the accepted M1 owner/test obligations. The redundant here-string
+`command_syntax` condition is removed with unchanged contexts and verdicts on the
+frozen manifest; the heredoc gate has a distinguishing context assertion inside
+parameters and arithmetic.
+Reverse substitution-end disagreement is unsupported while its lexical body is
+retained. `covered` is pinned by word text and variable ownership, and the missing
+subscript closer has a committed AST/original-source disagreement test. Ruling
+24 uses shell blanks (SP, TAB and LF), per ruling 31; CR, VT and FF are word
+bytes and retain divergence reach. Its closer-to-word-end range now reaches
+`Observation.array_tail_regions`, with the original source attached so nested
+source offsets remain interpretable. Ruling 32 and its amendment authorize 18
+named U-R to N corrections: 12 benign word/after-line observations and six inert
+heredoc-body controls. Protected substitutions and after-lines are still decided
+by their observed Environment effects. Go's CR-delimiter body refusal is a
+recorded baseline false denial; Go remains unchanged. The frozen wrapper
+supplement above belongs to P3; it does not change the legacy corpus labels.
 
 ## Historical M1.4 lexical framing, parameter coverage and visible nested effects
 

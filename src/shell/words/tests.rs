@@ -253,3 +253,70 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
         "an in-bounds Brush end disagreement is unsupported"
     );
 }
+
+#[test]
+fn reverse_substitution_end_is_unsupported_and_retains_code() {
+    let raw = "$(echo public)suffix";
+    let mut pieces = word::parse(raw, &ParserOptions::default()).unwrap();
+    pieces[0].end_index = raw.len();
+    pieces.truncate(1);
+    let lexical = Lexed::scan(raw).unwrap();
+    let mut out = Expanded {
+        word: Word::literal(String::new()),
+        split: Vec::new(),
+        nested: Vec::new(),
+        parameters: Vec::new(),
+        unsupported: false,
+    };
+    fill(
+        raw,
+        &pieces,
+        &lexical,
+        &BTreeMap::new(),
+        crate::record::HostFacts {
+            home: "/synthetic/home",
+            user: None,
+        },
+        &mut out,
+        &mut false,
+    )
+    .unwrap();
+    assert_eq!(out.nested, ["echo public"]);
+    assert!(
+        out.unsupported,
+        "bytes past the lexical closer need refusal"
+    );
+}
+
+#[test]
+fn covered_substitution_does_not_reexpand_body_as_word_data() {
+    let raw = "$(echo hi # )\nprintf ${secret})tail";
+    let pieces = word::parse(raw, &ParserOptions::default()).unwrap();
+    let lexical = Lexed::scan(raw).unwrap();
+    let mut out = Expanded {
+        word: Word::literal(String::new()),
+        split: Vec::new(),
+        nested: Vec::new(),
+        parameters: Vec::new(),
+        unsupported: false,
+    };
+    fill(
+        raw,
+        &pieces,
+        &lexical,
+        &BTreeMap::from([("secret".into(), "binding-data".into())]),
+        crate::record::HostFacts {
+            home: "/synthetic/home",
+            user: None,
+        },
+        &mut out,
+        &mut false,
+    )
+    .unwrap();
+    assert_eq!(out.nested, ["echo hi # )\nprintf ${secret}"]);
+    assert!(
+        out.word.vars.is_empty(),
+        "body variables belong to the nested scope"
+    );
+    assert_eq!(out.word.text, raw, "covered bytes must appear exactly once");
+}

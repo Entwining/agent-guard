@@ -66,6 +66,7 @@ pub struct Observation {
     pub parse_failures: usize,
     pub executable_qualifier: bool,
     pub word_coverage: Vec<WordCoverage>,
+    pub array_tail_regions: Vec<ArrayTailRegions>,
 }
 
 #[derive(Debug, Clone)]
@@ -74,10 +75,10 @@ pub struct ParameterRegion {
     pub supported: bool,
 }
 
-impl ParameterRegion {
-    pub fn refusal_cause(&self) -> Option<CoverageGap> {
-        (!self.supported).then_some(CoverageGap::UnsupportedShellSyntax)
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArrayTailRegions {
+    pub source: String,
+    pub ranges: Vec<Range<usize>>,
 }
 
 #[derive(Debug, Clone)]
@@ -197,6 +198,12 @@ fn observe_source(
         }
     };
     let detection = divergence::detect_lexed(source, &original.spans, &lexical)?;
+    if !detection.array_tail_spans.is_empty() {
+        output.array_tail_regions.push(ArrayTailRegions {
+            source: source.to_owned(),
+            ranges: detection.array_tail_spans.clone(),
+        });
+    }
     output.executable_qualifier |= detection.executable_qualifier;
     if detection.divergent {
         output.gap(if zsh {

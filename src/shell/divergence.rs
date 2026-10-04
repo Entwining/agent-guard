@@ -9,6 +9,7 @@ pub(super) struct Detection {
     pub code: Vec<String>,
     pub evaluated_variables: Vec<String>,
     pub parameter_spans: Vec<Range<usize>>,
+    pub array_tail_spans: Vec<Range<usize>>,
 }
 
 fn mask(bytes: &mut [u8], range: Range<usize>) {
@@ -39,8 +40,10 @@ pub(super) fn detect_lexed(
             });
         }
     }
+    let array_tail_spans = lexical.array_tail_spans();
     let mut result = Detection {
-        divergent: !lexical.array_tail_spans().is_empty(),
+        divergent: !array_tail_spans.is_empty(),
+        array_tail_spans,
         masked: source.to_owned(),
         ..Detection::default()
     };
@@ -133,7 +136,7 @@ pub(super) fn detect_lexed(
 
 fn assignment_prefix(source: &str, end: usize, lexical: &super::lexer::Lexed<'_>) -> bool {
     let start = source[..end]
-        .rfind(|c: char| c.is_ascii_whitespace() || ";|&()".contains(c))
+        .rfind(|c: char| c.is_ascii() && super::lexer::shell_blank(c as u8) || ";|&()".contains(c))
         .map_or(0, |i| i + 1);
     let name = source[start..end]
         .strip_suffix('+')
@@ -225,5 +228,18 @@ mod tests {
             found.parameter_spans,
             std::iter::once(5..source.len()).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn control_byte_before_name_does_not_create_assignment_prefix() {
+        for byte in ['\r', '\u{000b}', '\u{000c}'] {
+            let source = format!("printf '%s\\n' {byte}a=(x)#X");
+            let lexical = super::super::lexer::Lexed::scan(&source).unwrap();
+            assert!(!assignment_prefix(
+                &source,
+                source.find("=(").unwrap(),
+                &lexical
+            ));
+        }
     }
 }

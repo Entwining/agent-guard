@@ -407,6 +407,7 @@ fn fill(
                 let code = &raw[body];
                 out.nested.push(code.to_owned());
                 if right + 1 != piece.end_index {
+                    out.unsupported |= right + 1 < piece.end_index;
                     covered = right + 1;
                     out.word.expands = true;
                 }

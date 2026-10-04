@@ -184,3 +184,113 @@ fn array_tail_has_its_own_lexical_span() {
         );
     }
 }
+
+#[test]
+fn command_context_here_string_keeps_following_word_active() {
+    for source in [
+        "echo ${v:-$(cat <<< public\nprintf ${~v})}",
+        "echo $((1 + $(cat <<< public\nprintf ${~v})))",
+    ] {
+        let lexical = Lexed::scan(source).unwrap();
+        let context = lexical.context(source.find("printf").unwrap());
+        assert!(context.command_syntax);
+        assert!(
+            context.heredoc.is_none(),
+            "here-string must not mask the next line"
+        );
+        assert!(!context.heredoc_delimiter);
+    }
+}
+
+#[test]
+fn command_context_heredoc_keeps_quoted_body_inert() {
+    for source in [
+        "echo ${v:-$(cat <<'TAG'\n$(echo inert)\nTAG\nprintf public)}",
+        "echo $((1 + $(cat <<'TAG'\n$(echo inert)\nTAG\nprintf public)))",
+    ] {
+        let lexical = Lexed::scan(source).unwrap();
+        let body = lexical.context(source.find("$(echo inert)").unwrap());
+        assert_eq!(body.heredoc, Some(true), "quoted body is data");
+        assert!(!body.active());
+        let following = lexical.context(source.find("printf").unwrap());
+        assert!(following.command_syntax && following.heredoc.is_none());
+    }
+}
+
+#[test]
+fn array_tail_region_reaches_divergence_observation() {
+    for source in ["a=(x)#X", "typeset a=(x)\"y\""] {
+        let observation = agent_guard_rust::shell::observe(
+            source,
+            Arm::Brush,
+            "/synthetic/home",
+            "/synthetic/home/project",
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            observation.array_tail_regions,
+            [agent_guard_rust::shell::ArrayTailRegions {
+                source: source.into(),
+                ranges: std::iter::once(source.rfind(')').unwrap()..source.len()).collect(),
+            }]
+        );
+        assert!(observation.gaps.contains(&CoverageGap::ExecutorDivergence));
+    }
+}
+
+#[test]
+fn ruling31_array_tail_control_bytes_have_divergence_cause() {
+    for assignment in ["a=(x)", "a+=(x)"] {
+        for byte in ['\r', '\u{000b}', '\u{000c}'] {
+            let source = format!("{assignment}{byte}#$(echo HIT)z");
+            for zsh in [true, false] {
+                let observation = agent_guard_rust::shell::observe(
+                    &source,
+                    Arm::Brush,
+                    "/synthetic/home",
+                    "/synthetic/home/project",
+                    zsh,
+                )
+                .unwrap();
+                assert_eq!(
+                    observation.gaps,
+                    [if zsh {
+                        CoverageGap::ExecutorDivergence
+                    } else {
+                        CoverageGap::UnsupportedDialectConstruct
+                    }],
+                    "ruling31 cause: {source:?}"
+                );
+                assert_eq!(
+                    observation.array_tail_regions,
+                    [agent_guard_rust::shell::ArrayTailRegions {
+                        source: source.clone(),
+                        ranges: std::iter::once(assignment.len() - 1..source.len()).collect(),
+                    }]
+                );
+            }
+        }
+    }
+    for whitespace in [' ', '\t', '\n'] {
+        let source = format!("a=(x){whitespace}#$(echo HIT)z");
+        assert!(
+            Lexed::scan(&source).unwrap().array_tail_spans().is_empty(),
+            "shell blank control: {source:?}"
+        );
+        assert!(
+            Lexed::scan(&source)
+                .unwrap()
+                .context(source.find('#').unwrap())
+                .comment
+        );
+    }
+}
+
+#[test]
+fn control_byte_before_name_is_not_an_array_assignment_boundary() {
+    for byte in ['\r', '\u{000b}', '\u{000c}'] {
+        let source = format!("printf '%s\\n' {byte}a=(x)#X");
+        assert!(Lexed::scan(&source).unwrap().array_tail_spans().is_empty());
+    }
+}
