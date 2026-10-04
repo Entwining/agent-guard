@@ -21,6 +21,8 @@ pub(super) fn expand(
             split: vec![word.clone()],
             word,
             nested: Vec::new(),
+            parameters: Vec::new(),
+            unsupported: false,
         });
     }
     let heredoc = matches!(syntax, super::WordSyntax::Heredoc);
@@ -42,6 +44,8 @@ pub(super) fn expand(
         word: Word::literal(String::new()),
         split: Vec::new(),
         nested: Vec::new(),
+        parameters: Vec::new(),
+        unsupported: false,
     };
     out.word.raw = raw.to_owned();
     out.word.globs = braces;
@@ -54,6 +58,7 @@ pub(super) fn expand(
     .map_err(|_| CheckError {
         kind: CheckErrorKind::GuardFault,
     })?;
+    out.parameters = parameter_regions(&input, &lexical);
     fill(
         &input,
         &pieces,
@@ -63,6 +68,21 @@ pub(super) fn expand(
         &mut out,
         &mut splitting,
     )?;
+    out.unsupported |= out.parameters.iter().any(|region| !region.supported);
+    if input != raw && !out.parameters.is_empty() {
+        let original = super::lexer::Lexed::scan(raw).map_err(|_| CheckError {
+            kind: CheckErrorKind::GuardFault,
+        })?;
+        let original_regions = parameter_regions(raw, &original);
+        if original_regions.len() != out.parameters.len() {
+            return Err(CheckError {
+                kind: CheckErrorKind::GuardFault,
+            });
+        }
+        for (region, original) in out.parameters.iter_mut().zip(original_regions) {
+            region.range = original.range;
+        }
+    }
     out.word.value = out.word.text.clone();
     out.split = if splitting {
         out.word
@@ -170,6 +190,80 @@ fn brace_sequence(body: &str) -> Option<String> {
     None
 }
 
+fn parameter_regions(raw: &str, lexical: &super::lexer::Lexed<'_>) -> Vec<super::ParameterRegion> {
+    raw.match_indices("${")
+        .filter_map(|(start, _)| {
+            let context = lexical.context(start);
+            (context.active() && context.command_depth == 0 && context.backtick_depth == 0).then(
+                || super::ParameterRegion {
+                    range: start
+                        ..lexical
+                            .closing(start + 1, b'{', b'}')
+                            .map_or(raw.len(), |end| end + 1),
+                    supported: false,
+                },
+            )
+        })
+        .collect()
+}
+
+fn fragment(
+    raw: &str,
+    context: super::lexer::Context,
+    variables: &BTreeMap<String, String>,
+    host: crate::record::HostFacts<'_>,
+) -> Result<Expanded, CheckError> {
+    let mut out = Expanded {
+        word: Word::literal(String::new()),
+        split: Vec::new(),
+        nested: Vec::new(),
+        parameters: Vec::new(),
+        unsupported: false,
+    };
+    let (lexical, error) = super::lexer::Lexed::parameter_fragment(raw, context);
+    match error {
+        Some(super::lexer::LexError::Nesting) => {
+            return Err(CheckError {
+                kind: CheckErrorKind::ResourceLimit,
+            });
+        }
+        Some(super::lexer::LexError::Unterminated { .. }) => out.unsupported = true,
+        None => {}
+    }
+    out.parameters = parameter_regions(raw, &lexical);
+    let pieces = if matches!(
+        context.quote,
+        super::lexer::Quote::Double | super::lexer::Quote::Gettext
+    ) {
+        word::parse_heredoc(raw, &ParserOptions::default())
+    } else {
+        word::parse(raw, &ParserOptions::default())
+    };
+    match pieces {
+        Ok(pieces) => fill(
+            raw, &pieces, &lexical, variables, host, &mut out, &mut false,
+        )?,
+        Err(_) => out.unsupported = true,
+    }
+    out.unsupported |= out.parameters.iter().any(|r| !r.supported);
+    Ok(out)
+}
+
+fn merge_fragment(out: &mut Expanded, inner: Expanded, offset: usize) {
+    out.unsupported |= inner.unsupported;
+    for region in inner.parameters {
+        if let Some(parent) = out
+            .parameters
+            .iter_mut()
+            .find(|parent| parent.range.start == offset + region.range.start)
+        {
+            parent.supported = region.supported;
+        }
+    }
+    out.word.vars.extend(inner.word.vars);
+    out.nested.extend(inner.nested);
+}
+
 fn fill(
     raw: &str,
     pieces: &[WordPieceWithSource],
@@ -234,34 +328,27 @@ fn fill(
                 if let Some(name) = parameter_name(expr) {
                     out.word.vars.push(name);
                 }
-                for fragment in parameter_fragments(expr) {
-                    let inner = word::parse(fragment, &ParserOptions::default()).map_err(|_| {
-                        CheckError {
-                            kind: CheckErrorKind::GuardFault,
-                        }
-                    })?;
-                    let mut expansion = Expanded {
-                        word: Word::literal(String::new()),
-                        split: Vec::new(),
-                        nested: Vec::new(),
+                if spelling.starts_with("${")
+                    && lexical.closing(piece.start_index + 1, b'{', b'}')
+                        == Some(piece.end_index - 1)
+                    && let Some(region) = out
+                        .parameters
+                        .iter_mut()
+                        .find(|r| r.range.start == piece.start_index)
+                {
+                    region.supported = true;
+                }
+                for body in parameter_fragments(expr) {
+                    let context = super::lexer::Context {
+                        quote: context.quote,
+                        parameter_depth: 1,
+                        ..super::lexer::Context::default()
                     };
-                    let lexical =
-                        super::lexer::Lexed::parameter_fragment(fragment).map_err(|_| {
-                            CheckError {
-                                kind: CheckErrorKind::GuardFault,
-                            }
-                        })?;
-                    fill(
-                        fragment,
-                        &inner,
-                        &lexical,
-                        variables,
-                        host,
-                        &mut expansion,
-                        &mut false,
-                    )?;
-                    out.word.vars.extend(expansion.word.vars);
-                    out.nested.extend(expansion.nested);
+                    let inner = fragment(body, context, variables, host)?;
+                    let offset = spelling.find(body).ok_or(CheckError {
+                        kind: CheckErrorKind::GuardFault,
+                    })?;
+                    merge_fragment(out, inner, piece.start_index + offset);
                 }
                 if let Some(value) = plain.and_then(|name| {
                     if name == "HOME" {
@@ -294,33 +381,16 @@ fn fill(
                 }
             }
             WordPiece::ArithmeticExpression(expr) => {
-                let pieces = word::parse(&expr.value, &ParserOptions::default()).map_err(|_| {
-                    CheckError {
-                        kind: CheckErrorKind::GuardFault,
-                    }
-                })?;
-                let mut inner = Expanded {
-                    word: Word::literal(String::new()),
-                    split: Vec::new(),
-                    nested: Vec::new(),
-                };
-                let lexical =
-                    super::lexer::Lexed::parameter_fragment(&expr.value).map_err(|_| {
-                        CheckError {
-                            kind: CheckErrorKind::GuardFault,
-                        }
-                    })?;
-                fill(
+                let inner = fragment(
                     &expr.value,
-                    &pieces,
-                    &lexical,
+                    super::lexer::Context::default(),
                     variables,
                     host,
-                    &mut inner,
-                    &mut false,
                 )?;
-                out.word.vars.extend(inner.word.vars);
-                out.nested.extend(inner.nested);
+                let offset = spelling.find(&expr.value).ok_or(CheckError {
+                    kind: CheckErrorKind::GuardFault,
+                })?;
+                merge_fragment(out, inner, piece.start_index + offset);
                 out.word.text.push_str(spelling);
                 out.word.expands = true;
             }

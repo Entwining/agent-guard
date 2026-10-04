@@ -8,6 +8,7 @@ pub(super) struct Detection {
     pub masked: String,
     pub code: Vec<String>,
     pub evaluated_variables: Vec<String>,
+    pub parameter_spans: Vec<Range<usize>>,
 }
 
 fn mask(bytes: &mut [u8], range: Range<usize>) {
@@ -52,12 +53,17 @@ pub(super) fn detect_lexed(
             cursor += source[cursor..].chars().next().map_or(1, char::len_utf8);
             continue;
         }
-        if tail.starts_with("${(")
+        if (tail.starts_with("${(")
+            || ["${~", "${=", "${^"]
+                .iter()
+                .any(|prefix| tail.starts_with(prefix)))
             && let Some(end) = lexical.closing(cursor + 1, b'{', b'}')
         {
             result.divergent = true;
+            result.parameter_spans.push(cursor..end + 1);
             let parameter = &source[cursor + 3..end];
-            if let Some((flags, name)) = parameter.split_once(')')
+            if tail.starts_with("${(")
+                && let Some((flags, name)) = parameter.split_once(')')
                 && flags.contains('e')
             {
                 result.evaluated_variables.push(name.to_owned());
@@ -68,6 +74,7 @@ pub(super) fn detect_lexed(
         }
         if context.unquoted()
             && tail.starts_with("=(")
+            && !assignment_prefix(source, cursor, lexical)
             && let Some(end) = lexical.closing(cursor + 1, b'(', b')')
         {
             result.divergent = true;
@@ -132,6 +139,18 @@ pub(super) fn detect_lexed(
     Ok(result)
 }
 
+fn assignment_prefix(source: &str, end: usize, lexical: &super::lexer::Lexed<'_>) -> bool {
+    let start = source[..end]
+        .rfind(|c: char| c.is_ascii_whitespace() || ";|&()".contains(c))
+        .map_or(0, |i| i + 1);
+    let name = &source[start..end];
+    !name.is_empty()
+        && name.bytes().enumerate().all(|(i, b)| {
+            (b.is_ascii_alphabetic() || b == b'_' || (i > 0 && b.is_ascii_digit()))
+                && lexical.context(start + i).unquoted()
+        })
+}
+
 fn statement_boundary(prefix: &str) -> bool {
     let prefix = prefix.trim_end_matches([' ', '\t']);
     prefix.is_empty()
@@ -184,5 +203,30 @@ mod tests {
         let found = detect(source, std::slice::from_ref(&(0..source.len()))).unwrap();
         assert_eq!(found.masked, "echo ${v:-_____________} tail");
         assert_eq!(found.evaluated_variables, ["${name}"]);
+    }
+    #[test]
+    fn modifier_detection_has_its_own_cause_and_span() {
+        for modifier in ["~", "~~", "=", "==", "^", "^^"] {
+            for quoted in [false, true] {
+                let expansion = format!("${{{modifier}v}}");
+                let source = if quoted {
+                    format!("echo \"{expansion}\"")
+                } else {
+                    format!("echo {expansion}")
+                };
+                let start = source.find("${").unwrap();
+                let found = detect(&source, std::slice::from_ref(&(0..source.len()))).unwrap();
+                assert!(found.divergent, "D30 modifier cause: {source}");
+                assert_eq!(
+                    found.parameter_spans,
+                    vec![start..start + expansion.len()],
+                    "D30 span: {source}"
+                );
+                assert!(found.code.is_empty() && found.evaluated_variables.is_empty());
+            }
+        }
+        assert!(!detect("echo '${~v}'", &[]).unwrap().divergent);
+        assert!(!detect("a=(x y)", &[]).unwrap().divergent);
+        assert!(detect("cat =(echo public)", &[]).unwrap().divergent);
     }
 }

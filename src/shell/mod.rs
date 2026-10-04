@@ -63,6 +63,20 @@ pub struct Observation {
     pub parse_successes: usize,
     pub parse_failures: usize,
     pub executable_qualifier: bool,
+    pub word_coverage: Vec<WordCoverage>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParameterRegion {
+    pub range: Range<usize>,
+    pub supported: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct WordCoverage {
+    pub raw: String,
+    pub parameters: Vec<ParameterRegion>,
+    pub unsupported: bool,
 }
 
 impl Observation {
@@ -465,7 +479,27 @@ fn expand_all(
     }
     contexts
         .iter()
-        .map(|context| words::expand(&raw.raw, &raw.syntax, context, host))
+        .map(|context| {
+            let expanded = words::expand(&raw.raw, &raw.syntax, context, host)?;
+            if expanded.unsupported
+                && !output.gaps.iter().any(|gap| {
+                    matches!(
+                        gap,
+                        CoverageGap::ExecutorDivergence | CoverageGap::UnsupportedDialectConstruct
+                    )
+                })
+            {
+                output.gap(CoverageGap::UnsupportedShellSyntax);
+            }
+            if expanded.unsupported || !expanded.parameters.is_empty() {
+                output.word_coverage.push(WordCoverage {
+                    raw: raw.raw.clone(),
+                    parameters: expanded.parameters.clone(),
+                    unsupported: expanded.unsupported,
+                });
+            }
+            Ok(expanded)
+        })
         .collect()
 }
 
@@ -473,6 +507,8 @@ struct Expanded {
     split: Vec<Word>,
     word: Word,
     nested: Vec<String>,
+    parameters: Vec<ParameterRegion>,
+    unsupported: bool,
 }
 
 #[cfg(test)]

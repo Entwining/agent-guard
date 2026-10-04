@@ -313,3 +313,141 @@ fn manifest_observations() {
         }
     }
 }
+
+#[test]
+fn original_parameter_regions_have_supported_or_refused_coverage() {
+    use agent_guard_rust::shell;
+    for body in [
+        "${v@Z}",
+        "${v[${v@Z}]}",
+        "${v:-${v@Z}}",
+        "${v:-${(f)v}}",
+        "$((${v@Z}))",
+        "$[${v@Z}]",
+        "\"${${v}}\"",
+    ] {
+        let source = format!("echo {body}");
+        let observation = shell::observe(
+            &source,
+            Arm::Brush,
+            "/synthetic/home",
+            "/synthetic/home/project",
+            true,
+        )
+        .unwrap();
+        let refused: Vec<_> = observation
+            .word_coverage
+            .iter()
+            .filter(|w| w.unsupported)
+            .collect();
+        assert!(
+            !refused.is_empty(),
+            "unrecognized active region must be explicit: {source}"
+        );
+        assert!(
+            observation.gaps.iter().any(|gap| matches!(
+                gap,
+                CoverageGap::UnsupportedShellSyntax | CoverageGap::ExecutorDivergence
+            )),
+            "unsupported coverage must block: {source}"
+        );
+        for word in refused {
+            assert_eq!(
+                word.parameters.len(),
+                word.raw.match_indices("${").count(),
+                "source-region coverage: {word:?}"
+            );
+            for region in &word.parameters {
+                let spelling = word.raw.get(region.range.clone()).unwrap();
+                assert!(
+                    spelling.starts_with("${"),
+                    "original bounded region: {word:?}"
+                );
+            }
+            assert!(word.parameters.iter().any(|r| !r.supported));
+        }
+    }
+    for source in [
+        "echo ${v:-${w:-x}}",
+        "echo '${~v}'",
+        "echo \\${x}",
+        "echo $(echo ${w:-x})",
+    ] {
+        let observation = shell::observe(
+            source,
+            Arm::Brush,
+            "/synthetic/home",
+            "/synthetic/home/project",
+            true,
+        )
+        .unwrap();
+        assert!(
+            observation
+                .word_coverage
+                .iter()
+                .all(|w| !w.unsupported && w.parameters.iter().all(|r| r.supported)),
+            "supported/literal control: {source}"
+        );
+        assert!(
+            observation.gaps.is_empty(),
+            "supported/literal control: {source}"
+        );
+    }
+}
+
+#[test]
+fn probe_fault_stays_fault_with_independently_observed_denial() {
+    use agent_guard_rust::{CheckErrorKind, shell};
+    struct Fault;
+    impl agent_guard_rust::filesystem::Probe for Fault {
+        fn stat(
+            &mut self,
+            _: &std::path::Path,
+        ) -> std::io::Result<Option<agent_guard_rust::filesystem::Metadata>> {
+            Err(std::io::ErrorKind::PermissionDenied.into())
+        }
+        fn read_link(
+            &mut self,
+            _: &std::path::Path,
+        ) -> std::io::Result<Option<std::path::PathBuf>> {
+            Err(std::io::ErrorKind::PermissionDenied.into())
+        }
+    }
+    let source = "cat .env; echo ${v:-${(f)v}}; cat public";
+    let observation = shell::observe(
+        source,
+        Arm::Brush,
+        "/synthetic/home",
+        "/synthetic/home/project",
+        true,
+    )
+    .unwrap();
+    assert!(
+        observation
+            .script
+            .commands
+            .iter()
+            .any(|c| c.argv.iter().any(|w| w.text == ".env")),
+        "independent protected operand survives refusal"
+    );
+    let context = agent_guard_rust::Context {
+        consumer: adapters::Consumer::Claude,
+        home: "/synthetic/home".into(),
+        cwd: "/synthetic/home/project".into(),
+        user: None,
+        zsh_executor: true,
+        require_execution_owner: false,
+        shell_observation_entries: std::cell::Cell::new(0),
+    };
+    let bytes =
+        serde_json::to_vec(&json!({"tool_name":"Bash","tool_input":{"command":source}})).unwrap();
+    let result = evaluate_with_arm(
+        Event {
+            bytes: &bytes,
+            context: &context,
+            probe: &mut Fault,
+        },
+        Arm::Brush,
+    );
+    assert_eq!(result.unwrap_err().kind, CheckErrorKind::ProbeFault);
+}

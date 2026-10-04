@@ -7,22 +7,26 @@ fn fragments(pieces: &[WordPieceWithSource], entries: &mut Vec<Value>) {
         match &piece.piece {
             WordPiece::ParameterExpansion(expr) => {
                 for fragment in parameter_fragments(expr) {
-                    let lexical = Lexed::parameter_fragment(fragment);
+                    let lexical = Lexed::parameter_fragment(
+                        fragment,
+                        crate::shell::lexer::Context::default(),
+                    );
                     entries.push(json!({
                         "expr":format!("{expr:?}"),
                         "fragment":fragment,
-                        "lexer_error":lexical.as_ref().err().map(|error| format!("{error:?}"))
+                        "lexer_error":lexical.1.map(|error| format!("{error:?}"))
                     }));
                     let inner = word::parse(fragment, &ParserOptions::default()).unwrap();
                     fragments(&inner, entries);
                 }
             }
             WordPiece::ArithmeticExpression(expr) => {
-                let lexical = Lexed::parameter_fragment(&expr.value);
+                let lexical =
+                    Lexed::parameter_fragment(&expr.value, crate::shell::lexer::Context::default());
                 entries.push(json!({
                     "expr":format!("{expr:?}"),
                     "fragment":expr.value,
-                    "lexer_error":lexical.as_ref().err().map(|error| format!("{error:?}"))
+                    "lexer_error":lexical.1.map(|error| format!("{error:?}"))
                 }));
                 let inner = word::parse(&expr.value, &ParserOptions::default()).unwrap();
                 fragments(&inner, entries);
@@ -84,8 +88,8 @@ fn brush_production_fragments_preserve_refusal() {
 fn unterminated_parameter_fragments_are_errors() {
     for fragment in ["${(f)v", "a${(f)v", "${w:-${(f)v", "${w"] {
         assert!(matches!(
-            Lexed::parameter_fragment(fragment),
-            Err(crate::shell::lexer::LexError::Unterminated { .. })
+            Lexed::parameter_fragment(fragment, crate::shell::lexer::Context::default()),
+            (_, Some(crate::shell::lexer::LexError::Unterminated { .. }))
         ));
     }
 }
@@ -97,4 +101,46 @@ fn escaped_dollar_brace_reach_queries_owner() {
     assert!(lexical.context(1).escaped);
     let (_, reach) = brace_text(raw).unwrap();
     assert!(reach, "brace expansion follows an escaped literal dollar");
+}
+
+#[test]
+fn genuine_piece_fault_is_f_and_retains_independent_code() {
+    let raw = "$(cat .env)public";
+    let mut pieces = word::parse(raw, &ParserOptions::default()).unwrap();
+    pieces.last_mut().unwrap().end_index = raw.len() + 1;
+    let lexical = Lexed::scan(raw).unwrap();
+    let mut out = Expanded {
+        word: Word::literal(String::new()),
+        split: Vec::new(),
+        nested: Vec::new(),
+        parameters: Vec::new(),
+        unsupported: false,
+    };
+    let error = fill(
+        raw,
+        &pieces,
+        &lexical,
+        &BTreeMap::new(),
+        crate::record::HostFacts {
+            home: "/synthetic/home",
+            user: None,
+        },
+        &mut out,
+        &mut false,
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.kind,
+        CheckErrorKind::GuardFault,
+        "genuine bad piece bounds must stay a fault"
+    );
+    assert_eq!(
+        out.nested,
+        ["cat .env"],
+        "independently observed code survives the operational fault"
+    );
+    let result: Result<crate::Evaluation, CheckError> = Err(error);
+    let wire = crate::adapters::render(crate::adapters::Consumer::Claude, &result);
+    assert_eq!(wire.exit, 2);
+    assert!(wire.stderr.contains("checker failed"));
 }

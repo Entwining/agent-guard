@@ -82,23 +82,24 @@ impl<'a> Lexed<'a> {
             },
         )
     }
-    pub(super) fn parameter_fragment(source: &'a str) -> Result<Self, LexError> {
-        Self::with_context(
-            source,
-            Context {
-                quote: Quote::Double,
-                ..Context::default()
-            },
-        )
-    }
-    fn with_context(source: &'a str, context: Context) -> Result<Self, LexError> {
+    pub(super) fn parameter_fragment(
+        source: &'a str,
+        context: Context,
+    ) -> (Self, Option<LexError>) {
         let mut lexed = Self {
             source,
             context: vec![context; source.len()],
         };
         let mut cursor = 0;
-        lexed.region(&mut cursor, context, None, 0)?;
-        Ok(lexed)
+        let error = lexed.region(&mut cursor, context, None, 0).err();
+        (lexed, error)
+    }
+    fn with_context(source: &'a str, context: Context) -> Result<Self, LexError> {
+        let (lexed, error) = Self::parameter_fragment(source, context);
+        match error {
+            Some(error) => Err(error),
+            None => Ok(lexed),
+        }
     }
     pub fn context(&self, byte: usize) -> Context {
         self.context.get(byte).copied().unwrap_or_default()
