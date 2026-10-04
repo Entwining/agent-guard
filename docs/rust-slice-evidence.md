@@ -1,4 +1,127 @@
-# Offline Rust R4h M1.3 evidence
+# Offline Rust migration evidence
+
+## M1.4 lexical framing, parameter coverage and visible nested effects
+
+The baseline is `61e29334db08835f100a8e5bfc398b0c96834691`. The binding scope
+is `r5/m1-4-rulings-final.md`, SHA-256
+`290d67ef85aff693fdc5fad085a862602baf62d8ebb83608b052ba9e4286706e`.
+Go remains authoritative. The packaged Rust binary remains version-only.
+M2 Phase B has not started; coordinator checks and fresh Opus 5.5 plus
+DeepSeek acceptance remain required.
+
+All raw evidence is external under
+`~/.cache/guard-fixtures/fixture-seat/r4h-m1-4-phase2/`. The final report contains the
+complete changed-observation table, the 121-row owner/scope backlog and every
+mechanism receipt. `changed-observations.jsonl` preserves complete before,
+after and Go records; `changed-observations.md` shows all changed fields.
+Only evaluator timing is excluded. `corpus-changed-observations.json` records
+every full-corpus delta, and `oracle-before-after.json` retains every original
+oracle discrepancy and final disposition.
+
+The observers ran before product edits: nine wire/context regressions failed
+at runtime with unchanged production source, apart from test registration.
+An external archive confirms the frozen failures at 61e2933. The corrected
+escaped-dollar assertion also fails against that archive. The original R2
+fixture's D expectation was wrong: an escaped dollar followed by brace
+expansion yields `$.env` and `$x`, so that call remains N. Its separate reach
+assertion, not the mistaken denial label, detects the old owner defect.
+
+`rust-m1-4-input-manifest.json` freezes 7,459 input occurrences: 7,258 shell
+and 201 structured inputs, each replayed for three consumers (22,377
+observations). Its SHA-256 is
+`9f27697356e242f5b145c2e560d921d9705cab5086aa900b1decbc40f4c3a0df`.
+All 49 provenance file hashes match. The audit corrected 260 Astra shell
+field classifications without changing IDs or original events, and retained
+F3 from the Phase 1 host inputs as an explicit known-limit row. Two additional
+lexical regression inputs and F3 extend the initial 7,456-input observer set;
+none are denominator exclusions. The full corpus remains 1,289 records:
+1,265 operations / 3,795 consumer observations plus 24 filesystem setup rows.
+Its frozen sources, scope selection and CHANGE labels are unchanged.
+
+The materialized request replay maps cached fixture homes and task markers
+to an empty synthetic HOME. It checks word/role changes, not every reviewer's
+filesystem topology or execution-owner harness context. The full differential
+uses its original synthetic identity fixtures; dev and D23 tests retain their
+own authoritative fixtures. No submitted protected command is executed.
+An independently built archive evaluator matches all 22,377 observations
+from the retained 61e2933 evaluator, excluding timing.
+
+Word-start comments now respect escaped separators and word-level groups;
+`<<<` is consumed atomically before heredoc recognition. Brace reach queries
+the escaped-dollar owner. Qualifier extraction removes one outer quote layer,
+and closing delimiters stay in their opening nesting context. Each active
+original parameter region has supported bounded-node coverage or explicit
+unsupported coverage. Known fragment parse limits become U-R; genuine faults
+still propagate. Fragment re-entry preserves quote context and completes
+independent code observations. D30 modifiers have their own cause and span;
+array assignments no longer trigger equals-process substitution. Visible
+assignment-index code is forwarded through arithmetic observation, while
+quoted assignment data stays inert.
+
+| Check | Final observation |
+| --- | --- |
+| Full corpus | 121 conflict rows / 347 conflict observations, unchanged |
+| Previously matching RETAIN | 2,479 observations remain matched; no regressions |
+| CHANGE | All 21 rows / 63 observations pass their frozen contracts |
+| Full-corpus changes | shell[149], all three consumers: D stays D; coverage improves and probes decrease from 95 to 32 |
+| Manifest semantic changes | 3,960 observations: 3,726 class changes plus 234 same-class changes |
+| New wire permits | 252 false-refusal/fault corrections; all are Go permits |
+| Protection regression | No D-to-permit, no new Go-deny/Rust-permit |
+| Recovery regression | No U-R-to-F |
+| Brush oracle | 16,036 parent disagreements become zero; 198,731 compared bytes |
+| Oracle limits | 267 tokenizer refusals and one retained F3 known limit; no word/nested refusals |
+| Mechanism ablations | 16 compile-success / named runtime failure / exact-byte restore / passing rerun receipts |
+| Full test suite | 103 pass; only `every_legacy_row_is_accounted_for` fails |
+| fmt, Clippy, release, cargo-deny | Pass offline; cargo-deny retains existing duplicate warnings |
+| make rust-check | make 2 / Cargo 101 at the unchanged strict differential |
+| Packaged binary | Version 0.6.0 exits 0; no args or checker exits 1 with no check performed |
+
+The sole corpus change is ruling 23: `values=(a $(printenv))` is no longer
+masked into phantom command operands. The independent dump remains D, with
+the same reason, advice and recovery. Historic M1.3 probe counts also differed
+because its fixture directory was one component shallower. Rebuilding
+61e2933 and replaying at the current fixture depth removes those topology
+deltas; `historical-corpus-observations.jsonl` retains them separately.
+
+| Manifest class change | Observations | Disposition |
+| --- | ---: | --- |
+| N to D | 1,038 | Framing or fragment context reveals independently protected code |
+| N to U-R | 1,023 | Active unsupported source regions / listed D1 modifiers block |
+| F to U-R | 873 | Known adapter limit refuses syntax rather than faulting |
+| U-R to D | 432 | Independent protected effects complete and take precedence |
+| F to N | 210 | Literal-context controls no longer fault; Go permits |
+| D to U-R | 84 | Redirect followed by a real comment is incomplete syntax; both results block |
+| U-R to N | 42 | Array assignment, escaped delimiter and here-string false refusals; Go permits |
+| U-C to U-R | 15 | Explicit unsupported coverage blocks |
+| F to D | 9 | Known fragment limit no longer aborts an independent protected observation |
+
+Each mechanism receipt binds all build inputs, the changed source and test
+binaries, exact mutation, successful compile, named failing assertions,
+restore hash and successful reruns. Receipts cover comment framing,
+here-strings, escaped dollar, F2 mapping, qualifier quotes, parameter pairing,
+region state, coverage forwarding, known fragment error class, genuine
+piece faults, D30 detection, array-assignment exclusion, fragment context,
+assignment-index forwarding, legacy arithmetic and nested closing context.
+The first here-string mutation and the single-depth closing mutation did not
+fail assertions and are diagnostics, not successful ablations.
+
+The 121 conflict rows remain assigned individually in
+`owner-scope-backlog.jsonl` and its Markdown table. Shell[175] remains a P5
+option-value role defect: a long Git `-m` message becomes a path, then fails
+with ProbeFault. The probe error must remain a fault while the target producer
+is repaired. Deferred owners are not implemented by this packet.
+
+The two A3 binding-to-arithmetic rows remain Go exit 0 / Rust N while Bash
+executes the echo-only HIT witness. They are the first bounded P2 binding item
+in M2. Inherited arithmetic values remain unobservable and block cutover,
+like D28-CDPATH. The R1 evaluated-variable sibling is separately recorded as
+a Go baseline false permit under ruling 20. F3 retains the exact input:
+Bash's outer echo exits 0 while its backtick child fails and runs no printf;
+Zsh exits 1. The unparenthesized case-pattern depth limit has syntax-only host
+evidence (Bash rejects, Zsh accepts) and remains a documented divergence,
+with U-R unchanged. No Go repair or consumer cutover is claimed.
+
+## Historical M1.3 evidence
 
 M1.3 replaces partial raw-shell quote scanners with one lexical owner under
 decisions.md v3.1 D29 2–7 and records D29 8. The baseline is
@@ -116,9 +239,11 @@ records and the end-tag ablation retain the after result.
 
 `m1_3::lexer_matches_brush_word_quoting` visits the 1,289-row corpus and all
 JSON/JSONL `tests/fixtures/rust-*` fixtures, including the reviewer-input fixture.
-Its 491 shell inputs retain every shell variant from all 536 reviewer records;
-the other 45 are structured events with no shell quote state. The full event
-set is separately replayed against the built Go comparator.
+Its 491 source-field inputs did not cover all 536 reviewer records: the other
+45 included 24 Bash events and 21 structured events. Twelve distinct Bash
+commands were omitted from this oracle, although the event-level comparator
+replay retained them. M1.4's unified manifest includes those event schemas and
+their shell command fields; the M1.3 counts below retain their historical scope.
 
 | Oracle measure | Final |
 | --- | ---: |

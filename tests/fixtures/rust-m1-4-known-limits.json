@@ -1,0 +1,9 @@
+[
+  {
+    "id": "F3-brush-backtick-leniency",
+    "decision_id": "D29/ruling19",
+    "source": "echo `printf 'a\\'b'`",
+    "expected": "UR",
+    "oracle_disposition": "Brush tokenizer accepts an invalid backtick child; Lexed refuses. Bash outer echo exits 0 while its child fails and runs no printf; Zsh outer exits 1."
+  }
+]

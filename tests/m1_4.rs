@@ -483,3 +483,32 @@ fn probe_fault_stays_fault_with_independently_observed_denial() {
     );
     assert_eq!(result.unwrap_err().kind, CheckErrorKind::ProbeFault);
 }
+
+#[test]
+fn brush_backtick_leniency_keeps_the_input_and_refusal() {
+    use agent_guard_rust::shell::{self, lexer::Lexed};
+    let rows: Vec<Value> =
+        serde_json::from_str(include_str!("fixtures/rust-m1-4-known-limits.json")).unwrap();
+    for row in rows {
+        let source = row["source"].as_str().unwrap();
+        assert!(
+            brush_parser::uncached_tokenize_str(source, &brush_parser::TokenizerOptions::default())
+                .is_ok()
+        );
+        assert!(Lexed::scan(source).is_err());
+        let observation = shell::observe(
+            source,
+            Arm::Brush,
+            "/synthetic/home",
+            "/synthetic/home/project",
+            true,
+        )
+        .unwrap();
+        assert!(
+            observation
+                .gaps
+                .contains(&CoverageGap::UnsupportedShellSyntax)
+        );
+        assert!(observation.script.commands.is_empty());
+    }
+}
