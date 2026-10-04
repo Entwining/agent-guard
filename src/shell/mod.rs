@@ -1,3 +1,4 @@
+mod arithmetic;
 mod brush;
 mod divergence;
 pub mod lexer;
@@ -307,6 +308,25 @@ fn observe_source(
                         choices.push(expanded.split);
                         choices.push(vec![expanded.word]);
                     }
+                    if argv.first().is_some_and(|w| w.raw == "let") && word.raw != "let" {
+                        for choice in &choices {
+                            for value in choice {
+                                let evaluated = arithmetic::evaluate(&value.text, variables)?;
+                                if evaluated.bounded {
+                                    output.gap(CoverageGap::InspectionBudget);
+                                }
+                                for code in evaluated.code {
+                                    observe_source(
+                                        &code,
+                                        frontend,
+                                        &mut variables.clone(),
+                                        output,
+                                        depth + 1,
+                                    )?;
+                                }
+                            }
+                        }
+                    }
                     choices.dedup();
                     let mut next = Vec::new();
                     for argv in &alternatives {
@@ -514,6 +534,18 @@ fn expand_all(
                     unsupported: expanded.unsupported,
                 });
             }
+            let mut expanded = expanded;
+            for expression in &expanded.arithmetic {
+                let evaluated = arithmetic::evaluate(expression, variables)?;
+                if evaluated.bounded {
+                    output.gap(CoverageGap::InspectionBudget);
+                }
+                for code in evaluated.code {
+                    if !expanded.nested.contains(&code) {
+                        expanded.nested.push(code);
+                    }
+                }
+            }
             Ok(expanded)
         })
         .collect()
@@ -523,6 +555,7 @@ struct Expanded {
     split: Vec<Word>,
     word: Word,
     nested: Vec<String>,
+    arithmetic: Vec<String>,
     parameters: Vec<ParameterRegion>,
     unsupported: bool,
 }

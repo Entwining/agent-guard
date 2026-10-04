@@ -1,5 +1,25 @@
 # Offline Rust migration evidence
 
+## M2 bounded arithmetic bindings
+
+M1 is accepted at `ff95842`; M2 Phase B is in progress. Ruling 16 routes
+current lexical binding values only through arithmetic expansion, parameter
+arithmetic expansion, arithmetic commands, `let`, assignment subscripts and
+numeric equality tests. The arithmetic owner follows identifiers and observes
+checked subscript substitution bodies; ordinary variable strings never become
+general shell source. Rebinding replaces the prior value. Recursive cycles,
+depth above 64 and more than 512 expression visits produce InspectionBudget.
+The work bound covers repeated references even in an acyclic binding graph.
+
+`rust-m2-arithmetic.json` freezes each sink, ordinary-data and rebound controls,
+indirection, unsupported modifiers, cycles and acyclic fanout. Safe echo/printf
+witnesses use Bash 3.2 and Zsh 5.9. Inputs are static fixture data authored
+through the editor; receipt programs read them as data and execute no submitted
+protected operation. Raw receipts live in `r5-m2-phase-b/` outside the checkout.
+Inherited arithmetic bindings remain unobservable and block cutover. Go's
+arithmetic false permits are recorded without changing Go. The legacy strict
+differential and coordinator-owned M2 acceptance remain open.
+
 ## M1.5 substitution boundaries and adapter-owned divergence
 
 The baseline is `aaf179abaefee26f243736bbb524de71ab4ec2e4`. Binding rulings
@@ -7,8 +27,8 @@ are `r5/m1-5-rulings.md` (24–29) and `r5/m1-5-rulings-b.md` (30).
 Raw evidence lives under `~/.cache/guard-fixtures/fixture-seat/r4h-m1-5-final/`;
 `sol-m1-5-report-final.md` contains every changed observation, receipt and
 owner/scope backlog row. Go remains authoritative, the packaged Rust entry
-remains version-only, and M2 Phase B has not started. Coordinator checks and
-fresh Opus plus DeepSeek acceptance are pending.
+remains version-only. Coordinator checks and fresh Opus plus DeepSeek accepted
+M1 at `ff95842`; the results below remain the M1.5 packet measurements.
 
 Brush 0.4.0 closes a word substitution at a comment's `)` or `}` and previously
 forwarded only that truncated body. The lexer now owns command/backquote body

@@ -157,10 +157,7 @@ fn walk_command(
             output.push(Record::Definition(function.fname.value.clone(), body));
         }
         Command::ExtendedTest(test, redirects) => {
-            output.push(Record::Expansion(Word {
-                raw: original(source, &test.loc)?.to_owned(),
-                syntax: super::WordSyntax::Shell,
-            }));
+            test_words(source, &test.expr, output)?;
             redirect_list(source, redirects.as_ref(), output)?;
         }
     }
@@ -232,9 +229,36 @@ fn walk_compound(
         }
         CompoundCommand::Coprocess(group) => walk_command(source, &group.body, output, None)?,
         CompoundCommand::Arithmetic(group) => output.push(Record::Expansion(Word {
-            raw: original(source, &group.loc)?.to_owned(),
-            syntax: super::WordSyntax::Shell,
+            raw: group.expr.value.clone(),
+            syntax: super::WordSyntax::Arithmetic,
         })),
+    }
+    Ok(())
+}
+
+fn test_words(
+    source: &Source<'_>,
+    expr: &ExtendedTestExpr,
+    output: &mut Vec<Record>,
+) -> Result<(), CheckError> {
+    match expr {
+        ExtendedTestExpr::And(a, b) | ExtendedTestExpr::Or(a, b) => {
+            test_words(source, a, output)?;
+            test_words(source, b, output)?;
+        }
+        ExtendedTestExpr::Not(e) | ExtendedTestExpr::Parenthesized(e) => {
+            test_words(source, e, output)?
+        }
+        ExtendedTestExpr::UnaryTest(_, w) => output.push(Record::Expansion(word(source, w)?)),
+        ExtendedTestExpr::BinaryTest(predicate, a, b) => {
+            for w in [a, b] {
+                let mut value = word(source, w)?;
+                if matches!(predicate, BinaryPredicate::ArithmeticEqualTo) {
+                    value.syntax = super::WordSyntax::Arithmetic;
+                }
+                output.push(Record::Expansion(value));
+            }
+        }
     }
     Ok(())
 }

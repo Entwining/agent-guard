@@ -21,6 +21,7 @@ pub(super) fn expand(
             split: vec![word.clone()],
             word,
             nested: Vec::new(),
+            arithmetic: Vec::new(),
             parameters: Vec::new(),
             unsupported: false,
         });
@@ -45,6 +46,7 @@ pub(super) fn expand(
         word: Word::literal(String::new()),
         split: Vec::new(),
         nested: Vec::new(),
+        arithmetic: Vec::new(),
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -92,6 +94,9 @@ pub(super) fn expand(
         for (region, original) in out.parameters.iter_mut().zip(original_regions) {
             region.range = original.range;
         }
+    }
+    if arithmetic {
+        out.arithmetic.push(raw.to_owned());
     }
     out.word.value = out.word.text.clone();
     out.split = if splitting {
@@ -233,6 +238,7 @@ fn fragment(
         word: Word::literal(String::new()),
         split: Vec::new(),
         nested: Vec::new(),
+        arithmetic: Vec::new(),
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -278,6 +284,7 @@ fn merge_fragment(out: &mut Expanded, inner: Expanded, offset: usize) {
     }
     out.word.vars.extend(inner.word.vars);
     out.nested.extend(inner.nested);
+    out.arithmetic.extend(inner.arithmetic);
 }
 
 fn fill(
@@ -422,6 +429,7 @@ fn fill(
                 }
             }
             WordPiece::ArithmeticExpression(expr) => {
+                out.arithmetic.push(expr.value.clone());
                 let (open, close) = if spelling.starts_with("$[") {
                     (b'[', b']')
                 } else {

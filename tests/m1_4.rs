@@ -137,13 +137,16 @@ fn mechanism_rows(owner: &str) {
                 Arm::Brush,
             );
             let wire = adapters::render(context.consumer, &result);
-            if support::class(&result) != row["expected"]
-                || wire.exit
-                    != if matches!(row["expected"].as_str(), Some("N" | "UC")) {
-                        0
-                    } else {
-                        2
-                    }
+            let expected = if matches!(
+                row["id"].as_str(),
+                Some("i4-arith-sub-plain" | "i5-arith-sub-param")
+            ) {
+                "D" // Ruling 16 moves the two recorded arithmetic gaps to P2.
+            } else {
+                row["expected"].as_str().unwrap()
+            };
+            if support::class(&result) != expected
+                || wire.exit != if matches!(expected, "N" | "UC") { 0 } else { 2 }
             {
                 failures.push(json!({"id":row["id"],"consumer":consumer,"expected":row["expected"],"actual":support::class(&result),"result":format!("{result:?}"),"wire":format!("{wire:?}")}));
             }
@@ -162,6 +165,8 @@ fn mechanism_rows(owner: &str) {
                             | "coverage-eval-queue"
                             | "coverage-qualifier-queue"
                             | "qualifier-nested-quotes"
+                            | "i4-arith-sub-plain"
+                            | "i5-arith-sub-param"
                     );
                     assert!(
                         reason.effect.contains(if environmental {
