@@ -82,6 +82,15 @@ impl<'a> Lexed<'a> {
             },
         )
     }
+    pub(super) fn arithmetic(source: &'a str) -> Result<Self, LexError> {
+        Self::with_context(
+            source,
+            Context {
+                arithmetic_depth: 1,
+                ..Context::default()
+            },
+        )
+    }
     pub(super) fn parameter_fragment(
         source: &'a str,
         context: Context,
@@ -109,7 +118,13 @@ impl<'a> Lexed<'a> {
         let mut depth: usize = 0;
         for (offset, byte) in self.source.as_bytes()[start..].iter().copied().enumerate() {
             let context = self.context(start + offset);
-            if !context.active() || context.quote != base.quote {
+            if !context.active()
+                || context.quote != base.quote
+                || context.command_depth != base.command_depth
+                || context.parameter_depth != base.parameter_depth
+                || context.backtick_depth != base.backtick_depth
+                || context.arithmetic_depth != base.arithmetic_depth
+            {
                 continue;
             }
             if byte == open {
@@ -252,6 +267,21 @@ impl<'a> Lexed<'a> {
                     self.mark(*cursor - 1..*cursor + 1, context);
                     *cursor += 1;
                 }
+                word_start = false;
+                continue;
+            }
+            if tail.starts_with("$[") {
+                let opening = *cursor;
+                self.mark(opening..opening + 2, context);
+                *cursor += 2;
+                let inner = Context {
+                    quote: Quote::Unquoted,
+                    arithmetic_depth: context.arithmetic_depth + 1,
+                    heredoc: None,
+                    ..context
+                };
+                self.region(cursor, inner, Some(b']'), depth + 1)?;
+                self.mark(*cursor - 1..*cursor, context);
                 word_start = false;
                 continue;
             }

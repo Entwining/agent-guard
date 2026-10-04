@@ -104,7 +104,10 @@ pub(super) fn detect_lexed(
                 if let Some(code) = body.strip_prefix("e:").and_then(|s| s.strip_suffix(':')) {
                     let bytes = code.as_bytes();
                     let code = if bytes.len() >= 2
-                        && matches!(bytes[0], b'\'' | b'"')
+                        && matches!(
+                            super::lexer::initial_quote(code),
+                            super::lexer::Quote::Single | super::lexer::Quote::Double
+                        )
                         && bytes.last() == Some(&bytes[0])
                     {
                         &code[1..code.len() - 1]
@@ -228,5 +231,18 @@ mod tests {
         assert!(!detect("echo '${~v}'", &[]).unwrap().divergent);
         assert!(!detect("a=(x y)", &[]).unwrap().divergent);
         assert!(detect("cat =(echo public)", &[]).unwrap().divergent);
+    }
+    #[test]
+    fn parameter_pairing_ignores_braces_in_nested_code() {
+        let source = "echo ${~v:-$(echo {)}";
+        let found = detect(source, &[]).unwrap();
+        assert!(
+            found.divergent,
+            "D30 modifier still has a complete source span"
+        );
+        assert_eq!(
+            found.parameter_spans,
+            std::iter::once(5..source.len()).collect::<Vec<_>>()
+        );
     }
 }

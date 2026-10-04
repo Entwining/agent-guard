@@ -184,6 +184,34 @@ fn array_assignment_is_not_process_substitution() {
 #[test]
 fn assignment_subscript_forwards_code() {
     mechanism_rows("assignment");
+    let observation = agent_guard_rust::shell::observe(
+        "a[$(cat .env)]=public",
+        Arm::Brush,
+        "/synthetic/home",
+        "/synthetic/home/project",
+        true,
+    )
+    .unwrap();
+    assert!(
+        observation
+            .script
+            .commands
+            .iter()
+            .any(|c| c.nested && c.argv == ["cat", ".env"]),
+        "assignment subscript nested effect is visible"
+    );
+    let data = agent_guard_rust::shell::observe(
+        "a[1]='$(cat .env)'",
+        Arm::Brush,
+        "/synthetic/home",
+        "/synthetic/home/project",
+        true,
+    )
+    .unwrap();
+    assert!(
+        data.script.commands.is_empty(),
+        "assignment data is not executed code"
+    );
 }
 
 #[test]
@@ -244,6 +272,10 @@ fn lexical_owner_dimensions_have_independent_witnesses() {
         (1, 1, 1, 1)
     );
     assert_eq!(c.quote, Quote::Unquoted);
+    let source = "echo $[1 # ${v@Z}]";
+    let lex = Lexed::scan(source).unwrap();
+    assert_eq!(lex.context(source.find('#').unwrap()).arithmetic_depth, 1);
+    assert!(!lex.context(source.find('#').unwrap()).comment);
     for source in ["cat <<'TAG'\necho x\nTAG", "cat <<TAG\necho x\nTAG"] {
         let lex = Lexed::scan(source).unwrap();
         assert!(lex.context(source.find("TAG").unwrap()).heredoc_delimiter);

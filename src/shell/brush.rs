@@ -235,20 +235,45 @@ fn item_record(
 ) -> Result<(), CheckError> {
     match item {
         CommandPrefixOrSuffixItem::Word(value) => argv.push(word(source, value)?),
-        CommandPrefixOrSuffixItem::AssignmentWord(_, value) => {
+        CommandPrefixOrSuffixItem::AssignmentWord(assignment, value) => {
             let value = word(source, value)?;
+            if let AssignmentName::ArrayElementName(name, _) = &assignment.name {
+                let left = name.len();
+                let lexical = super::lexer::Lexed::scan(&value.raw).map_err(|_| CheckError {
+                    kind: CheckErrorKind::GuardFault,
+                })?;
+                let right = lexical.closing(left, b'[', b']').ok_or(CheckError {
+                    kind: CheckErrorKind::GuardFault,
+                })?;
+                let index = value.raw.get(left + 1..right).ok_or(CheckError {
+                    kind: CheckErrorKind::GuardFault,
+                })?;
+                output.push(Record::Expansion(Word {
+                    raw: index.to_owned(),
+                    syntax: super::WordSyntax::Arithmetic,
+                }));
+            }
             if !argv.is_empty() {
                 argv.push(value);
                 return Ok(());
             }
             if let Some((name, raw)) = value.raw.split_once('=') {
-                output.push(Record::Assignment(
-                    name.to_owned(),
-                    Word {
-                        raw: raw.to_owned(),
-                        syntax: super::WordSyntax::Shell,
-                    },
-                ));
+                let (name, target) = if let AssignmentValue::Scalar(target) = &assignment.value {
+                    let mut name = assignment.name.to_string();
+                    if assignment.append {
+                        name.push('+');
+                    }
+                    (name, word(source, target)?)
+                } else {
+                    (
+                        name.to_owned(),
+                        Word {
+                            raw: raw.to_owned(),
+                            syntax: super::WordSyntax::Shell,
+                        },
+                    )
+                };
+                output.push(Record::Assignment(name, target));
             }
         }
         CommandPrefixOrSuffixItem::IoRedirect(value) => redirect(source, value, redirects, output)?,

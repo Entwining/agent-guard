@@ -22,6 +22,7 @@ pub const ACCEPTANCE_ARMS: &[Arm] = &[Arm::Brush];
 enum WordSyntax {
     Shell,
     Heredoc,
+    Arithmetic,
     Literal,
 }
 

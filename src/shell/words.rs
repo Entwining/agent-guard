@@ -26,8 +26,9 @@ pub(super) fn expand(
         });
     }
     let heredoc = matches!(syntax, super::WordSyntax::Heredoc);
+    let arithmetic = matches!(syntax, super::WordSyntax::Arithmetic);
     let options = ParserOptions::default();
-    let (input, braces) = if heredoc {
+    let (input, braces) = if heredoc || arithmetic {
         (raw.to_owned(), false)
     } else {
         brace_text(raw)?
@@ -52,6 +53,8 @@ pub(super) fn expand(
     let mut splitting = false;
     let lexical = if heredoc {
         super::lexer::Lexed::heredoc(&input)
+    } else if arithmetic {
+        super::lexer::Lexed::arithmetic(&input)
     } else {
         super::lexer::Lexed::scan(&input)
     }
@@ -383,7 +386,10 @@ fn fill(
             WordPiece::ArithmeticExpression(expr) => {
                 let inner = fragment(
                     &expr.value,
-                    super::lexer::Context::default(),
+                    super::lexer::Context {
+                        arithmetic_depth: 1,
+                        ..super::lexer::Context::default()
+                    },
                     variables,
                     host,
                 )?;
