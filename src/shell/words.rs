@@ -9,11 +9,38 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 mod tests;
 
+pub(super) fn first_literal(raw: &str) -> Option<String> {
+    let pieces = word::parse(raw, &ParserOptions::default()).ok()?;
+    match &pieces.first()?.piece {
+        WordPiece::Text(text) => Some(text.clone()),
+        _ => None,
+    }
+}
+
+pub(super) fn single_literal(raw: &str) -> Option<String> {
+    let pieces = word::parse(raw, &ParserOptions::default()).ok()?;
+    pieces
+        .iter()
+        .all(|piece| {
+            matches!(
+                piece.piece,
+                WordPiece::Text(_) | WordPiece::TildeExpansion(_) | WordPiece::EscapeSequence(_)
+            )
+        })
+        .then(|| raw.to_owned())
+}
+
+pub(super) struct ExpansionContext<'a> {
+    pub variables: &'a BTreeMap<String, String>,
+    pub host: crate::record::HostFacts<'a>,
+    pub cwd: &'a str,
+    pub tilde_assigned: bool,
+}
+
 pub(super) fn expand(
     raw: &str,
     syntax: &super::WordSyntax,
-    variables: &BTreeMap<String, String>,
-    host: crate::record::HostFacts<'_>,
+    context: &ExpansionContext<'_>,
 ) -> Result<Expanded, CheckError> {
     if matches!(syntax, super::WordSyntax::Literal) {
         let word = Word::literal(raw.to_owned());
@@ -23,6 +50,7 @@ pub(super) fn expand(
             nested: Vec::new(),
             arithmetic: Vec::new(),
             references: Vec::new(),
+            tilde: false,
             parameters: Vec::new(),
             unsupported: false,
         });
@@ -49,6 +77,7 @@ pub(super) fn expand(
         nested: Vec::new(),
         arithmetic: Vec::new(),
         references: Vec::new(),
+        tilde: false,
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -73,15 +102,7 @@ pub(super) fn expand(
         None => {}
     }
     out.parameters = parameter_regions(&input, &lexical);
-    fill(
-        &input,
-        &pieces,
-        &lexical,
-        variables,
-        host,
-        &mut out,
-        &mut splitting,
-    )?;
+    fill(&input, &pieces, &lexical, context, &mut out, &mut splitting)?;
     out.unsupported |= out.parameters.iter().any(|region| !region.supported);
     if input != raw && !out.parameters.is_empty() {
         let original = super::lexer::Lexed::scan(raw).map_err(|_| CheckError {
@@ -109,6 +130,29 @@ pub(super) fn expand(
                 let mut word = out.word.clone();
                 word.text = text.to_owned();
                 word.value = word.text.clone();
+                // split_whitespace yields slices of this buffer, so their offsets
+                // preserve the cwd-origin ranges without a second text search.
+                let start = text.as_ptr() as usize - out.word.text.as_ptr() as usize;
+                let end = start + text.len();
+                word.cwd_ranges = out
+                    .word
+                    .cwd_ranges
+                    .iter()
+                    .filter_map(|range| {
+                        if range.start >= start && range.end <= end {
+                            Some(range.start - start..range.end - start)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                if out.word.cwd_ranges.iter().any(|range| {
+                    range.start < end
+                        && range.end > start
+                        && !(range.start >= start && range.end <= end)
+                }) {
+                    out.unsupported = true;
+                }
                 word
             })
             .collect()
@@ -233,8 +277,7 @@ fn parameter_regions(raw: &str, lexical: &super::lexer::Lexed<'_>) -> Vec<super:
 fn fragment(
     raw: &str,
     context: super::lexer::Context,
-    variables: &BTreeMap<String, String>,
-    host: crate::record::HostFacts<'_>,
+    expansion: &ExpansionContext<'_>,
 ) -> Result<Expanded, CheckError> {
     let mut out = Expanded {
         word: Word::literal(String::new()),
@@ -242,6 +285,7 @@ fn fragment(
         nested: Vec::new(),
         arithmetic: Vec::new(),
         references: Vec::new(),
+        tilde: false,
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -265,9 +309,7 @@ fn fragment(
         word::parse(raw, &ParserOptions::default())
     };
     match pieces {
-        Ok(pieces) => fill(
-            raw, &pieces, &lexical, variables, host, &mut out, &mut false,
-        )?,
+        Ok(pieces) => fill(raw, &pieces, &lexical, expansion, &mut out, &mut false)?,
         Err(_) => out.unsupported = true,
     }
     out.unsupported |= out.parameters.iter().any(|r| !r.supported);
@@ -289,17 +331,19 @@ fn merge_fragment(out: &mut Expanded, inner: Expanded, offset: usize) {
     out.nested.extend(inner.nested);
     out.arithmetic.extend(inner.arithmetic);
     out.references.extend(inner.references);
+    out.tilde |= inner.tilde;
 }
 
 fn fill(
     raw: &str,
     pieces: &[WordPieceWithSource],
     lexical: &super::lexer::Lexed<'_>,
-    variables: &BTreeMap<String, String>,
-    host: crate::record::HostFacts<'_>,
+    expansion: &ExpansionContext<'_>,
     out: &mut Expanded,
     splitting: &mut bool,
 ) -> Result<(), CheckError> {
+    let variables = expansion.variables;
+    let host = expansion.host;
     let mut covered = 0;
     for piece in pieces {
         let context = lexical.context(piece.start_index);
@@ -334,7 +378,7 @@ fn fill(
             WordPiece::AnsiCQuotedText(text) => out.word.text.push_str(&ansi(text)),
             WordPiece::DoubleQuotedSequence(inner)
             | WordPiece::GettextDoubleQuotedSequence(inner) => {
-                fill(raw, inner, lexical, variables, host, out, splitting)?
+                fill(raw, inner, lexical, expansion, out, splitting)?
             }
             WordPiece::EscapeSequence(text) => {
                 let text = text.strip_prefix('\\').unwrap_or(text);
@@ -355,8 +399,17 @@ fn fill(
                         Some(host.home)
                     }
                     TildeExpr::WorkingDir => {
-                        out.word.pwd = true;
-                        variables.get("PWD").map(String::as_str)
+                        out.tilde = true;
+                        out.word.vars.push("PWD".into());
+                        if expansion.tilde_assigned && variables.contains_key("PWD") {
+                            variables.get("PWD").map(String::as_str)
+                        } else {
+                            out.word.pwd = true;
+                            out.word.cwd_ranges.push(
+                                out.word.text.len()..out.word.text.len() + expansion.cwd.len(),
+                            );
+                            Some(expansion.cwd)
+                        }
                     }
                     _ => None,
                 };
@@ -400,7 +453,7 @@ fn fill(
                         parameter_depth: 1,
                         ..super::lexer::Context::default()
                     };
-                    let inner = fragment(body, context, variables, host)?;
+                    let inner = fragment(body, context, expansion)?;
                     let offset = spelling.find(body).ok_or(CheckError {
                         kind: CheckErrorKind::GuardFault,
                     })?;
@@ -411,8 +464,14 @@ fn fill(
                         .get(name)
                         .map(String::as_str)
                         .or_else(|| (name == "HOME").then_some(host.home))
+                        .or_else(|| (name == "PWD").then_some(expansion.cwd))
                 }) {
-                    out.word.pwd |= plain.is_some_and(|name| name == "PWD");
+                    if plain.is_some_and(|name| name == "PWD") && !variables.contains_key("PWD") {
+                        out.word.pwd = true;
+                        out.word
+                            .cwd_ranges
+                            .push(out.word.text.len()..out.word.text.len() + value.len());
+                    }
                     out.word.text.push_str(value);
                     *splitting |= !quoted;
                     // D1 retains Bash pathname expansion even when Zsh leaves the binding literal.
@@ -438,9 +497,10 @@ fn fill(
                 }
                 if prints_pwd(code) && right + 1 == piece.end_index {
                     out.word.pwd = true;
-                    if let Some(cwd) = variables.get("PWD") {
-                        out.word.text.push_str(cwd);
-                    }
+                    out.word
+                        .cwd_ranges
+                        .push(out.word.text.len()..out.word.text.len() + expansion.cwd.len());
+                    out.word.text.push_str(expansion.cwd);
                 } else {
                     out.word.text.push_str(&raw[piece.start_index..right + 1]);
                     out.word.expands = true;
@@ -461,8 +521,7 @@ fn fill(
                         arithmetic_depth: 1,
                         ..super::lexer::Context::default()
                     },
-                    variables,
-                    host,
+                    expansion,
                 )?;
                 let offset = spelling.find(&expr.value).ok_or(CheckError {
                     kind: CheckErrorKind::GuardFault,

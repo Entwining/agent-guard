@@ -1,5 +1,44 @@
 # Offline Rust migration evidence
 
+## M2 tracked directories and PWD data
+
+The directory owner separates a raw physical prefix from its logical tail and
+collects failed movements outside a qualifying AND chain's successful RHS.
+Nested groups, functions, substitutions, conditions and loops retain their
+specified collector boundaries. No-operand cd and pushd update the tracked
+directory without guessing filesystem existence. Literal CDPATH contributes
+reachable candidates; unresolved values refuse conservatively.
+
+PWD assignments remain data. Recognized pwd substitutions use the actual
+tracked directory, and tilde-plus keeps both Bash and Zsh readings after a PWD
+assignment. Actual cwd-origin byte ranges reproject Text and Value for alternate
+command directories while preserving assigned data. A range split by unquoted
+whitespace is a named UnsupportedShellSyntax limit. Redirects retain their
+original directory. Inherited CDPATH remains a cutover-blocking limit.
+
+Against the signed parent `7804a3b`, this group closes 21 specified cwd rows.
+The full 1,289-row differential retains every prior match and all 21 CHANGE
+contracts, with 94 defect rows and 266 consumer conflicts remaining. The 417
+req4–req16 projections are unchanged, and no new F appears. The env -C and fd -C
+rows match through shared path behavior; their complete adapter owners remain
+open. The full physical/firmlink owner and directory-target roles await P7.
+
+The frozen cwd packet contains 51 rows and 153 consumer projections. Thirty-two
+mechanism ablations compile, fail a named assertion, restore every source byte
+and pass. Each mutant and restore runs the full corpus and all five M2 packets
+(792 consumer projections); every restore has zero field drift. The final suite
+passes 236 tests and fails only the unchanged strict legacy-conformance test.
+fmt, warnings-denied Clippy, the locked dependency check and release build pass.
+These are offline source observations, not installed loading or cutover proof.
+
+The observation summary is SHA-256
+`28aad612e1f80e20caf038d6baa98e78a70d9d28d09ced1ca80381dcc058e326`;
+the ablation summary is
+`83548a0a80569c5670ac098c002bd574c8ecb96a0143831e0ff524cb3b0428c0`.
+Both reside under `~/.cache/guard-fixtures/fixture-seat/r5-m2-phase-b/`. Earlier group
+counts below describe their own source-bound snapshots. Go and production hooks
+remain unchanged; the packaged Rust entry remains version-only.
+
 ## M2 math-armed binding references
 
 Ruling 36 corrects ruling 34's numeric printf and shift controls: their Zsh

@@ -1,5 +1,6 @@
 mod arithmetic;
 mod brush;
+mod cwd;
 mod divergence;
 pub mod lexer;
 mod statements;
@@ -260,7 +261,17 @@ fn expand_scoped(
 ) -> Result<Vec<Expanded>, CheckError> {
     let host = evaluator.frontend.host;
     let first = scope.contexts();
-    let seed = words::expand(&raw.raw, &raw.syntax, &first, host)?;
+    let cwd = scope.directory.current.render();
+    let seed = words::expand(
+        &raw.raw,
+        &raw.syntax,
+        &words::ExpansionContext {
+            variables: &first,
+            host,
+            cwd: &cwd,
+            tilde_assigned: true,
+        },
+    )?;
     let mut contexts = vec![first];
     for name in seed
         .word
@@ -307,39 +318,54 @@ fn expand_scoped(
     }
     let mut result = Vec::new();
     for context in contexts {
-        let mut expanded = words::expand(&raw.raw, &raw.syntax, &context, host)?;
-        if expanded.unsupported
-            && !evaluator.output.gaps.iter().any(|g| {
-                matches!(
-                    g,
-                    CoverageGap::ExecutorDivergence | CoverageGap::UnsupportedDialectConstruct
-                )
-            })
-        {
-            evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
-        }
-        if expanded.unsupported || !expanded.parameters.is_empty() {
-            evaluator.output.word_coverage.push(WordCoverage {
-                raw: raw.raw.clone(),
-                parameters: expanded.parameters.clone(),
-                unsupported: expanded.unsupported,
-            });
-        }
-        for expression in &expanded.arithmetic {
-            evaluator.armed_references(expression, scope, depth)?;
-            for code in evaluator.arithmetic_code(expression, scope)? {
-                if !expanded.nested.contains(&code) {
-                    expanded.nested.push(code);
+        for tilde_assigned in if seed.tilde && context.contains_key("PWD") {
+            vec![true, false]
+        } else {
+            vec![true]
+        } {
+            let mut expanded = words::expand(
+                &raw.raw,
+                &raw.syntax,
+                &words::ExpansionContext {
+                    variables: &context,
+                    host,
+                    cwd: &cwd,
+                    tilde_assigned,
+                },
+            )?;
+            if expanded.unsupported
+                && !evaluator.output.gaps.iter().any(|g| {
+                    matches!(
+                        g,
+                        CoverageGap::ExecutorDivergence | CoverageGap::UnsupportedDialectConstruct
+                    )
+                })
+            {
+                evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+            }
+            if expanded.unsupported || !expanded.parameters.is_empty() {
+                evaluator.output.word_coverage.push(WordCoverage {
+                    raw: raw.raw.clone(),
+                    parameters: expanded.parameters.clone(),
+                    unsupported: expanded.unsupported,
+                });
+            }
+            for expression in &expanded.arithmetic {
+                evaluator.armed_references(expression, scope, depth)?;
+                for code in evaluator.arithmetic_code(expression, scope)? {
+                    if !expanded.nested.contains(&code) {
+                        expanded.nested.push(code);
+                    }
                 }
             }
+            for expression in &expanded.references {
+                evaluator.armed_references(expression, scope, depth)?;
+            }
+            for code in &expanded.nested {
+                evaluator.source(code, &mut scope.isolated(), depth + 1)?;
+            }
+            result.push(expanded);
         }
-        for expression in &expanded.references {
-            evaluator.armed_references(expression, scope, depth)?;
-        }
-        for code in &expanded.nested {
-            evaluator.source(code, &mut scope.isolated(), depth + 1)?;
-        }
-        result.push(expanded);
     }
     Ok(result)
 }
@@ -350,6 +376,7 @@ struct Expanded {
     nested: Vec<String>,
     arithmetic: Vec<String>,
     references: Vec<String>,
+    tilde: bool,
     parameters: Vec<ParameterRegion>,
     unsupported: bool,
 }

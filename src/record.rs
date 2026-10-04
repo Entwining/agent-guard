@@ -16,6 +16,7 @@ pub struct Word {
     pub role: Role,
     pub value: String,
     pub pwd: bool,
+    pub cwd_ranges: Vec<std::ops::Range<usize>>,
 }
 
 impl Word {
@@ -29,6 +30,7 @@ impl Word {
             vars: Vec::new(),
             role: Role::Arg,
             pwd: false,
+            cwd_ranges: Vec::new(),
         }
     }
     pub fn as_str(&self) -> &str {
@@ -38,8 +40,28 @@ impl Word {
         Self {
             text: text.clone(),
             value: text,
+            cwd_ranges: Vec::new(),
+            pwd: false,
             ..self.clone()
         }
+    }
+    pub(crate) fn reproject_cwd(&mut self, cwd: &str) {
+        let mut text = String::new();
+        let mut value = String::new();
+        let mut cursor = 0;
+        for range in &mut self.cwd_ranges {
+            text.push_str(&self.text[cursor..range.start]);
+            value.push_str(&self.value[cursor..range.start]);
+            cursor = range.end;
+            let start = text.len();
+            text.push_str(cwd);
+            value.push_str(cwd);
+            *range = start..text.len();
+        }
+        text.push_str(&self.text[cursor..]);
+        value.push_str(&self.value[cursor..]);
+        self.text = text;
+        self.value = value;
     }
 }
 impl std::ops::Deref for Word {
@@ -256,5 +278,45 @@ impl Target {
             search: false,
             command: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn projected_cwd_ranges_describe_current_word_bytes() {
+        let packet: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/rust-m2-cwd.json")).unwrap();
+        let mut projected = 0;
+        for row in packet["rows"].as_array().unwrap() {
+            let result = crate::shell::observe(
+                row["source"].as_str().unwrap(),
+                crate::shell::Arm::Brush,
+                "/h",
+                row["cwd"].as_str().unwrap(),
+                true,
+            )
+            .unwrap();
+            for command in result.script.commands {
+                for word in command.argv {
+                    for range in word.cwd_ranges {
+                        assert_eq!(
+                            word.text.get(range.clone()),
+                            Some(command.cwd.as_str()),
+                            "{}",
+                            row["id"]
+                        );
+                        assert_eq!(
+                            word.value.get(range),
+                            Some(command.cwd.as_str()),
+                            "{}",
+                            row["id"]
+                        );
+                        projected += 1;
+                    }
+                }
+            }
+        }
+        assert!(projected > 0);
     }
 }

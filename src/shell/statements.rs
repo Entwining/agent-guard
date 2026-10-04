@@ -1,3 +1,4 @@
+use super::cwd::{self, Directory};
 use super::{Expanded, Frontend, Observation, Operator, RawWord, Statement, WordSyntax};
 use crate::{
     CheckError, CoverageGap,
@@ -13,8 +14,7 @@ pub(super) struct Binding {
 
 #[derive(Clone)]
 pub(super) struct Scope {
-    pub cwd: String,
-    pub alternatives: Vec<String>,
+    pub directory: Directory,
     pub bindings: BTreeMap<String, Binding>,
     frames: Vec<BTreeMap<String, Option<Binding>>>,
     isolated: bool,
@@ -33,8 +33,7 @@ struct BindingState {
 impl Scope {
     pub fn new(home: &str, cwd: &str) -> Self {
         Self {
-            cwd: cwd.into(),
-            alternatives: Vec::new(),
+            directory: Directory::new(cwd),
             bindings: BTreeMap::from([(
                 "HOME".into(),
                 Binding {
@@ -54,6 +53,7 @@ impl Scope {
         child.returns.clear();
         child.loops.clear();
         child.isolated = true;
+        child.directory.failures = None;
         child
     }
     fn branch(&self) -> Self {
@@ -80,8 +80,7 @@ impl Scope {
             .collect()
     }
     pub fn contexts(&self) -> BTreeMap<String, String> {
-        let mut values = self
-            .bindings
+        self.bindings
             .iter()
             .filter_map(|(n, b)| {
                 b.values
@@ -89,11 +88,7 @@ impl Scope {
                     .and_then(Option::as_ref)
                     .map(|v| (n.clone(), v.clone()))
             })
-            .collect::<BTreeMap<_, _>>();
-        if !self.bindings.contains_key("PWD") {
-            values.insert("PWD".into(), self.cwd.clone());
-        }
-        values
+            .collect::<BTreeMap<_, _>>()
     }
     fn local(&mut self, name: &str) {
         if let Some(frame) = self.frames.last_mut() {
@@ -283,12 +278,14 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
     }
     fn merge_directories(&mut self, scope: &mut Scope, branches: &[Scope]) {
-        let mut candidates = scope.alternatives.clone();
+        let mut candidates = Vec::new();
         for branch in branches {
-            candidates.push(branch.cwd.clone());
-            candidates.extend(branch.alternatives.clone());
+            candidates.push(branch.directory.current.clone());
+            candidates.extend(branch.directory.alternatives.clone());
         }
-        scope.alternatives = bounded_directories(&scope.cwd, candidates, self.frontend.host.home);
+        scope
+            .directory
+            .merge(candidates.into_iter(), self.frontend.host.home);
     }
     fn statement(
         &mut self,
@@ -337,12 +334,36 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 let before = scope.isolated();
                 match operator {
                     Operator::And => {
+                        let qualified = cwd::moved_on_success(left);
+                        let outer_failures = if qualified {
+                            scope.directory.failures.take()
+                        } else {
+                            None
+                        };
+                        if qualified {
+                            scope.directory.failures = Some(Vec::new());
+                        }
                         self.statement(left, scope, depth + 1, source_id, nested)?;
                         let left_exit = scope.clone();
                         let mut after = scope.branch();
+                        if qualified && !matches!(right.as_ref(), Statement::Command { .. }) {
+                            after.directory.failures = None;
+                        }
                         self.statement(right, &mut after, depth + 1, source_id, nested)?;
-                        scope.cwd = after.cwd.clone();
-                        scope.alternatives = after.alternatives.clone();
+                        let mut failures = left_exit.directory.failures.clone().unwrap_or_default();
+                        failures.extend(after.directory.failures.clone().unwrap_or_default());
+                        scope.directory = after.directory.clone();
+                        if qualified {
+                            scope.directory.failures = outer_failures.map(|mut outer| {
+                                outer.extend(failures.clone());
+                                outer
+                            });
+                            if scope.directory.failures.is_none() {
+                                scope
+                                    .directory
+                                    .merge(failures.into_iter(), self.frontend.host.home);
+                            }
+                        }
                         self.merge_bindings(scope, &[before, left_exit, after]);
                     }
                     Operator::Or | Operator::Pipe => {
@@ -372,6 +393,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             } => {
                 let before = scope.clone();
                 let mut test = scope.clone();
+                test.directory.failures = None;
                 self.run(condition, &mut test, depth + 1, source_id, nested)?;
                 let mut yes = test.branch();
                 self.run(then, &mut yes, depth + 1, source_id, nested)?;
@@ -416,6 +438,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             } => {
                 let before = scope.clone();
                 let mut inner = scope.branch();
+                inner.directory.failures = None;
                 let mut values = Vec::new();
                 let mut count = Some(0usize);
                 for word in header {
@@ -527,6 +550,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         .map(|v| v.word.clone())
                         .unwrap_or_else(|| crate::record::Word::literal(String::new()));
                     word.text = format!("{name}={}", word.text);
+                    for range in &mut word.cwd_ranges {
+                        range.start += name.len() + 1;
+                        range.end += name.len() + 1;
+                    }
                     word.value = word.text.clone();
                     word.role = if argv.is_empty() {
                         Role::Precommand
@@ -553,6 +580,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         )? {
                             let mut word = expanded.word;
                             word.text = format!("{name}={}", word.text);
+                            for range in &mut word.cwd_ranges {
+                                range.start += name.len() + 1;
+                                range.end += name.len() + 1;
+                            }
                             word.value = word.text.clone();
                             word.raw = raw.raw.clone();
                             choices.push(vec![word]);
@@ -684,7 +715,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             .is_some_and(|i| self.functions.contains_key(&argv[i].text)),
                         argv,
                         redirects: targets.clone(),
-                        cwd: scope.cwd.clone(),
+                        cwd: scope.directory.current.render(),
                         program,
                         wrappers: Vec::new(),
                         shell: true,
@@ -710,6 +741,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             self.running.insert(name.clone());
                             let caller_returns = std::mem::take(&mut scope.returns);
                             let caller_loops = std::mem::take(&mut scope.loops);
+                            let caller_failures = scope.directory.failures.take();
                             scope.enter_function();
                             self.run(&function.body, scope, depth + 1, function.source_id, nested)?;
                             let returns = std::mem::take(&mut scope.returns);
@@ -723,6 +755,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             self.merge_bindings(scope, &candidates);
                             scope.returns = caller_returns;
                             scope.loops = caller_loops;
+                            scope.directory.failures = caller_failures;
                             self.running.remove(&name);
                         }
                     }
@@ -738,8 +771,12 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     exits.push(branch);
                 }
                 if let Some(first) = exits.first() {
-                    scope.cwd = first.cwd.clone();
-                    scope.alternatives = first.alternatives.clone();
+                    scope.directory = first.directory.clone();
+                    if let Some(failures) = &mut scope.directory.failures {
+                        for branch in exits.iter().skip(1) {
+                            failures.extend(branch.directory.failures.clone().unwrap_or_default());
+                        }
+                    }
                 }
                 self.merge_directories(scope, &exits);
                 self.merge_bindings(scope, &exits);
@@ -804,7 +841,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     function: false,
                     argv: vec![expanded.word],
                     redirects: Vec::new(),
-                    cwd: scope.cwd.clone(),
+                    cwd: scope.directory.current.render(),
                     program: None,
                     wrappers: Vec::new(),
                     shell: true,
@@ -840,13 +877,13 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 .push((self.output.script.commands.len(), scope.defining));
         }
         self.output.script.commands.push(command.clone());
-        for cwd in &scope.alternatives {
+        for cwd in &scope.directory.alternatives {
+            let cwd = cwd.render();
             let mut copy = command.clone();
             copy.cwd = cwd.clone();
             for word in &mut copy.argv {
                 if word.pwd {
-                    word.text = word.text.replace(&scope.cwd, cwd);
-                    word.value = word.value.replace(&scope.cwd, cwd);
+                    word.reproject_cwd(&cwd);
                 }
             }
             if copy.program.is_some() && !copy.function {
@@ -860,20 +897,63 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
     }
     fn track(&mut self, command: &Command, scope: &mut Scope) {
-        if let Some(index) = command.program
-            && command.argv[index] == "cd"
-            && let Some(target) = command.argv[index + 1..]
-                .iter()
-                .find(|w| !w.starts_with('-'))
-        {
-            let next = crate::filesystem::normalize(target, &scope.cwd, self.frontend.host.home);
-            let mut candidates = scope.alternatives.clone();
-            candidates.push(scope.cwd.clone());
-            scope.cwd = next;
-            scope.alternatives =
-                bounded_directories(&scope.cwd, candidates, self.frontend.host.home);
-            scope.bindings.remove("PWD");
+        let Some(index) = command.program else {
+            return;
+        };
+        let program = command.argv[index].text.as_str();
+        if !command.shell || !matches!(program, "cd" | "pushd") {
+            return;
         }
+        let args = &command.argv[index + 1..];
+        let operand = args.iter().position(|w| !w.starts_with('-'));
+        let target = if let Some(operand) = operand {
+            args[operand].text.clone()
+        } else if program == "cd"
+            && args.iter().all(|w| {
+                w == "--"
+                    || w.strip_prefix('-').is_some_and(|flags| {
+                        !flags.is_empty() && flags.bytes().all(|b| b"PLqs".contains(&b))
+                    })
+            })
+        {
+            self.frontend.host.home.into()
+        } else {
+            return;
+        };
+        let modes = args[..operand.unwrap_or(args.len())]
+            .iter()
+            .filter(|w| {
+                w.strip_prefix('-').is_some_and(|flags| {
+                    !flags.is_empty() && flags.bytes().all(|b| b.is_ascii_alphabetic())
+                })
+            })
+            .flat_map(|w| w.bytes().filter(|b| matches!(b, b'L' | b'P')))
+            .collect::<Vec<_>>();
+        let physical =
+            modes.contains(&b'P') && operand.is_none_or(|i| !args[i].expands && !args[i].globs);
+        let disputed = physical && modes.last() == Some(&b'L');
+        let mut targets = vec![target.clone()];
+        if operand.is_some()
+            && !target.starts_with(['/', '.'])
+            && let Some(binding) = scope.bindings.get("CDPATH")
+        {
+            for value in &binding.values {
+                if let Some(value) = value {
+                    for entry in value.split(':').filter(|entry| !entry.is_empty()) {
+                        let path = format!("{entry}/{target}");
+                        if !targets.contains(&path) {
+                            targets.push(path);
+                        }
+                    }
+                } else {
+                    self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                }
+            }
+        }
+        scope
+            .directory
+            .move_to(&targets, physical, disputed, self.frontend.host.home);
+        scope.bindings.remove("PWD");
     }
     pub fn expand(
         &mut self,
@@ -1001,23 +1081,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
     }
 }
 
-pub(super) fn bounded_directories(
-    current: &str,
-    candidates: Vec<String>,
-    home: &str,
-) -> Vec<String> {
-    let mut result = Vec::new();
-    for path in candidates {
-        if path != current && !result.contains(&path) {
-            result.push(path);
-        }
-    }
-    if result.len() > 16 {
-        vec![home.into(), format!("{home}/Library")]
-    } else {
-        result
-    }
-}
 pub(super) fn identifier(name: &str) -> bool {
     !name.is_empty()
         && name
@@ -1175,11 +1238,20 @@ mod tests {
     }
     #[test]
     fn directory_alternatives_keep_order_and_collapse() {
-        let paths = (0..17).map(|n| format!("/p/{n}")).collect::<Vec<_>>();
+        let paths = (0..17)
+            .map(|n| cwd::CwdPath::Logical(format!("/p/{n}")))
+            .collect::<Vec<_>>();
+        let current = cwd::CwdPath::Logical("/p".into());
         assert_eq!(
-            bounded_directories("/p", paths[..16].to_vec(), "/h"),
+            cwd::bounded(&current, paths[..16].to_vec(), "/h"),
             paths[..16]
         );
-        assert_eq!(bounded_directories("/p", paths, "/h"), ["/h", "/h/Library"]);
+        assert_eq!(
+            cwd::bounded(&current, paths, "/h"),
+            [
+                cwd::CwdPath::Logical("/h".into()),
+                cwd::CwdPath::Logical("/h/Library".into())
+            ]
+        );
     }
 }

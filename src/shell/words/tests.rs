@@ -115,6 +115,7 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
         nested: Vec::new(),
         arithmetic: Vec::new(),
         references: Vec::new(),
+        tilde: false,
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -122,10 +123,14 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
         raw,
         &pieces,
         &lexical,
-        &BTreeMap::new(),
-        crate::record::HostFacts {
-            home: "/synthetic/home",
-            user: None,
+        &ExpansionContext {
+            variables: &BTreeMap::new(),
+            host: crate::record::HostFacts {
+                home: "/synthetic/home",
+                user: None,
+            },
+            cwd: "/synthetic/home/project",
+            tilde_assigned: true,
         },
         &mut out,
         &mut false,
@@ -188,10 +193,14 @@ fn brush_accepted_word_lexer_refusal_is_unsupported() {
     let expanded = expand(
         raw,
         &crate::shell::WordSyntax::Shell,
-        &BTreeMap::new(),
-        crate::record::HostFacts {
-            home: "/synthetic/home",
-            user: None,
+        &ExpansionContext {
+            variables: &BTreeMap::new(),
+            host: crate::record::HostFacts {
+                home: "/synthetic/home",
+                user: None,
+            },
+            cwd: "/synthetic/home/project",
+            tilde_assigned: true,
         },
     )
     .unwrap();
@@ -207,10 +216,14 @@ fn outer_early_closer_has_its_own_unsupported_region() {
     let expanded = expand(
         raw,
         &crate::shell::WordSyntax::Shell,
-        &BTreeMap::new(),
-        crate::record::HostFacts {
-            home: "/synthetic/home",
-            user: None,
+        &ExpansionContext {
+            variables: &BTreeMap::new(),
+            host: crate::record::HostFacts {
+                home: "/synthetic/home",
+                user: None,
+            },
+            cwd: "/synthetic/home/project",
+            tilde_assigned: true,
         },
     )
     .unwrap();
@@ -236,6 +249,7 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
         nested: Vec::new(),
         arithmetic: Vec::new(),
         references: Vec::new(),
+        tilde: false,
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -243,10 +257,14 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
         raw,
         &pieces,
         &lexical,
-        &BTreeMap::new(),
-        crate::record::HostFacts {
-            home: "/synthetic/home",
-            user: None,
+        &ExpansionContext {
+            variables: &BTreeMap::new(),
+            host: crate::record::HostFacts {
+                home: "/synthetic/home",
+                user: None,
+            },
+            cwd: "/synthetic/home/project",
+            tilde_assigned: true,
         },
         &mut out,
         &mut false,
@@ -271,6 +289,7 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
         nested: Vec::new(),
         arithmetic: Vec::new(),
         references: Vec::new(),
+        tilde: false,
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -278,10 +297,14 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
         raw,
         &pieces,
         &lexical,
-        &BTreeMap::new(),
-        crate::record::HostFacts {
-            home: "/synthetic/home",
-            user: None,
+        &ExpansionContext {
+            variables: &BTreeMap::new(),
+            host: crate::record::HostFacts {
+                home: "/synthetic/home",
+                user: None,
+            },
+            cwd: "/synthetic/home/project",
+            tilde_assigned: true,
         },
         &mut out,
         &mut false,
@@ -305,6 +328,7 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
         nested: Vec::new(),
         arithmetic: Vec::new(),
         references: Vec::new(),
+        tilde: false,
         parameters: Vec::new(),
         unsupported: false,
     };
@@ -312,10 +336,14 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
         raw,
         &pieces,
         &lexical,
-        &BTreeMap::from([("secret".into(), "binding-data".into())]),
-        crate::record::HostFacts {
-            home: "/synthetic/home",
-            user: None,
+        &ExpansionContext {
+            variables: &BTreeMap::from([("secret".into(), "binding-data".into())]),
+            host: crate::record::HostFacts {
+                home: "/synthetic/home",
+                user: None,
+            },
+            cwd: "/synthetic/home/project",
+            tilde_assigned: true,
         },
         &mut out,
         &mut false,
