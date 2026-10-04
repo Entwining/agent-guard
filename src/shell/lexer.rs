@@ -206,12 +206,14 @@ impl<'a> Lexed<'a> {
         }
         let start = *cursor;
         let mut parens: usize = 0;
+        let mut word_start = true;
+        let mut word_groups = Vec::new();
         let mut braces: usize = 0;
         let mut documents = VecDeque::new();
         while *cursor < self.source.len() {
             let byte = self.source.as_bytes()[*cursor];
             let tail = &self.source[*cursor..];
-            if end == Some(byte) && parens == 0 && braces == 0 {
+            if end == Some(byte) && (end == Some(b'}') || parens == 0) && braces == 0 {
                 self.mark(*cursor..*cursor + 1, context);
                 *cursor += 1;
                 return Ok(Some(*cursor));
@@ -223,7 +225,11 @@ impl<'a> Lexed<'a> {
                             || (*next == b'"' && context.heredoc.is_none())
                     }))
             {
+                let continuation = self.source.as_bytes().get(*cursor + 1) == Some(&b'\n');
                 self.escape(cursor, context);
+                if !continuation {
+                    word_start = false;
+                }
                 continue;
             }
             if tail.starts_with("$((") || (context.unquoted() && tail.starts_with("((")) {
@@ -245,6 +251,7 @@ impl<'a> Lexed<'a> {
                     self.mark(*cursor - 1..*cursor + 1, context);
                     *cursor += 1;
                 }
+                word_start = false;
                 continue;
             }
             if tail.starts_with("$(") || tail.starts_with("${") || byte == b'`' {
@@ -279,20 +286,21 @@ impl<'a> Lexed<'a> {
                     depth + 1,
                 )?;
                 self.mark(*cursor - 1..*cursor, context);
+                word_start = false;
                 continue;
             }
             if context.heredoc.is_none() && context.quote == Quote::Unquoted {
                 let quote = initial_quote(tail);
                 if quote != Quote::Unquoted {
                     self.quotation(cursor, context, quote, depth)?;
+                    word_start = false;
                     continue;
                 }
-                let boundary =
-                    *cursor == start
-                        || self.source.as_bytes().get(*cursor - 1).is_some_and(|byte| {
-                            byte.is_ascii_whitespace() || b";|&()".contains(byte)
-                        });
-                if byte == b'#' && boundary && context.parameter_depth == 0 {
+                if byte == b'#'
+                    && word_start
+                    && context.parameter_depth == 0
+                    && context.arithmetic_depth == 0
+                {
                     let right = tail.find('\n').map_or(self.source.len(), |n| *cursor + n);
                     self.mark(
                         *cursor..right,
@@ -304,8 +312,16 @@ impl<'a> Lexed<'a> {
                     *cursor = right;
                     continue;
                 }
+                if tail.starts_with("<<<")
+                    && context.parameter_depth == 0
+                    && context.arithmetic_depth == 0
+                {
+                    self.mark(*cursor..*cursor + 3, context);
+                    *cursor += 3;
+                    word_start = true;
+                    continue;
+                }
                 if tail.starts_with("<<")
-                    && !tail.starts_with("<<<")
                     && context.parameter_depth == 0
                     && context.arithmetic_depth == 0
                 {
@@ -331,6 +347,7 @@ impl<'a> Lexed<'a> {
                         },
                         depth,
                     )?;
+                    word_start = false;
                     if *cursor > delimiter_start && !delimiter.is_empty() {
                         documents.push_back((delimiter, quoted, strip_tabs));
                     }
@@ -392,9 +409,16 @@ impl<'a> Lexed<'a> {
             if context.quote == Quote::Unquoted && context.heredoc.is_none() {
                 if byte == b'(' {
                     parens += 1;
-                }
-                if byte == b')' {
+                    let process = *cursor > 0
+                        && matches!(self.source.as_bytes()[*cursor - 1], b'<' | b'>')
+                        && !self.context(*cursor - 1).escaped;
+                    word_groups.push(!word_start || process);
+                    word_start = true;
+                } else if byte == b')' {
                     parens = parens.saturating_sub(1);
+                    word_start = !word_groups.pop().unwrap_or(false);
+                } else {
+                    word_start = byte.is_ascii_whitespace() || b";|&<>".contains(&byte);
                 }
                 if end == Some(b'}') && byte == b'{' {
                     braces += 1;

@@ -6,6 +6,9 @@ use brush_parser::{
 };
 use std::collections::BTreeMap;
 
+#[cfg(test)]
+mod tests;
+
 pub(super) fn expand(
     raw: &str,
     syntax: &super::WordSyntax,
@@ -92,7 +95,7 @@ fn brace_text(raw: &str) -> Result<(String, bool), CheckError> {
             && let Some((right, list)) = brace_group(raw, cursor, &lexical)
         {
             let group = &raw[cursor..=right];
-            if raw[..cursor].ends_with('$') {
+            if raw[..cursor].ends_with('$') && lexical.context(cursor - 1).active() {
                 text.push_str(group);
             } else {
                 let body = &raw[cursor + 1..right];

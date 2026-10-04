@@ -1,0 +1,184 @@
+[
+  {
+    "id": "F1-default",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v:-${(f)v}}",
+    "word": "${v:-${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-alternative",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v:+${(f)v}}",
+    "word": "${v:+${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-assignment",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v:=${(f)v}}",
+    "word": "${v:=${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-error",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v:?${(f)v}}",
+    "word": "${v:?${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-prefix",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v#${(f)v}}",
+    "word": "${v#${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-suffix",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v%${(f)v}}",
+    "word": "${v%${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-replace-first",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v/${(f)v}/x}",
+    "word": "${v/${(f)v}/x}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-replace-all",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v//${(f)v}/x}",
+    "word": "${v//${(f)v}/x}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-replace-prefix",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v/#${(f)v}/x}",
+    "word": "${v/#${(f)v}/x}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-replace-suffix",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v/%${(f)v}/x}",
+    "word": "${v/%${(f)v}/x}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-substring-length",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v:0:${(f)v}}",
+    "word": "${v:0:${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-affixes",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v:-a${(f)v}b}",
+    "word": "${v:-a${(f)v}b}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-eval-flag",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v:-${(e)v}}",
+    "word": "${v:-${(e)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-flag-only",
+    "decision_id": "D29",
+    "owner": "parameter_fragment",
+    "reviewer": "m1-3-verify-deepseek F1 table",
+    "source": "echo ${v:-${(f)}}",
+    "word": "${v:-${(f)}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-control-direct",
+    "decision_id": "D1",
+    "owner": "parameter_fragment_control",
+    "source": "echo ${(f)v}",
+    "word": "${(f)v}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-control-command",
+    "decision_id": "D1",
+    "owner": "parameter_fragment_control",
+    "source": "echo $(echo ${(f)v})",
+    "word": "$(echo ${(f)v})",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-control-ordinary",
+    "decision_id": "D1",
+    "owner": "parameter_fragment_control",
+    "source": "echo ${v:-${w}}",
+    "word": "${v:-${w}}",
+    "expected": "N"
+  },
+  {
+    "id": "F1-control-nested-default",
+    "decision_id": "D1",
+    "owner": "parameter_fragment_control",
+    "source": "echo ${v:-${w:-x}}",
+    "word": "${v:-${w:-x}}",
+    "expected": "N"
+  },
+  {
+    "id": "F1-control-inert",
+    "decision_id": "D1",
+    "owner": "parameter_fragment_control",
+    "source": "echo '${v:-${(f)v}}'",
+    "word": "'${v:-${(f)v}}'",
+    "expected": "N"
+  },
+  {
+    "id": "F1-control-quoted-inner",
+    "decision_id": "D1",
+    "owner": "parameter_fragment_control",
+    "source": "echo ${v:-\"${(f)v}\"}",
+    "word": "${v:-\"${(f)v}\"}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-control-double-outer",
+    "decision_id": "D1",
+    "owner": "parameter_fragment_control",
+    "source": "echo \"${v:-${(f)v}}\"",
+    "word": "\"${v:-${(f)v}}\"",
+    "expected": "UR"
+  }
+]

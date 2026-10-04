@@ -9,7 +9,7 @@ use agent_guard_rust::{
 use brush_parser::SourceSpan;
 use brush_parser::word::{self, WordPiece, WordPieceWithSource};
 use serde_json::{Value, json};
-use std::{collections::BTreeSet, path::Path};
+use std::collections::BTreeSet;
 
 fn regressions(owner: &str) {
     let rows: Vec<Value> =
@@ -125,39 +125,6 @@ fn unterminated_quotes_are_blocked() {
         let wire = agent_guard_rust::adapters::render(context.consumer, &result);
         assert_eq!(wire.exit, 2);
         assert!(wire.stdout.is_empty());
-    }
-}
-
-fn sources(value: &Value, label: &str, output: &mut Vec<(String, String)>) {
-    match value {
-        Value::Array(rows) => {
-            for (i, row) in rows.iter().enumerate() {
-                sources(row, &format!("{label}[{i}]"), output);
-            }
-        }
-        Value::Object(fields) => {
-            if let Some(source) = fields
-                .get("source")
-                .or_else(|| fields.get("command"))
-                .and_then(Value::as_str)
-            {
-                output.push((label.into(), source.into()));
-            }
-            if fields
-                .get("tool")
-                .and_then(Value::as_str)
-                .is_some_and(|s| s.eq_ignore_ascii_case("bash"))
-                && let Some(source) = fields.get("input").and_then(Value::as_str)
-            {
-                output.push((label.into(), source.into()));
-            }
-            for (name, value) in fields {
-                if !matches!(name.as_str(), "source" | "command") {
-                    sources(value, &format!("{label}.{name}"), output);
-                }
-            }
-        }
-        _ => {}
     }
 }
 
@@ -281,23 +248,46 @@ impl Oracle {
                 continue;
             };
             let local = offsets[span.start.index];
-            let raw = raw.trim_start();
+            let mut raw = raw.trim_start();
             let mut local = local + source[local..].len() - source[local..].trim_start().len();
+            while let Some(tail) = source[local..].strip_prefix("\\\n") {
+                local += 2;
+                local += tail.len() - tail.trim_start().len();
+            }
             // Brush emits a synthetic end-tag token after consuming its source bytes.
             // The independent AST body boundary and exact tag bytes bind its real location.
-            if let Some((span, _)) = heredocs.iter().find(|(span, _)| {
-                let after = span.end + raw.len();
-                (local == after
+            if let Some(tag) = heredocs.iter().find_map(|(span, _)| {
+                let tag = span.end + source[span.end..].len()
+                    - source[span.end..].trim_start_matches('\t').len();
+                let after = tag + raw.len();
+                ((local == after
                     || (local == after + 1 && source.as_bytes().get(after) == Some(&b'\n')))
-                    && source.get(span.end..after) == Some(raw)
+                    && source.get(tag..after) == Some(raw))
+                .then_some(tag)
             }) {
-                self.span_disagreements.push(json!({"id":id,"token":raw,"reported_byte":base+local,"actual_byte":base+span.end,"disposition":"Brush synthetic heredoc end-tag span; mapped by independent AST body and exact original tag bytes"}));
-                local = span.end;
+                self.span_disagreements.push(json!({"id":id,"token":raw,"reported_byte":base+local,"actual_byte":base+tag,"disposition":"Brush synthetic heredoc end-tag span; mapped by independent AST body and exact original tag bytes"}));
+                local = tag;
                 for byte in local..local + raw.len() {
                     let context = lexical.context(base + byte);
                     if !context.heredoc_delimiter || context.active() {
                         self.disagreements.push(json!({"id":id,"byte":base+byte,"brush_end_tag":raw,"lexer":format!("{context:?}")}));
                     }
+                }
+            }
+            let actual_end = offsets[span.end.index];
+            if let Some(actual) = source.get(local..actual_end)
+                && actual.contains("$(")
+                && actual.contains(" #")
+            {
+                raw = actual;
+            }
+            for byte in local..(local + raw.len()).min(source.len()) {
+                let context = lexical.context(base + byte);
+                if context.comment
+                    && context.command_depth == lexical.context(base + local).command_depth
+                    && context.backtick_depth == lexical.context(base + local).backtick_depth
+                {
+                    self.disagreements.push(json!({"id":id,"byte":base+byte,"dimension":"word_comment","token":raw,"lexer":format!("{context:?}")}));
                 }
             }
             let heredoc = heredocs.iter().find(|(span, _)| span.contains(&local));
@@ -308,7 +298,8 @@ impl Oracle {
                     let nested = *expands
                         && (context.command_depth > parent.command_depth
                             || context.parameter_depth > parent.parameter_depth
-                            || context.backtick_depth > parent.backtick_depth);
+                            || context.backtick_depth > parent.backtick_depth
+                            || context.arithmetic_depth > parent.arithmetic_depth);
                     if !nested && context.heredoc != Some(!expands) {
                         self.disagreements.push(json!({"id":id,"byte":base+byte,"brush_heredoc_expands":expands,"lexer":format!("{context:?}")}));
                     }
@@ -467,40 +458,23 @@ fn brush_heredocs(
 
 #[test]
 fn lexer_matches_brush_word_quoting() {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let mut inputs = Vec::new();
-    let mut files: Vec<_> = std::fs::read_dir(&dir)
+    let manifest: Value =
+        serde_json::from_str(include_str!("fixtures/rust-m1-4-input-manifest.json")).unwrap();
+    let inputs: Vec<(String, String)> = manifest["inputs"]
+        .as_array()
         .unwrap()
-        .map(|e| e.unwrap().path())
-        .filter(|p| {
-            let name = p.file_name().unwrap().to_str().unwrap();
-            (name == "contract.jsonl" || name.starts_with("rust-"))
-                && matches!(
-                    p.extension().and_then(|s| s.to_str()),
-                    Some("json" | "jsonl")
-                )
+        .iter()
+        .filter_map(|row| {
+            row["source"]
+                .as_str()
+                .map(|s| (row["id"].as_str().unwrap().into(), s.into()))
         })
         .collect();
-    files.sort();
-    for file in &files {
-        let text = std::fs::read_to_string(file).unwrap();
-        let name = file.file_name().unwrap().to_str().unwrap();
-        if file.extension().unwrap() == "jsonl" {
-            for (line, text) in text.lines().enumerate() {
-                sources(
-                    &serde_json::from_str::<Value>(text).unwrap(),
-                    &format!("{name}:{}", line + 1),
-                    &mut inputs,
-                );
-            }
-        } else {
-            sources(
-                &serde_json::from_str::<Value>(&text).unwrap(),
-                name,
-                &mut inputs,
-            );
-        }
-    }
+    assert_eq!(
+        inputs.len(),
+        manifest["counts"]["shell"].as_u64().unwrap() as usize
+    );
+    let files = manifest["files"].as_array().unwrap();
     let mut oracle = Oracle::default();
     let mut tokenized = 0;
     let mut parsed_programs = 0;
@@ -619,6 +593,29 @@ fn target_tilde_uses_lexical_prefix_context() {
                 format!("{}/Library/Containers", fixture.home)
             },
             "{raw}"
+        );
+    }
+}
+
+#[test]
+fn escaped_continuation_token_mapping() {
+    let rows: Vec<Value> =
+        serde_json::from_str(include_str!("fixtures/rust-m1-4-oracle.json")).unwrap();
+    for row in rows {
+        let source = row["source"].as_str().unwrap();
+        let tokens =
+            brush_parser::uncached_tokenize_str(source, &brush_parser::TokenizerOptions::default())
+                .unwrap();
+        let lexical = Lexed::scan(source).unwrap();
+        let mut oracle = Oracle::default();
+        oracle.compare_tokens(source, tokens, None, &lexical, 0, "F2");
+        println!(
+            "{}",
+            json!({"id":"F2","disagreements":oracle.disagreements})
+        );
+        assert!(
+            oracle.disagreements.is_empty(),
+            "F2 normalized token start disagrees with source"
         );
     }
 }

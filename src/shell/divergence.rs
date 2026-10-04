@@ -53,17 +53,17 @@ pub(super) fn detect_lexed(
             continue;
         }
         if tail.starts_with("${(")
-            && let Some(end) = tail.find('}')
+            && let Some(end) = lexical.closing(cursor + 1, b'{', b'}')
         {
             result.divergent = true;
-            let parameter = &tail[3..end];
+            let parameter = &source[cursor + 3..end];
             if let Some((flags, name)) = parameter.split_once(')')
                 && flags.contains('e')
             {
                 result.evaluated_variables.push(name.to_owned());
             }
-            mask(&mut masked, cursor..cursor + end + 1);
-            cursor += end + 1;
+            mask(&mut masked, cursor..end + 1);
+            cursor = end + 1;
             continue;
         }
         if context.unquoted()
@@ -95,7 +95,16 @@ pub(super) fn detect_lexed(
                 result.divergent = true;
                 result.executable_qualifier = true;
                 if let Some(code) = body.strip_prefix("e:").and_then(|s| s.strip_suffix(':')) {
-                    result.code.push(code.trim_matches(['\'', '"']).to_owned());
+                    let bytes = code.as_bytes();
+                    let code = if bytes.len() >= 2
+                        && matches!(bytes[0], b'\'' | b'"')
+                        && bytes.last() == Some(&bytes[0])
+                    {
+                        &code[1..code.len() - 1]
+                    } else {
+                        code
+                    };
+                    result.code.push(code.to_owned());
                 }
             }
             // Ordinary extglob/filter groups retain their original operand spelling.
@@ -168,5 +177,12 @@ mod tests {
                 .unwrap()
                 .divergent
         );
+    }
+    #[test]
+    fn parameter_mask_uses_the_complete_nested_region() {
+        let source = "echo ${v:-${(e)${name}}} tail";
+        let found = detect(source, std::slice::from_ref(&(0..source.len()))).unwrap();
+        assert_eq!(found.masked, "echo ${v:-_____________} tail");
+        assert_eq!(found.evaluated_variables, ["${name}"]);
     }
 }

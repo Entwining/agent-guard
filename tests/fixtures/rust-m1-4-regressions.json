@@ -1,0 +1,548 @@
+[
+  {
+    "id": "r1-space-eval",
+    "decision_id": "D29/D30",
+    "source": "v='$(cat ~/.ssh/id_rsa)'; printf %s file\\ #1; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "r1-paren-eval",
+    "decision_id": "D29/D30",
+    "source": "v='$(cat ~/.ssh/id_rsa)'; printf %s file\\)#1; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "r1-space-qual",
+    "decision_id": "D29/D30",
+    "source": "printf %s file\\ #1; printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "r1-space-flag",
+    "decision_id": "D29/D30",
+    "source": "printf %s file\\ #1; printf %s \"${(f)v}\"",
+    "expected": "UR",
+    "owner": "comments"
+  },
+  {
+    "id": "r1-newline-qual",
+    "decision_id": "D29/D30",
+    "source": "printf %s file\\\n#1; printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "ctrl-eval",
+    "decision_id": "D29/D30",
+    "source": "v='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "ctrl-real-comment",
+    "decision_id": "D29/D30",
+    "source": "printf ok # ${(f)v}",
+    "expected": "N",
+    "owner": "comments"
+  },
+  {
+    "id": "A102-herestring-eval",
+    "decision_id": "D29/D30",
+    "source": "cat <<< \"public\"\nv='$(cat .env)'; echo \"${(e)v}\"",
+    "expected": "D",
+    "owner": "herestring"
+  },
+  {
+    "id": "A039-herestring-flag",
+    "decision_id": "D29/D30",
+    "source": "cat <<< \"public\"\necho \"${(f)v}\"",
+    "expected": "UR",
+    "owner": "herestring"
+  },
+  {
+    "id": "A040-herestring-sq-flag",
+    "decision_id": "D29/D30",
+    "source": "cat <<< 'public'\necho \"${(f)v}\"",
+    "expected": "UR",
+    "owner": "herestring"
+  },
+  {
+    "id": "A044-herestring-bare-flag",
+    "decision_id": "D29/D30",
+    "source": "cat <<< public\necho \"${(f)v}\"",
+    "expected": "UR",
+    "owner": "herestring"
+  },
+  {
+    "id": "A043-herestring-direct",
+    "decision_id": "D29/D30",
+    "source": "cat <<< \"public\"\ncat .env",
+    "expected": "D",
+    "owner": "herestring"
+  },
+  {
+    "id": "A056-subscript-assign",
+    "decision_id": "D29/D30",
+    "source": "a[$(cat .env)]=public",
+    "expected": "D",
+    "owner": "assignment"
+  },
+  {
+    "id": "A083-param-sq-cmdsub",
+    "decision_id": "D29/D30",
+    "source": "echo ${v:-'$('}",
+    "expected": "N",
+    "owner": "literal_fragment"
+  },
+  {
+    "id": "A107-arith-sq",
+    "decision_id": "D29/D30",
+    "source": "echo $(( '$(' ))",
+    "expected": "N",
+    "owner": "literal_fragment"
+  },
+  {
+    "id": "A019-arith-nested-flag",
+    "decision_id": "D29/D30",
+    "source": "echo $(( ${v:-${(f)w}} + 1 ))",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s1-idx-caret",
+    "decision_id": "D29/D30",
+    "source": "echo ${v[${^v}]}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s2-idx-tilde",
+    "decision_id": "D29/D30",
+    "source": "echo ${v[${~v}]}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s3-idx-atZ",
+    "decision_id": "D29/D30",
+    "source": "echo ${v[${v@Z}]}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s4-arith-caret",
+    "decision_id": "D29/D30",
+    "source": "echo $((${^v}))",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s5-arith-tilde",
+    "decision_id": "D29/D30",
+    "source": "echo $((${~v}))",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s6-arith-atZ",
+    "decision_id": "D29/D30",
+    "source": "echo $((${v@Z}))",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s7-legacy-caret",
+    "decision_id": "D29/D30",
+    "source": "echo $[${^v}]",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s8-legacy-tilde",
+    "decision_id": "D29/D30",
+    "source": "echo $[${~v}]",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s9-legacy-atZ",
+    "decision_id": "D29/D30",
+    "source": "echo $[${v@Z}]",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "c1-top-caret",
+    "decision_id": "D29/D30",
+    "source": "echo ${^v}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "c2-top-tilde",
+    "decision_id": "D29/D30",
+    "source": "echo ${~v}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "c3-top-atZ",
+    "decision_id": "D29/D30",
+    "source": "echo ${v@Z}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "c4-arith-flag",
+    "decision_id": "D29/D30",
+    "source": "echo $((${(f)v}))",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "c5-idx-flag",
+    "decision_id": "D29/D30",
+    "source": "echo ${v[${(f)v}]}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "i1-tilde-glob-read",
+    "decision_id": "D29/D30",
+    "source": "v='.env*'; cat ${~v}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "i2-arith-tilde-read",
+    "decision_id": "D29/D30",
+    "source": "v='.env*'; echo $((${~v})); cat ${~v}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "i3-arith-sub-tilde",
+    "decision_id": "D29/D30",
+    "source": "v='a[$(cat .env)]'; echo $((${~v}))",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "i4-arith-sub-plain",
+    "decision_id": "D29/D30",
+    "source": "v='a[$(cat .env)]'; echo $((v))",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "i5-arith-sub-param",
+    "decision_id": "D29/D30",
+    "source": "v='a[$(cat .env)]'; echo $((${v}))",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "g1-plain-unquoted",
+    "decision_id": "D29/D30",
+    "source": "v='.env*'; cat $v",
+    "expected": "D",
+    "owner": "coverage"
+  },
+  {
+    "id": "g2-plain-quoted",
+    "decision_id": "D29/D30",
+    "source": "v='.env*'; cat \"$v\"",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "g3-tilde-quoted",
+    "decision_id": "D29/D30",
+    "source": "v='.env*'; cat \"${~v}\"",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "g4-split",
+    "decision_id": "D29/D30",
+    "source": "v='x .env'; cat ${=v}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "g5-split-quoted",
+    "decision_id": "D29/D30",
+    "source": "v='x .env'; cat \"${=v}\"",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "g6-caret-array",
+    "decision_id": "D29/D30",
+    "source": "w=(.env); cat ${^w}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "g7-tilde-literal",
+    "decision_id": "D29/D30",
+    "source": "cat ${~v:-.env*}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "g8-plain-literal",
+    "decision_id": "D29/D30",
+    "source": "cat ${v:-.env*}",
+    "expected": "UC",
+    "owner": "coverage"
+  },
+  {
+    "id": "l1-default-quoted-split",
+    "decision_id": "D29/D30",
+    "source": "echo ${v:-\"${=v}\"}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "l2-alt-quoted-tilde",
+    "decision_id": "D29/D30",
+    "source": "echo ${v:+\"${~v}\"}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "l3-trim-quoted-nested",
+    "decision_id": "D29/D30",
+    "source": "echo ${v#\"${${v}}\"}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "l4-default-nested",
+    "decision_id": "D29/D30",
+    "source": "echo ${v:-${${v}}}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "l5-top-quoted-nested",
+    "decision_id": "D29/D30",
+    "source": "echo \"${${v}}\"",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "l6-read-quoted-split",
+    "decision_id": "D29/D30",
+    "source": "v='x .env'; cat ${w:-\"${=v}\"}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "d1-cmdsub-qual",
+    "decision_id": "D29/D30",
+    "source": "echo $(echo hi)#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-cmdsub-eval",
+    "decision_id": "D29/D30",
+    "source": "echo $(echo hi)#v='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"",
+    "expected": "UR",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-arith-qual",
+    "decision_id": "D29/D30",
+    "source": "echo $((1))#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-procsub-qual",
+    "decision_id": "D29/D30",
+    "source": "cat <(echo hi)#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-extglob-qual",
+    "decision_id": "D29/D30",
+    "source": "echo @(a)#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-dblparen-qual",
+    "decision_id": "D29/D30",
+    "source": "(( 1 ))#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-ctrl-space",
+    "decision_id": "D29/D30",
+    "source": "echo $(echo hi) printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-ctrl-subshell",
+    "decision_id": "D29/D30",
+    "source": "(echo hi)#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "N",
+    "owner": "comments"
+  },
+  {
+    "id": "d2-hs-ab",
+    "decision_id": "D29/D30",
+    "source": "cat <<< \"a b\"\nv='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "herestring"
+  },
+  {
+    "id": "d2-hs-redir",
+    "decision_id": "D29/D30",
+    "source": "cat <<< \"a\" >/dev/null\nv='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "herestring"
+  },
+  {
+    "id": "d2-hs-escsp",
+    "decision_id": "D29/D30",
+    "source": "cat <<< a\\ b\nv='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "herestring"
+  },
+  {
+    "id": "d2-hs-dash",
+    "decision_id": "D29/D30",
+    "source": "cat <<<- \"a\"\nv='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "herestring"
+  },
+  {
+    "id": "d3-case-noparen",
+    "decision_id": "D29/D30",
+    "source": "echo $(case x in a) printf %s \"${(f)v}\";; esac)",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "d5-array-assign",
+    "decision_id": "D29/D30",
+    "source": "a=(x)#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d5-array-assign-plain",
+    "decision_id": "D29/D30",
+    "source": "a=(x y); echo ${a[1]}",
+    "expected": "N",
+    "owner": "array_assignment"
+  },
+  {
+    "id": "brace-escaped-dollar",
+    "decision_id": "D29",
+    "source": "cat \\${.env,x}",
+    "expected": "N",
+    "owner": "brace"
+  },
+  {
+    "id": "assignment-data",
+    "decision_id": "D29",
+    "source": "a[1]='$(cat .env)'",
+    "expected": "N",
+    "owner": "assignment"
+  },
+  {
+    "id": "coverage-sibling",
+    "decision_id": "D29",
+    "source": "cat ${v@Z} .env",
+    "expected": "D",
+    "owner": "coverage"
+  },
+  {
+    "id": "coverage-nested-effect",
+    "decision_id": "D29",
+    "source": "echo ${v:-${(f)v}$(cat .env)}",
+    "expected": "D",
+    "owner": "coverage"
+  },
+  {
+    "id": "coverage-eval-queue",
+    "decision_id": "D29",
+    "source": "v='$(cat .env)'; echo ${w:-${(e)v}}",
+    "expected": "D",
+    "owner": "coverage"
+  },
+  {
+    "id": "coverage-qualifier-queue",
+    "decision_id": "D29",
+    "source": "echo ${w:-${(f)v}} *(e:'cat .env':)",
+    "expected": "D",
+    "owner": "coverage"
+  },
+  {
+    "id": "control-70",
+    "decision_id": "D29/D30",
+    "source": "echo $",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "control-71",
+    "decision_id": "D29/D30",
+    "source": "echo \"$\"",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "control-72",
+    "decision_id": "D29/D30",
+    "source": "echo \\${x}",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "control-73",
+    "decision_id": "D29/D30",
+    "source": "echo '${~v}'",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "control-74",
+    "decision_id": "D29/D30",
+    "source": "echo ${v:-${w:-x}}",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "control-75",
+    "decision_id": "D29/D30",
+    "source": "cat =(echo public)",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "qualifier-nested-quotes",
+    "decision_id": "D29",
+    "source": "printf %s *(e:'cat \".env\"':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "herestring-data-control",
+    "decision_id": "D29",
+    "source": "cat <<< '$(cat .env)'\necho public",
+    "expected": "N",
+    "owner": "herestring"
+  }
+]
