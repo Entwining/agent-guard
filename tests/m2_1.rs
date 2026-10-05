@@ -7,6 +7,7 @@ fn rows() -> Vec<Value> {
         include_str!("fixtures/rust-m2-1.json"),
         include_str!("fixtures/rust-m2-1-armed.json"),
         include_str!("fixtures/rust-batch1.json"),
+        include_str!("fixtures/rust-batch1-joins.json"),
     ]
     .into_iter()
     .flat_map(|source| {
@@ -104,11 +105,19 @@ fn cwd_overflow_reaches_nested_code() {
     partition("batch1-nested-cwd");
 }
 #[test]
+fn absent_join_candidates_keep_baseline_coverage() {
+    partition("batch1-join");
+}
+#[test]
+fn loop_state_converges_after_oldpwd_catches_up() {
+    partition("batch1-loop-convergence");
+}
+#[test]
 fn tree_roots_list() {
     partition("tree");
 }
 #[test]
-fn moving_loop_directory_refuses_after_the_bound() {
+fn finite_loop_directories_keep_protected_candidates() {
     partition("loop-cwd");
 }
 #[test]

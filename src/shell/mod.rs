@@ -289,6 +289,13 @@ fn expand_scoped(
             let mut next = Vec::new();
             for context in &contexts {
                 for value in &binding.values {
+                    // Preserve pre-M2 inference from present lexical candidates;
+                    // absence at a join is runtime data, not a scope refusal.
+                    if matches!(value, statements::BindingValue::RuntimeUnknown(Some(value)) if value.is_empty())
+                        && binding.values.iter().any(|value| value.known().is_some())
+                    {
+                        continue;
+                    }
                     if next.len() == 512 {
                         evaluator.output.gap(CoverageGap::InspectionBudget);
                         break;

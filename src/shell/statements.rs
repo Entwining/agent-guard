@@ -138,6 +138,35 @@ impl Scope {
             })
             .collect::<BTreeMap<_, _>>()
     }
+    fn expanded_binding(&self, word: &crate::record::Word, text: &str) -> BindingValue {
+        let candidates = word.vars.iter().filter_map(|name| self.bindings.get(name));
+        let mut runtime = false;
+        let mut representative = false;
+        let mut derived = false;
+        for binding in candidates {
+            for value in &binding.values {
+                match value {
+                    BindingValue::RuntimeDerived(_) => derived = true,
+                    BindingValue::RuntimeUnknown(Some(value)) => {
+                        runtime |= !value.is_empty()
+                            || !binding.values.iter().any(|value| value.known().is_some());
+                        representative |= value == text;
+                    }
+                    BindingValue::RuntimeUnknown(None) => {
+                        runtime = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if derived || (runtime && (word.globs || !representative)) {
+            BindingValue::RuntimeDerived(text.into())
+        } else if runtime || word.expands {
+            BindingValue::RuntimeUnknown(Some(text.into()))
+        } else {
+            BindingValue::Known(text.into())
+        }
+    }
     fn local(&mut self, name: &str) {
         if let Some(frame) = self.frames.last_mut() {
             frame
@@ -249,7 +278,10 @@ fn join_values<'a>(values: impl Iterator<Item = Option<&'a Binding>>) -> (Option
     let mut bounded = false;
     for binding in values {
         present |= binding.is_some();
-        let values = binding.map_or_else(|| vec![BindingValue::Undetermined], |b| b.values.clone());
+        let values = binding.map_or_else(
+            || vec![BindingValue::RuntimeUnknown(Some(String::new()))],
+            |b| b.values.clone(),
+        );
         for value in values {
             if !joined.contains(&value) {
                 if joined.len() == 512 {
@@ -395,25 +427,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             }
             let mut binding = values
                 .iter()
-                .map(|v| {
-                    if v.word.vars.iter().any(|name| {
-                        assignment_scope.bindings.get(name).is_some_and(|binding| {
-                            binding.values.iter().any(|value| {
-                                matches!(
-                                    value,
-                                    BindingValue::RuntimeUnknown(_)
-                                        | BindingValue::RuntimeDerived(_)
-                                )
-                            })
-                        })
-                    }) {
-                        BindingValue::RuntimeDerived(v.word.text.clone())
-                    } else if v.word.expands {
-                        BindingValue::RuntimeUnknown(Some(v.word.text.clone()))
-                    } else {
-                        BindingValue::Known(v.word.text.clone())
-                    }
-                })
+                .map(|v| assignment_scope.expanded_binding(&v.word, &v.word.text))
                 .collect::<Vec<_>>();
             let (name, append) = name
                 .strip_suffix('+')
@@ -1018,21 +1032,27 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
                 inner.loops.push(Vec::new());
                 self.run(body, &mut inner, depth + 1, source_id, nested)?;
-                let first = inner.clone();
-                if !matches!(iterations, Some(0 | 1)) {
+                let mut branches = vec![before, inner.clone()];
+                let mut completed = 1;
+                while iterations.is_none_or(|n| completed < n) {
+                    let prior = inner.clone();
                     self.run(body, &mut inner, depth + 1, source_id, nested)?;
-                    if (inner.bindings != first.bindings
-                        || inner.directory.current != first.directory.current
-                        || inner.directory.alternatives != first.directory.alternatives)
-                        && iterations.is_none_or(|n| n > 2)
+                    completed += 1;
+                    branches.push(inner.clone());
+                    if inner.bindings == prior.bindings
+                        && inner.directory.current == prior.directory.current
+                        && inner.directory.alternatives == prior.directory.alternatives
                     {
+                        break;
+                    }
+                    if self.inspected >= 512 || completed >= 512 {
                         self.output.gap(CoverageGap::InspectionBudget);
+                        break;
                     }
                 }
                 let early = inner.loops.pop().ok_or(CheckError {
                     kind: crate::CheckErrorKind::GuardFault,
                 })?;
-                let mut branches = vec![before, first, inner.clone()];
                 branches.extend(early.into_iter().map(|state| inner.with_state(state)));
                 if *empty {
                     branches.truncate(1);
@@ -1068,22 +1088,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 if local {
                     scope.local(name);
                 }
-                let mut values = vec![if word.vars.iter().any(|name| {
-                    scope.bindings.get(name).is_some_and(|binding| {
-                        binding.values.iter().any(|value| {
-                            matches!(
-                                value,
-                                BindingValue::RuntimeUnknown(_) | BindingValue::RuntimeDerived(_)
-                            )
-                        })
-                    })
-                }) {
-                    BindingValue::RuntimeDerived(value.into())
-                } else if word.expands {
-                    BindingValue::RuntimeUnknown(Some(value.into()))
-                } else {
-                    BindingValue::Known(value.into())
-                }];
+                let mut values = vec![scope.expanded_binding(word, value)];
                 if top_local {
                     let prior = scope
                         .bindings
@@ -1100,8 +1105,16 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
                 scope.assign(name.into(), values);
             } else if local && identifier(&word.text) {
+                let mut values = scope
+                    .bindings
+                    .get(&word.text)
+                    .map_or_else(Vec::new, |binding| binding.values.clone());
+                let unset = BindingValue::RuntimeUnknown(Some(String::new()));
+                if !values.contains(&unset) {
+                    values.push(unset);
+                }
                 scope.local(&word.text);
-                scope.assign(word.text.clone(), vec![BindingValue::Undetermined]);
+                scope.assign(word.text.clone(), values);
             }
         }
     }
@@ -1633,7 +1646,7 @@ mod tests {
         );
     }
     #[test]
-    fn loop_directory_loss_has_an_explicit_gap() {
+    fn finite_loop_retains_all_directory_candidates() {
         let data: serde_json::Value =
             serde_json::from_str(include_str!("../../tests/fixtures/rust-m2-1.json")).unwrap();
         let row = data["rows"]
@@ -1652,14 +1665,14 @@ mod tests {
                 .any(|path| path.render() == "/h/project")
         );
         assert!(
-            !scope
+            scope
                 .directory
                 .alternatives
                 .iter()
                 .any(|path| path.render() == "/h")
         );
         assert!(
-            result.gaps.contains(&CoverageGap::InspectionBudget),
+            !result.gaps.contains(&CoverageGap::InspectionBudget),
             "{result:?}"
         );
     }
