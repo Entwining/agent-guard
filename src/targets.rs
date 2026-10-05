@@ -4,6 +4,9 @@ pub use crate::record::Target;
 use crate::record::{Direction, Effect, HostFacts, Via, Walk, Word};
 mod clients;
 mod secrets;
+const READERS: &str = "cat head tail less more bat sed awk jq yq base64 xxd od strings diff openssl plutil cp tee tar source . sort uniq cut nl fold rev paste comm join iconv hexdump hd zcat gzcat bzcat xzcat ag ack tac column pr vim vi nvim view perl ruby dd scp rsync zip ed ex hg svn sh bash zsh dash ksh wget php zgrep zless zmore";
+const DATA_PROGRAMS: &str = "echo printf print : true false export set unset typeset declare local";
+
 #[derive(Debug, Default)]
 pub struct Effects {
     pub targets: Vec<Target>,
@@ -83,6 +86,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         "egrep" | "fgrep" => "grep",
         name => name,
     };
+    let cwd_program = program;
     let program = ["python", "node", "ruby", "perl", "php", "lua"]
         .into_iter()
         .find(|base| {
@@ -354,15 +358,46 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
     }
     effects.hidden_content |= hidden_items_read;
     effects.dump |= effects.inline.iter().any(|code| printenv_signature(code));
-    let display = "cat head tail less more bat sed awk jq yq base64 xxd od strings diff openssl plutil cp tee tar source . sort uniq cut nl fold rev paste comm join iconv hexdump hd zcat gzcat bzcat xzcat ag ack tac column pr vim vi nvim view perl ruby dd scp rsync zip ed ex hg svn sh bash zsh dash ksh wget php zgrep zless zmore echo printf print".split_whitespace().any(|name| name == program)
-        && !(program != "echo" && ["printf", "print"].contains(&program) && args.first().is_some_and(|arg| arg == "-v"));
+    let display = READERS
+        .split_whitespace()
+        .chain(["echo", "printf", "print"])
+        .any(|name| name == program)
+        && !(program != "echo"
+            && ["printf", "print"].contains(&program)
+            && args.first().is_some_and(|arg| arg == "-v"));
     effects.variable |= display
         && command
             .redirects
             .iter()
             .flat_map(|r| &r.vars)
             .any(|name| secret_name(name));
+    // Go's command cwd owner (native/targets/infer.go:219-226) also covers
+    // unknown programs; reader arguments alone do not model their behavior.
+    let named = effects.targets.iter().any(|target| {
+        matches!(target.via, Via::Operand | Via::Cwd | Via::Scan)
+            && !matches!(target.effect, Effect::Enter | Effect::Name)
+    });
+    if !DATA_PROGRAMS
+        .split_whitespace()
+        .any(|name| name == cwd_program)
+        && !["cd", "pushd", "popd"].contains(&cwd_program)
+        && (!named || !modelled_program(cwd_program))
+    {
+        effects.targets.push(Target::new(
+            cwd.to_owned(),
+            Effect::Enter,
+            Walk::None,
+            Via::Cwd,
+        ));
+    }
     effects
+}
+
+fn modelled_program(program: &str) -> bool {
+    // Keep the model boundary aligned with native/targets/programs.go Specs.
+    READERS.split_whitespace().chain(DATA_PROGRAMS.split_whitespace()).chain(
+        "stat test [ chmod chown chgrp chflags touch rm rmdir mkdir mv ln wc file shasum sha1sum sha256sum md5 md5sum cksum realpath readlink basename dirname cd pushd popd gh ls tree du install sftp curl git docker node bun deno kubectl ssh ssh-add ssh-keygen dotenvx npm pnpm yarn rg grep find fd".split_whitespace()
+    ).any(|name| name == program)
 }
 
 fn printenv_signature(code: &str) -> bool {

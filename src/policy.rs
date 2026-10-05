@@ -435,7 +435,9 @@ impl Inspection<'_> {
                 self.target(
                     &target,
                     cwd,
-                    if depth > 0 || command.nested {
+                    if target.via == Via::Cwd {
+                        EffectSource::Cwd
+                    } else if depth > 0 || command.nested {
                         EffectSource::Nested
                     } else {
                         EffectSource::Operand
