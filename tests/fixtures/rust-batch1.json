@@ -30,7 +30,7 @@
     {"id":"b4-absolute-cd-while","partition":"batch1-loop-convergence","source":"while true; do cd /tmp; ls; done","expected":"N"},
     {"id":"b4-binding-three","partition":"batch1-loop-convergence","source":"a=0; b=0; for i in 1 2 3; do a=$b; b=1; done; printf '%s' \"$a\"","expected":"N"},
     {"id":"b4-nonconverging-public","partition":"batch1-loop-convergence","source":"while true; do cd child; done; ls","expected":"UR","gap":"InspectionBudget"},
-    {"id":"b3-local-known-sibling","partition":"batch1-join","source":"D=~/Library/Containers/com.example.syn/Data; f(){ local D; cat \"$D/x\"; }; f","expected":"D"},
+    {"id":"b3-local-known-sibling","partition":"batch1-join","source":"D=~/Library/Containers/com.example.syn/Data; f(){ local D; cat \"$D/x\"; }; f","expected":"N"},
     {"id":"b5-oldpwd-constant","partition":"batch1-directory-comparison","cwd":"/h/project/a/b","source":"for i in 1 2 3; do cd ..; OLDPWD=/x; done; ls Library/Containers/com.example.syn/Data","expected":"D","reason":"read protected App Data"},
     {"id":"b5-two-iteration-control","partition":"batch1-directory-comparison","cwd":"/h/project/a/b","source":"for i in 1 2; do cd ..; OLDPWD=/x; done; ls Library/Containers/com.example.syn/Data","expected":"N"}
   ]

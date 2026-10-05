@@ -603,13 +603,17 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 scope.assign(name.clone(), values.clone());
             }
             if let Some(index) = program {
-                for word in &argv[index + 1..] {
-                    // These builtins consume variable names, not arithmetic values.
-                    if !(resolved.shell
+                for (position, word) in argv[index + 1..].iter().enumerate() {
+                    let name_operand = resolved.shell
                         && !self.functions.contains_key(&argv[index].text)
-                        && matches!(argv[index].text.as_str(), "unset" | "export")
-                        && identifier(&word.text))
-                    {
+                        && identifier(&word.text)
+                        && match argv[index].text.as_str() {
+                            "unset" | "export" | "read" => true,
+                            "printf" => position == 1 && argv[index + 1] == "-v",
+                            "local" | "declare" | "typeset" => !scope.frames.is_empty(),
+                            _ => false,
+                        };
+                    if !name_operand {
                         self.armed_word(word, scope, depth)?;
                     }
                 }
@@ -737,24 +741,39 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             && (!scope.bindings.contains_key("IFS"))
                             && (argv.iter().any(|word| word == "-r")
                                 || literal.is_none_or(|literal| !literal.target.contains('\\')));
+                        let eof = targets.iter().any(|target| {
+                            target.direction == crate::record::Direction::In
+                                && target.target == "/dev/null"
+                                && !target.expands
+                        });
                         for word in &argv[index + 1..] {
                             if identifier(&word.text) {
-                                scope.assign(
-                                    word.text.clone(),
-                                    vec![if modeled && let Some(literal) = literal {
-                                        BindingValue::Known(
-                                            literal
-                                                .target
-                                                .lines()
-                                                .next()
-                                                .unwrap_or("")
-                                                .trim_matches([' ', '\t'])
-                                                .to_owned(),
-                                        )
-                                    } else {
-                                        BindingValue::RuntimeUnknown(None)
-                                    }],
-                                );
+                                let value = if modeled && let Some(literal) = literal {
+                                    BindingValue::Known(
+                                        literal
+                                            .target
+                                            .lines()
+                                            .next()
+                                            .unwrap_or("")
+                                            .trim_matches([' ', '\t'])
+                                            .to_owned(),
+                                    )
+                                } else if modeled && eof {
+                                    BindingValue::Known(String::new())
+                                } else {
+                                    BindingValue::RuntimeUnknown(None)
+                                };
+                                let mut values = vec![value];
+                                // An unsupported option can reject the write in one
+                                // executor (notably zsh's read -a), preserving the old value.
+                                if !modeled && let Some(prior) = scope.bindings.get(&word.text) {
+                                    for value in &prior.values {
+                                        if !values.contains(value) {
+                                            values.push(value.clone());
+                                        }
+                                    }
+                                }
+                                scope.assign(word.text.clone(), values);
                             }
                         }
                         if !modeled
@@ -1356,16 +1375,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     })
                     .exported = exported;
             } else if local && identifier(&word.text) {
-                let mut values = scope
-                    .bindings
-                    .get(&word.text)
-                    .map_or_else(Vec::new, |binding| binding.values.clone());
-                let unset = BindingValue::RuntimeUnknown(Some(String::new()));
-                if !values.contains(&unset) {
-                    values.push(unset);
-                }
                 scope.local(&word.text);
-                scope.assign(word.text.clone(), values);
+                scope.assign(word.text.clone(), vec![BindingValue::Known(String::new())]);
             }
             if let Some(arithmetic) = arithmetic {
                 let name = assignment(&word.text).map_or(word.text.as_str(), |(name, _)| name);
