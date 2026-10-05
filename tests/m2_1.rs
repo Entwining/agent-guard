@@ -84,6 +84,14 @@ fn moving_loop_directory_refuses_after_the_bound() {
     partition("loop-cwd");
 }
 #[test]
+fn oldpwd_bindings_move_the_tracked_directory() {
+    partition("cwd-oldpwd");
+}
+#[test]
+fn two_operand_cd_retains_both_shell_readings() {
+    partition("cwd-two-operands");
+}
+#[test]
 fn visible_file_roots_list() {
     partition("files-visible");
 }

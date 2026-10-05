@@ -1215,7 +1215,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             return;
         }
         let args = &command.argv[index + 1..];
-        let operand = args.iter().position(|w| !w.starts_with('-'));
+        let operand = args
+            .iter()
+            .position(|w| !w.starts_with('-') || program == "cd" && w == "-");
         let target = if let Some(operand) = operand {
             args[operand].text.clone()
         } else if program == "cd"
@@ -1243,7 +1245,60 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             modes.contains(&b'P') && operand.is_none_or(|i| !args[i].expands && !args[i].globs);
         let disputed = physical && modes.last() == Some(&b'L');
         let mut targets = vec![target.clone()];
+        let oldpwd = program == "cd" && target == "-";
+        if oldpwd {
+            targets.clear();
+            if let Some(binding) = scope.bindings.get("OLDPWD") {
+                for value in &binding.values {
+                    match value {
+                        BindingValue::Known(value) => targets.push(value.clone()),
+                        BindingValue::Undetermined => {
+                            self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                        }
+                        BindingValue::RuntimeUnknown(_) => {}
+                    }
+                }
+            }
+            if targets.is_empty() {
+                return;
+            }
+        } else if program == "cd"
+            && let Some(operand) = operand
+            && args.len() == operand + 2
+            && !args[operand].expands
+            && !args[operand + 1].expands
+        {
+            let mut readings = std::iter::once(scope.directory.current.render())
+                .chain(
+                    scope
+                        .directory
+                        .alternatives
+                        .iter()
+                        .map(cwd::CwdPath::render),
+                )
+                .collect::<Vec<_>>();
+            if let Some(binding) = scope.bindings.get("PWD") {
+                for value in &binding.values {
+                    match value {
+                        BindingValue::Known(value) => readings.push(value.clone()),
+                        BindingValue::Undetermined => {
+                            self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                        }
+                        BindingValue::RuntimeUnknown(_) => {}
+                    }
+                }
+            }
+            for reading in readings {
+                if reading.contains(&target) {
+                    let replaced = reading.replacen(&target, &args[operand + 1].text, 1);
+                    if !targets.contains(&replaced) {
+                        targets.push(replaced);
+                    }
+                }
+            }
+        }
         if operand.is_some()
+            && !oldpwd
             && !target.starts_with(['/', '.'])
             && let Some(binding) = scope.bindings.get("CDPATH")
         {
@@ -1260,6 +1315,13 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
             }
         }
+        scope.assign(
+            "OLDPWD".into(),
+            std::iter::once(&scope.directory.current)
+                .chain(&scope.directory.alternatives)
+                .map(|path| BindingValue::Known(path.render()))
+                .collect(),
+        );
         scope
             .directory
             .move_to(&targets, physical, disputed, self.frontend.host.home);
@@ -1580,6 +1642,25 @@ mod tests {
             result.gaps.contains(&CoverageGap::InspectionBudget),
             "{result:?}"
         );
+    }
+    #[test]
+    fn tracked_movement_updates_oldpwd_binding() {
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/rust-m2-1.json")).unwrap();
+        let row = data["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == "oldpwd-metadata-control")
+            .unwrap();
+        let mut scope = Scope::new("/h", "/h/project");
+        observation(row["source"].as_str().unwrap(), &mut scope);
+        assert!(
+            scope.bindings["OLDPWD"]
+                .values
+                .contains(&BindingValue::Known("/h/public".into()))
+        );
+        assert_eq!(scope.directory.current.render(), "/h/project");
     }
     #[test]
     fn binding_values_and_exit_snapshots_are_bounded() {
