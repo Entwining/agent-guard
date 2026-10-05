@@ -102,6 +102,7 @@ pub enum OptionRole {
     PatternFile,
     Arg,
     Glob,
+    Name,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {

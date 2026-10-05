@@ -1,7 +1,7 @@
 use crate::{CoverageGap, shell::CommandRecord};
 
 pub use crate::record::Target;
-use crate::record::{Direction, Effect, HostFacts, Via, Walk, Word};
+use crate::record::{Direction, Effect, HostFacts, OptionRole, Role, Via, Walk, Word};
 mod clients;
 mod secrets;
 const READERS: &str = "cat head tail less more bat sed awk jq yq base64 xxd od strings diff openssl plutil cp tee tar source . sort uniq cut nl fold rev paste comm join iconv hexdump hd zcat gzcat bzcat xzcat ag ack tac column pr vim vi nvim view perl ruby dd scp rsync zip ed ex hg svn sh bash zsh dash ksh wget php zgrep zless zmore";
@@ -98,42 +98,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         })
         .unwrap_or(program);
     let args = &command.argv[index + 1..];
-    // Search selectors are claimed by their adapter before generic operands
-    // (native/targets/search.go:43-53). Other global values are names.
-    let args = if !["rg", "grep", "ag", "ack"].contains(&program)
-        && args.iter().any(|arg| {
-            ["--exclude", "--exclude-dir", "--include"]
-                .contains(&arg.split_once('=').map_or(arg.as_str(), |(key, _)| key))
-        }) {
-        let mut remaining = Vec::new();
-        let mut position = 0;
-        while let Some(arg) = args.get(position) {
-            let (key, inline) = arg
-                .split_once('=')
-                .map_or((arg.as_str(), None), |(key, value)| (key, Some(value)));
-            if ["--exclude", "--exclude-dir", "--include"].contains(&key) {
-                let value = inline.map(|value| arg.with_text(value.into())).or_else(|| {
-                    position += 1;
-                    args.get(position).cloned()
-                });
-                if let Some(value) = value {
-                    effects.targets.push(Target::from_word(
-                        &value,
-                        cwd,
-                        host,
-                        Effect::Name,
-                        Walk::None,
-                    ));
-                }
-            } else {
-                remaining.push(arg.clone());
-            }
-            position += 1;
-        }
-        std::borrow::Cow::Owned(remaining)
-    } else {
-        std::borrow::Cow::Borrowed(args)
-    };
+    let args = label_options(program, args, cwd, host, &mut effects);
     let args = args.as_ref();
     if command.argv[index].contains('/') {
         let mut target =
@@ -201,7 +166,11 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             word,
             cwd,
             host,
-            Effect::Read,
+            if word.role == Role::Option(OptionRole::Name) {
+                Effect::Name
+            } else {
+                Effect::Read
+            },
             if recursive { Walk::Visible } else { Walk::None },
         )
     };
@@ -428,8 +397,13 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
     if let Some(walk) = generic_walk {
         for (index, arg) in args.iter().enumerate() {
             if !claimed.contains(&index)
+                && arg.role != Role::Option(OptionRole::Name)
                 && arg.as_str() != "__observed_stream__"
-                && let Some(value) = operand_value(arg)
+                && let Some(value) = if arg.role == Role::Path {
+                    (!arg.value.is_empty()).then_some(arg.value.as_str())
+                } else {
+                    operand_value(arg)
+                }
             {
                 effects.targets.push(Target::from_word(
                     &arg.with_text(value.into()),
@@ -476,6 +450,50 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         ));
     }
     effects
+}
+
+fn label_options<'a>(
+    program: &str,
+    args: &'a [Word],
+    cwd: &str,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) -> std::borrow::Cow<'a, [Word]> {
+    let mut labelled = std::borrow::Cow::Borrowed(args);
+    let mut options = true;
+    // Go resolves program options before GlobalOptions (infer.go:87-104).
+    // Keep values in place so an adapter can claim a stronger program role.
+    for (index, word) in args.iter().enumerate() {
+        if word == "--" {
+            options = false;
+            continue;
+        }
+        if !options {
+            labelled.to_mut()[index].role = Role::Path;
+            continue;
+        }
+        let key = if word.value.starts_with('-') {
+            word.value.split_once('=').map_or("", |(key, _)| key)
+        } else {
+            args.get(index.wrapping_sub(1)).map_or("", Word::as_str)
+        };
+        if clients::option(program, key).is_none()
+            && ["--exclude", "--exclude-dir", "--include"].contains(&key)
+        {
+            labelled.to_mut()[index].role = Role::Option(OptionRole::Name);
+            let value = operand_value(word).unwrap_or(&word.text);
+            let mut target = Target::from_word(
+                &word.with_text(value.into()),
+                cwd,
+                host,
+                Effect::Name,
+                Walk::None,
+            );
+            target.via = Via::Option;
+            effects.targets.push(target);
+        }
+    }
+    labelled
 }
 
 fn modelled_program(program: &str) -> bool {
@@ -922,6 +940,9 @@ fn infer_listing(
     let mut skip = false;
     let mut pattern = program != "fd";
     for (index, arg) in args.iter().enumerate() {
+        if arg.role == Role::Option(OptionRole::Name) {
+            continue;
+        }
         if skip {
             skip = false;
             continue;
@@ -1098,6 +1119,10 @@ fn infer_tar(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
     let mut index = 0;
     while index < args.len() {
         let arg = &args[index];
+        if arg.role == Role::Option(OptionRole::Name) {
+            index += 1;
+            continue;
+        }
         let cluster = !arg.starts_with("--") && (index == 0 || arg.starts_with('-'));
         if cluster {
             create |= arg.contains('c');

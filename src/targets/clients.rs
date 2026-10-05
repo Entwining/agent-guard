@@ -1,5 +1,5 @@
 use super::{operand_value, space};
-use crate::record::{Effect, HostFacts, Target, Via, Walk, Word};
+use crate::record::{Effect, HostFacts, OptionRole, Role, Target, Via, Walk, Word};
 
 struct Spec {
     operand: Effect,
@@ -37,6 +37,13 @@ fn spec(program: &str) -> Spec {
         _ => {}
     }
     spec
+}
+
+pub(super) fn option(program: &str, key: &str) -> Option<Effect> {
+    spec(program)
+        .options
+        .iter()
+        .find_map(|(name, effect)| (*name == key).then_some(*effect))
 }
 
 struct Context<'a> {
@@ -78,6 +85,9 @@ impl<'a> Context<'a> {
         &mut self.targets[at]
     }
     fn option_effect(&self, index: usize) -> Option<Effect> {
+        if self.words[index].role == Role::Path {
+            return None;
+        }
         let value = &self.words[index].value;
         let previous = self.text(index.wrapping_sub(1));
         let key = if value.starts_with('-') {
@@ -104,10 +114,11 @@ impl<'a> Context<'a> {
             .next_back();
         let sends = self.spec.remote && self.words.iter().any(|word| remote(&word.value));
         for (index, word) in self.words.iter().enumerate() {
-            if self.claimed[index] {
+            if self.claimed[index] || word.role == Role::Option(OptionRole::Name) {
                 continue;
             }
-            if let Some(flags) = word.strip_prefix('-').filter(|s| !s.starts_with('-'))
+            if word.role != Role::Path
+                && let Some(flags) = word.strip_prefix('-').filter(|s| !s.starts_with('-'))
                 && let Some((at, (_, effect))) = flags.char_indices().find_map(|(at, letter)| {
                     self.spec
                         .options
@@ -131,7 +142,12 @@ impl<'a> Context<'a> {
                     continue;
                 }
             }
-            let Some(value) = operand_value(word) else {
+            let value = if word.role == Role::Path {
+                (!word.value.is_empty()).then_some(word.value.as_str())
+            } else {
+                operand_value(word)
+            };
+            let Some(value) = value else {
                 continue;
             };
             let mut effect = self.option_effect(index).unwrap_or(self.spec.operand);
@@ -320,6 +336,10 @@ fn curl(context: &mut Context<'_>) {
             let target = context.add(&decoded, Some(index), Effect::Read, None);
             target.via = Via::Operand;
             target.glob = decoded.contains(['[', '{']);
+            index += 1;
+            continue;
+        }
+        if word.role == Role::Option(OptionRole::Name) {
             index += 1;
             continue;
         }
