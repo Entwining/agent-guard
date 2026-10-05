@@ -98,6 +98,43 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         })
         .unwrap_or(program);
     let args = &command.argv[index + 1..];
+    // Search selectors are claimed by their adapter before generic operands
+    // (native/targets/search.go:43-53). Other global values are names.
+    let args = if !["rg", "grep", "ag", "ack"].contains(&program)
+        && args.iter().any(|arg| {
+            ["--exclude", "--exclude-dir", "--include"]
+                .contains(&arg.split_once('=').map_or(arg.as_str(), |(key, _)| key))
+        }) {
+        let mut remaining = Vec::new();
+        let mut position = 0;
+        while let Some(arg) = args.get(position) {
+            let (key, inline) = arg
+                .split_once('=')
+                .map_or((arg.as_str(), None), |(key, value)| (key, Some(value)));
+            if ["--exclude", "--exclude-dir", "--include"].contains(&key) {
+                let value = inline.map(|value| arg.with_text(value.into())).or_else(|| {
+                    position += 1;
+                    args.get(position).cloned()
+                });
+                if let Some(value) = value {
+                    effects.targets.push(Target::from_word(
+                        &value,
+                        cwd,
+                        host,
+                        Effect::Name,
+                        Walk::None,
+                    ));
+                }
+            } else {
+                remaining.push(arg.clone());
+            }
+            position += 1;
+        }
+        std::borrow::Cow::Owned(remaining)
+    } else {
+        std::borrow::Cow::Borrowed(args)
+    };
+    let args = args.as_ref();
     if command.argv[index].contains('/') {
         let mut target =
             Target::from_word(&command.argv[index], cwd, host, Effect::Use, Walk::Visible);
@@ -168,6 +205,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             if recursive { Walk::Visible } else { Walk::None },
         )
     };
+    let mut generic_walk = None;
+    let mut claimed = Vec::new();
     match program {
         "__observed_stream__" => effects.gaps.push(CoverageGap::UnresolvedTarget),
         "printf" | "echo" | "print" => {
@@ -230,12 +269,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
         "cat" | "head" | "tail" | "less" | "more" | "bat" | "sort" | "uniq" | "cut" | "nl"
         | "base64" | "xxd" | "od" | "strings" => {
-            for path in args
-                .iter()
-                .filter(|s| !s.starts_with('-') && s.as_str() != "__observed_stream__")
-            {
-                effects.targets.push(read(path, false));
-            }
+            generic_walk = Some(Walk::None);
             if command.unresolved() {
                 effects.gaps.push(CoverageGap::UnresolvedTarget);
             }
@@ -277,7 +311,10 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         "fd" | "tree" | "du" | "find" => {
             infer_listing(program, args, command, cwd, host, &mut effects, depth)
         }
-        "tar" => infer_tar(args, cwd, host, &mut effects),
+        "tar" => {
+            claimed = infer_tar(args, cwd, host, &mut effects);
+            generic_walk = Some(Walk::Visible);
+        }
         "rm" => {
             // native/targets/programs.go:42-48 assigns metadata operands.
             effects.targets.extend(
@@ -383,12 +420,24 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.gaps.push(CoverageGap::UnknownProgram {
                 program: program.to_owned(),
             });
-            for arg in args {
-                if let Some(value) = clients::operand_value(arg) {
-                    effects
-                        .targets
-                        .push(read(&arg.with_text(value.into()), false));
-                }
+            generic_walk = Some(Walk::None);
+        }
+    }
+    // Go's generic operand loop owns unclaimed glued values, including readers
+    // (native/targets/infer.go:79-95,187-209); special adapters retain their roles.
+    if let Some(walk) = generic_walk {
+        for (index, arg) in args.iter().enumerate() {
+            if !claimed.contains(&index)
+                && arg.as_str() != "__observed_stream__"
+                && let Some(value) = operand_value(arg)
+            {
+                effects.targets.push(Target::from_word(
+                    &arg.with_text(value.into()),
+                    cwd,
+                    host,
+                    Effect::Read,
+                    walk,
+                ));
             }
         }
     }
@@ -1038,7 +1087,8 @@ fn content_consumer(name: &str) -> bool {
     .contains(&name)
 }
 
-fn infer_tar(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effects) {
+fn infer_tar(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effects) -> Vec<usize> {
+    let mut claimed = Vec::new();
     let mut archive = None;
     let mut create = false;
     let mut extract = false;
@@ -1049,20 +1099,6 @@ fn infer_tar(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
     while index < args.len() {
         let arg = &args[index];
         let cluster = !arg.starts_with("--") && (index == 0 || arg.starts_with('-'));
-        // Global pattern-name options are owned by native/targets/programs.go:33.
-        if ["--exclude", "--exclude-dir", "--include"].contains(&arg.as_str()) {
-            if let Some(pattern) = args.get(index + 1) {
-                effects.targets.push(Target::from_word(
-                    pattern,
-                    cwd,
-                    host,
-                    Effect::Name,
-                    Walk::None,
-                ));
-            }
-            index += 2;
-            continue;
-        }
         if cluster {
             create |= arg.contains('c');
             extract |= arg.contains('x');
@@ -1074,8 +1110,10 @@ fn infer_tar(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
         if arg == "--file" || cluster && arg.ends_with('f') {
             index += 1;
             archive = args.get(index).cloned();
+            claimed.push(index);
         } else if let Some(path) = arg.strip_prefix("--file=") {
             archive = Some(arg.with_text(path.to_owned()));
+            claimed.push(index);
         } else if let Some(path) = arg.strip_prefix("--directory=").or_else(|| {
             arg.strip_prefix('-')
                 .filter(|flags| !flags.starts_with('-'))
@@ -1083,13 +1121,16 @@ fn infer_tar(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
                 .filter(|path| !path.is_empty())
         }) {
             base = crate::filesystem::normalize(path, &base, host.home);
+            claimed.push(index);
         } else if arg == "-C" || arg == "--directory" || arg == "--cd" {
             index += 1;
+            claimed.push(index);
             if let Some(path) = args.get(index) {
                 base = crate::filesystem::normalize(path, &base, "");
             }
         } else if !cluster && !arg.starts_with('-') {
             operands.push(arg.clone());
+            claimed.push(index);
         }
         index += 1;
     }
@@ -1120,6 +1161,34 @@ fn infer_tar(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
             .targets
             .push(Target::new(base, Effect::Write, Walk::None, Via::Operand));
     }
+    claimed
+}
+
+fn operand_value(word: &Word) -> Option<&str> {
+    let mut value = word.value.as_str();
+    if value.starts_with('-') {
+        value = value.split_once('=')?.1;
+    }
+    if let Some(path) = value.strip_prefix('@') {
+        return (!path.is_empty()).then_some(path);
+    }
+    if let Some(at) = value.find('@') {
+        let prefix = &value[..at];
+        if (prefix.ends_with('=') || prefix.ends_with(':'))
+            && prefix
+                .trim_end_matches(['=', ':'])
+                .chars()
+                .all(|c| !matches!(c, '=' | '@') && !space(c))
+            && !prefix.trim_end_matches(['=', ':']).is_empty()
+        {
+            value = &value[at + 1..];
+        }
+    }
+    (!value.is_empty()).then_some(value)
+}
+
+fn space(c: char) -> bool {
+    c.is_whitespace() && c != '\u{85}' || c == '\u{feff}'
 }
 
 fn infer_search(

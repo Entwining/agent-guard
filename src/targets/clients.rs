@@ -1,3 +1,4 @@
+use super::{operand_value, space};
 use crate::record::{Effect, HostFacts, Target, Via, Walk, Word};
 
 struct Spec {
@@ -159,33 +160,6 @@ fn remote(value: &str) -> bool {
             let host = host.rsplit_once('@').map_or(host, |(_, host)| host);
             !host.is_empty() && !host.contains(['/', '@', ':'])
         })
-}
-
-pub(super) fn operand_value(word: &Word) -> Option<&str> {
-    let mut value = word.value.as_str();
-    if value.starts_with('-') {
-        value = value.split_once('=')?.1;
-    }
-    if let Some(path) = value.strip_prefix('@') {
-        return (!path.is_empty()).then_some(path);
-    }
-    if let Some(at) = value.find('@') {
-        let prefix = &value[..at];
-        if (prefix.ends_with('=') || prefix.ends_with(':'))
-            && prefix
-                .trim_end_matches(['=', ':'])
-                .chars()
-                .all(|c| !matches!(c, '=' | '@') && !space(c))
-            && !prefix.trim_end_matches(['=', ':']).is_empty()
-        {
-            value = &value[at + 1..];
-        }
-    }
-    (!value.is_empty()).then_some(value)
-}
-
-fn space(c: char) -> bool {
-    c.is_whitespace() && c != '\u{85}' || c == '\u{feff}'
 }
 
 pub(super) fn infer(program: &str, words: &[Word], cwd: &str, host: HostFacts<'_>) -> Vec<Target> {
