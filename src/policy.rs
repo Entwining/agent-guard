@@ -315,7 +315,10 @@ impl Inspection<'_> {
                     }
                     Identity::Protected(_) => self.context.home.clone(),
                 };
-                if target.walk != Walk::None && filesystem::broad_root(&path, &resolved_home) {
+                if target.walk != Walk::None
+                    && (target.effect != Effect::Name || target.glob)
+                    && filesystem::broad_root(&path, &resolved_home)
+                {
                     self.effect(EffectRecord::BroadRoot);
                     self.denial.get_or_insert_with(|| {
                         format!(

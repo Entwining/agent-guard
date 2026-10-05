@@ -59,3 +59,13 @@ fn partition(name: &str) {
 fn client_specs_preserve_file_roles() {
     partition("spec");
 }
+
+#[test]
+fn curl_file_inputs_and_outputs_follow_go() {
+    partition("curl");
+}
+
+#[test]
+fn wget_file_inputs_and_outputs_follow_go() {
+    partition("wget");
+}

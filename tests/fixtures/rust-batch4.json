@@ -1889,6 +1889,13 @@
       "partition": "docker",
       "source": "docker run img --volume=public:/tmp",
       "expected": "N"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "curl-name-home-control",
+      "partition": "curl",
+      "source": "curl $HOME",
+      "expected": "N"
     }
   ]
 }

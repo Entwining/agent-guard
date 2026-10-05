@@ -273,7 +273,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
         "tar" => infer_tar(args, cwd, host, &mut effects),
         "git" => infer_git(args, cwd, host, &mut effects),
-        "ssh" | "scp" | "sftp" | "ssh-keygen" | "dd" | "kubectl" | "npm" => {
+        "ssh" | "scp" | "sftp" | "ssh-keygen" | "dd" | "kubectl" | "npm" | "curl" | "wget" => {
             effects
                 .targets
                 .extend(clients::infer(program, args, cwd, host));

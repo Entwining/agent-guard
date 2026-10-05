@@ -21,6 +21,14 @@ fn spec(program: &str) -> Spec {
         "ssh-keygen" => spec.options = &[("-f", Effect::Use)],
         "kubectl" => spec.options = &[("--kubeconfig", Effect::Use)],
         "npm" => spec.options = &[("--userconfig", Effect::Use)],
+        "curl" => {
+            spec.operand = Effect::Name;
+            spec.options = CURL_USE;
+        }
+        "wget" => {
+            spec.operand = Effect::Name;
+            spec.options = WGET_USE;
+        }
         _ => {}
     }
     spec
@@ -35,8 +43,8 @@ struct Context<'a> {
     targets: Vec<Target>,
 }
 
-impl Context<'_> {
-    fn text(&self, index: usize) -> &str {
+impl<'a> Context<'a> {
+    fn text(&self, index: usize) -> &'a str {
         self.words.get(index).map_or("", Word::as_str)
     }
     fn add(
@@ -187,6 +195,8 @@ pub(super) fn infer(program: &str, words: &[Word], cwd: &str, host: HostFacts<'_
     };
     match program {
         "ssh" | "scp" | "sftp" => ssh(program, &mut context),
+        "curl" => curl(&mut context),
+        "wget" => wget(&mut context),
         "dd" => {
             for (index, word) in words.iter().enumerate() {
                 context.claimed[index] = true;
@@ -201,6 +211,327 @@ pub(super) fn infer(program: &str, words: &[Word], cwd: &str, host: HostFacts<'_
     }
     context.fallback();
     context.targets
+}
+
+pub(super) const CURL_VALUE_LETTERS: &str = "AbcCdDeEFHKmoPQrTtuUwxXyYz";
+const CURL_USE: &[(&str, Effect)] = &[
+    ("--cacert", Effect::Use),
+    ("--capath", Effect::Use),
+    ("--cert", Effect::Use),
+    ("--key", Effect::Use),
+    ("-E", Effect::Use),
+    ("--netrc-file", Effect::Use),
+    ("--crlfile", Effect::Use),
+    ("--egd-file", Effect::Use),
+    ("--knownhosts", Effect::Use),
+    ("--proxy-cacert", Effect::Use),
+    ("--proxy-capath", Effect::Use),
+    ("--proxy-cert", Effect::Use),
+    ("--proxy-crlfile", Effect::Use),
+    ("--proxy-key", Effect::Use),
+    ("--random-file", Effect::Use),
+    ("--pubkey", Effect::Use),
+    ("--pinnedpubkey", Effect::Use),
+    ("--proxy-pinnedpubkey", Effect::Use),
+    ("--unix-socket", Effect::Use),
+];
+const WGET_USE: &[(&str, Effect)] = &[
+    ("--ca-certificate", Effect::Use),
+    ("--ca-directory", Effect::Use),
+    ("--certificate", Effect::Use),
+    ("--private-key", Effect::Use),
+    ("--crl-file", Effect::Use),
+    ("--random-file", Effect::Use),
+];
+const CURL_LONG: &[&str] = &[
+    "data",
+    "data-ascii",
+    "data-binary",
+    "data-urlencode",
+    "json",
+    "form",
+    "header",
+    "proxy-header",
+    "url-query",
+    "variable",
+    "upload-file",
+    "config",
+    "output",
+    "dump-header",
+    "write-out",
+    "cookie",
+    "etag-compare",
+    "cookie-jar",
+    "etag-save",
+    "libcurl",
+    "stderr",
+    "hsts",
+    "alt-svc",
+    "trace",
+    "trace-ascii",
+    "ssl-sessions",
+];
+const CURL_WRITES: &[&str] = &[
+    "o",
+    "output",
+    "D",
+    "dump-header",
+    "c",
+    "cookie-jar",
+    "etag-save",
+    "libcurl",
+    "stderr",
+    "hsts",
+    "alt-svc",
+    "trace",
+    "trace-ascii",
+    "ssl-sessions",
+];
+
+fn curl(context: &mut Context<'_>) {
+    let mut index = 0;
+    let mut remote_name = false;
+    let mut output_dir = None;
+    while let Some(word) = context.words.get(index) {
+        if word == "--" {
+            break;
+        }
+        let text = word.as_str();
+        remote_name |= ["--remote-name", "--remote-name-all"].contains(&text)
+            || text.starts_with('-') && !text[1..].contains('-') && text.ends_with('O');
+        if text == "--output-dir" || text.starts_with("--output-dir=") {
+            if !text.contains('=') {
+                index += 1;
+            }
+            output_dir = (index < context.words.len()).then_some(index);
+            if let Some(index) = output_dir {
+                context.claimed[index] = true;
+            }
+            index += 1;
+            continue;
+        }
+        let url = if text
+            .get(..6)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("--url="))
+        {
+            &text[6..]
+        } else {
+            text
+        };
+        if url
+            .get(..5)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("file:"))
+        {
+            let path = url[5..].strip_prefix("//").unwrap_or(&url[5..]);
+            let mut decoded = String::new();
+            let mut at = 0;
+            while at < path.len() {
+                if path.as_bytes()[at] == b'%'
+                    && let Some(pair) = path.get(at + 1..at + 3)
+                    && let Ok(value) = u8::from_str_radix(pair, 16)
+                {
+                    decoded.push(char::from(value));
+                    at += 3;
+                } else {
+                    let ch = path[at..].chars().next().unwrap_or_default();
+                    decoded.push(ch);
+                    at += ch.len_utf8();
+                }
+            }
+            let target = context.add(&decoded, Some(index), Effect::Read, None);
+            target.via = Via::Operand;
+            target.glob = decoded.contains(['[', '{']);
+            index += 1;
+            continue;
+        }
+        let mut key = "";
+        let mut value = "";
+        if let Some(option) = text.strip_prefix("--")
+            && CURL_LONG.contains(&option.split('=').next().unwrap_or(""))
+        {
+            key = option.split('=').next().unwrap_or("");
+            if let Some((_, attached)) = option.split_once('=') {
+                value = attached;
+            } else {
+                index += 1;
+                value = context.text(index);
+            }
+        } else if let Some(flags) = text
+            .strip_prefix('-')
+            .filter(|flags| !flags.starts_with('-'))
+            && let Some((at, letter)) = flags
+                .char_indices()
+                .find(|(_, letter)| CURL_VALUE_LETTERS.contains(*letter))
+        {
+            key = &flags[at..at + letter.len_utf8()];
+            value = &flags[at + letter.len_utf8()..];
+            if value.is_empty() {
+                index += 1;
+                value = context.text(index);
+            }
+        }
+        if index >= context.words.len() {
+            break;
+        }
+        match key {
+            "d" | "data" | "data-ascii" | "data-binary" | "data-urlencode" | "json" | "H"
+            | "header" | "proxy-header" | "url-query" | "variable" => {
+                if let Some((_, path)) = value.split_once('@').filter(|(_, path)| !path.is_empty())
+                {
+                    context
+                        .add(path, Some(index), Effect::Read, Some(true))
+                        .sends = true;
+                }
+            }
+            "F" | "form" => {
+                let file = value.split_once('=').map_or(value, |(_, value)| value);
+                let file = file.strip_prefix(['@', '<']).unwrap_or(file);
+                let file = file
+                    .strip_prefix('"')
+                    .and_then(|file| file.split_once('"').map(|(file, _)| file))
+                    .unwrap_or_else(|| file.split(';').next().unwrap_or(""));
+                context
+                    .add(file, Some(index), Effect::Read, Some(true))
+                    .sends = true;
+            }
+            "T" | "upload-file" | "K" | "config" | "etag-compare" => {
+                context.add(value, Some(index), Effect::Read, None).sends = true;
+            }
+            "w" | "write-out" if value.starts_with('@') && value.len() > 1 && value != "@-" => {
+                context.add(&value[1..], Some(index), Effect::Read, Some(true));
+            }
+            "b" | "cookie" if !value.is_empty() && !value.contains('=') => {
+                context.add(value, Some(index), Effect::Use, None);
+            }
+            key if CURL_WRITES.contains(&key) && !value.is_empty() => {
+                context.claimed[index] = true;
+                if value != "-" {
+                    context.add(value, Some(index), Effect::Write, None);
+                }
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    if remote_name {
+        let path = output_dir.map_or(".", |index| {
+            context
+                .text(index)
+                .strip_prefix("--output-dir=")
+                .unwrap_or(context.text(index))
+        });
+        context.add(path, output_dir, Effect::Write, None).walk = Walk::None;
+    }
+}
+
+const WGET_WRITES: &[&str] = &[
+    "output-document",
+    "output-file",
+    "append-output",
+    "directory-prefix",
+    "save-cookies",
+    "warc-file",
+    "hsts-file",
+];
+const WGET_LONG: &[&str] = &[
+    "post-file",
+    "body-file",
+    "input-file",
+    "output-document",
+    "output-file",
+    "append-output",
+    "directory-prefix",
+    "save-cookies",
+    "warc-file",
+    "hsts-file",
+    "execute",
+    "config",
+    "load-cookies",
+];
+
+fn wget(context: &mut Context<'_>) {
+    let mut placed = false;
+    for (index, word) in context.words.iter().enumerate() {
+        let text = word.as_str();
+        placed |= text == "--spider";
+        let (mut key, attached) = if let Some(option) = text.strip_prefix("--")
+            && WGET_LONG.contains(&option.split('=').next().unwrap_or(""))
+        {
+            (
+                option.split('=').next().unwrap_or(""),
+                option.split_once('=').map(|(_, value)| value),
+            )
+        } else if let Some(flags) = text.strip_prefix('-') {
+            let hit = flags
+                .char_indices()
+                .take_while(|(_, letter)| letter.is_ascii_alphabetic())
+                .find(|(_, letter)| "ieOPoa".contains(*letter));
+            if let Some((at, letter)) = hit {
+                let key = match letter {
+                    'i' => "input-file",
+                    'e' => "execute",
+                    'O' => "output-document",
+                    'P' => "directory-prefix",
+                    'o' => "output-file",
+                    _ => "append-output",
+                };
+                let value = &flags[at + 1..];
+                (key, (!value.is_empty()).then_some(value))
+            } else {
+                continue;
+            }
+        } else {
+            continue;
+        };
+        let holder = if attached.is_some() { index } else { index + 1 };
+        if holder >= context.words.len() {
+            continue;
+        }
+        let mut path = attached.unwrap_or_else(|| context.text(holder));
+        if key == "execute" {
+            let Some((name, value)) = path.trim_start_matches(space).split_once('=') else {
+                continue;
+            };
+            let name = name.trim_end_matches(space);
+            if name.is_empty()
+                || !name
+                    .chars()
+                    .all(|c| c.is_ascii_alphabetic() || matches!(c, '_' | '-'))
+            {
+                continue;
+            }
+            key = match name.to_ascii_lowercase().replace(['_', '-'], "").as_str() {
+                "postfile" => "post-file",
+                "bodyfile" => "body-file",
+                "input" => "input-file",
+                "outputdocument" => "output-document",
+                "logfile" => "output-file",
+                "dirprefix" => "directory-prefix",
+                "loadcookies" => "load-cookies",
+                "savecookies" => "save-cookies",
+                "warcfile" => "warc-file",
+                "hstsfile" => "hsts-file",
+                _ => continue,
+            };
+            path = value.trim_start_matches(space);
+        }
+        context.claimed[holder] = true;
+        placed |= matches!(key, "output-document" | "directory-prefix");
+        if key == "output-document" && path == "-" {
+            continue;
+        }
+        let effect = if WGET_WRITES.contains(&key) {
+            Effect::Write
+        } else {
+            Effect::Read
+        };
+        let target = context.add(path, Some(holder), effect, None);
+        target.walk = Walk::None;
+        target.sends = matches!(key, "post-file" | "body-file" | "config");
+    }
+    if !placed {
+        context.add(".", None, Effect::Write, None).walk = Walk::None;
+    }
 }
 
 fn ssh(program: &str, context: &mut Context<'_>) {
