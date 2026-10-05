@@ -1179,7 +1179,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             // target dependencies without inventing a separate adapter role table.
             let effects = crate::targets::infer(&command, &command.cwd, self.frontend.host);
             let relocated = crate::targets::infer(&command, "/", self.frontend.host);
-            if command.argv.iter().any(|word| word.pwd) || effects.targets != relocated.targets {
+            if command.argv.iter().any(|word| word.pwd)
+                || effects.targets != relocated.targets
+                || !effects.code.is_empty()
+                || !effects.inline.is_empty()
+            {
                 self.output.gap(gap.clone());
             }
         }

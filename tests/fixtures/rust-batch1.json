@@ -1,4 +1,5 @@
 {
+  "overflow": {"initial":"cd ~/Library/Containers/com.example.syn/Data; ","step":"cd /nonexistent/x$N; "},
   "rows": [
     {"id":"b1-concat-cat","partition":"batch1-runtime-text","source":"D=~/Library/Containers/com.example.syn/Data; s=$(echo x); E=\"$D/$s\"; cat \"$E\"","expected":"D","reason":"read protected App Data"},
     {"id":"b1-concat-ls","partition":"batch1-runtime-text","source":"D=~/Library/Containers/com.example.syn/Data; s=$(echo x); E=\"$D/$s\"; ls \"$E\"","expected":"D"},
@@ -8,6 +9,22 @@
     {"id":"b1-cwd-relative","partition":"batch1-runtime-text","source":"D=~/Library/Containers/com.example.syn; s=$(echo x); E=\"$D/$s\"; cd \"$E\"/..; ls Data","expected":"D"},
     {"id":"b1-export-concat","partition":"batch1-runtime-text","source":"D=~/Library/Containers/com.example.syn/Data; s=$(echo x); export E=\"$D/$s\"; cat \"$E\"","expected":"D"},
     {"id":"b1-ctrl-public","partition":"batch1-runtime-text","source":"D=/tmp; s=$(echo x); E=\"$D/$s\"; cat \"$E\"","expected":"UC","gap":"UnresolvedTarget"},
-    {"id":"b1-ctrl-glob","partition":"batch1-runtime-text","source":"D=/tmp; for n in public*; do D=$n; done; ls \"$D\"","expected":"UC","gap":"UnresolvedTarget"}
+    {"id":"b1-ctrl-glob","partition":"batch1-runtime-text","source":"D=/tmp; for n in public*; do D=$n; done; ls \"$D\"","expected":"UC","gap":"UnresolvedTarget"},
+    {"id":"ov17-bash-c","partition":"batch1-nested-cwd","failed_moves":17,"source":"bash -c 'cat x'","expected":"UR","gap":"InspectionBudget"},
+    {"id":"ov15-bash-c","partition":"batch1-nested-cwd","failed_moves":15,"source":"bash -c 'cat x'","expected":"D"},
+    {"id":"ov17-sh-c","partition":"batch1-nested-cwd","failed_moves":17,"source":"sh -c 'ls'","expected":"UR","gap":"InspectionBudget"},
+    {"id":"ov15-sh-c","partition":"batch1-nested-cwd","failed_moves":15,"source":"sh -c 'ls'","expected":"D"},
+    {"id":"ov17-zsh-c","partition":"batch1-nested-cwd","failed_moves":17,"source":"zsh -c 'cat x'","expected":"UR","gap":"InspectionBudget"},
+    {"id":"ov15-zsh-c","partition":"batch1-nested-cwd","failed_moves":15,"source":"zsh -c 'cat x'","expected":"D"},
+    {"id":"ov17-env-bash-c","partition":"batch1-nested-cwd","failed_moves":17,"source":"env bash -c 'cat x'","expected":"UR","gap":"InspectionBudget"},
+    {"id":"ov15-env-bash-c","partition":"batch1-nested-cwd","failed_moves":15,"source":"env bash -c 'cat x'","expected":"D"},
+    {"id":"ov17-xargs-sh","partition":"batch1-nested-cwd","failed_moves":17,"source":"echo /tmp | xargs sh -c 'cat x'","expected":"UR","gap":"InspectionBudget"},
+    {"id":"ov15-xargs-sh","partition":"batch1-nested-cwd","failed_moves":15,"source":"echo /tmp | xargs sh -c 'cat x'","expected":"D"},
+    {"id":"ov17-python-c","partition":"batch1-nested-cwd","failed_moves":17,"source":"python3 -c \"print(open('x').read())\"","expected":"UR","gap":"InspectionBudget"},
+    {"id":"ov15-python-c","partition":"batch1-nested-cwd","failed_moves":15,"source":"python3 -c \"print(open('x').read())\"","expected":"D"},
+    {"id":"ov17-node-e","partition":"batch1-nested-cwd","failed_moves":17,"source":"node -e \"require('fs').readFileSync('x')\"","expected":"UR","gap":"InspectionBudget"},
+    {"id":"ov15-node-e","partition":"batch1-nested-cwd","failed_moves":15,"source":"node -e \"require('fs').readFileSync('x')\"","expected":"D"},
+    {"id":"ov17-perl-e","partition":"batch1-nested-cwd","failed_moves":17,"source":"perl -e \"open(F,'x'); print <F>\"","expected":"UR","gap":"InspectionBudget"},
+    {"id":"ov15-perl-e","partition":"batch1-nested-cwd","failed_moves":15,"source":"perl -e \"open(F,'x'); print <F>\"","expected":"D"}
   ]
 }

@@ -10,10 +10,29 @@ fn rows() -> Vec<Value> {
     ]
     .into_iter()
     .flat_map(|source| {
-        serde_json::from_str::<Value>(source).unwrap()["rows"]
+        let packet = serde_json::from_str::<Value>(source).unwrap();
+        packet["rows"]
             .as_array()
             .unwrap()
-            .clone()
+            .iter()
+            .cloned()
+            .map(|mut row| {
+                if let Some(count) = row["failed_moves"].as_u64() {
+                    let mut source = packet["overflow"]["initial"].as_str().unwrap().to_owned();
+                    for n in 0..count {
+                        source.push_str(
+                            &packet["overflow"]["step"]
+                                .as_str()
+                                .unwrap()
+                                .replace("$N", &n.to_string()),
+                        );
+                    }
+                    source.push_str(row["source"].as_str().unwrap());
+                    row["source"] = source.into();
+                }
+                row
+            })
+            .collect::<Vec<_>>()
     })
     .collect()
 }
@@ -79,6 +98,10 @@ fn partition(name: &str) {
 #[test]
 fn runtime_bindings_preserve_known_path_text() {
     partition("batch1-runtime-text");
+}
+#[test]
+fn cwd_overflow_reaches_nested_code() {
+    partition("batch1-nested-cwd");
 }
 #[test]
 fn tree_roots_list() {
