@@ -6,6 +6,7 @@ fn rows() -> Vec<Value> {
     [
         include_str!("fixtures/rust-m2-1.json"),
         include_str!("fixtures/rust-m2-1-armed.json"),
+        include_str!("fixtures/rust-batch1.json"),
     ]
     .into_iter()
     .flat_map(|source| {
@@ -75,6 +76,10 @@ fn partition(name: &str) {
     }
 }
 
+#[test]
+fn runtime_bindings_preserve_known_path_text() {
+    partition("batch1-runtime-text");
+}
 #[test]
 fn tree_roots_list() {
     partition("tree");

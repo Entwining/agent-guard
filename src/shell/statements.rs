@@ -13,14 +13,24 @@ pub(super) enum BindingValue {
     // The lexical representative preserves pre-M2 target inference; it is
     // never evidence of the runtime value or its arithmetic contents.
     RuntimeUnknown(Option<String>),
+    // Derived text must carry its runtime uncertainty through substitution.
+    RuntimeDerived(String),
     Undetermined,
 }
 
 impl BindingValue {
+    fn lexical(&self) -> Option<&String> {
+        match self {
+            Self::Known(value)
+            | Self::RuntimeUnknown(Some(value))
+            | Self::RuntimeDerived(value) => Some(value),
+            Self::RuntimeUnknown(None) | Self::Undetermined => None,
+        }
+    }
     pub fn known(&self) -> Option<&String> {
         match self {
             Self::Known(value) => Some(value),
-            Self::RuntimeUnknown(_) | Self::Undetermined => None,
+            Self::RuntimeUnknown(_) | Self::RuntimeDerived(_) | Self::Undetermined => None,
         }
     }
 }
@@ -123,12 +133,7 @@ impl Scope {
             .filter_map(|(n, b)| {
                 b.values
                     .first()
-                    .and_then(|value| match value {
-                        BindingValue::Known(value) | BindingValue::RuntimeUnknown(Some(value)) => {
-                            Some(value)
-                        }
-                        _ => None,
-                    })
+                    .and_then(BindingValue::lexical)
                     .map(|v| (n.clone(), v.clone()))
             })
             .collect::<BTreeMap<_, _>>()
@@ -391,17 +396,20 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             let mut binding = values
                 .iter()
                 .map(|v| {
-                    if v.word.expands {
-                        BindingValue::RuntimeUnknown(Some(v.word.text.clone()))
-                    } else if v.word.vars.iter().any(|name| {
+                    if v.word.vars.iter().any(|name| {
                         assignment_scope.bindings.get(name).is_some_and(|binding| {
-                            binding
-                                .values
-                                .iter()
-                                .any(|value| matches!(value, BindingValue::RuntimeUnknown(_)))
+                            binding.values.iter().any(|value| {
+                                matches!(
+                                    value,
+                                    BindingValue::RuntimeUnknown(_)
+                                        | BindingValue::RuntimeDerived(_)
+                                )
+                            })
                         })
                     }) {
-                        BindingValue::RuntimeUnknown(None)
+                        BindingValue::RuntimeDerived(v.word.text.clone())
+                    } else if v.word.expands {
+                        BindingValue::RuntimeUnknown(Some(v.word.text.clone()))
                     } else {
                         BindingValue::Known(v.word.text.clone())
                     }
@@ -429,7 +437,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             (BindingValue::Undetermined, _) | (_, BindingValue::Undetermined) => {
                                 BindingValue::Undetermined
                             }
-                            _ => BindingValue::RuntimeUnknown(None),
+                            _ => BindingValue::RuntimeDerived(format!(
+                                "{}{}",
+                                left.lexical().map_or("", String::as_str),
+                                right.lexical().map_or("", String::as_str),
+                            )),
                         };
                         if !combined.contains(&value) {
                             combined.push(value);
@@ -1056,17 +1068,19 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 if local {
                     scope.local(name);
                 }
-                let mut values = vec![if word.expands {
-                    BindingValue::RuntimeUnknown(Some(value.into()))
-                } else if word.vars.iter().any(|name| {
+                let mut values = vec![if word.vars.iter().any(|name| {
                     scope.bindings.get(name).is_some_and(|binding| {
-                        binding
-                            .values
-                            .iter()
-                            .any(|value| matches!(value, BindingValue::RuntimeUnknown(_)))
+                        binding.values.iter().any(|value| {
+                            matches!(
+                                value,
+                                BindingValue::RuntimeUnknown(_) | BindingValue::RuntimeDerived(_)
+                            )
+                        })
                     })
                 }) {
-                    BindingValue::RuntimeUnknown(None)
+                    BindingValue::RuntimeDerived(value.into())
+                } else if word.expands {
+                    BindingValue::RuntimeUnknown(Some(value.into()))
                 } else {
                     BindingValue::Known(value.into())
                 }];
@@ -1146,10 +1160,12 @@ impl<'a, 'b> Evaluator<'a, 'b> {
     fn emit(&mut self, mut command: Command, scope: &Scope) {
         if command.argv.iter().flat_map(|word| &word.vars).any(|name| {
             scope.bindings.get(name).is_some_and(|binding| {
-                binding
-                    .values
-                    .iter()
-                    .any(|value| matches!(value, BindingValue::RuntimeUnknown(_)))
+                binding.values.iter().any(|value| {
+                    matches!(
+                        value,
+                        BindingValue::RuntimeUnknown(_) | BindingValue::RuntimeDerived(_)
+                    )
+                })
             })
         }) && crate::targets::infer(&command, &command.cwd, self.frontend.host)
             .targets
@@ -1255,7 +1271,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         BindingValue::Undetermined => {
                             self.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
-                        BindingValue::RuntimeUnknown(_) => {}
+                        BindingValue::RuntimeUnknown(_) | BindingValue::RuntimeDerived(_) => {}
                     }
                 }
             }
@@ -1284,7 +1300,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         BindingValue::Undetermined => {
                             self.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
-                        BindingValue::RuntimeUnknown(_) => {}
+                        BindingValue::RuntimeUnknown(_) | BindingValue::RuntimeDerived(_) => {}
                     }
                 }
             }
@@ -1607,7 +1623,7 @@ mod tests {
         assert!(
             scope.bindings["D"]
                 .values
-                .contains(&BindingValue::RuntimeUnknown(None)),
+                .contains(&BindingValue::RuntimeDerived("public*".into())),
             "{:?}: {result:?}",
             scope.bindings
         );

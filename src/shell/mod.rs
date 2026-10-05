@@ -295,7 +295,8 @@ fn expand_scoped(
                     }
                     let mut context = context.clone();
                     if let statements::BindingValue::Known(value)
-                    | statements::BindingValue::RuntimeUnknown(Some(value)) = value
+                    | statements::BindingValue::RuntimeUnknown(Some(value))
+                    | statements::BindingValue::RuntimeDerived(value) = value
                     {
                         context.insert(name.clone(), value.clone());
                     } else {
@@ -343,6 +344,19 @@ fn expand_scoped(
                     tilde_assigned,
                 },
             )?;
+            if expanded.word.vars.iter().any(|name| {
+                scope.bindings.get(name).is_some_and(|binding| {
+                    binding
+                        .values
+                        .iter()
+                        .any(|value| matches!(value, statements::BindingValue::RuntimeDerived(_)))
+                })
+            }) {
+                expanded.word.expands = true;
+                for word in &mut expanded.split {
+                    word.expands = true;
+                }
+            }
             if expanded.unsupported
                 && !evaluator.output.gaps.iter().any(|g| {
                     matches!(

@@ -1,0 +1,13 @@
+{
+  "rows": [
+    {"id":"b1-concat-cat","partition":"batch1-runtime-text","source":"D=~/Library/Containers/com.example.syn/Data; s=$(echo x); E=\"$D/$s\"; cat \"$E\"","expected":"D","reason":"read protected App Data"},
+    {"id":"b1-concat-ls","partition":"batch1-runtime-text","source":"D=~/Library/Containers/com.example.syn/Data; s=$(echo x); E=\"$D/$s\"; ls \"$E\"","expected":"D"},
+    {"id":"b1-glob-var","partition":"batch1-runtime-text","source":"D=~/Library/Containers/com.example.syn/Data; for f in *.txt; do E=\"$D/$f\"; cat \"$E\"; done","expected":"D"},
+    {"id":"b1-append-cat","partition":"batch1-runtime-text","source":"s=$(echo x); E=~/Library/Containers/com.example.syn/Data; E+=\"/$s\"; cat \"$E\"","expected":"D"},
+    {"id":"b1-append-ls","partition":"batch1-runtime-text","source":"s=$(echo x); E=~/Library/Containers/com.example.syn/Data; E+=\"/$s\"; ls \"$E\"","expected":"D"},
+    {"id":"b1-cwd-relative","partition":"batch1-runtime-text","source":"D=~/Library/Containers/com.example.syn; s=$(echo x); E=\"$D/$s\"; cd \"$E\"/..; ls Data","expected":"D"},
+    {"id":"b1-export-concat","partition":"batch1-runtime-text","source":"D=~/Library/Containers/com.example.syn/Data; s=$(echo x); export E=\"$D/$s\"; cat \"$E\"","expected":"D"},
+    {"id":"b1-ctrl-public","partition":"batch1-runtime-text","source":"D=/tmp; s=$(echo x); E=\"$D/$s\"; cat \"$E\"","expected":"UC","gap":"UnresolvedTarget"},
+    {"id":"b1-ctrl-glob","partition":"batch1-runtime-text","source":"D=/tmp; for n in public*; do D=$n; done; ls \"$D\"","expected":"UC","gap":"UnresolvedTarget"}
+  ]
+}
