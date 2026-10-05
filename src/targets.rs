@@ -141,6 +141,11 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             }
         }
     }
+    if program == "gh" {
+        effects.token = args.first().is_some_and(|arg| arg == "auth")
+            && (args.get(1).is_some_and(|arg| arg == "token")
+                || args.get(1).is_some_and(|arg| arg == "status") && gh_shows_token(&args[2..]));
+    }
     let read = |word: &Word, recursive| {
         Target::from_word(
             word,
@@ -261,15 +266,6 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
         "tar" => infer_tar(args, cwd, host, &mut effects),
         "git" => infer_git(args, cwd, host, &mut effects),
-        "gh" => {
-            effects.token = args.first().is_some_and(|arg| arg == "auth")
-                && (args.get(1).is_some_and(|arg| arg == "token")
-                    || args.get(1).is_some_and(|arg| arg == "status")
-                        && gh_shows_token(&args[2..]));
-            effects.gaps.push(CoverageGap::UnknownProgram {
-                program: program.into(),
-            });
-        }
         "python" | "python3" | "node" | "bun" | "ruby" | "perl" | "php" | "osascript" | "lua"
         | "deno" => {
             effects.gaps.push(CoverageGap::InterpreterChosenRead);
