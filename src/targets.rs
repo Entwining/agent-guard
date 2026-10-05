@@ -900,6 +900,22 @@ fn infer_listing(
             skip = !arg.contains('=');
             continue;
         }
+        if program == "du"
+            && ["--exclude-from", "--files0-from"]
+                .contains(&arg.split_once('=').map_or(arg.as_str(), |(key, _)| key))
+        {
+            let value = arg
+                .split_once('=')
+                .map(|(_, value)| arg.with_text(value.into()))
+                .or_else(|| args.get(index + 1).cloned());
+            if let Some(value) = value {
+                let mut target = Target::from_word(&value, cwd, host, Effect::List, Walk::None);
+                target.via = Via::Option;
+                effects.targets.push(target);
+            }
+            skip = !arg.contains('=');
+            continue;
+        }
         if program == "find" && arg == "-f" {
             if let Some(path) = args.get(index + 1) {
                 paths.push(path.clone());
@@ -940,8 +956,6 @@ fn infer_listing(
                     "--block-size",
                     "--max-depth",
                     "--exclude",
-                    "--exclude-from",
-                    "--files0-from",
                 ]
                 .contains(&arg.as_str())
                     || !arg.starts_with("--")
