@@ -394,18 +394,27 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                     "dump" => wire.stderr.contains("environment dump"),
                     "variable" => wire.stderr.contains("credential variable"),
                     "syntax" => actual_class == "UR",
-                    _ => false,
+                    _ => wire.stderr.contains(old_reason),
                 }
             } else {
                 true
             };
             let advice_match = if expected == "A" {
-                wire.stdout.contains("-r replaces")
-                    && old["advice"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .any(|s| s.as_str().unwrap().contains("--replace"))
+                let output: Value = serde_json::from_str(&wire.stdout).unwrap_or(Value::Null);
+                let message = output["hookSpecificOutput"]["additionalContext"]
+                    .as_str()
+                    .unwrap_or("");
+                !old["advice"].as_array().unwrap().is_empty()
+                    && old["advice"].as_array().unwrap().iter().all(|advice| {
+                        let expected = advice.as_str().unwrap();
+                        if expected.starts_with("rg -r means --replace.") {
+                            message.contains("-r replaces")
+                                && message.contains("not recursive")
+                                && message.contains("-n")
+                        } else {
+                            message.contains(expected)
+                        }
+                    })
             } else {
                 wire.stdout.is_empty()
             };

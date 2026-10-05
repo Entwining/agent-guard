@@ -1,3 +1,5 @@
+#[path = "support/differential.rs"]
+mod differential;
 mod support;
 use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell::Arm};
 use serde_json::{Value, json};
@@ -17,6 +19,7 @@ fn partition(name: &str) {
             let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer=="pi" {"bash"} else {"Bash"},"tool_input":{"command":fixture.expand(row["source"].as_str().unwrap())}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
+            probe.fault = row["fault"].as_str().map(|path| fixture.expand(path));
             let result = evaluate_with_arm(
                 Event {
                     bytes: &bytes,
@@ -34,7 +37,7 @@ fn partition(name: &str) {
             let wire = adapters::render(context.consumer, &result);
             assert_eq!(
                 wire.exit,
-                if row["expected"] == "D" || row["expected"] == "UR" {
+                if row["expected"] == "D" || row["expected"] == "UR" || row["expected"] == "F" {
                     2
                 } else {
                     0
@@ -62,4 +65,74 @@ fn unset_removes_only_executed_named_bindings() {
 #[test]
 fn git_environment_uses_git_directory_roles() {
     partition("git-environment");
+}
+
+fn contract_rows(ids: &[&str]) {
+    for row in differential::selected_report(Arm::Brush, ids) {
+        for observation in row["observations"].as_array().unwrap() {
+            assert_ne!(
+                observation["category"], "Rust_defect",
+                "{}: {observation}",
+                row["id"]
+            );
+            assert_eq!(
+                observation["exit"],
+                if observation["expected"] == "D" { 2 } else { 0 },
+                "{}: {observation}",
+                row["id"]
+            );
+            assert_eq!(
+                observation["stdout"].as_str().unwrap().is_empty(),
+                observation["expected"] != "A",
+                "{}: {observation}",
+                row["id"]
+            );
+            assert_eq!(
+                observation["stderr"].as_str().unwrap().is_empty(),
+                observation["expected"] != "D",
+                "{}: {observation}",
+                row["id"]
+            );
+        }
+    }
+}
+
+#[test]
+fn bundle_output_is_a_write() {
+    contract_rows(&["programs[42]"]);
+}
+#[test]
+fn tar_exclude_is_a_pattern_name() {
+    contract_rows(&["programs[64]"]);
+}
+#[test]
+fn rm_operand_is_metadata() {
+    contract_rows(&["shell[0]"]);
+}
+#[test]
+fn long_commit_message_is_not_a_probe_fault() {
+    contract_rows(&["shell[175]"]);
+}
+#[test]
+fn rg_include_advice_follows_go() {
+    contract_rows(&["search[50]", "search[51]"]);
+}
+#[test]
+fn rg_bre_advice_follows_go() {
+    contract_rows(&[
+        "search[52]",
+        "search[53]",
+        "search[54]",
+        "search[55]",
+        "search[62]",
+    ]);
+}
+#[test]
+fn secret_reasons_follow_their_go_owner() {
+    contract_rows(&["credentials[128]", "readers[86]"]);
+}
+
+#[test]
+fn target_advice_and_probe_controls_preserve_their_contract() {
+    partition("item5-controls");
 }

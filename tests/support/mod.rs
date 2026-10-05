@@ -259,20 +259,7 @@ impl Probe for RecordingProbe {
         if let Some(target) = self.links.get(&spelling) {
             return Ok(Some(PathBuf::from(target)));
         }
-        match fs::read_link(path) {
-            Ok(p) => Ok(Some(p)),
-            Err(e)
-                if matches!(
-                    e.kind(),
-                    io::ErrorKind::NotFound
-                        | io::ErrorKind::InvalidInput
-                        | io::ErrorKind::NotADirectory
-                ) =>
-            {
-                Ok(None)
-            }
-            Err(e) => Err(e),
-        }
+        filesystem::DiskProbe.read_link(path)
     }
 }
 

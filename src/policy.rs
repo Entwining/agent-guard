@@ -90,7 +90,7 @@ fn evaluate_with_catalog_loader(
         arm,
         gaps: Vec::new(),
         denial: None,
-        advice: false,
+        advice: Vec::new(),
         executable_qualifier: false,
         effects: Vec::new(),
     };
@@ -223,10 +223,10 @@ fn evaluate_with_catalog_loader(
             effects: inspection.effects,
         });
     }
-    let outcome = if inspection.advice {
-        Outcome::SoftAdvice(vec![Advice {message:"-r replaces matching text; it is not recursive search. Use an explicit project root and -n when line numbers are intended.".into()}])
-    } else {
+    let outcome = if inspection.advice.is_empty() {
         Outcome::NoObjection
+    } else {
+        Outcome::SoftAdvice(inspection.advice)
     };
     Ok(Evaluation {
         outcome,
@@ -242,7 +242,7 @@ struct Inspection<'a> {
     arm: Arm,
     gaps: Vec<CoverageGap>,
     denial: Option<String>,
-    advice: bool,
+    advice: Vec<Advice>,
     executable_qualifier: bool,
     effects: Vec<EffectRecord>,
 }
@@ -408,7 +408,7 @@ impl Inspection<'_> {
             if effects.token {
                 self.effect(EffectRecord::HostingToken);
                 self.denial.get_or_insert_with(|| {
-                    "print a Git hosting token; use auth status without token-display flags".into()
+                    "This prints a Git hosting token. Use auth status without token-display flags; if authentication needs repair, ask the user to update the credential in their terminal.".into()
                 });
             }
             if effects.keychain {
@@ -417,7 +417,7 @@ impl Inspection<'_> {
             }
             if effects.stored_secret {
                 self.effect(EffectRecord::StoredSecret);
-                self.denial.get_or_insert_with(|| "print a stored secret or access token; run the command that uses it without printing it".into());
+                self.denial.get_or_insert_with(|| "This prints a stored secret or access token. Run the command that uses the credential without printing it, or ask the user to run it in their own terminal and share only the non-secret fact needed.".into());
             }
             if effects.trace {
                 self.effect(EffectRecord::NetworkTrace);
@@ -429,7 +429,28 @@ impl Inspection<'_> {
                     "hidden recursive content search reaches protected environment files".into()
                 });
             }
-            self.advice |= effects.replace_advice;
+            // native/rules/workflow.go:13-39 owns usage advice; D22 retains
+            // the trial's replacement wording and consumer-specific rendering.
+            for (applies, message) in [
+                (
+                    effects.replace_advice,
+                    "-r replaces matching text; it is not recursive search. Use an explicit project root and -n when line numbers are intended.",
+                ),
+                (
+                    effects.include_advice,
+                    "rg has no --include flag. Filter files with -g GLOB (for example -g '*.ts') or a type filter such as -t ts.",
+                ),
+                (
+                    effects.bre_advice,
+                    "rg regex is not grep BRE: a\\|b matches a literal pipe. Write alternation as a|b; for a literal pipe, use [|] or -F.",
+                ),
+            ] {
+                if applies && !self.advice.iter().any(|advice| advice.message == message) {
+                    self.advice.push(Advice {
+                        message: message.into(),
+                    });
+                }
+            }
             for mut target in effects.targets {
                 target.command = Some(command_index);
                 self.target(

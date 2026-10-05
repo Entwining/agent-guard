@@ -21,6 +21,8 @@ pub struct Effects {
     pub trace: bool,
     pub hidden_content: bool,
     pub replace_advice: bool,
+    pub include_advice: bool,
+    pub bre_advice: bool,
     pub hidden_listing: bool,
     pub consumes_listing: bool,
 }
@@ -276,6 +278,14 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             infer_listing(program, args, command, cwd, host, &mut effects, depth)
         }
         "tar" => infer_tar(args, cwd, host, &mut effects),
+        "rm" => {
+            // native/targets/programs.go:42-48 assigns metadata operands.
+            effects.targets.extend(
+                args.iter()
+                    .filter(|word| !word.starts_with('-'))
+                    .map(|word| Target::from_word(word, cwd, host, Effect::Meta, Walk::Visible)),
+            );
+        }
         "git" => {
             // D48 gives shell-supplied locations the Go option roles
             // (native/targets/git.go:26-48); Go does not yet infer these env values.
@@ -567,6 +577,8 @@ fn infer_wrapper(
     effects.hidden_listing |= result.hidden_listing;
     effects.hidden_content |= result.hidden_content;
     effects.replace_advice |= result.replace_advice;
+    effects.include_advice |= result.include_advice;
+    effects.bre_advice |= result.bre_advice;
 }
 
 fn at(path: &str, base: &str) -> String {
@@ -648,7 +660,9 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
         return;
     };
     index += 1;
-    effects.variable = sub == "credential" && args.get(index).is_some_and(|arg| arg == "fill");
+    // native/rules/secrets.go:166-177 owns credential fill as SecretPrint.
+    effects.stored_secret |=
+        sub == "credential" && args.get(index).is_some_and(|arg| arg == "fill");
     let names="branch tag remote switch push fetch pull merge rebase cherry-pick revert reflog rev-parse describe bisect init clone submodule worktree config lfs sparse-checkout".split_whitespace().any(|name|name==sub.as_str());
     let metadata="add rm mv restore checkout reset stash check-ignore check-attr update-index ls-files status clean commit".split_whitespace().any(|name|name==sub.as_str());
     let pathspec = !names && sub != "grep";
@@ -687,6 +701,8 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
     };
     let mut pattern = sub != "grep";
     let mut options = true;
+    let mut bundle_action = None;
+    let mut bundle_output = false;
     while index < args.len() {
         let arg = &args[index];
         let mut option_path = None;
@@ -732,20 +748,31 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
         if let Some(path) = option_path {
             add(&path, &path, Effect::Read, Walk::None, effects);
         } else if !options || !arg.starts_with('-') {
+            // native/targets/git.go:109-151 claims the action and writes create's file.
+            if sub == "bundle" && bundle_action.is_none() {
+                bundle_action = Some(arg.text.clone());
+                index += 1;
+                continue;
+            }
             if !pattern {
                 pattern = true;
             } else {
+                let output =
+                    sub == "bundle" && bundle_action.as_deref() == Some("create") && !bundle_output;
+                bundle_output |= output;
                 add(
                     arg,
                     arg,
-                    if metadata {
+                    if output {
+                        Effect::Write
+                    } else if metadata {
                         Effect::Meta
                     } else if names {
                         Effect::Name
                     } else {
                         Effect::Read
                     },
-                    if !names && !metadata {
+                    if !output && !names && !metadata {
                         Walk::Visible
                     } else {
                         Walk::None
@@ -1008,6 +1035,20 @@ fn infer_tar(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
     while index < args.len() {
         let arg = &args[index];
         let cluster = !arg.starts_with("--") && (index == 0 || arg.starts_with('-'));
+        // Global pattern-name options are owned by native/targets/programs.go:33.
+        if ["--exclude", "--exclude-dir", "--include"].contains(&arg.as_str()) {
+            if let Some(pattern) = args.get(index + 1) {
+                effects.targets.push(Target::from_word(
+                    pattern,
+                    cwd,
+                    host,
+                    Effect::Name,
+                    Walk::None,
+                ));
+            }
+            index += 2;
+            continue;
+        }
         if cluster {
             create |= arg.contains('c');
             extract |= arg.contains('x');
@@ -1084,6 +1125,8 @@ fn infer_search(
     let mut unrestricted = 0;
     let mut options = true;
     let mut position = 0;
+    let mut fixed = false;
+    let mut patterns = Vec::new();
     while position < args.len() {
         let arg = &args[position];
         if options && arg == "--" {
@@ -1099,6 +1142,8 @@ fn infer_search(
                     (k, Some(arg.with_text(v.to_owned())))
                 });
             match key {
+                "include" if program == "rg" => effects.include_advice = true,
+                "fixed-strings" => fixed = true,
                 "files" => names = true,
                 "hidden" => {
                     hidden = true;
@@ -1125,6 +1170,7 @@ fn infer_search(
         } else if options && arg.starts_with('-') && arg.len() > 1 {
             for (offset, ch) in arg.char_indices().skip(1) {
                 if program == "rg" {
+                    fixed |= ch == 'F';
                     if ch == 'u' {
                         unrestricted += 1;
                         hidden |= unrestricted >= 2 && !no_hidden;
@@ -1176,6 +1222,7 @@ fn infer_search(
                     }
                     "e" | "regexp" => {
                         explicit = true;
+                        patterns.push(value.text);
                     }
                     "f" | "file" => {
                         explicit = true;
@@ -1202,8 +1249,20 @@ fn infer_search(
         position += 1;
     }
     if !explicit && !names && !operands.is_empty() {
-        operands.remove(0);
+        patterns.push(operands.remove(0).text);
     }
+    // native/rules/workflow.go:24-32 applies BRE advice only to pattern roles.
+    effects.bre_advice = program == "rg"
+        && !fixed
+        && patterns.iter().any(|pattern| {
+            pattern
+                .as_bytes()
+                .windows(2)
+                .enumerate()
+                .any(|(index, bytes)| {
+                    bytes == b"\\|" && (index == 0 || pattern.as_bytes()[index - 1] != b'\\')
+                })
+        });
     let implicit = operands.is_empty() && (program != "grep" || hidden);
     if implicit {
         operands.push(Word::literal(cwd.to_owned()));
