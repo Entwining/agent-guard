@@ -295,6 +295,41 @@
       "expected": "N"
     },
     {
+      "id": "or-aws-config",
+      "partition": "roots",
+      "source": "cat ~/.aws/config",
+      "cwd": "$H/project",
+      "expected": "N"
+    },
+    {
+      "id": "or-aws-config-example",
+      "partition": "roots",
+      "source": "cat ~/.aws/config.example",
+      "cwd": "$H/project",
+      "expected": "N"
+    },
+    {
+      "id": "or-aws-cli-cache",
+      "partition": "roots",
+      "source": "cat ~/.aws/cli/cache/x",
+      "cwd": "$H/project",
+      "expected": "N"
+    },
+    {
+      "id": "or-gnupg-trustdb",
+      "partition": "roots",
+      "source": "cat ~/.gnupg/trustdb",
+      "cwd": "$H/project",
+      "expected": "N"
+    },
+    {
+      "id": "or-gnupg-config",
+      "partition": "roots",
+      "source": "cat ~/.gnupg/config",
+      "cwd": "$H/project",
+      "expected": "N"
+    },
+    {
       "cwd": "$H/project",
       "id": "cwd-modeled-public-reader",
       "partition": "cwd",
@@ -313,6 +348,55 @@
       "id": "cwd-unknown-public-operand",
       "partition": "cwd",
       "source": "cd $C && make /tmp/public",
+      "expected": "D"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "credential-file",
+      "partition": "roots",
+      "source": "cat ~/.aws/credentials",
+      "expected": "D"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "credential-file-suffix",
+      "partition": "roots",
+      "source": "cat ~/.aws/credentials.backup",
+      "expected": "D"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "credential-directory-read",
+      "partition": "roots",
+      "source": "cat ~/.aws",
+      "expected": "D"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "credential-directory-list",
+      "partition": "roots",
+      "source": "ls ~/.aws",
+      "expected": "N"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "credential-directory-consumer",
+      "partition": "roots",
+      "source": "fd x ~/.aws -X cat",
+      "expected": "D"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "gpg-private-directory",
+      "partition": "roots",
+      "source": "cat ~/.gnupg/private-keys-v1.d/key",
+      "expected": "D"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "credential-root-glob",
+      "partition": "roots",
+      "source": "cat ~/.aws/*",
       "expected": "D"
     }
   ]

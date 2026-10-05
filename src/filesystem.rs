@@ -266,8 +266,14 @@ fn lexical_candidate(path: &str, home: &str, patterned: bool) -> Option<Protecti
     }) {
         return Some(Protection::Environment);
     }
+    // Go separates sensitive files from read-only credential roots
+    // (native/filesystem/credentials.go:8-10, 135-142). A public child may
+    // traverse a root's metadata; reading the root is checked by the resolver.
     if parts.contains(&"private-keys-v1.d")
-        || [".aws", ".gnupg"].contains(&base)
+        || base.starts_with("credentials")
+            && path
+                .rsplit_once('/')
+                .is_some_and(|(parent, _)| parent.ends_with("/.aws"))
         || [".npmrc", ".netrc", ".git-credentials", ".pypirc", ".pgpass"].contains(&base)
         || base.starts_with(".zprofile")
         || base.starts_with(".zsh_history")

@@ -31,6 +31,14 @@ fn partition(name: &str) {
                 "{consumer}: {}: {result:?}",
                 row["id"]
             );
+            if name == "roots" {
+                assert!(
+                    probe.stat_calls.is_empty(),
+                    "{}: {:?}",
+                    row["id"],
+                    probe.stat_calls
+                );
+            }
             let wire = adapters::render(context.consumer, &result);
             assert_eq!(wire.exit, if row["expected"] == "D" { 2 } else { 0 });
             assert!(wire.stdout.is_empty());
@@ -73,4 +81,9 @@ fn tracked_cwd_entry_follows_go_named_target_rule() {
 #[test]
 fn git_directory_values_remain_read_targets() {
     partition("gitdir");
+}
+
+#[test]
+fn credential_roots_do_not_protect_public_children() {
+    partition("roots");
 }
