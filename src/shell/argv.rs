@@ -16,6 +16,20 @@ pub(super) enum EnvironmentChange {
     Set(String, Word),
 }
 
+impl EnvironmentChange {
+    fn assignment(word: &Word) -> Option<Self> {
+        let (name, value) = word.text.split_once('=')?;
+        let mut value = word.with_text(value.into());
+        if super::lexer::initial_quote(&value.raw) == super::lexer::Quote::Unquoted {
+            value.raw = value
+                .raw
+                .split_once('=')
+                .map_or(value.raw.clone(), |(_, raw)| raw.into());
+        }
+        Some(Self::Set(name.into(), value))
+    }
+}
+
 fn text(argv: &[Word], index: usize) -> &str {
     argv.get(index).map_or("", Word::as_str)
 }
@@ -80,6 +94,87 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
                     index = argv.len();
                 }
             }
+            // The Go unwrapper owns these boundaries (native/shell/argv.go:66-147).
+            // Assignments after the boundary are executable names, unless the
+            // wrapper itself accepts assignments (env, sudo and doas).
+            "exec" if result.shell && text(argv, index) == "exec" => {
+                mark(argv, &mut index);
+                while ["-c", "-l"].contains(&text(argv, index)) {
+                    if text(argv, index) == "-c" {
+                        result.environment.push(EnvironmentChange::Clear);
+                    }
+                    mark(argv, &mut index);
+                }
+                if text(argv, index) == "-a" {
+                    mark(argv, &mut index);
+                    mark(argv, &mut index);
+                }
+            }
+            "nohup" => {
+                mark(argv, &mut index);
+                if text(argv, index) == "--" {
+                    mark(argv, &mut index);
+                }
+            }
+            "timeout" => {
+                mark(argv, &mut index);
+                while text(argv, index).starts_with('-') {
+                    if ["-s", "--signal", "-k", "--kill-after"].contains(&text(argv, index)) {
+                        mark(argv, &mut index);
+                    }
+                    mark(argv, &mut index);
+                }
+                mark(argv, &mut index);
+            }
+            "nice" => {
+                mark(argv, &mut index);
+                let option = text(argv, index);
+                if ["-n", "--adjustment"].contains(&option) {
+                    mark(argv, &mut index);
+                    mark(argv, &mut index);
+                } else if option.starts_with("-n")
+                    || option.starts_with("--adjustment=")
+                    || option
+                        .strip_prefix('-')
+                        .is_some_and(|s| s.starts_with(|c: char| c.is_ascii_digit()))
+                {
+                    mark(argv, &mut index);
+                }
+            }
+            "script" | "arch" | "stdbuf" | "caffeinate" | "time" => {
+                mark(argv, &mut index);
+                while index < argv.len() {
+                    let option = text(argv, index);
+                    let accepted = match name.as_str() {
+                        "stdbuf" => {
+                            option.starts_with("-i")
+                                || option.starts_with("-o")
+                                || option.starts_with("-e")
+                        }
+                        "caffeinate" => {
+                            ["-d", "-i", "-s", "-u", "-m", "-t", "-w"].contains(&option)
+                        }
+                        _ => option.starts_with('-'),
+                    };
+                    if !accepted {
+                        break;
+                    }
+                    let takes = match name.as_str() {
+                        "script" => ["-F", "-t"].contains(&option),
+                        "arch" => ["-e", "-d", "-arch"].contains(&option),
+                        "stdbuf" => ["-i", "-o", "-e"].contains(&option),
+                        "caffeinate" => ["-t", "-w"].contains(&option),
+                        _ => ["-f", "-o", "--format", "--output"].contains(&option),
+                    };
+                    if takes {
+                        mark(argv, &mut index);
+                    }
+                    mark(argv, &mut index);
+                }
+                if name == "script" && index < argv.len() {
+                    mark(argv, &mut index);
+                }
+            }
             "sudo" | "doas" => {
                 mark(argv, &mut index);
                 while index < argv.len()
@@ -87,6 +182,11 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
                     && (text(argv, index).starts_with('-')
                         || super::statements::assignment(text(argv, index)).is_some())
                 {
+                    if super::statements::assignment(text(argv, index)).is_some()
+                        && let Some(change) = EnvironmentChange::assignment(&argv[index])
+                    {
+                        result.environment.push(change);
+                    }
                     let option = text(argv, index);
                     let takes = [
                         "--user",
@@ -162,22 +262,11 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
                             index = argv.len();
                         }
                         option if option.starts_with('-') => index += 1,
-                        assignment => {
-                            let Some((name, value)) = assignment.split_once('=') else {
+                        _ => {
+                            let Some(change) = EnvironmentChange::assignment(&argv[index]) else {
                                 break;
                             };
-                            let mut value = argv[index].with_text(value.into());
-                            if super::lexer::initial_quote(&value.raw)
-                                == super::lexer::Quote::Unquoted
-                            {
-                                value.raw = value
-                                    .raw
-                                    .split_once('=')
-                                    .map_or(value.raw.clone(), |(_, raw)| raw.into());
-                            }
-                            result
-                                .environment
-                                .push(EnvironmentChange::Set(name.into(), value));
+                            result.environment.push(change);
                             index += 1;
                         }
                     }
