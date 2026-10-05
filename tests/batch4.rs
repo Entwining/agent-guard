@@ -69,3 +69,8 @@ fn curl_file_inputs_and_outputs_follow_go() {
 fn wget_file_inputs_and_outputs_follow_go() {
     partition("wget");
 }
+
+#[test]
+fn docker_host_inputs_respect_command_boundaries() {
+    partition("docker");
+}
