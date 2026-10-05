@@ -40,7 +40,14 @@ fn partition(name: &str) {
                 );
             }
             let wire = adapters::render(context.consumer, &result);
-            assert_eq!(wire.exit, if row["expected"] == "D" { 2 } else { 0 });
+            assert_eq!(
+                wire.exit,
+                if row["expected"] == "D" || row["expected"] == "UR" {
+                    2
+                } else {
+                    0
+                }
+            );
             assert!(wire.stdout.is_empty());
             if row["expected"] == "D" {
                 assert!(!wire.stderr.is_empty());
@@ -86,4 +93,9 @@ fn git_directory_values_remain_read_targets() {
 #[test]
 fn credential_roots_do_not_protect_public_children() {
     partition("roots");
+}
+
+#[test]
+fn cwd_entry_does_not_spend_resource_overflow_budget() {
+    partition("overflow");
 }

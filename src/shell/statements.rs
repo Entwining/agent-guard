@@ -3,7 +3,7 @@ use super::{Expanded, Frontend, Observation, Operator, RawWord, Statement, WordS
 use crate::{
     CheckError, CoverageGap,
     limits::MAX_NESTING,
-    record::{Command, Role, Stdin},
+    record::{Command, Effect, Role, Stdin, Target, Via, Walk},
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1253,8 +1253,18 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         if let Some(gap) = &scope.directory.gap {
             // Only overflow pays for this second inference. A different cwd exposes
             // target dependencies without inventing a separate adapter role table.
-            let effects = crate::targets::infer(&command, &command.cwd, self.frontend.host);
-            let relocated = crate::targets::infer(&command, "/", self.frontend.host);
+            let mut effects = crate::targets::infer(&command, &command.cwd, self.frontend.host);
+            let mut relocated = crate::targets::infer(&command, "/", self.frontend.host);
+            // Go's overflow substitutes HOME/Library (native/shell/cwd.go:12-24).
+            // Cwd entry does not scan either root; resource targets still consume
+            // the relative-target budget when their meaning depends on cwd.
+            let resource = |target: &Target| {
+                target.via != Via::Cwd
+                    || target.effect != Effect::Enter
+                    || target.walk != Walk::None
+            };
+            effects.targets.retain(resource);
+            relocated.targets.retain(resource);
             if command.argv.iter().any(|word| word.pwd)
                 || effects.targets != relocated.targets
                 || !effects.code.is_empty()
