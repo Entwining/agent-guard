@@ -98,3 +98,8 @@ fn git_grep_attached_file_values_keep_read_roles() {
 fn tar_glued_directory_is_an_extraction_write_root() {
     partition("tar");
 }
+
+#[test]
+fn gh_token_display_is_denied_at_the_secret_owner() {
+    partition("gh");
+}

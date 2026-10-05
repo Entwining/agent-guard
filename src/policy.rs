@@ -402,6 +402,12 @@ impl Inspection<'_> {
                 self.denial
                     .get_or_insert_with(|| "extract protected credential variable".into());
             }
+            if effects.token {
+                self.effect(EffectRecord::HostingToken);
+                self.denial.get_or_insert_with(|| {
+                    "print a Git hosting token; use auth status without token-display flags".into()
+                });
+            }
             if effects.hidden_content {
                 self.effect(EffectRecord::HiddenContent);
                 self.denial.get_or_insert_with(|| {

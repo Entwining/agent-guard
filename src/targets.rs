@@ -10,6 +10,7 @@ pub struct Effects {
     pub inline: Vec<String>,
     pub dump: bool,
     pub variable: bool,
+    pub token: bool,
     pub hidden_content: bool,
     pub replace_advice: bool,
     pub hidden_listing: bool,
@@ -260,6 +261,15 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
         "tar" => infer_tar(args, cwd, host, &mut effects),
         "git" => infer_git(args, cwd, host, &mut effects),
+        "gh" => {
+            effects.token = args.first().is_some_and(|arg| arg == "auth")
+                && (args.get(1).is_some_and(|arg| arg == "token")
+                    || args.get(1).is_some_and(|arg| arg == "status")
+                        && gh_shows_token(&args[2..]));
+            effects.gaps.push(CoverageGap::UnknownProgram {
+                program: program.into(),
+            });
+        }
         "python" | "python3" | "node" | "bun" | "ruby" | "perl" | "php" | "osascript" | "lua"
         | "deno" => {
             effects.gaps.push(CoverageGap::InterpreterChosenRead);
@@ -351,6 +361,30 @@ fn printenv_signature(code: &str) -> bool {
                 .next()
                 .is_none_or(boundary)
     })
+}
+
+fn gh_shows_token(args: &[Word]) -> bool {
+    let mut index = 0;
+    while let Some(arg) = args.get(index) {
+        if arg == "--" {
+            return false;
+        }
+        if ["--hostname", "--jq", "--json", "--template", "-h"].contains(&arg.as_str()) {
+            index += 1;
+        } else if arg == "--show-token"
+            || arg.starts_with("--show-token=")
+            || arg.strip_prefix('-').is_some_and(|flags| {
+                flags
+                    .chars()
+                    .take_while(|c| matches!(c, 'a' | 't'))
+                    .any(|c| c == 't')
+            })
+        {
+            return true;
+        }
+        index += 1;
+    }
+    false
 }
 
 fn secret_name(name: &str) -> bool {

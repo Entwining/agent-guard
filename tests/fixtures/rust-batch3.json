@@ -49,6 +49,7 @@
     },
     {
       "id": "credentials[128]",
+      "reason_contains": "Git hosting token",
       "partition": "gh",
       "source": "printf done | gh auth status -at",
       "cwd": "$H/project",
@@ -264,6 +265,20 @@
       "source": "tar -xf x.tar -Cpublic",
       "cwd": "$H/project",
       "expected": "N"
+    },
+    {
+      "id": "gh-option-value-control",
+      "partition": "gh",
+      "source": "gh auth status -h -at",
+      "cwd": "$H/project",
+      "expected": "UC"
+    },
+    {
+      "id": "gh-option-terminator-control",
+      "partition": "gh",
+      "source": "gh auth status -- -at",
+      "cwd": "$H/project",
+      "expected": "UC"
     },
     {
       "id": "gh-no-token-control",

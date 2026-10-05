@@ -33,6 +33,7 @@ pub enum EffectRecord {
     BroadRoot,
     EnvironmentDump,
     CredentialVariable,
+    HostingToken,
     HiddenContent,
 }
 
