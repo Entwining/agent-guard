@@ -289,26 +289,14 @@ fn lexical_candidate(path: &str, home: &str, patterned: bool) -> Option<Protecti
     if !patterned {
         return None;
     }
-    const SENSITIVE: &[&str] = &[
-        "**/.npmrc",
-        "**/.zprofile*",
-        "**/.zsh_history*",
-        "**/*.pem",
-        "**/*.key",
-        "**/auth.json*",
-        "**/.credentials.json*",
-        "**/.aws/credentials*",
-        "**/.netrc",
-        "**/.git-credentials",
-        "**/.docker/config.json",
-        "**/.kube/config",
-        "**/.pypirc",
-        "**/.pgpass",
-        "**/.cargo/credentials*",
-        "**/.config/gh/hosts.yml",
-        "**/private-keys-v1.d",
-        "**/private-keys-v1.d/**",
-    ];
+    if base.trim_matches(['*', '?']).is_empty() {
+        let parent = path.rsplit_once('/').map_or("", |(parent, _)| parent);
+        if [".ssh", ".aws", ".gnupg"].contains(&parent.rsplit('/').next().unwrap_or(""))
+            || listed_directories().any(|dir| parent.ends_with(&format!("/{dir}")))
+        {
+            return Some(Protection::Credential);
+        }
+    }
     for listed in SENSITIVE {
         if glob::path(listed, &path) {
             return Some(Protection::Credential);
@@ -332,6 +320,54 @@ fn lexical_candidate(path: &str, home: &str, patterned: bool) -> Option<Protecti
         }
     }
     None
+}
+
+const SENSITIVE: &[&str] = &[
+    "**/.npmrc",
+    "**/.zprofile*",
+    "**/.zsh_history*",
+    "**/*.pem",
+    "**/*.key",
+    "**/auth.json*",
+    "**/.credentials.json*",
+    "**/.aws/credentials*",
+    "**/.netrc",
+    "**/.git-credentials",
+    "**/.docker/config.json",
+    "**/.kube/config",
+    "**/.pypirc",
+    "**/.pgpass",
+    "**/.cargo/credentials*",
+    "**/.config/gh/hosts.yml",
+    "**/private-keys-v1.d",
+    "**/private-keys-v1.d/**",
+];
+
+fn listed_directories() -> impl Iterator<Item = &'static str> {
+    SENSITIVE.iter().filter_map(|path| {
+        path.trim_start_matches("**/")
+            .rsplit_once('/')
+            .map(|(dir, _)| dir)
+            .filter(|dir| !dir.contains('*'))
+    })
+}
+
+fn sensitive_root(path: &str, home: &str) -> bool {
+    let path = path.to_lowercase();
+    let home = home.to_lowercase();
+    [".aws", ".gnupg"].contains(&path.rsplit('/').next().unwrap_or(""))
+        || listed_directories().any(|dir| {
+            path.ends_with(&format!("/{dir}"))
+                || dir
+                    .match_indices('/')
+                    .any(|(at, _)| path == format!("{home}/{}", &dir[..at]))
+        })
+}
+
+pub(crate) fn credential_read(path: &str, home: &str, patterned: bool) -> Option<Protection> {
+    lexical_pattern(path, home, patterned)
+        .filter(|kind| *kind != Protection::AppData)
+        .or_else(|| (!patterned && sensitive_root(path, home)).then_some(Protection::Credential))
 }
 
 pub fn identify(
@@ -423,6 +459,13 @@ impl<'a> Resolver<'a> {
         if let Some(kind) = lexical_pattern(&path, self.home, target.glob) {
             return Ok(Identity::Protected(kind));
         }
+        if target.effect == Effect::Read
+            && !target.glob
+            && (target.via != Via::Cwd || target.search)
+            && sensitive_root(&path, self.home)
+        {
+            return Ok(Identity::Protected(Protection::Credential));
+        }
         if target.effect == Effect::Name && !target.glob || target.via == Via::Tool && target.glob {
             return Ok(Identity::Public(path));
         }
@@ -459,6 +502,13 @@ impl<'a> Resolver<'a> {
             .or_else(|| lexical_pattern(&resolved, &resolved_home, target.glob))
         {
             return Ok(Identity::Protected(kind));
+        }
+        if target.effect == Effect::Read
+            && !target.glob
+            && (target.via != Via::Cwd || target.search)
+            && sensitive_root(&resolved, &resolved_home)
+        {
+            return Ok(Identity::Protected(Protection::Credential));
         }
         // The broad-root owner wins before subordinate SSH metadata comparisons.
         let search = target.walk != Walk::None;

@@ -268,12 +268,19 @@ impl Inspection<'_> {
         // A literal relative ~/ prefix stays anchored at cwd, including with a
         // runtime-derived suffix. Its link aliases still need normal resolution.
         let relative_tilde = target.unresolved.starts_with(&format!("{cwd}/~/"));
-        let identity =
-            if target.expands && !relative_tilde && filesystem::appdata_fragment(&target.path) {
-                Identity::Protected(Protection::AppData)
-            } else {
-                self.resolver.target(&mut target, cwd, self.probe)?
+        let identity = if target.via == Via::Items {
+            let Some(kind) = (target.effect == Effect::Read)
+                .then(|| filesystem::credential_read(&target.path, &self.context.home, target.glob))
+                .flatten()
+            else {
+                return Ok(());
             };
+            Identity::Protected(kind)
+        } else if target.expands && !relative_tilde && filesystem::appdata_fragment(&target.path) {
+            Identity::Protected(Protection::AppData)
+        } else {
+            self.resolver.target(&mut target, cwd, self.probe)?
+        };
         match identity {
             Identity::Protected(kind) => {
                 let touches = match kind {
@@ -315,17 +322,6 @@ impl Inspection<'_> {
                             "broad recursive root reaches protected locations; HOME {} is excluded",
                             self.context.home
                         )
-                    });
-                }
-                if target.walk != Walk::None
-                    && target.effect == Effect::Read
-                    && ["/.docker", "/.kube", "/.cargo", "/.config"]
-                        .iter()
-                        .any(|suffix| path.ends_with(suffix))
-                {
-                    self.effect(EffectRecord::HiddenContent);
-                    self.denial.get_or_insert_with(|| {
-                        "recursive search reaches protected credential-file contents".into()
                     });
                 }
             }
@@ -414,9 +410,6 @@ impl Inspection<'_> {
             }
             self.advice |= effects.replace_advice;
             for mut target in effects.targets {
-                if target.via == Via::Items {
-                    continue;
-                }
                 target.command = Some(command_index);
                 self.target(
                     &target,

@@ -1,0 +1,270 @@
+{
+  "rows": [
+    {
+      "id": "appdata[20]",
+      "partition": "appdata",
+      "source": "printf %s ~/Library/*/*",
+      "cwd": "$H",
+      "expected": "D",
+      "go_expected": {
+        "claude": {
+          "reason": "This reads a protected macOS app-data directory. Name a specific non-sensitive file under ~/Library/Application Support instead, or ask the user to inspect the protected file and share the needed fact.",
+          "advice": []
+        },
+        "codex": {
+          "reason": "This reads a protected macOS app-data directory. Name a specific non-sensitive file under ~/Library/Application Support instead, or ask the user to inspect the protected file and share the needed fact.",
+          "advice": []
+        },
+        "pi": {
+          "reason": "This reads a protected macOS app-data directory. Name a specific non-sensitive file under ~/Library/Application Support instead, or ask the user to inspect the protected file and share the needed fact.",
+          "advice": []
+        }
+      }
+    },
+    {
+      "id": "appdata[87]",
+      "partition": "git",
+      "source": "git -C \"$HOME\" grep needle",
+      "cwd": "$H/project",
+      "expected": "D",
+      "go_expected": {
+        "claude": {
+          "reason": "A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path.",
+          "advice": []
+        },
+        "codex": {
+          "reason": "A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path.",
+          "advice": []
+        },
+        "pi": {
+          "reason": "A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path.",
+          "advice": []
+        }
+      }
+    },
+    {
+      "id": "credentials[128]",
+      "partition": "gh",
+      "source": "printf done | gh auth status -at",
+      "cwd": "$H/project",
+      "expected": "D",
+      "go_expected": {
+        "claude": {
+          "reason": "This prints a Git hosting token. Use auth status without token-display flags; if authentication needs repair, ask the user to update the credential in their terminal.",
+          "advice": []
+        },
+        "codex": {
+          "reason": "This prints a Git hosting token. Use auth status without token-display flags; if authentication needs repair, ask the user to update the credential in their terminal.",
+          "advice": []
+        },
+        "pi": {
+          "reason": "This prints a Git hosting token. Use auth status without token-display flags; if authentication needs repair, ask the user to update the credential in their terminal.",
+          "advice": []
+        }
+      }
+    },
+    {
+      "id": "programs[33]",
+      "partition": "tar",
+      "source": "tar -xf x.tar -C$HOME/.ssh",
+      "cwd": "$H/project",
+      "expected": "D",
+      "go_expected": {
+        "claude": {
+          "reason": "This reads private material under ~/.ssh. Search public material in the project or request the exact public key or client-config path; ask the user to inspect private material locally if a specific non-sensitive fact is needed.",
+          "advice": []
+        },
+        "codex": {
+          "reason": "This reads private material under ~/.ssh. Search public material in the project or request the exact public key or client-config path; ask the user to inspect private material locally if a specific non-sensitive fact is needed.",
+          "advice": []
+        },
+        "pi": {
+          "reason": "This reads private material under ~/.ssh. Search public material in the project or request the exact public key or client-config path; ask the user to inspect private material locally if a specific non-sensitive fact is needed.",
+          "advice": []
+        }
+      }
+    },
+    {
+      "id": "readers[106]",
+      "partition": "credential",
+      "source": "cat ~/.docker/*",
+      "cwd": "$H/project",
+      "expected": "D",
+      "go_expected": {
+        "claude": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        },
+        "codex": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        },
+        "pi": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        }
+      }
+    },
+    {
+      "id": "readers[107]",
+      "partition": "credential",
+      "source": "cat ~/.config/gh/*",
+      "cwd": "$H/project",
+      "expected": "D",
+      "go_expected": {
+        "claude": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        },
+        "codex": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        },
+        "pi": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        }
+      }
+    },
+    {
+      "id": "readers[108]",
+      "partition": "credential",
+      "source": "cat ~/.kube/*",
+      "cwd": "$H/project",
+      "expected": "D",
+      "go_expected": {
+        "claude": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        },
+        "codex": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        },
+        "pi": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        }
+      }
+    },
+    {
+      "id": "readers[111]",
+      "partition": "credential",
+      "source": "cat ~/.cargo/*",
+      "cwd": "$H/project",
+      "expected": "D",
+      "go_expected": {
+        "claude": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        },
+        "codex": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        },
+        "pi": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        }
+      }
+    },
+    {
+      "id": "readers[116]",
+      "partition": "credential",
+      "source": "ag auths ~/.config/gh",
+      "cwd": "$H/project",
+      "expected": "D",
+      "go_expected": {
+        "claude": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        },
+        "codex": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        },
+        "pi": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        }
+      }
+    },
+    {
+      "id": "readers[170]",
+      "partition": "fd",
+      "source": "fd x ~/.aws -x cat",
+      "cwd": "$H/project",
+      "expected": "D",
+      "go_expected": {
+        "claude": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        },
+        "codex": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        },
+        "pi": {
+          "reason": "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.",
+          "advice": []
+        }
+      }
+    },
+    {
+      "id": "credential-named-control",
+      "partition": "credential",
+      "source": "cat ~/.docker/input.txt",
+      "cwd": "$H/project",
+      "expected": "N"
+    },
+    {
+      "id": "credential-cwd-control",
+      "partition": "credential",
+      "source": "printf done",
+      "cwd": "$H/.docker",
+      "expected": "N"
+    },
+    {
+      "id": "credential-search-control",
+      "partition": "credential",
+      "source": "ag auths public",
+      "cwd": "$H/project",
+      "expected": "N"
+    },
+    {
+      "id": "fd-name-control",
+      "partition": "fd",
+      "source": "fd x public -x printf done",
+      "cwd": "$H/project",
+      "expected": "N"
+    },
+    {
+      "id": "appdata-glob-control",
+      "partition": "appdata",
+      "source": "printf %s ~/project/*/*",
+      "cwd": "$H",
+      "expected": "N"
+    },
+    {
+      "id": "git-public-scan-control",
+      "partition": "git",
+      "source": "git -C \"$HOME/project\" grep needle",
+      "cwd": "$H/project",
+      "expected": "N"
+    },
+    {
+      "id": "tar-public-root-control",
+      "partition": "tar",
+      "source": "tar -xf x.tar -Cpublic",
+      "cwd": "$H/project",
+      "expected": "N"
+    },
+    {
+      "id": "gh-no-token-control",
+      "partition": "gh",
+      "source": "printf done | gh auth status -a",
+      "cwd": "$H/project",
+      "expected": "UC"
+    }
+  ]
+}

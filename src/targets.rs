@@ -810,6 +810,7 @@ fn infer_listing(
     if paths.is_empty() {
         paths.push(Word::literal(base.clone()));
     }
+    let item_root = paths[0].text.clone();
     for path in paths {
         effects.targets.push(Target::from_word(
             &path,
@@ -845,12 +846,14 @@ fn infer_listing(
         Vec::new()
     };
     for (start, end) in children {
-        let result = infer_at(
-            &child(command, &args[start..end], &base),
-            &base,
-            host,
-            depth + 1,
-        );
+        let mut nested = child(command, &args[start..end], &base);
+        if program == "fd" {
+            nested.items = Some(crate::record::Items {
+                root: item_root.clone(),
+                hidden: shows_hidden(args),
+            });
+        }
+        let result = infer_at(&nested, &base, host, depth + 1);
         if effects.hidden_listing && args.get(start).is_some_and(|name| content_consumer(name)) {
             effects.hidden_content = true;
         }
@@ -858,6 +861,7 @@ fn infer_listing(
         effects.gaps.extend(result.gaps);
         effects.code.extend(result.code);
         effects.inline.extend(result.inline);
+        effects.hidden_content |= result.hidden_content;
     }
 }
 
