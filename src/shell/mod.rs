@@ -265,6 +265,7 @@ fn expand_scoped(
     scope: &mut statements::Scope,
     evaluator: &mut statements::Evaluator<'_, '_>,
     depth: usize,
+    observe_bindings: bool,
 ) -> Result<Vec<Expanded>, CheckError> {
     let host = evaluator.frontend.host;
     let first = scope.contexts();
@@ -286,7 +287,9 @@ fn expand_scoped(
         .iter()
         .collect::<std::collections::BTreeSet<_>>()
     {
-        evaluator.armed_reference(name, scope, depth)?;
+        if observe_bindings {
+            evaluator.armed_reference(name, scope, depth)?;
+        }
         if let Some(binding) = scope.bindings.get(name) {
             let mut next = Vec::new();
             for context in &contexts {

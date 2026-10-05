@@ -39,6 +39,7 @@ impl BindingValue {
 pub(super) struct Binding {
     pub values: Vec<BindingValue>,
     exported: bool,
+    arithmetic: bool,
 }
 
 #[derive(Clone)]
@@ -68,6 +69,7 @@ impl Scope {
                 Binding {
                     values: vec![BindingValue::Known(home.into())],
                     exported: false,
+                    arithmetic: false,
                 },
             )]),
             frames: Vec::new(),
@@ -205,7 +207,18 @@ impl Scope {
             .bindings
             .get(&name)
             .is_some_and(|binding| binding.exported);
-        self.bindings.insert(name, Binding { values, exported });
+        let arithmetic = self
+            .bindings
+            .get(&name)
+            .is_some_and(|binding| binding.arithmetic);
+        self.bindings.insert(
+            name,
+            Binding {
+                values,
+                exported,
+                arithmetic,
+            },
+        );
     }
     fn enter_function(&mut self) {
         self.frames.push(BTreeMap::new());
@@ -283,9 +296,11 @@ fn join_values<'a>(values: impl Iterator<Item = Option<&'a Binding>>) -> (Option
     let mut present = false;
     let mut bounded = false;
     let mut exported = false;
+    let mut arithmetic = false;
     for binding in values {
         present |= binding.is_some();
         exported |= binding.is_some_and(|binding| binding.exported);
+        arithmetic |= binding.is_some_and(|binding| binding.arithmetic);
         let values = binding.map_or_else(
             || vec![BindingValue::RuntimeUnknown(Some(String::new()))],
             |b| b.values.clone(),
@@ -304,6 +319,7 @@ fn join_values<'a>(values: impl Iterator<Item = Option<&'a Binding>>) -> (Option
         present.then_some(Binding {
             values: joined,
             exported,
+            arithmetic,
         }),
         bounded,
     )
@@ -428,7 +444,14 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let mut assignment_scope = scope.clone();
         let mut command_bindings = BTreeMap::new();
         for (name, raw) in assignments {
-            let values = self.expand(raw, &mut assignment_scope, depth)?;
+            let observe_bindings = assignment_scope
+                .bindings
+                .get(name.strip_suffix('+').unwrap_or(name))
+                .is_some_and(|binding| binding.arithmetic);
+            // Copying stores the armed value; only an arithmetic attribute
+            // consumes it here. A later assignment replaces the stored value.
+            let values =
+                super::expand_scoped(raw, &mut assignment_scope, self, depth, observe_bindings)?;
             for value in &values {
                 self.armed_references(&value.word.text, &mut assignment_scope, depth)?;
             }
@@ -798,6 +821,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         .or_insert_with(|| Binding {
                             values: Vec::new(),
                             exported: true,
+                            arithmetic: false,
                         });
                     if !binding.values.contains(&value) {
                         binding.values.push(value);
@@ -1281,6 +1305,17 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let local = in_function && matches!(program, "local" | "declare" | "typeset");
         let top_local = !in_function && program == "local";
         let exported = program == "export" && !argv.iter().any(|word| word == "-n");
+        let arithmetic = argv
+            .iter()
+            .skip(1)
+            .filter_map(|word| {
+                let flag = word
+                    .strip_prefix('-')
+                    .map(|value| (value, true))
+                    .or_else(|| word.strip_prefix('+').map(|value| (value, false)))?;
+                flag.0.contains('i').then_some(flag.1)
+            })
+            .next_back();
         if in_function && (program == "export" || argv.iter().skip(1).any(|w| w.starts_with('-'))) {
             self.output.gap(CoverageGap::UnsupportedShellSyntax);
         }
@@ -1317,6 +1352,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     .or_insert_with(|| Binding {
                         values: vec![BindingValue::RuntimeUnknown(None)],
                         exported,
+                        arithmetic: false,
                     })
                     .exported = exported;
             } else if local && identifier(&word.text) {
@@ -1330,6 +1366,20 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
                 scope.local(&word.text);
                 scope.assign(word.text.clone(), values);
+            }
+            if let Some(arithmetic) = arithmetic {
+                let name = assignment(&word.text).map_or(word.text.as_str(), |(name, _)| name);
+                if identifier(name) {
+                    scope
+                        .bindings
+                        .entry(name.into())
+                        .or_insert_with(|| Binding {
+                            values: vec![BindingValue::RuntimeUnknown(None)],
+                            exported: false,
+                            arithmetic: false,
+                        })
+                        .arithmetic = arithmetic;
+                }
             }
         }
     }
@@ -1641,7 +1691,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         scope: &mut Scope,
         depth: usize,
     ) -> Result<Vec<Expanded>, CheckError> {
-        super::expand_scoped(raw, scope, self, depth)
+        super::expand_scoped(raw, scope, self, depth, true)
     }
     pub fn isolated_source(
         &mut self,
@@ -1742,7 +1792,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let mut sources = Vec::new();
         for value in &values {
             let BindingValue::Known(value) = value else {
-                if value == &BindingValue::Undetermined {
+                if value == &BindingValue::Undetermined
+                    || matches!(value, BindingValue::RuntimeDerived(text)
+                        if !matches!(super::arithmetic::armed(text), super::arithmetic::Arming::Inert))
+                {
                     self.output.gap(CoverageGap::UnsupportedShellSyntax);
                 }
                 continue;
