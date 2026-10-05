@@ -65,3 +65,13 @@ fn credential_globs_and_roots_follow_the_lexical_owner() {
 fn fd_exec_reads_its_match_root() {
     partition("fd");
 }
+
+#[test]
+fn data_globs_touch_appdata() {
+    partition("appdata");
+}
+
+#[test]
+fn git_option_roots_keep_the_go_walk() {
+    partition("git");
+}

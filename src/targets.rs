@@ -152,6 +152,11 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
     match program {
         "__observed_stream__" => effects.gaps.push(CoverageGap::UnresolvedTarget),
         "printf" | "echo" | "print" => {
+            effects.targets.extend(
+                args.iter()
+                    .filter(|arg| !arg.starts_with('-'))
+                    .map(|arg| Target::from_word(arg, cwd, host, Effect::Name, Walk::None)),
+            );
             effects.variable = !(program != "echo" && args.first().is_some_and(|arg| arg == "-v"))
                 && command.variables().any(|name| secret_name(name));
         }
@@ -494,6 +499,11 @@ fn xargs_content_consumer(name: &str) -> bool {
 fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effects) {
     let mut index = 0;
     let mut base = cwd.to_owned();
+    let option_walk = if args.iter().any(|arg| arg == "config") {
+        Walk::None
+    } else {
+        Walk::Visible
+    };
     while let Some(arg) = args.get(index).filter(|arg| arg.starts_with('-')) {
         let takes = [
             "-C",
@@ -521,7 +531,7 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
                 cwd,
                 host,
                 Effect::Enter,
-                Walk::None,
+                option_walk,
             ));
         }
         index += if takes { 2 } else { 1 };
