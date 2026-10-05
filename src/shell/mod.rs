@@ -254,7 +254,7 @@ impl statements::Evaluator<'_, '_> {
             }
         }
         for code in detection.code {
-            self.source(&code, &mut scope.isolated(), depth + 1)?;
+            self.isolated_source(&code, scope, depth + 1)?;
         }
         Ok(())
     }
@@ -322,12 +322,12 @@ fn expand_scoped(
     }
     for expansion in &raw.expansions {
         match expansion {
-            RawExpansion::Code(code) => evaluator.source(code, &mut scope.isolated(), depth + 1)?,
+            RawExpansion::Code(code) => evaluator.isolated_source(code, scope, depth + 1)?,
             RawExpansion::Variable(name) => {
                 if let Some(binding) = scope.bindings.get(name).cloned() {
                     for value in binding.values {
                         if let statements::BindingValue::Known(code) = value {
-                            evaluator.source(&code, &mut scope.isolated(), depth + 1)?;
+                            evaluator.isolated_source(&code, scope, depth + 1)?;
                         } else if value == statements::BindingValue::Undetermined {
                             evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
@@ -395,7 +395,7 @@ fn expand_scoped(
                 evaluator.armed_references(expression, scope, depth)?;
             }
             for code in &expanded.nested {
-                evaluator.source(code, &mut scope.isolated(), depth + 1)?;
+                evaluator.isolated_source(code, scope, depth + 1)?;
             }
             result.push(expanded);
         }

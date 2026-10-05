@@ -38,6 +38,7 @@ impl BindingValue {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Binding {
     pub values: Vec<BindingValue>,
+    exported: bool,
 }
 
 #[derive(Clone)]
@@ -66,6 +67,7 @@ impl Scope {
                 "HOME".into(),
                 Binding {
                     values: vec![BindingValue::Known(home.into())],
+                    exported: false,
                 },
             )]),
             frames: Vec::new(),
@@ -199,7 +201,11 @@ impl Scope {
                 .entry(name.clone())
                 .or_insert_with(|| self.bindings.get(&name).cloned());
         }
-        self.bindings.insert(name, Binding { values });
+        let exported = self
+            .bindings
+            .get(&name)
+            .is_some_and(|binding| binding.exported);
+        self.bindings.insert(name, Binding { values, exported });
     }
     fn enter_function(&mut self) {
         self.frames.push(BTreeMap::new());
@@ -276,8 +282,10 @@ fn join_values<'a>(values: impl Iterator<Item = Option<&'a Binding>>) -> (Option
     let mut joined = Vec::new();
     let mut present = false;
     let mut bounded = false;
+    let mut exported = false;
     for binding in values {
         present |= binding.is_some();
+        exported |= binding.is_some_and(|binding| binding.exported);
         let values = binding.map_or_else(
             || vec![BindingValue::RuntimeUnknown(Some(String::new()))],
             |b| b.values.clone(),
@@ -292,7 +300,13 @@ fn join_values<'a>(values: impl Iterator<Item = Option<&'a Binding>>) -> (Option
             }
         }
     }
-    (present.then_some(Binding { values: joined }), bounded)
+    (
+        present.then_some(Binding {
+            values: joined,
+            exported,
+        }),
+        bounded,
+    )
 }
 
 fn restore_prefix(
@@ -567,7 +581,14 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             }
             if let Some(index) = program {
                 for word in &argv[index + 1..] {
-                    self.armed_word(word, scope, depth)?;
+                    // These builtins consume variable names, not arithmetic values.
+                    if !(resolved.shell
+                        && !self.functions.contains_key(&argv[index].text)
+                        && matches!(argv[index].text.as_str(), "unset" | "export")
+                        && identifier(&word.text))
+                    {
+                        self.armed_word(word, scope, depth)?;
+                    }
                 }
             }
             if let Some(index) = program.filter(|i| {
@@ -585,6 +606,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
                 self.declaration(&argv[index..], scope);
                 match argv[index].text.as_str() {
+                    "unset" => self.unset(&argv[index + 1..], scope),
                     "set" if argv.get(index + 1).is_some_and(|word| word == "--") => {
                         self.positionals(&argv[index + 2..], scope);
                     }
@@ -742,8 +764,31 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 nested,
             };
             self.emit(command.clone(), scope);
+            if let Some(index) = program.filter(|index| {
+                !command.function
+                    && matches!(
+                        command.argv[*index].rsplit('/').next(),
+                        Some("sh" | "bash" | "zsh" | "dash" | "ksh")
+                    )
+            }) && let Some(pair) = command.argv[index + 1..]
+                .windows(2)
+                .find(|pair| super::argv::shell_code_flag(&pair[0]))
+            {
+                let mut child = Scope::new(self.frontend.host.home, &command.cwd);
+                child.bindings.extend(
+                    scope
+                        .bindings
+                        .iter()
+                        .filter(|(_, binding)| binding.exported)
+                        .map(|(name, binding)| (name.clone(), binding.clone())),
+                );
+                let functions = self.functions.clone();
+                let result = self.source(&pair[1].text, &mut child, depth + 1);
+                self.functions = functions;
+                result?;
+            }
             if let Some(source) = resolved.source {
-                self.source(&source, &mut scope.isolated(), depth + 1)?;
+                self.isolated_source(&source, scope, depth + 1)?;
             }
             if super::argv::stdin_kind(&command) == Stdin::Shell {
                 for redirect in &command.redirects {
@@ -883,11 +928,17 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             }
             Statement::UnsupportedSyntax => self.output.gap(CoverageGap::UnsupportedShellSyntax),
             Statement::Group(body) => self.run(body, scope, depth + 1, source_id, nested)?,
-            Statement::Subshell(body) | Statement::Async(body) => {
-                self.run(body, &mut scope.isolated(), depth + 1, source_id, nested)?
-            }
-            Statement::Substitution(body) => {
-                self.run(body, &mut scope.isolated(), depth + 1, source_id, true)?
+            Statement::Subshell(body) | Statement::Async(body) | Statement::Substitution(body) => {
+                let functions = self.functions.clone();
+                let result = self.run(
+                    body,
+                    &mut scope.isolated(),
+                    depth + 1,
+                    source_id,
+                    nested || matches!(statement, Statement::Substitution(_)),
+                );
+                self.functions = functions;
+                result?;
             }
             Statement::Definition(name, body) => {
                 if scope.isolated || scope.conditional_definition || !scope.frames.is_empty() {
@@ -1165,6 +1216,39 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
         Ok(())
     }
+    fn unset(&mut self, argv: &[crate::record::Word], scope: &mut Scope) {
+        let mut functions = false;
+        let mut options = true;
+        for word in argv {
+            if options && word == "--" {
+                options = false;
+                continue;
+            }
+            if options && word.starts_with('-') {
+                match word.text.as_str() {
+                    "-v" => functions = false,
+                    "-f" => functions = true,
+                    _ => return,
+                }
+                continue;
+            }
+            options = false;
+            if !identifier(&word.text) || scope.expanded_binding(word, &word.text).known().is_none()
+            {
+                continue;
+            }
+            if functions {
+                if !scope.defining {
+                    self.functions.remove(&word.text);
+                }
+            } else {
+                let prefix = format!("{}[", word.text);
+                scope
+                    .bindings
+                    .retain(|name, _| name != &word.text && !name.starts_with(&prefix));
+            }
+        }
+    }
     fn declaration(&mut self, argv: &[crate::record::Word], scope: &mut Scope) {
         let Some(program) = argv.first().map(|w| w.text.as_str()) else {
             return;
@@ -1175,6 +1259,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let in_function = !scope.frames.is_empty();
         let local = in_function && matches!(program, "local" | "declare" | "typeset");
         let top_local = !in_function && program == "local";
+        let exported = program == "export" && !argv.iter().any(|word| word == "-n");
         if in_function && (program == "export" || argv.iter().skip(1).any(|w| w.starts_with('-'))) {
             self.output.gap(CoverageGap::UnsupportedShellSyntax);
         }
@@ -1199,6 +1284,20 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     }
                 }
                 scope.assign(name.into(), values);
+                if program == "export"
+                    && let Some(binding) = scope.bindings.get_mut(name)
+                {
+                    binding.exported = exported;
+                }
+            } else if program == "export" && identifier(&word.text) {
+                scope
+                    .bindings
+                    .entry(word.text.clone())
+                    .or_insert_with(|| Binding {
+                        values: vec![BindingValue::RuntimeUnknown(None)],
+                        exported,
+                    })
+                    .exported = exported;
             } else if local && identifier(&word.text) {
                 let mut values = scope
                     .bindings
@@ -1466,6 +1565,17 @@ impl<'a, 'b> Evaluator<'a, 'b> {
     ) -> Result<Vec<Expanded>, CheckError> {
         super::expand_scoped(raw, scope, self, depth)
     }
+    pub fn isolated_source(
+        &mut self,
+        source: &str,
+        scope: &Scope,
+        depth: usize,
+    ) -> Result<(), CheckError> {
+        let functions = self.functions.clone();
+        let result = self.source(source, &mut scope.isolated(), depth);
+        self.functions = functions;
+        result
+    }
     pub fn arithmetic(
         &mut self,
         expression: &str,
@@ -1475,7 +1585,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         self.armed_references(expression, scope, depth)?;
         let code = self.arithmetic_code(expression, scope)?;
         for code in code {
-            self.source(&code, &mut scope.isolated(), depth + 1)?;
+            self.isolated_source(&code, scope, depth + 1)?;
         }
         Ok(())
     }
@@ -1580,7 +1690,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
             }
             for source in sources {
-                self.source(&source, &mut scope.isolated(), depth + 1)?;
+                self.isolated_source(&source, scope, depth + 1)?;
             }
         }
         Ok(())
