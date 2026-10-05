@@ -411,6 +411,18 @@ impl Inspection<'_> {
                     "print a Git hosting token; use auth status without token-display flags".into()
                 });
             }
+            if effects.keychain {
+                self.effect(EffectRecord::Keychain);
+                self.denial.get_or_insert_with(|| "extract a password from the macOS Keychain; run the authorized client that consumes it without printing it".into());
+            }
+            if effects.stored_secret {
+                self.effect(EffectRecord::StoredSecret);
+                self.denial.get_or_insert_with(|| "print a stored secret or access token; run the command that uses it without printing it".into());
+            }
+            if effects.trace {
+                self.effect(EffectRecord::NetworkTrace);
+                self.denial.get_or_insert_with(|| "curl verbose or trace output can print authentication headers; drop -v and --trace and use a normal request".into());
+            }
             if effects.hidden_content {
                 self.effect(EffectRecord::HiddenContent);
                 self.denial.get_or_insert_with(|| {

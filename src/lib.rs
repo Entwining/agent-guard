@@ -34,6 +34,9 @@ pub enum EffectRecord {
     EnvironmentDump,
     CredentialVariable,
     HostingToken,
+    Keychain,
+    StoredSecret,
+    NetworkTrace,
     HiddenContent,
 }
 

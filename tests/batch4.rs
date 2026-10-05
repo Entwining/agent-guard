@@ -44,6 +44,27 @@ fn partition(name: &str) {
             if row["expected"] == "D" {
                 assert!(!wire.stderr.is_empty());
                 assert!(!result.as_ref().unwrap().effects.is_empty());
+                if let Some(kind) = row["effect"].as_str() {
+                    let effect = match kind {
+                        "HostingToken" => agent_guard_rust::EffectRecord::HostingToken,
+                        "Keychain" => agent_guard_rust::EffectRecord::Keychain,
+                        "StoredSecret" => agent_guard_rust::EffectRecord::StoredSecret,
+                        "NetworkTrace" => agent_guard_rust::EffectRecord::NetworkTrace,
+                        _ => panic!("unknown effect"),
+                    };
+                    assert!(
+                        result.as_ref().unwrap().effects.contains(&effect),
+                        "{}",
+                        row["id"]
+                    );
+                    assert!(
+                        wire.stderr
+                            .contains(row["reason_contains"].as_str().unwrap()),
+                        "{}: {}",
+                        row["id"],
+                        wire.stderr
+                    );
+                }
             } else if row["expected"] == "N" {
                 assert!(wire.stderr.is_empty());
             }
@@ -73,4 +94,14 @@ fn wget_file_inputs_and_outputs_follow_go() {
 #[test]
 fn docker_host_inputs_respect_command_boundaries() {
     partition("docker");
+}
+
+#[test]
+fn stored_secret_outputs_follow_the_secret_owner() {
+    partition("secret");
+}
+
+#[test]
+fn curl_trace_detection_skips_option_values() {
+    partition("trace");
 }

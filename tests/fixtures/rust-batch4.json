@@ -943,7 +943,9 @@
           "reason": "curl verbose or trace output can print HTTP headers including Authorization. Drop -v and --trace; use a normal curl request for the needed result.",
           "advice": []
         }
-      }
+      },
+      "effect": "NetworkTrace",
+      "reason_contains": "curl verbose or trace"
     },
     {
       "id": "credentials[107]",
@@ -964,7 +966,9 @@
           "reason": "curl verbose or trace output can print HTTP headers including Authorization. Drop -v and --trace; use a normal curl request for the needed result.",
           "advice": []
         }
-      }
+      },
+      "effect": "NetworkTrace",
+      "reason_contains": "curl verbose or trace"
     },
     {
       "id": "credentials[108]",
@@ -985,7 +989,9 @@
           "reason": "curl verbose or trace output can print HTTP headers including Authorization. Drop -v and --trace; use a normal curl request for the needed result.",
           "advice": []
         }
-      }
+      },
+      "effect": "NetworkTrace",
+      "reason_contains": "curl verbose or trace"
     },
     {
       "id": "credentials[109]",
@@ -1006,7 +1012,9 @@
           "reason": "curl verbose or trace output can print HTTP headers including Authorization. Drop -v and --trace; use a normal curl request for the needed result.",
           "advice": []
         }
-      }
+      },
+      "effect": "NetworkTrace",
+      "reason_contains": "curl verbose or trace"
     },
     {
       "id": "credentials[110]",
@@ -1027,7 +1035,9 @@
           "reason": "curl verbose or trace output can print HTTP headers including Authorization. Drop -v and --trace; use a normal curl request for the needed result.",
           "advice": []
         }
-      }
+      },
+      "effect": "NetworkTrace",
+      "reason_contains": "curl verbose or trace"
     },
     {
       "id": "credentials[228]",
@@ -1048,7 +1058,9 @@
           "reason": "This prints a Git hosting token. Use auth status without token-display flags; if authentication needs repair, ask the user to update the credential in their terminal.",
           "advice": []
         }
-      }
+      },
+      "effect": "HostingToken",
+      "reason_contains": "Git hosting token"
     },
     {
       "id": "credentials[229]",
@@ -1069,7 +1081,9 @@
           "reason": "This extracts a password from the macOS Keychain. State the intended use and run the authorized client that consumes it without printing it.",
           "advice": []
         }
-      }
+      },
+      "effect": "Keychain",
+      "reason_contains": "macOS Keychain"
     },
     {
       "id": "credentials[230]",
@@ -1090,7 +1104,9 @@
           "reason": "curl verbose or trace output can print HTTP headers including Authorization. Drop -v and --trace; use a normal curl request for the needed result.",
           "advice": []
         }
-      }
+      },
+      "effect": "NetworkTrace",
+      "reason_contains": "curl verbose or trace"
     },
     {
       "id": "credentials[231]",
@@ -1111,7 +1127,9 @@
           "reason": "curl verbose or trace output can print HTTP headers including Authorization. Drop -v and --trace; use a normal curl request for the needed result.",
           "advice": []
         }
-      }
+      },
+      "effect": "NetworkTrace",
+      "reason_contains": "curl verbose or trace"
     },
     {
       "id": "programs[21]",
@@ -1321,7 +1339,9 @@
           "reason": "This extracts a password from the macOS Keychain. State the intended use and run the authorized client that consumes it without printing it.",
           "advice": []
         }
-      }
+      },
+      "effect": "Keychain",
+      "reason_contains": "macOS Keychain"
     },
     {
       "id": "readers[73]",
@@ -1342,7 +1362,9 @@
           "reason": "This extracts a password from the macOS Keychain. State the intended use and run the authorized client that consumes it without printing it.",
           "advice": []
         }
-      }
+      },
+      "effect": "Keychain",
+      "reason_contains": "macOS Keychain"
     },
     {
       "id": "readers[74]",
@@ -1363,7 +1385,9 @@
           "reason": "This extracts a password from the macOS Keychain. State the intended use and run the authorized client that consumes it without printing it.",
           "advice": []
         }
-      }
+      },
+      "effect": "Keychain",
+      "reason_contains": "macOS Keychain"
     },
     {
       "id": "readers[76]",
@@ -1384,7 +1408,9 @@
           "reason": "This prints a stored secret or access token. Run the command that uses the credential without printing it, or ask the user to run it in their own terminal and share only the non-secret fact needed.",
           "advice": []
         }
-      }
+      },
+      "effect": "StoredSecret",
+      "reason_contains": "stored secret or access token"
     },
     {
       "id": "readers[78]",
@@ -1405,7 +1431,9 @@
           "reason": "This prints a stored secret or access token. Run the command that uses the credential without printing it, or ask the user to run it in their own terminal and share only the non-secret fact needed.",
           "advice": []
         }
-      }
+      },
+      "effect": "StoredSecret",
+      "reason_contains": "stored secret or access token"
     },
     {
       "id": "readers[80]",
@@ -1426,7 +1454,9 @@
           "reason": "This prints a stored secret or access token. Run the command that uses the credential without printing it, or ask the user to run it in their own terminal and share only the non-secret fact needed.",
           "advice": []
         }
-      }
+      },
+      "effect": "StoredSecret",
+      "reason_contains": "stored secret or access token"
     },
     {
       "id": "readers[82]",
@@ -1447,7 +1477,9 @@
           "reason": "This prints a stored secret or access token. Run the command that uses the credential without printing it, or ask the user to run it in their own terminal and share only the non-secret fact needed.",
           "advice": []
         }
-      }
+      },
+      "effect": "StoredSecret",
+      "reason_contains": "stored secret or access token"
     },
     {
       "id": "readers[84]",
@@ -1468,7 +1500,9 @@
           "reason": "This prints a stored secret or access token. Run the command that uses the credential without printing it, or ask the user to run it in their own terminal and share only the non-secret fact needed.",
           "advice": []
         }
-      }
+      },
+      "effect": "StoredSecret",
+      "reason_contains": "stored secret or access token"
     },
     {
       "id": "readers[87]",
@@ -1489,7 +1523,9 @@
           "reason": "This prints a stored secret or access token. Run the command that uses the credential without printing it, or ask the user to run it in their own terminal and share only the non-secret fact needed.",
           "advice": []
         }
-      }
+      },
+      "effect": "StoredSecret",
+      "reason_contains": "stored secret or access token"
     },
     {
       "id": "readers[100]",
@@ -1657,7 +1693,9 @@
           "reason": "This extracts a password from the macOS Keychain. State the intended use and run the authorized client that consumes it without printing it.",
           "advice": []
         }
-      }
+      },
+      "effect": "Keychain",
+      "reason_contains": "macOS Keychain"
     },
     {
       "id": "shell[128]",
@@ -1678,7 +1716,9 @@
           "reason": "This prints a Git hosting token. Use auth status without token-display flags; if authentication needs repair, ask the user to update the credential in their terminal.",
           "advice": []
         }
-      }
+      },
+      "effect": "HostingToken",
+      "reason_contains": "Git hosting token"
     },
     {
       "cwd": "$H/project",

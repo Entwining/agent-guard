@@ -3,6 +3,7 @@ use crate::{CoverageGap, shell::CommandRecord};
 pub use crate::record::Target;
 use crate::record::{Direction, Effect, HostFacts, Via, Walk, Word};
 mod clients;
+mod secrets;
 #[derive(Debug, Default)]
 pub struct Effects {
     pub targets: Vec<Target>,
@@ -12,6 +13,9 @@ pub struct Effects {
     pub dump: bool,
     pub variable: bool,
     pub token: bool,
+    pub keychain: bool,
+    pub stored_secret: bool,
+    pub trace: bool,
     pub hidden_content: bool,
     pub replace_advice: bool,
     pub hidden_listing: bool,
@@ -148,11 +152,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             }
         }
     }
-    if program == "gh" {
-        effects.token = args.first().is_some_and(|arg| arg == "auth")
-            && (args.get(1).is_some_and(|arg| arg == "token")
-                || args.get(1).is_some_and(|arg| arg == "status") && gh_shows_token(&args[2..]));
-    }
+    secrets::infer(program, args, &mut effects);
     let read = |word: &Word, recursive| {
         Target::from_word(
             word,
@@ -376,30 +376,6 @@ fn printenv_signature(code: &str) -> bool {
     })
 }
 
-fn gh_shows_token(args: &[Word]) -> bool {
-    let mut index = 0;
-    while let Some(arg) = args.get(index) {
-        if arg == "--" {
-            return false;
-        }
-        if ["--hostname", "--jq", "--json", "--template", "-h"].contains(&arg.as_str()) {
-            index += 1;
-        } else if arg == "--show-token"
-            || arg.starts_with("--show-token=")
-            || arg.strip_prefix('-').is_some_and(|flags| {
-                flags
-                    .chars()
-                    .take_while(|c| matches!(c, 'a' | 't'))
-                    .any(|c| c == 't')
-            })
-        {
-            return true;
-        }
-        index += 1;
-    }
-    false
-}
-
 fn secret_name(name: &str) -> bool {
     let name = name.to_ascii_uppercase();
     ["TOKEN", "SECRET", "KEY", "PASSWORD", "CREDENTIAL"]
@@ -522,6 +498,10 @@ fn infer_wrapper(
     effects.inline.extend(result.inline);
     effects.dump |= result.dump;
     effects.variable |= result.variable;
+    effects.token |= result.token;
+    effects.keychain |= result.keychain;
+    effects.stored_secret |= result.stored_secret;
+    effects.trace |= result.trace;
     effects.hidden_listing |= result.hidden_listing;
     effects.hidden_content |= result.hidden_content;
     effects.replace_advice |= result.replace_advice;
