@@ -80,6 +80,10 @@ fn tree_roots_list() {
     partition("tree");
 }
 #[test]
+fn moving_loop_directory_refuses_after_the_bound() {
+    partition("loop-cwd");
+}
+#[test]
 fn visible_file_roots_list() {
     partition("files-visible");
 }

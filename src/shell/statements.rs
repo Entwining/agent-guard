@@ -1009,7 +1009,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 let first = inner.clone();
                 if !matches!(iterations, Some(0 | 1)) {
                     self.run(body, &mut inner, depth + 1, source_id, nested)?;
-                    if inner.bindings != first.bindings && iterations.is_none_or(|n| n > 2) {
+                    if (inner.bindings != first.bindings
+                        || inner.directory.current != first.directory.current
+                        || inner.directory.alternatives != first.directory.alternatives)
+                        && iterations.is_none_or(|n| n > 2)
+                    {
                         self.output.gap(CoverageGap::InspectionBudget);
                     }
                 }
@@ -1544,6 +1548,37 @@ mod tests {
                 .contains(&BindingValue::RuntimeUnknown(None)),
             "{:?}: {result:?}",
             scope.bindings
+        );
+    }
+    #[test]
+    fn loop_directory_loss_has_an_explicit_gap() {
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/rust-m2-1.json")).unwrap();
+        let row = data["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == "loop-cwd-up-three")
+            .unwrap();
+        let mut scope = Scope::new("/h", row["cwd"].as_str().unwrap());
+        let result = observation(row["source"].as_str().unwrap(), &mut scope);
+        assert!(
+            scope
+                .directory
+                .alternatives
+                .iter()
+                .any(|path| path.render() == "/h/project")
+        );
+        assert!(
+            !scope
+                .directory
+                .alternatives
+                .iter()
+                .any(|path| path.render() == "/h")
+        );
+        assert!(
+            result.gaps.contains(&CoverageGap::InspectionBudget),
+            "{result:?}"
         );
     }
     #[test]
