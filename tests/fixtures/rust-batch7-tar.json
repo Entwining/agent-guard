@@ -1,0 +1,11 @@
+{"rows":[
+ {"id":"tar-glued-list","partition":"tar","expected":"D","input":{"command":"tar -T$C/data.txt -cf out.tar"}},
+ {"id":"tar-glued-exclude-list","partition":"tar","expected":"D","input":{"command":"tar -X$C/data.txt -cf out.tar"}},
+ {"id":"tar-glued-list-env","partition":"tar","expected":"D","input":{"command":"tar -cT.env -f out.tar"}},
+ {"id":"tar-separated-list","partition":"tar","expected":"D","input":{"command":"tar -T '$C/data.txt' -cf out.tar"}},
+ {"id":"tar-public-list","partition":"tar","expected":"N","input":{"command":"tar -Tinput.txt -cf out.tar"}},
+ {"id":"tar-glued-output","partition":"archive","expected":"N","input":{"command":"tar -cf.env input.txt"}},
+ {"id":"tar-glued-input","partition":"archive","expected":"D","input":{"command":"tar -tf.env"}},
+ {"id":"tar-glued-directory","partition":"directory","expected":"D","input":{"command":"tar -cC$C -f out.tar data.txt"}},
+ {"id":"tar-public-directory","partition":"directory","expected":"N","input":{"command":"tar -cC$P -f out.tar input.txt"}}
+]}
