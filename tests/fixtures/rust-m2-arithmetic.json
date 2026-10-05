@@ -5,7 +5,7 @@
   {"id":"let","sink":"let","source":"a='b[$(cat .env)]'; let 'a'","expected":"D","nested":true,"scope":"top-level a version 1","host_source":"a='b[$(echo HIT >&2)]'; b=(0); let 'a'; printf '%s\n' done"},
   {"id":"index","sink":"index","source":"a='b[$(cat .env)]'; b[a]=0","expected":"D","nested":true,"scope":"top-level a version 1","host_source":"a='b[$(echo HIT >&2)]'; b=(0); b[a]=0; printf '%s\n' done"},
   {"id":"test","sink":"test","source":"a='b[$(cat .env)]'; [[ a -eq 0 ]]","expected":"D","nested":true,"scope":"top-level a version 1","host_source":"a='b[$(echo HIT >&2)]'; b=(0); [[ a -eq 0 ]]; printf '%s\n' done"},
-  {"id":"ordinary-data","source":"a='b[$(cat .env)]'; printf '%s' \"$a\"","expected":"N","nested":false,"scope":"top-level a version 1, non-arithmetic sink","host_source":"a='b[$(echo HIT >&2)]'; printf '%s\n' \"$a\""},
+  {"id":"ordinary-data","source":"a='b[$(cat .env)]'; printf '%s' \"$a\"","expected":"D","nested":true,"scope":"ruling 42 conservative armed expansion in a non-math sink","host_source":"a='b[$(echo HIT >&2)]'; printf '%s\n' \"$a\""},
   {"id":"rebound","source":"a='b[$(cat .env)]'; a=0; printf '%s' $((a))","expected":"N","nested":false,"scope":"top-level a version 2 replaces version 1","host_source":"a='b[$(echo HIT >&2)]'; a=0; printf '%s\n' \"$((a))\""},
   {"id":"shell-data","source":"a='cat .env'; printf '%s' $((a))","expected":"N","nested":false,"scope":"top-level a version 1, invalid arithmetic data"},
   {"id":"value-substitution","source":"a='$(cat .env)'; printf '%s' $((a))","expected":"N","nested":false,"scope":"top-level a version 1, substitution outside subscript"},

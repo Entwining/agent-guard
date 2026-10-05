@@ -1,6 +1,40 @@
 # Offline Rust migration evidence
 
-## M2 final scope and nesting completion
+## M2.1 acceptance corrections
+
+M2 at `67dde11` was rejected by both acceptance seats. Rulings 38–44
+repair the target-role regressions, OR exit state, directory overflow,
+runtime-value classification, armed-value propagation, directory convergence
+and the additional cd forms. The 1,289-row differential still has the same
+90 defect rows / 254 consumer conflicts, with no lost matched observation and
+all 21 CHANGE contracts retained. Every observation in the coordinator's
+254-item list is unchanged; the full corpus has 24 same-class field changes.
+
+The three-consumer req4–req27 replay has 810 observations. Against `ff95842`,
+228 complete records change; the 15 new permits are previously ruled scope
+isolation controls and the two accepted pushd Enter controls. The three new
+U-R results are the ruled complex-break fallback. Against `67dde11`, 96
+records change, including 12 runtime-value permits under ruling 41 and six
+directory-budget refusals under ruling 40. Neither comparison has a new F.
+Only evaluation time is omitted from these wire comparisons. Corpus comparison
+also normalizes the synthetic fixture process suffix.
+
+Static value and cwd fixtures cover claude, codex and pi. Host readings use
+only echo/printf markers and public synthetic directories. Array locals retain
+the existing dynamic shadow/return boundary; unmodeled armed constructions
+refuse within the existing budget. Runtime data becoming code remains a
+lexical known limit, including unresolved cd values. Tree is not installed;
+its List reach is the Go adapter contract, not a host execution claim.
+
+Raw source-bound receipts, complete before/after records and the unchanged
+remaining-difference ledger reside under `~/.cache/guard-fixtures/fixture-seat/r5-m2-1/`.
+The final external report supplies each signed group, named failures, exact
+restoration hashes, recovered checks and cutover findings. The nesting observer
+removes its successful log and keeps failure diagnostics. No Go, production
+hook, dependency, installed permission or packaged execution entry changed.
+Fresh coordinator-owned acceptance and consumer cutover remain required.
+
+## Historical M2 scope and nesting completion at 67dde11
 
 The accepted M1 baseline `ff95842` has 121 defect rows and 347 consumer
 conflicts. M2 closes 30 of the 31 planned rows; appdata[20] remains deferred
@@ -42,7 +76,7 @@ implementation packet; the coordinator's fresh Opus 5.5 and DeepSeek acceptance
 is still required. Go and production hooks remain unchanged, the packaged
 Rust entry remains version-only, and installed loading and cutover are unverified.
 
-## M2 ordered filesystem identity and direct roles
+## Historical M2 ordered filesystem identity and direct roles
 
 Target construction keeps a clean Path and raw Unresolved. One ordered component
 walker consumes Unresolved, retains Data-volume parent transitions, resolves
@@ -62,7 +96,7 @@ their owning contracts.
 The generic Name gate requires ruling 37's adapter roles: du/find/fd scan roots
 and rg file roots are List, interpreter environment-file options are Use, Git
 directory options are Enter, and Git metadata operands are Meta. Their Go
-owners are `native/targets/programs.go:58`, `:81`, `:95`, `:96`,
+owners are `native/targets/programs.go:58`, `:80`, `:95`, `:96`,
 `native/targets/search.go:17` and `native/targets/git.go:42`, `:57`.
 Other option grammars and program roles remain at P3/P5/P6. Independent role
 ablations expose 18 previously matched rows / 54 consumer observations; the
@@ -94,7 +128,7 @@ regression at its existing 64-level nesting boundary, also reproduced at
 accept M2 or establish installed loading or cutover. Go and production hooks
 remain unchanged, and the packaged Rust entry remains version-only.
 
-## M2 tracked directories and PWD data
+## Historical M2 tracked directories and PWD data
 
 The directory owner separates a raw physical prefix from its logical tail and
 collects failed movements outside a qualifying AND chain's successful RHS.
@@ -135,7 +169,7 @@ Both reside under `~/.cache/guard-fixtures/fixture-seat/r5-m2-phase-b/`. Earlier
 counts below describe their own source-bound snapshots. Go and production hooks
 remain unchanged; the packaged Rust entry remains version-only.
 
-## M2 math-armed binding references
+## Historical M2 math-armed binding references
 
 Ruling 36 corrects ruling 34's numeric printf and shift controls: their Zsh
 witnesses execute the bound subscript when the named array exists. The binding
@@ -171,7 +205,7 @@ the ablation summary is
 `194f539d8cb674dca1c74d0542e22575e7284a809295d272a572ab6949b48ae2`.
 Both reside under `~/.cache/guard-fixtures/fixture-seat/r5-m2-phase-b/`.
 
-## M2 statement scopes and binding joins
+## Historical M2 statement scopes and binding joins
 
 Rulings 33 and 35 replace the flattened binding table with a bounded statement
 evaluator. Assignment-only and declaration bindings persist; command prefixes
@@ -207,7 +241,7 @@ binding losses and false denials remain cutover backlog. Ruling 34's additional
 arithmetic sinks, the full cwd tracker and physical resolver are later commit
 groups within M2. M2 acceptance and runtime cutover remain open.
 
-## M2 bounded arithmetic bindings
+## Historical M2 bounded arithmetic bindings
 
 M1 is accepted at `ff95842`; M2 Phase B is in progress. Ruling 16 originally
 routed lexical bindings through arithmetic expansion, parameter arithmetic,

@@ -258,7 +258,7 @@
       "cwds": [
         "/h/project/named"
       ],
-      "gap": "UnsupportedShellSyntax",
+      "absent_gap": "UnsupportedShellSyntax",
       "observation_cwd": "home/project"
     },
     {

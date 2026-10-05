@@ -64,9 +64,14 @@ fn nesting_frontier_completes_on_default_test_stack() {
         log.display(),
         std::fs::read_to_string(&log).unwrap()
     );
-    println!(
-        "nesting frontier child reaped in {:?}; log: {}",
-        started.elapsed(),
+    std::fs::remove_file(&log).unwrap();
+    assert!(
+        !log.try_exists().unwrap(),
+        "successful frontier log retained: {}",
         log.display()
+    );
+    println!(
+        "nesting frontier child reaped in {:?}; successful log removed",
+        started.elapsed()
     );
 }

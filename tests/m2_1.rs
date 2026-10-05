@@ -121,6 +121,10 @@ fn runtime_values_keep_unresolved_target_contract() {
     partition("runtime-target");
 }
 #[test]
+fn runtime_cdpath_keeps_the_baseline_class() {
+    partition("runtime-cdpath");
+}
+#[test]
 fn runtime_read_does_not_refuse_syntax() {
     partition("runtime-read");
 }
@@ -183,6 +187,38 @@ fn positional_values_reach_target_operands() {
 #[test]
 fn indexed_values_reach_target_operands() {
     partition("armed-indexed-value");
+}
+#[test]
+fn dynamic_array_indices_keep_their_variable_names() {
+    partition("indexed-vars");
+    let row = rows()
+        .into_iter()
+        .find(|row| row["id"] == "dynamic-index-control")
+        .unwrap();
+    let result = agent_guard_rust::shell::observe(
+        row["source"].as_str().unwrap(),
+        Arm::Brush,
+        "/h",
+        "/h/project",
+        true,
+    )
+    .unwrap();
+    let word = result
+        .script
+        .commands
+        .iter()
+        .rev()
+        .find(|command| {
+            command
+                .argv
+                .first()
+                .is_some_and(|word| word.text == "printf")
+        })
+        .unwrap()
+        .argv
+        .last()
+        .unwrap();
+    assert_eq!(word.vars, ["arr", "INDEX"]);
 }
 #[test]
 fn array_locals_restore_indexed_binding_state() {

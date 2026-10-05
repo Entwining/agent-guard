@@ -26,6 +26,13 @@ fn partition(name: &str) {
                 row["id"]
             );
         }
+        if let Some(gap) = row["absent_gap"].as_str() {
+            assert!(
+                !result.gaps.iter().any(|g| format!("{g:?}") == gap),
+                "{}",
+                row["id"]
+            );
+        }
         let commands = result
             .script
             .commands
@@ -159,7 +166,7 @@ fn cdpath_does_not_override_dot_absolute_or_home() {
     partition("cdpath-controls");
 }
 #[test]
-fn cdpath_unknown_candidates_refuse() {
+fn runtime_cdpath_has_no_scope_refusal() {
     partition("cdpath-unknown");
 }
 #[test]

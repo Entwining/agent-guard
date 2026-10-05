@@ -1,5 +1,7 @@
 {
   "home": "/h", "cwd": "/h/project", "rows": [
+    {"id":"dynamic-index-control","partition":"indexed-vars","source":"arr=(public); printf '%s' \"${arr[$INDEX]}\"","expected":"N"},
+    {"id":"runtime-cdpath-control","partition":"runtime-cdpath","source":"CDPATH=$UNKNOWN; cd named && cat z","expected":"N"},
     {"id":"oldpwd-metadata-control","partition":"cwd-oldpwd","source":"cd ~/public; cd -; printf '%s' \"$PWD\"","expected":"N"},
     {"id":"oldpwd-assigned","partition":"cwd-oldpwd","source":"cd /tmp; OLDPWD=~/Library/Containers/com.example.syn/Data; cd -; cat notes.txt","expected":"D","reason":"App Data","host_source":"cd ..; OLDPWD=\"$PWD/public\"; cd -; printf '%s' \"$PWD\"","host_cwd":"witness/project","host_directories":["witness/project","witness/public"]},
     {"id":"oldpwd-control","partition":"cwd-oldpwd","source":"cd /tmp; OLDPWD=~/public; cd -; cat notes.txt","expected":"N"},

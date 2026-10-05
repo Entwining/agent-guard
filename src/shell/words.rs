@@ -437,7 +437,7 @@ fn fill(
                     ParameterExpr::Parameter {
                         parameter: Parameter::NamedWithIndex { name, index },
                         indirect: false,
-                    } => Some(format!("{name}[{index}]")),
+                    } if index.parse::<usize>().is_ok() => Some(format!("{name}[{index}]")),
                     _ => None,
                 };
                 if let Some(name) = parameter_name(expr) {
