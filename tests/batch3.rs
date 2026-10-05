@@ -75,3 +75,8 @@ fn data_globs_touch_appdata() {
 fn git_option_roots_keep_the_go_walk() {
     partition("git");
 }
+
+#[test]
+fn git_grep_attached_file_values_keep_read_roles() {
+    partition("b2b");
+}

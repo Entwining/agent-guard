@@ -1,5 +1,10 @@
 {
   "rows": [
+    {"id":"un-git-grep-file","partition":"b2b","source":"git grep --file=.env","cwd":"$H/project","expected":"D"},
+    {"id":"un-git-grep-feq","partition":"b2b","source":"git grep -f=.env","cwd":"$H/project","expected":"D"},
+    {"id":"b2b-file-control","partition":"b2b","source":"git grep --file=public.txt needle","cwd":"$H/project","expected":"N"},
+    {"id":"b2b-pattern-control","partition":"b2b","source":"git grep --regexp=.env","cwd":"$H/project","expected":"N"},
+    {"id":"b2b-option-terminator-control","partition":"b2b","source":"git grep -- --file=.env","cwd":"$H/project","expected":"N"},
     {
       "id": "appdata[20]",
       "partition": "appdata",

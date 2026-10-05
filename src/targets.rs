@@ -593,7 +593,12 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
                 index += 2;
                 continue;
             }
-            if arg == "-f" {
+            if let Some(path) = arg
+                .strip_prefix("--file=")
+                .or_else(|| arg.strip_prefix("-f="))
+            {
+                option_path = Some(arg.with_text(path.to_owned()));
+            } else if arg == "-f" {
                 pattern = true;
                 index += 1;
                 option_path = args.get(index).cloned();
