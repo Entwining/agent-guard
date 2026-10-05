@@ -109,35 +109,36 @@ pub fn decode(
     if cwd.is_empty() || !std::path::Path::new(&cwd).is_absolute() {
         return Err(malformed());
     }
-    let operation = match (consumer, name) {
-        (Consumer::Claude, "Bash") | (Consumer::Codex, "Bash") | (Consumer::Pi, "bash") => {
+    let folded_name = name.to_lowercase();
+    let operation = match (consumer, folded_name.as_str()) {
+        (Consumer::Claude | Consumer::Codex | Consumer::Pi, "bash") => {
             Operation::Shell(field(&input, "command")?)
         }
-        (Consumer::Codex, "exec_command" | "functions.exec_command") => {
+        (Consumer::Codex, "exec_command" | "functions.exec_command")
+            if ["exec_command", "functions.exec_command"].contains(&name) =>
+        {
             Operation::Shell(field(&input, "cmd")?)
         }
-        (Consumer::Claude, "Read") | (Consumer::Codex, "Read") => {
+        (Consumer::Claude | Consumer::Codex, "read") => {
             Operation::Read(field(&input, "file_path")?)
         }
         (Consumer::Pi, "read") => Operation::Read(field(&input, "path")?),
-        (Consumer::Claude, "Write" | "Edit") | (Consumer::Codex, "Write" | "Edit") => {
+        (Consumer::Claude | Consumer::Codex, "write" | "edit") => {
             Operation::Write(field(&input, "file_path")?)
         }
         (Consumer::Pi, "write" | "edit") => Operation::Write(field(&input, "path")?),
-        (Consumer::Claude, "Grep") | (Consumer::Codex, "Grep") | (Consumer::Pi, "grep") => {
-            Operation::Search {
-                root: input
-                    .get("path")
-                    .map(|_| field(&input, "path"))
-                    .transpose()?
-                    .unwrap_or_default(),
-                glob: input
-                    .get("glob")
-                    .map(|_| field(&input, "glob"))
-                    .transpose()?
-                    .unwrap_or_default(),
-            }
-        }
+        (Consumer::Claude | Consumer::Codex | Consumer::Pi, "grep") => Operation::Search {
+            root: input
+                .get("path")
+                .map(|_| field(&input, "path"))
+                .transpose()?
+                .unwrap_or_default(),
+            glob: input
+                .get("glob")
+                .map(|_| field(&input, "glob"))
+                .transpose()?
+                .unwrap_or_default(),
+        },
         _ => Operation::Outside(name.to_owned()),
     };
     Ok(CanonicalEvent {
