@@ -450,6 +450,23 @@ fn item_record(
                 argv.push(value);
                 return Ok(());
             }
+            if let AssignmentValue::Array(elements) = &assignment.value {
+                let mut values = Vec::new();
+                for (index, value) in elements {
+                    if let Some(index) = index {
+                        let mut index = word(source, index)?;
+                        index.syntax = super::WordSyntax::Arithmetic;
+                        output.push(Statement::Expansion(index));
+                    }
+                    values.push(word(source, value)?);
+                }
+                output.push(Statement::ArrayAssignment {
+                    name: assignment.name.to_string(),
+                    values,
+                    append: assignment.append,
+                });
+                return Ok(());
+            }
             if let Some((name, raw)) = value.raw.split_once('=') {
                 let (name, target) = if let AssignmentValue::Scalar(target) = &assignment.value {
                     let mut name = assignment.name.to_string();

@@ -91,13 +91,24 @@ impl Scope {
         scope.frames = state.frames;
         scope
     }
+    fn candidates(&self) -> BTreeMap<String, Vec<BindingValue>> {
+        let mut values: BTreeMap<String, Vec<BindingValue>> = BTreeMap::new();
+        for (name, binding) in &self.bindings {
+            let base = name.split_once('[').map_or(name.as_str(), |(base, _)| base);
+            values
+                .entry(base.into())
+                .or_default()
+                .extend(binding.values.clone());
+        }
+        values
+    }
     pub fn values(&self) -> BTreeMap<String, Vec<String>> {
-        self.bindings
-            .iter()
-            .map(|(name, b)| {
+        self.candidates()
+            .into_iter()
+            .map(|(name, values)| {
                 (
-                    name.clone(),
-                    b.values
+                    name,
+                    values
                         .iter()
                         .filter_map(BindingValue::known)
                         .cloned()
@@ -127,9 +138,33 @@ impl Scope {
             frame
                 .entry(name.into())
                 .or_insert_with(|| self.bindings.get(name).cloned());
+            let prefix = format!("{name}[");
+            let indexed = self
+                .bindings
+                .keys()
+                .filter(|key| key.starts_with(&prefix))
+                .cloned()
+                .collect::<Vec<_>>();
+            for key in indexed {
+                frame
+                    .entry(key.clone())
+                    .or_insert_with(|| self.bindings.get(&key).cloned());
+                self.bindings.remove(&key);
+            }
         }
     }
     fn assign(&mut self, name: String, values: Vec<BindingValue>) {
+        if let Some((base, _)) = name.split_once('[')
+            && let Some(frame) = self
+                .frames
+                .iter_mut()
+                .rev()
+                .find(|frame| frame.contains_key(base))
+        {
+            frame
+                .entry(name.clone())
+                .or_insert_with(|| self.bindings.get(&name).cloned());
+        }
         self.bindings.insert(name, Binding { values });
     }
     fn enter_function(&mut self) {
@@ -209,10 +244,7 @@ fn join_values<'a>(values: impl Iterator<Item = Option<&'a Binding>>) -> (Option
     let mut bounded = false;
     for binding in values {
         present |= binding.is_some();
-        let values = binding.map_or_else(
-            || vec![BindingValue::Undetermined],
-            |b| b.values.clone(),
-        );
+        let values = binding.map_or_else(|| vec![BindingValue::Undetermined], |b| b.values.clone());
         for value in values {
             if !joined.contains(&value) {
                 if joined.len() == 512 {
@@ -356,7 +388,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             {
                 self.output.gap(CoverageGap::UnsupportedShellSyntax);
             }
-            let binding = values
+            let mut binding = values
                 .iter()
                 .map(|v| {
                     if v.word.expands {
@@ -375,11 +407,42 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     }
                 })
                 .collect::<Vec<_>>();
-            assignment_scope.assign(name.clone(), binding.clone());
+            let (name, append) = name
+                .strip_suffix('+')
+                .map_or((name.as_str(), false), |name| (name, true));
+            if append {
+                let prior = assignment_scope.bindings.get(name).map_or_else(
+                    || vec![BindingValue::Known(String::new())],
+                    |binding| binding.values.clone(),
+                );
+                let mut combined = Vec::new();
+                for left in &prior {
+                    for right in &binding {
+                        if combined.len() == 512 {
+                            self.output.gap(CoverageGap::InspectionBudget);
+                            break;
+                        }
+                        let value = match (left, right) {
+                            (BindingValue::Known(left), BindingValue::Known(right)) => {
+                                BindingValue::Known(format!("{left}{right}"))
+                            }
+                            (BindingValue::Undetermined, _) | (_, BindingValue::Undetermined) => {
+                                BindingValue::Undetermined
+                            }
+                            _ => BindingValue::RuntimeUnknown(None),
+                        };
+                        if !combined.contains(&value) {
+                            combined.push(value);
+                        }
+                    }
+                }
+                binding = combined;
+            }
+            assignment_scope.assign(name.to_owned(), binding.clone());
             if argv.is_empty() {
-                scope.assign(name.clone(), binding.clone());
+                scope.assign(name.to_owned(), binding.clone());
             } else {
-                command_bindings.insert(name.clone(), binding);
+                command_bindings.insert(name.to_owned(), binding);
             }
             let mut word = values
                 .first()
@@ -484,6 +547,46 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
                 self.declaration(&argv[index..], scope);
                 match argv[index].text.as_str() {
+                    "set" if argv.get(index + 1).is_some_and(|word| word == "--") => {
+                        self.positionals(&argv[index + 2..], scope);
+                    }
+                    "printf" if argv.get(index + 1).is_some_and(|word| word == "-v") => {
+                        if let Some(name) =
+                            argv.get(index + 2).filter(|word| identifier(&word.text))
+                        {
+                            let values = &argv[index + 3..];
+                            if values.first().is_some_and(|word| word == "%s")
+                                && values.len() == 2
+                                && !values[1].expands
+                            {
+                                scope.assign(
+                                    name.text.clone(),
+                                    vec![BindingValue::Known(values[1].text.clone())],
+                                );
+                            } else {
+                                let joined = values
+                                    .iter()
+                                    .skip(1)
+                                    .map(|word| word.text.as_str())
+                                    .collect::<String>();
+                                if !matches!(
+                                    super::arithmetic::armed(&joined),
+                                    super::arithmetic::Arming::Inert
+                                ) {
+                                    self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                                    scope.assign(
+                                        name.text.clone(),
+                                        vec![BindingValue::Undetermined],
+                                    );
+                                } else {
+                                    scope.assign(
+                                        name.text.clone(),
+                                        vec![BindingValue::RuntimeUnknown(None)],
+                                    );
+                                }
+                            }
+                        }
+                    }
                     "break" | "continue" => {
                         let state = scope.state();
                         let level = if argv.len() == index + 1 {
@@ -533,13 +636,53 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         }
                     }
                     "read" => {
+                        let names: Vec<_> = argv[index + 1..]
+                            .iter()
+                            .filter(|word| identifier(&word.text))
+                            .collect();
+                        let literal = targets.iter().rev().find(|target| {
+                            matches!(
+                                target.direction,
+                                crate::record::Direction::Heredoc
+                                    | crate::record::Direction::Herestring
+                            ) && !target.expands
+                        });
+                        let modeled = names.len() == 1
+                            && argv[index + 1..]
+                                .iter()
+                                .all(|word| identifier(&word.text) || word == "-r")
+                            && (!scope.bindings.contains_key("IFS"))
+                            && (argv.iter().any(|word| word == "-r")
+                                || literal.is_none_or(|literal| !literal.target.contains('\\')));
                         for word in &argv[index + 1..] {
                             if identifier(&word.text) {
                                 scope.assign(
                                     word.text.clone(),
-                                    vec![BindingValue::RuntimeUnknown(None)],
+                                    vec![if modeled && let Some(literal) = literal {
+                                        BindingValue::Known(
+                                            literal
+                                                .target
+                                                .lines()
+                                                .next()
+                                                .unwrap_or("")
+                                                .trim_matches([' ', '\t'])
+                                                .to_owned(),
+                                        )
+                                    } else {
+                                        BindingValue::RuntimeUnknown(None)
+                                    }],
                                 );
                             }
+                        }
+                        if !modeled
+                            && literal.is_some_and(|literal| {
+                                !matches!(
+                                    super::arithmetic::armed(&literal.target.replace('\\', "")),
+                                    super::arithmetic::Arming::Inert
+                                )
+                            })
+                        {
+                            self.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
                     }
                     _ => {}
@@ -577,6 +720,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     let caller_loops = std::mem::take(&mut scope.loops);
                     let caller_failures = scope.directory.failures.take();
                     scope.enter_function();
+                    self.positionals(&command.argv[program.unwrap_or(0) + 1..], scope);
                     self.run(&function.body, scope, depth + 1, function.source_id, nested)?;
                     let returns = std::mem::take(&mut scope.returns);
                     let mut candidates = vec![scope.clone()];
@@ -624,6 +768,46 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         nested: bool,
     ) -> Result<(), CheckError> {
         match statement {
+            Statement::ArrayAssignment {
+                name,
+                values,
+                append,
+            } => {
+                let mut elements = Vec::new();
+                for raw in values {
+                    let mut candidates = Vec::new();
+                    for expanded in self.expand(raw, scope, depth)? {
+                        if candidates.len() == 512 {
+                            self.output.gap(CoverageGap::InspectionBudget);
+                            break;
+                        }
+                        candidates.push(if expanded.word.expands {
+                            BindingValue::RuntimeUnknown(None)
+                        } else {
+                            BindingValue::Known(expanded.word.text)
+                        });
+                    }
+                    elements.push(candidates);
+                }
+                let prefix = format!("{name}[");
+                let start = if *append {
+                    scope
+                        .bindings
+                        .keys()
+                        .filter(|key| key.starts_with(&prefix))
+                        .count()
+                } else {
+                    0
+                };
+                if !append {
+                    scope
+                        .bindings
+                        .retain(|key, _| key != name && !key.starts_with(&prefix));
+                }
+                for (index, candidates) in elements.into_iter().enumerate() {
+                    scope.assign(format!("{name}[{}]", start + index), candidates);
+                }
+            }
             Statement::UnsupportedSyntax => self.output.gap(CoverageGap::UnsupportedShellSyntax),
             Statement::Group(body) => self.run(body, scope, depth + 1, source_id, nested)?,
             Statement::Subshell(body) | Statement::Async(body) => {
@@ -903,6 +1087,30 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             }
         }
     }
+    fn positionals(&mut self, argv: &[crate::record::Word], scope: &mut Scope) {
+        let prior = scope
+            .bindings
+            .keys()
+            .filter(|name| name.parse::<usize>().is_ok())
+            .cloned()
+            .collect::<Vec<_>>();
+        for name in prior {
+            scope.local(&name);
+            scope.bindings.remove(&name);
+        }
+        for (index, word) in argv.iter().enumerate() {
+            let name = (index + 1).to_string();
+            scope.local(&name);
+            scope.assign(
+                name,
+                vec![if word.expands {
+                    BindingValue::RuntimeUnknown(None)
+                } else {
+                    BindingValue::Known(word.text.clone())
+                }],
+            );
+        }
+    }
     fn word_use(
         &mut self,
         raw: &RawWord,
@@ -1136,17 +1344,18 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
         Ok(())
     }
-    fn armed_reference(
+    pub(super) fn armed_reference(
         &mut self,
         name: &str,
         scope: &mut Scope,
         depth: usize,
     ) -> Result<(), CheckError> {
-        let Some(binding) = scope.bindings.get(name) else {
+        let values = scope.candidates().remove(name).unwrap_or_default();
+        if values.is_empty() {
             return Ok(());
-        };
+        }
         let mut sources = Vec::new();
-        for value in &binding.values {
+        for value in &values {
             let BindingValue::Known(value) = value else {
                 if value == &BindingValue::Undetermined {
                     self.output.gap(CoverageGap::UnsupportedShellSyntax);

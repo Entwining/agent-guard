@@ -3,10 +3,18 @@ use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell::Arm};
 use serde_json::{Value, json};
 
 fn rows() -> Vec<Value> {
-    serde_json::from_str::<Value>(include_str!("fixtures/rust-m2-1.json")).unwrap()["rows"]
-        .as_array()
-        .unwrap()
-        .clone()
+    [
+        include_str!("fixtures/rust-m2-1.json"),
+        include_str!("fixtures/rust-m2-1-armed.json"),
+    ]
+    .into_iter()
+    .flat_map(|source| {
+        serde_json::from_str::<Value>(source).unwrap()["rows"]
+            .as_array()
+            .unwrap()
+            .clone()
+    })
+    .collect()
 }
 
 fn partition(name: &str) {
@@ -115,4 +123,97 @@ fn runtime_cd_keeps_existing_uncertainty() {
 #[test]
 fn runtime_arithmetic_keeps_pre_m2_class() {
     partition("runtime-arithmetic");
+}
+#[test]
+fn armed_values_propagate_through_expansion() {
+    partition("armed-expansion");
+}
+#[test]
+fn function_arguments_bind_armed_positionals() {
+    partition("armed-function");
+}
+#[test]
+fn set_arguments_bind_armed_positionals() {
+    partition("armed-positional");
+}
+#[test]
+fn printf_assigns_literal_armed_values() {
+    partition("armed-printf");
+}
+#[test]
+fn append_combines_values_before_arming() {
+    partition("armed-append");
+}
+#[test]
+fn indexed_values_reach_arithmetic_references() {
+    partition("armed-indexed");
+}
+#[test]
+fn compound_array_values_reach_arithmetic_references() {
+    partition("armed-array");
+}
+#[test]
+fn literal_read_values_reach_arithmetic_references() {
+    partition("armed-read");
+}
+#[test]
+fn unmodeled_armed_printf_refuses() {
+    partition("armed-printf-fallback");
+}
+#[test]
+fn unmodeled_armed_read_refuses() {
+    partition("armed-read-fallback");
+}
+#[test]
+fn positional_values_reach_target_operands() {
+    partition("armed-positional-value");
+}
+#[test]
+fn indexed_values_reach_target_operands() {
+    partition("armed-indexed-value");
+}
+#[test]
+fn array_locals_restore_indexed_binding_state() {
+    partition("armed-array-scope");
+}
+#[test]
+fn local_array_elements_do_not_escape_return() {
+    partition("armed-array-local");
+}
+#[test]
+fn append_candidate_product_is_bounded() {
+    partition("armed-append-budget");
+}
+#[test]
+fn positional_and_indexed_values_materialize() {
+    for id in [
+        "unarmed-positional-value",
+        "unarmed-array-value",
+        "unarmed-function-control",
+    ] {
+        let row = rows().into_iter().find(|row| row["id"] == id).unwrap();
+        let result = agent_guard_rust::shell::observe(
+            row["source"].as_str().unwrap(),
+            Arm::Brush,
+            "/h",
+            "/h/project",
+            true,
+        )
+        .unwrap();
+        let command = result
+            .script
+            .commands
+            .iter()
+            .rfind(|command| {
+                command
+                    .program
+                    .is_some_and(|index| command.argv[index] == "printf")
+            })
+            .unwrap();
+        assert_eq!(
+            command.argv.last().unwrap().text,
+            "public",
+            "{id}: {result:?}"
+        );
+    }
 }

@@ -69,6 +69,11 @@ enum Statement {
     },
     Use(RawWord),
     Expansion(RawWord),
+    ArrayAssignment {
+        name: String,
+        values: Vec<RawWord>,
+        append: bool,
+    },
     Command {
         assignments: Vec<(String, RawWord)>,
         argv: Vec<RawWord>,
@@ -279,6 +284,7 @@ fn expand_scoped(
         .iter()
         .collect::<std::collections::BTreeSet<_>>()
     {
+        evaluator.armed_reference(name, scope, depth)?;
         if let Some(binding) = scope.bindings.get(name) {
             let mut next = Vec::new();
             for context in &contexts {

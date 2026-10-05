@@ -425,17 +425,28 @@ fn fill(
                         out.references.push(length.value.clone());
                     }
                 }
-                let plain = if let ParameterExpr::Parameter {
-                    parameter: Parameter::Named(name),
-                    indirect: false,
-                } = expr
-                {
-                    Some(name)
-                } else {
-                    None
+                let plain = match expr {
+                    ParameterExpr::Parameter {
+                        parameter: Parameter::Named(name),
+                        indirect: false,
+                    } => Some(name.clone()),
+                    ParameterExpr::Parameter {
+                        parameter: Parameter::Positional(index),
+                        indirect: false,
+                    } => Some(index.to_string()),
+                    ParameterExpr::Parameter {
+                        parameter: Parameter::NamedWithIndex { name, index },
+                        indirect: false,
+                    } => Some(format!("{name}[{index}]")),
+                    _ => None,
                 };
                 if let Some(name) = parameter_name(expr) {
                     out.word.vars.push(name);
+                }
+                if let Some(name) = &plain
+                    && !out.word.vars.contains(name)
+                {
+                    out.word.vars.push(name.clone());
                 }
                 if spelling.starts_with("${")
                     && lexical.closing(piece.start_index + 1, b'{', b'}')
@@ -459,14 +470,14 @@ fn fill(
                     })?;
                     merge_fragment(out, inner, piece.start_index + offset);
                 }
-                if let Some(value) = plain.and_then(|name| {
+                if let Some(value) = plain.as_deref().and_then(|name| {
                     variables
                         .get(name)
                         .map(String::as_str)
                         .or_else(|| (name == "HOME").then_some(host.home))
                         .or_else(|| (name == "PWD").then_some(expansion.cwd))
                 }) {
-                    if plain.is_some_and(|name| name == "PWD") && !variables.contains_key("PWD") {
+                    if plain.as_deref() == Some("PWD") && !variables.contains_key("PWD") {
                         out.word.pwd = true;
                         out.word
                             .cwd_ranges

@@ -98,6 +98,13 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
                 && command.variables().any(|name| secret_name(name));
         }
         "true" | "false" | ":" | "unset" | "local" | "break" | "continue" | "return" => {}
+        "read"
+            if command.redirects.iter().any(|redirect| {
+                matches!(
+                    redirect.direction,
+                    Direction::Heredoc | Direction::Herestring
+                ) && !redirect.expands
+            }) => {}
         "cd" | "pushd" | "popd" => {
             let mut options = true;
             for word in args {
