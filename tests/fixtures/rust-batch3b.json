@@ -29,6 +29,20 @@
       "expected": "D"
     },
     {
+      "id": "b3b-x-gitdir-eq",
+      "partition": "gitdir",
+      "source": "git --git-dir=$H/Library/Containers/com.example.syn/Data status",
+      "cwd": "$H/project",
+      "expected": "D"
+    },
+    {
+      "id": "b3b-x-gitdir-sp",
+      "partition": "gitdir",
+      "source": "git --git-dir $H/Library/Containers/com.example.syn/Data status",
+      "cwd": "$H/project",
+      "expected": "D"
+    },
+    {
       "id": "b3b-x-worktree",
       "partition": "cwd",
       "source": "git --work-tree=$H/Library/Containers/com.example.syn/Data status",
@@ -146,6 +160,20 @@
       "source": "if true; then cd $H/Library/Containers/com.example.syn/Data; fi; git status",
       "cwd": "$H/project",
       "expected": "D"
+    },
+    {
+      "id": "b3b-gitdir-env",
+      "partition": "gitdir",
+      "source": "GIT_DIR=$H/Library/Containers/com.example.syn/Data git status",
+      "cwd": "$H/project",
+      "expected": "N"
+    },
+    {
+      "id": "b3b-ctrl-gitdir",
+      "partition": "gitdir",
+      "source": "git --git-dir=/tmp/x status",
+      "cwd": "$H/project",
+      "expected": "N"
     },
     {
       "id": "b3b-ctrl-c1-git",

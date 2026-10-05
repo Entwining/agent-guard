@@ -69,3 +69,8 @@ fn partition(name: &str) {
 fn tracked_cwd_entry_follows_go_named_target_rule() {
     partition("cwd");
 }
+
+#[test]
+fn git_directory_values_remain_read_targets() {
+    partition("gitdir");
+}

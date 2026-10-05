@@ -596,6 +596,25 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
                 option_walk,
             ));
         }
+        // gitTargets leaves this value unclaimed (native/targets/git.go:26-48),
+        // so commandTargets' operand fallback reads it at the command cwd.
+        let directory = arg
+            .strip_prefix("--git-dir=")
+            .map(|text| arg.with_text(text.to_owned()))
+            .or_else(|| {
+                (arg == "--git-dir")
+                    .then(|| args.get(index + 1).cloned())
+                    .flatten()
+            });
+        if let Some(directory) = directory {
+            effects.targets.push(Target::from_word(
+                &directory,
+                cwd,
+                host,
+                Effect::Read,
+                option_walk,
+            ));
+        }
         index += if takes { 2 } else { 1 };
     }
     let Some(sub) = args.get(index) else {
