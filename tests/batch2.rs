@@ -114,3 +114,8 @@ fn xargs_consumes_produced_items_and_here_data() {
 fn interpreter_stdin_and_display_body_variables_are_inspected() {
     partition("stdin");
 }
+
+#[test]
+fn git_file_options_keep_read_roles() {
+    partition("git");
+}

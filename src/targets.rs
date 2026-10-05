@@ -561,15 +561,34 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
     };
     let keys: &[&str] = match sub.as_str() {
         "config" => &["-f", "--file", "--blob"],
+        "blame" => &["--contents"],
         "commit" => &["-F", "--file", "--pathspec-from-file"],
         "tag" | "merge" => &["-F", "--file"],
         "add" | "rm" | "restore" | "reset" | "checkout" | "stash" => &["--pathspec-from-file"],
         _ => &[],
     };
     let mut pattern = sub != "grep";
+    let mut options = true;
     while index < args.len() {
         let arg = &args[index];
         let mut option_path = None;
+        if sub == "grep" && options {
+            if arg == "--" {
+                options = false;
+                index += 1;
+                continue;
+            }
+            if arg == "-e" {
+                pattern = true;
+                index += 2;
+                continue;
+            }
+            if arg == "-f" {
+                pattern = true;
+                index += 1;
+                option_path = args.get(index).cloned();
+            }
+        }
         for key in keys {
             if arg == key {
                 index += 1;
@@ -589,7 +608,7 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
         }
         if let Some(path) = option_path {
             add(&path, &path, Effect::Read, Walk::None, effects);
-        } else if !arg.starts_with('-') {
+        } else if !options || !arg.starts_with('-') {
             if !pattern {
                 pattern = true;
             } else {
