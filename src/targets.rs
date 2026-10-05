@@ -913,6 +913,13 @@ fn infer_tar(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
             archive = args.get(index).cloned();
         } else if let Some(path) = arg.strip_prefix("--file=") {
             archive = Some(arg.with_text(path.to_owned()));
+        } else if let Some(path) = arg.strip_prefix("--directory=").or_else(|| {
+            arg.strip_prefix('-')
+                .filter(|flags| !flags.starts_with('-'))
+                .and_then(|flags| flags.split_once('C').map(|(_, path)| path))
+                .filter(|path| !path.is_empty())
+        }) {
+            base = crate::filesystem::normalize(path, &base, host.home);
         } else if arg == "-C" || arg == "--directory" || arg == "--cd" {
             index += 1;
             if let Some(path) = args.get(index) {

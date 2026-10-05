@@ -70,6 +70,7 @@
     },
     {
       "id": "programs[33]",
+      "write": true,
       "partition": "tar",
       "source": "tar -xf x.tar -C$HOME/.ssh",
       "cwd": "$H/project",

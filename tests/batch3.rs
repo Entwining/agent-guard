@@ -45,6 +45,19 @@ fn partition(name: &str) {
                     );
                 }
                 assert!(!result.as_ref().unwrap().effects.is_empty());
+                if row["write"] == true {
+                    assert!(
+                        result
+                            .as_ref()
+                            .unwrap()
+                            .effects
+                            .iter()
+                            .any(|effect| matches!(
+                                effect,
+                                agent_guard_rust::EffectRecord::ProtectedTarget { write: true, .. }
+                            ))
+                    );
+                }
             } else if row["expected"] == "N" {
                 assert!(wire.stderr.is_empty());
             }
@@ -79,4 +92,9 @@ fn git_option_roots_keep_the_go_walk() {
 #[test]
 fn git_grep_attached_file_values_keep_read_roles() {
     partition("b2b");
+}
+
+#[test]
+fn tar_glued_directory_is_an_extraction_write_root() {
+    partition("tar");
 }
