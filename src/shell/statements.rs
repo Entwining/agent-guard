@@ -742,6 +742,22 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             if let Some(source) = resolved.source {
                 self.source(&source, &mut scope.isolated(), depth + 1)?;
             }
+            if command.wrappers.iter().any(|w| w == "xargs") && command.program.is_some() {
+                for redirect in &command.redirects {
+                    if matches!(
+                        redirect.direction,
+                        crate::record::Direction::Heredoc | crate::record::Direction::Herestring
+                    ) {
+                        for input in super::pipeline::xargs_here_input(&command, &redirect.target) {
+                            self.source(
+                                &input.source,
+                                &mut Scope::new(self.frontend.host.home, &input.cwd),
+                                depth + 1,
+                            )?;
+                        }
+                    }
+                }
+            }
             if let Some(name) = program
                 .and_then(|i| command.argv.get(i))
                 .map(|w| w.text.clone())
@@ -941,7 +957,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         if matches!(operator, Operator::Pipe) {
                             let (left, right) =
                                 self.output.script.commands[start..].split_at_mut(middle - start);
-                            let sources = super::pipeline::shell_input(left, right);
+                            super::pipeline::mark_walked_input(left, right);
+                            let mut sources = super::pipeline::xargs_replacements(left, right);
+                            sources.extend(super::pipeline::shell_input(left, right));
                             for input in sources {
                                 self.source(
                                     &input.source,

@@ -410,6 +410,9 @@ impl Inspection<'_> {
             }
             self.advice |= effects.replace_advice;
             for mut target in effects.targets {
+                if target.via == Via::Items {
+                    continue;
+                }
                 target.command = Some(command_index);
                 self.target(
                     &target,

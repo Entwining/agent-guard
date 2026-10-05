@@ -50,7 +50,7 @@ fn partition(name: &str) {
                         ) | (
                             "CredentialFile",
                             EffectRecord::ProtectedTarget {
-                                protection: Protection::Environment,
+                                protection: Protection::Environment | Protection::Credential,
                                 ..
                             },
                         ) | ("EnvironmentDump", EffectRecord::EnvironmentDump)
@@ -85,4 +85,9 @@ fn precommand_wrappers_reach_the_actual_program() {
 #[test]
 fn producers_feed_decoded_shell_stdin() {
     partition("producer");
+}
+
+#[test]
+fn xargs_consumes_produced_items_and_here_data() {
+    partition("xargs");
 }

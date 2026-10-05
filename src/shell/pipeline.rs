@@ -1,4 +1,4 @@
-use crate::record::{Command, Stdin, Word};
+use crate::record::{Command, Items, Stdin, Word};
 
 pub(super) struct InputSource {
     pub source: String,
@@ -159,4 +159,149 @@ pub(super) fn shell_input(left: &[Command], right: &mut [Command]) -> Vec<InputS
         source,
         cwd: shell.cwd.clone(),
     }]
+}
+
+fn fields(text: &str) -> impl Iterator<Item = &str> {
+    text.split(|c| matches!(c, '\u{9}'..='\u{d}' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}' | '\u{205f}' | '\u{3000}' | '\u{feff}'))
+        .filter(|s| !s.is_empty())
+}
+
+fn quote(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "'\\''"))
+}
+fn strip(text: &str) -> String {
+    text.replace(['\'', '"', '\\'], "")
+}
+
+pub(super) fn xargs_commands(command: &Command, items: &[String]) -> Vec<InputSource> {
+    let Some(index) = command.program else {
+        return Vec::new();
+    };
+    let options = &command.argv[..index];
+    let mut marker = "";
+    for (i, word) in options.iter().enumerate() {
+        if word == "-I" || word == "--replace" {
+            marker = options.get(i + 1).map_or("", Word::as_str);
+        } else if let Some(value) = word
+            .strip_prefix("-I")
+            .or_else(|| word.strip_prefix("--replace="))
+        {
+            marker = value;
+        }
+    }
+    let argv = &command.argv[index..];
+    let sources = if marker.is_empty() {
+        let mut words = vec![
+            argv.iter()
+                .map(|w| w.raw.as_str())
+                .collect::<Vec<_>>()
+                .join(" "),
+        ];
+        for item in items {
+            for value in fields(item) {
+                words.extend([quote(value), quote(&strip(value))]);
+            }
+        }
+        vec![words.join(" ")]
+    } else {
+        let mut sources = Vec::new();
+        for item in items {
+            for value in [item.clone(), strip(item)] {
+                sources.push(
+                    argv.iter()
+                        .map(|w| {
+                            if w.contains(marker) {
+                                quote(&w.replace(marker, &value))
+                            } else {
+                                w.raw.clone()
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                );
+            }
+        }
+        sources
+    };
+    sources
+        .into_iter()
+        .map(|source| InputSource {
+            source,
+            cwd: command.cwd.clone(),
+        })
+        .collect()
+}
+
+pub(super) fn xargs_replacements(left: &[Command], right: &[Command]) -> Vec<InputSource> {
+    let Some((producer, index)) = producer(left) else {
+        return Vec::new();
+    };
+    let Some(command) = right
+        .iter()
+        .find(|c| c.program.is_some() && c.wrappers.iter().any(|w| w == "xargs"))
+    else {
+        return Vec::new();
+    };
+    let args = &producer.argv[index + 1..];
+    let items: Vec<String> = if name(producer) == Some("printf") {
+        let Some(output) = printf_output(args) else {
+            return Vec::new();
+        };
+        output
+            .split('\n')
+            .filter(|line| !line.is_empty())
+            .map(str::to_owned)
+            .collect()
+    } else {
+        args.iter()
+            .filter(|w| !w.starts_with('-'))
+            .map(|w| unescape(w, true))
+            .collect()
+    };
+    xargs_commands(command, &items)
+}
+
+pub(super) fn xargs_here_input(command: &Command, body: &str) -> Vec<InputSource> {
+    xargs_commands(
+        command,
+        &fields(body).map(str::to_owned).collect::<Vec<_>>(),
+    )
+}
+
+fn hidden_name(text: &str) -> bool {
+    let name = text.trim_end_matches('/').rsplit('/').next().unwrap_or("");
+    name.starts_with('.') && name != "." && name != ".."
+}
+
+pub(super) fn mark_walked_input(left: &[Command], right: &mut [Command]) {
+    let walker = left.iter().find(|c| {
+        let Some(index) = c.program else {
+            return false;
+        };
+        let args = &c.argv[index + 1..];
+        name(c) == Some("find")
+            || name(c) == Some("fd") && crate::targets::shows_hidden(args)
+            || args.iter().any(|w| match name(c) {
+                Some("ls") => {
+                    ["--all", "--almost-all"].contains(&w.as_str())
+                        || w.starts_with('-')
+                            && !w.starts_with("--")
+                            && w[1..].chars().all(|ch| ch.is_ascii_alphanumeric())
+                            && w.contains(['a', 'A'])
+                        || !w.starts_with('-') && hidden_name(w)
+                }
+                Some("echo" | "printf") => !w.starts_with('-') && w.globs && hidden_name(w),
+                _ => false,
+            })
+    });
+    if let Some(walker) = walker {
+        for command in right {
+            if command.wrappers.iter().any(|w| w == "xargs") {
+                command.items = Some(Items {
+                    root: walker.cwd.clone(),
+                    hidden: true,
+                });
+            }
+        }
+    }
 }

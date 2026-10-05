@@ -86,6 +86,50 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         })
         .unwrap_or(program);
     let args = &command.argv[index + 1..];
+    let hidden_items_read = if let Some(items) = &command.items {
+        let effect = match program {
+            "echo" | "printf" | "print" | ":" | "true" | "false" | "export" | "set" | "unset"
+            | "typeset" | "declare" | "local" | "cd" | "curl" | "wget" | "docker" | "ssh" => {
+                Effect::Name
+            }
+            "stat" | "test" | "[" | "chmod" | "chown" | "chgrp" | "chflags" | "touch" | "rm"
+            | "rmdir" | "mkdir" | "mv" | "ln" | "wc" | "file" | "shasum" | "sha1sum"
+            | "sha256sum" | "md5" | "md5sum" | "cksum" | "realpath" | "readlink" | "basename"
+            | "dirname" => Effect::Meta,
+            "ls" | "tree" | "du" | "find" | "fd" => Effect::List,
+            "pushd" | "popd" => Effect::Enter,
+            "tee" => Effect::Write,
+            "ssh-add" => Effect::Use,
+            _ => Effect::Read,
+        };
+        let walk = if items.hidden {
+            Walk::Hidden
+        } else {
+            Walk::Visible
+        };
+        effects
+            .targets
+            .push(Target::new(items.root.clone(), effect, walk, Via::Items));
+        effect == Effect::Read && walk == Walk::Hidden
+    } else {
+        false
+    };
+    if command.wrappers.iter().any(|w| w == "xargs") {
+        let options = &command.argv[..index];
+        for (i, word) in options.iter().enumerate() {
+            let file = if word == "-a" || word == "--arg-file" {
+                options.get(i + 1).cloned()
+            } else {
+                word.strip_prefix("--arg-file=")
+                    .map(|path| word.with_text(path.into()))
+            };
+            if let Some(file) = file {
+                let mut target = Target::from_word(&file, cwd, host, Effect::Read, Walk::None);
+                target.via = Via::Option;
+                effects.targets.push(target);
+            }
+        }
+    }
     let read = |word: &Word, recursive| {
         Target::from_word(
             word,
@@ -260,6 +304,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             }
         }
     }
+    effects.hidden_content |= hidden_items_read;
     effects
 }
 
@@ -268,6 +313,16 @@ fn secret_name(name: &str) -> bool {
     ["TOKEN", "SECRET", "KEY", "PASSWORD", "CREDENTIAL"]
         .iter()
         .any(|part| name.contains(part))
+}
+
+pub(crate) fn shows_hidden(args: &[Word]) -> bool {
+    args.iter().any(|w| {
+        ["--hidden", "--unrestricted"].contains(&w.as_str())
+            || w.starts_with('-')
+                && !w.starts_with("--")
+                && w[1..].chars().all(|c| c.is_ascii_alphabetic())
+                && w.contains(['H', 'u'])
+    })
 }
 
 fn child(command: &CommandRecord, argv: &[Word], cwd: &str) -> CommandRecord {
