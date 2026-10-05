@@ -32,7 +32,14 @@ fn partition(name: &str) {
                 row["scope"]
             );
             let wire = adapters::render(context.consumer, &result);
-            assert_eq!(wire.exit, if row["expected"] == "N" { 0 } else { 2 });
+            assert_eq!(
+                wire.exit,
+                if matches!(row["expected"].as_str(), Some("N" | "UC" | "A")) {
+                    0
+                } else {
+                    2
+                }
+            );
             assert!(wire.stdout.is_empty());
             if row["expected"] == "D" {
                 assert!(wire.stderr.contains("protected"));

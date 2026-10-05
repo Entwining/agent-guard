@@ -22,6 +22,20 @@
     {"id":"f2-15ctrl","partition":"cwd-budget","source":"cd ~/Library/Containers/com.example.syn; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; ls Data","expected":"D","reason":"App Data"},
     {"id":"cwd26","partition":"cwd-budget","cwd":"/h","source":"cd a; cd b; cd c; cd d; cd e; cd f; cd g; cd h; cd i; cd j; cd k; cd l; cd m; cd n; cd o; cd p; cd q; cd r; cd s; cd t; cd u; cd v; cat Library/Containers/x","expected":"D","reason":"App Data"},
     {"id":"cwd-budget-inert-control","partition":"cwd-budget","source":"cd /p0; cd /p1; cd /p2; cd /p3; cd /p4; cd /p5; cd /p6; cd /p7; cd /p8; cd /p9; cd /p10; cd /p11; cd /p12; cd /p13; cd /p14; cd /p15; cd /p16; echo public","expected":"N"},
-    {"id":"cwd-budget-branch","partition":"cwd-budget-join","source":"if false; then cd /p0; cd /p1; cd /p2; cd /p3; cd /p4; cd /p5; cd /p6; cd /p7; cd /p8; cd /p9; cd /p10; cd /p11; cd /p12; cd /p13; cd /p14; cd /p15; cd /p16; fi; ls public","expected":"UR","gap":"InspectionBudget"}
+    {"id":"cwd-budget-branch","partition":"cwd-budget-join","source":"if false; then cd /p0; cd /p1; cd /p2; cd /p3; cd /p4; cd /p5; cd /p6; cd /p7; cd /p8; cd /p9; cd /p10; cd /p11; cd /p12; cd /p13; cd /p14; cd /p15; cd /p16; fi; ls public","expected":"UR","gap":"InspectionBudget"},
+    {"id":"f5-git-sha","partition":"runtime-target","source":"sha=$(git rev-parse HEAD); git show \"$sha\"","expected":"N"},
+    {"id":"f5-branch-echo","partition":"runtime-target","source":"b=$(git branch --show-current); echo \"$b\"","expected":"N"},
+    {"id":"f5-glob-loop","partition":"runtime-target","source":"for f in *.txt; do cat \"$f\"; done","expected":"N"},
+    {"id":"f5-mktemp","partition":"runtime-target","source":"f=$(mktemp); echo hi > \"$f\"; cat \"$f\"","expected":"UC"},
+    {"id":"f5-wc","partition":"runtime-target","source":"n=$(wc -l < notes.txt); echo \"$n\"","expected":"UC"},
+    {"id":"f5-read-loop","partition":"runtime-read","source":"git ls-files | while read f; do wc -l \"$f\"; done","expected":"UC"},
+    {"id":"f5-pwd","partition":"runtime-target","source":"d=$(pwd); ls \"$d\"","expected":"UC"},
+    {"id":"f5-control","partition":"runtime-target","source":"x=hello; echo \"$x\"","expected":"N"},
+    {"id":"loop-unknown-glob","partition":"runtime-target","source":"D=/tmp; for n in public*; do D=$n; done; ls \"$D\"","expected":"UC"},
+    {"id":"runtime-bare-name","partition":"runtime-math","source":"branch=$(git branch --show-current); git log -1 branch","expected":"N"},
+    {"id":"runtime-math-control","partition":"runtime-math","source":"branch=$(git branch --show-current); printf '%d' branch","expected":"N"},
+    {"id":"runtime-arithmetic-context","partition":"runtime-arithmetic","source":"branch=$(git branch --show-current); echo \"$((branch))\"","expected":"N"},
+    {"id":"runtime-cd-appdata-known-limit","partition":"runtime-cd","source":"cd $(printf %s ~/Library/Containers/com.example.syn/Data); cat notes.txt","expected":"N"},
+    {"id":"runtime-cd-git-known-limit","partition":"runtime-cd","source":"cd $(git rev-parse --show-toplevel); cat notes.txt","expected":"N"}
   ]
 }

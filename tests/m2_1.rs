@@ -96,3 +96,23 @@ fn cwd_candidate_loss_refuses_relative_targets() {
 fn cwd_budget_survives_branch_join() {
     partition("cwd-budget-join");
 }
+#[test]
+fn runtime_values_keep_unresolved_target_contract() {
+    partition("runtime-target");
+}
+#[test]
+fn runtime_read_does_not_refuse_syntax() {
+    partition("runtime-read");
+}
+#[test]
+fn runtime_math_values_keep_pre_m2_class() {
+    partition("runtime-math");
+}
+#[test]
+fn runtime_cd_keeps_existing_uncertainty() {
+    partition("runtime-cd");
+}
+#[test]
+fn runtime_arithmetic_keeps_pre_m2_class() {
+    partition("runtime-arithmetic");
+}

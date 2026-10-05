@@ -8,8 +8,26 @@ use crate::{
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum BindingValue {
+    Known(String),
+    // The lexical representative preserves pre-M2 target inference; it is
+    // never evidence of the runtime value or its arithmetic contents.
+    RuntimeUnknown(Option<String>),
+    Undetermined,
+}
+
+impl BindingValue {
+    pub fn known(&self) -> Option<&String> {
+        match self {
+            Self::Known(value) => Some(value),
+            Self::RuntimeUnknown(_) | Self::Undetermined => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Binding {
-    pub values: Vec<Option<String>>,
+    pub values: Vec<BindingValue>,
 }
 
 #[derive(Clone)]
@@ -37,7 +55,7 @@ impl Scope {
             bindings: BTreeMap::from([(
                 "HOME".into(),
                 Binding {
-                    values: vec![Some(home.into())],
+                    values: vec![BindingValue::Known(home.into())],
                 },
             )]),
             frames: Vec::new(),
@@ -76,7 +94,16 @@ impl Scope {
     pub fn values(&self) -> BTreeMap<String, Vec<String>> {
         self.bindings
             .iter()
-            .map(|(name, b)| (name.clone(), b.values.iter().flatten().cloned().collect()))
+            .map(|(name, b)| {
+                (
+                    name.clone(),
+                    b.values
+                        .iter()
+                        .filter_map(BindingValue::known)
+                        .cloned()
+                        .collect(),
+                )
+            })
             .collect()
     }
     pub fn contexts(&self) -> BTreeMap<String, String> {
@@ -85,7 +112,12 @@ impl Scope {
             .filter_map(|(n, b)| {
                 b.values
                     .first()
-                    .and_then(Option::as_ref)
+                    .and_then(|value| match value {
+                        BindingValue::Known(value) | BindingValue::RuntimeUnknown(Some(value)) => {
+                            Some(value)
+                        }
+                        _ => None,
+                    })
                     .map(|v| (n.clone(), v.clone()))
             })
             .collect::<BTreeMap<_, _>>()
@@ -97,7 +129,7 @@ impl Scope {
                 .or_insert_with(|| self.bindings.get(name).cloned());
         }
     }
-    fn assign(&mut self, name: String, values: Vec<Option<String>>) {
+    fn assign(&mut self, name: String, values: Vec<BindingValue>) {
         self.bindings.insert(name, Binding { values });
     }
     fn enter_function(&mut self) {
@@ -177,7 +209,10 @@ fn join_values<'a>(values: impl Iterator<Item = Option<&'a Binding>>) -> (Option
     let mut bounded = false;
     for binding in values {
         present |= binding.is_some();
-        let values = binding.map_or_else(|| vec![None], |b| b.values.clone());
+        let values = binding.map_or_else(
+            || vec![BindingValue::Undetermined],
+            |b| b.values.clone(),
+        );
         for value in values {
             if !joined.contains(&value) {
                 if joined.len() == 512 {
@@ -325,9 +360,18 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 .iter()
                 .map(|v| {
                     if v.word.expands {
-                        None
+                        BindingValue::RuntimeUnknown(Some(v.word.text.clone()))
+                    } else if v.word.vars.iter().any(|name| {
+                        assignment_scope.bindings.get(name).is_some_and(|binding| {
+                            binding
+                                .values
+                                .iter()
+                                .any(|value| matches!(value, BindingValue::RuntimeUnknown(_)))
+                        })
+                    }) {
+                        BindingValue::RuntimeUnknown(None)
                     } else {
-                        Some(v.word.text.clone())
+                        BindingValue::Known(v.word.text.clone())
                     }
                 })
                 .collect::<Vec<_>>();
@@ -491,10 +535,12 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     "read" => {
                         for word in &argv[index + 1..] {
                             if identifier(&word.text) {
-                                scope.assign(word.text.clone(), vec![None]);
+                                scope.assign(
+                                    word.text.clone(),
+                                    vec![BindingValue::RuntimeUnknown(None)],
+                                );
                             }
                         }
-                        self.output.gap(CoverageGap::UnsupportedShellSyntax);
                     }
                     _ => {}
                 }
@@ -735,16 +781,20 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             count = None;
                         }
                         values.extend(expanded.split.into_iter().map(|w| {
-                            if w.expands || w.globs {
-                                None
+                            if w.expands {
+                                BindingValue::RuntimeUnknown(None)
+                            } else if w.globs {
+                                BindingValue::RuntimeUnknown(Some(w.text))
                             } else {
-                                Some(w.text)
+                                BindingValue::Known(w.text)
                             }
                         }));
-                        let unsplit = if expanded.word.expands || expanded.word.globs {
-                            None
+                        let unsplit = if expanded.word.expands {
+                            BindingValue::RuntimeUnknown(None)
+                        } else if expanded.word.globs {
+                            BindingValue::RuntimeUnknown(Some(expanded.word.text))
                         } else {
-                            Some(expanded.word.text)
+                            BindingValue::Known(expanded.word.text)
                         };
                         if !values.contains(&unsplit) {
                             values.push(unsplit);
@@ -764,7 +814,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     inner.assign(
                         variable.clone(),
                         if values.is_empty() {
-                            vec![None]
+                            vec![BindingValue::RuntimeUnknown(None)]
                         } else {
                             values
                         },
@@ -819,28 +869,37 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     scope.local(name);
                 }
                 let mut values = vec![if word.expands {
-                    None
+                    BindingValue::RuntimeUnknown(Some(value.into()))
+                } else if word.vars.iter().any(|name| {
+                    scope.bindings.get(name).is_some_and(|binding| {
+                        binding
+                            .values
+                            .iter()
+                            .any(|value| matches!(value, BindingValue::RuntimeUnknown(_)))
+                    })
+                }) {
+                    BindingValue::RuntimeUnknown(None)
                 } else {
-                    Some(value.into())
+                    BindingValue::Known(value.into())
                 }];
                 if top_local {
                     let prior = scope
                         .bindings
                         .get(name)
-                        .map_or_else(|| vec![None], |b| b.values.clone());
+                        .map_or_else(|| vec![BindingValue::Undetermined], |b| b.values.clone());
                     for value in prior {
                         if !values.contains(&value) {
                             values.push(value);
                         }
                     }
-                    if values.contains(&None) {
+                    if values.contains(&BindingValue::Undetermined) {
                         self.output.gap(CoverageGap::UnsupportedShellSyntax);
                     }
                 }
                 scope.assign(name.into(), values);
             } else if local && identifier(&word.text) {
                 scope.local(&word.text);
-                scope.assign(word.text.clone(), vec![None]);
+                scope.assign(word.text.clone(), vec![BindingValue::Undetermined]);
             }
         }
     }
@@ -873,6 +932,20 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         Ok(())
     }
     fn emit(&mut self, mut command: Command, scope: &Scope) {
+        if command.argv.iter().flat_map(|word| &word.vars).any(|name| {
+            scope.bindings.get(name).is_some_and(|binding| {
+                binding
+                    .values
+                    .iter()
+                    .any(|value| matches!(value, BindingValue::RuntimeUnknown(_)))
+            })
+        }) && crate::targets::infer(&command, &command.cwd, self.frontend.host)
+            .targets
+            .iter()
+            .any(|target| target.expands)
+        {
+            self.output.gap(CoverageGap::UnresolvedTarget);
+        }
         if let Some(gap) = &scope.directory.gap {
             // Only overflow pays for this second inference. A different cwd exposes
             // target dependencies without inventing a separate adapter role table.
@@ -963,14 +1036,14 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             && let Some(binding) = scope.bindings.get("CDPATH")
         {
             for value in &binding.values {
-                if let Some(value) = value {
+                if let BindingValue::Known(value) = value {
                     for entry in value.split(':').filter(|entry| !entry.is_empty()) {
                         let path = format!("{entry}/{target}");
                         if !targets.contains(&path) {
                             targets.push(path);
                         }
                     }
-                } else {
+                } else if value == &BindingValue::Undetermined {
                     self.output.gap(CoverageGap::UnsupportedShellSyntax);
                 }
             }
@@ -1014,7 +1087,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             scope
                 .bindings
                 .get(name)
-                .is_some_and(|b| b.values.contains(&None))
+                .is_some_and(|b| b.values.contains(&BindingValue::Undetermined))
         }) {
             self.output.gap(CoverageGap::UnsupportedShellSyntax);
         }
@@ -1074,8 +1147,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         };
         let mut sources = Vec::new();
         for value in &binding.values {
-            let Some(value) = value else {
-                self.output.gap(CoverageGap::UnsupportedShellSyntax);
+            let BindingValue::Known(value) = value else {
+                if value == &BindingValue::Undetermined {
+                    self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                }
                 continue;
             };
             match super::arithmetic::armed(value) {
@@ -1138,7 +1213,7 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .map(|v| Some(v.as_str().unwrap().into()))
+            .map(|v| BindingValue::Known(v.as_str().unwrap().into()))
             .collect::<Vec<_>>();
         let mut scope = Scope::new("/h", "/p");
         for name in ["A", "B", "C"] {
@@ -1165,7 +1240,7 @@ mod tests {
     fn binding_join_replaces_the_complete_exit_state() {
         let mut outer = Scope::new("/h", "/p");
         let exit = outer.clone();
-        outer.assign("D".into(), vec![Some("public".into())]);
+        outer.assign("D".into(), vec![BindingValue::Known("public".into())]);
         assert!(!outer.join(&[exit]));
         assert!(!outer.contexts().contains_key("D"));
     }
@@ -1235,12 +1310,32 @@ mod tests {
     fn unknown_binding_at_an_arithmetic_sink_refuses() {
         let data = fixture();
         let mut scope = Scope::new("/h", "/p");
-        scope.assign("A".into(), vec![None]);
+        scope.assign("A".into(), vec![BindingValue::Undetermined]);
         let result = observation(
             data["sources"]["unknown_arithmetic"].as_str().unwrap(),
             &mut scope,
         );
         assert!(result.gaps.contains(&CoverageGap::UnsupportedShellSyntax));
+    }
+    #[test]
+    fn runtime_glob_propagation_stays_unknown() {
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/rust-m2-1.json")).unwrap();
+        let row = data["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == "loop-unknown-glob")
+            .unwrap();
+        let mut scope = Scope::new("/h", "/p");
+        let result = observation(row["source"].as_str().unwrap(), &mut scope);
+        assert!(
+            scope.bindings["D"]
+                .values
+                .contains(&BindingValue::RuntimeUnknown(None)),
+            "{:?}: {result:?}",
+            scope.bindings
+        );
     }
     #[test]
     fn binding_values_and_exit_snapshots_are_bounded() {
@@ -1249,7 +1344,7 @@ mod tests {
         let branches = (0..513)
             .map(|n| {
                 let mut branch = outer.clone();
-                branch.assign("A".into(), vec![Some(n.to_string())]);
+                branch.assign("A".into(), vec![BindingValue::Known(n.to_string())]);
                 let state = branch.state();
                 branch.returns.push(state.clone());
                 branch.loops[0].push(state);

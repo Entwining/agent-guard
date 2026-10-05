@@ -288,11 +288,15 @@ fn expand_scoped(
                         break;
                     }
                     let mut context = context.clone();
-                    if let Some(value) = value {
+                    if let statements::BindingValue::Known(value)
+                    | statements::BindingValue::RuntimeUnknown(Some(value)) = value
+                    {
                         context.insert(name.clone(), value.clone());
                     } else {
                         context.remove(name);
-                        evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+                        if value == &statements::BindingValue::Undetermined {
+                            evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+                        }
                     }
                     next.push(context);
                 }
@@ -306,9 +310,9 @@ fn expand_scoped(
             RawExpansion::Variable(name) => {
                 if let Some(binding) = scope.bindings.get(name).cloned() {
                     for value in binding.values {
-                        if let Some(code) = value {
+                        if let statements::BindingValue::Known(code) = value {
                             evaluator.source(&code, &mut scope.isolated(), depth + 1)?;
-                        } else {
+                        } else if value == statements::BindingValue::Undetermined {
                             evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
                     }
