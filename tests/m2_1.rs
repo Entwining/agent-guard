@@ -113,6 +113,10 @@ fn loop_state_converges_after_oldpwd_catches_up() {
     partition("batch1-loop-convergence");
 }
 #[test]
+fn directory_convergence_is_independent_of_oldpwd() {
+    partition("batch1-directory-comparison");
+}
+#[test]
 fn tree_roots_list() {
     partition("tree");
 }
