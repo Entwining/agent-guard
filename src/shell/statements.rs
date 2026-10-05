@@ -745,6 +745,20 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             if let Some(source) = resolved.source {
                 self.source(&source, &mut scope.isolated(), depth + 1)?;
             }
+            if super::argv::stdin_kind(&command) == Stdin::Shell {
+                for redirect in &command.redirects {
+                    if matches!(
+                        redirect.direction,
+                        crate::record::Direction::Heredoc | crate::record::Direction::Herestring
+                    ) {
+                        self.source(
+                            &redirect.target,
+                            &mut Scope::new(self.frontend.host.home, &command.cwd),
+                            depth + 1,
+                        )?;
+                    }
+                }
+            }
             if command.wrappers.iter().any(|w| w == "xargs") && command.program.is_some() {
                 for redirect in &command.redirects {
                     if matches!(
@@ -1262,7 +1276,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             })
             .collect::<Vec<_>>();
         if !data.is_empty() {
-            command.stdin = Stdin::Data(data);
+            command.stdin = match super::argv::stdin_kind(&command) {
+                Stdin::None => Stdin::Data(data),
+                kind => kind,
+            };
         }
         if command.program.is_some() && !command.function {
             self.unresolved_calls

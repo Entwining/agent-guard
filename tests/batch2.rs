@@ -61,6 +61,24 @@ fn partition(name: &str) {
                     row["id"]
                 );
                 assert!(!wire.stderr.is_empty());
+                if row["go_expected"][consumer]["reason"]
+                    .as_str()
+                    .is_some_and(|reason| reason.starts_with("This inline code"))
+                {
+                    assert!(
+                        wire.stderr.contains("CodeFile"),
+                        "{}: {}",
+                        row["id"],
+                        wire.stderr
+                    );
+                    assert!(effects.iter().any(|effect| matches!(
+                        effect,
+                        EffectRecord::ProtectedTarget {
+                            source: agent_guard_rust::EffectSource::InlineCode,
+                            ..
+                        }
+                    )));
+                }
             }
             assert!(
                 !matches!(
@@ -90,4 +108,9 @@ fn producers_feed_decoded_shell_stdin() {
 #[test]
 fn xargs_consumes_produced_items_and_here_data() {
     partition("xargs");
+}
+
+#[test]
+fn interpreter_stdin_and_display_body_variables_are_inspected() {
+    partition("stdin");
 }

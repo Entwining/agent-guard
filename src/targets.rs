@@ -86,6 +86,15 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         })
         .unwrap_or(program);
     let args = &command.argv[index + 1..];
+    if command.stdin == crate::record::Stdin::Code {
+        effects.inline.extend(
+            command
+                .redirects
+                .iter()
+                .filter(|r| matches!(r.direction, Direction::Heredoc | Direction::Herestring))
+                .map(|r| r.target.clone()),
+        );
+    }
     let hidden_items_read = if let Some(items) = &command.items {
         let effect = match program {
             "echo" | "printf" | "print" | ":" | "true" | "false" | "export" | "set" | "unset"
@@ -316,7 +325,27 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
     }
     effects.hidden_content |= hidden_items_read;
+    effects.dump |= effects.inline.iter().any(|code| printenv_signature(code));
+    let display = "cat head tail less more bat sed awk jq yq base64 xxd od strings diff openssl plutil cp tee tar source . sort uniq cut nl fold rev paste comm join iconv hexdump hd zcat gzcat bzcat xzcat ag ack tac column pr vim vi nvim view perl ruby dd scp rsync zip ed ex hg svn sh bash zsh dash ksh wget php zgrep zless zmore echo printf print".split_whitespace().any(|name| name == program)
+        && !(program != "echo" && ["printf", "print"].contains(&program) && args.first().is_some_and(|arg| arg == "-v"));
+    effects.variable |= display
+        && command
+            .redirects
+            .iter()
+            .flat_map(|r| &r.vars)
+            .any(|name| secret_name(name));
     effects
+}
+
+fn printenv_signature(code: &str) -> bool {
+    let boundary = |c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '-';
+    code.match_indices("printenv").any(|(start, name)| {
+        code[..start].chars().next_back().is_none_or(boundary)
+            && code[start + name.len()..]
+                .chars()
+                .next()
+                .is_none_or(boundary)
+    })
 }
 
 fn secret_name(name: &str) -> bool {

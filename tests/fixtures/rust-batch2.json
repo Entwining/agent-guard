@@ -1477,5 +1477,7 @@
     ,{"id":"control-xargs","partition":"xargs","source":"printf '%s\\n' input.txt | xargs cat","cwd":"$H/project","expected":"N"}
     ,{"id":"control-stdin","partition":"stdin","source":"python3 <<'EOF'\nprint('public')\nEOF","cwd":"$H/project","expected":"UC"}
     ,{"id":"control-git","partition":"git","source":"git grep -f input.txt","cwd":"$H/project","expected":"N"}
+    ,{"id":"stdin-shell-body","partition":"stdin","source":"sh <<'EOF'\ncat .env\nEOF","cwd":"$H/project","expected":"D","effect":"CredentialFile"}
+    ,{"id":"control-shell-body","partition":"stdin","source":"sh <<'EOF'\nprintf public\nEOF","cwd":"$H/project","expected":"N"}
   ]
 }
