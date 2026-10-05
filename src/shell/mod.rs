@@ -1,3 +1,4 @@
+mod argv;
 mod arithmetic;
 mod brush;
 mod cwd;

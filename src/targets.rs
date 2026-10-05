@@ -49,10 +49,14 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         return effects;
     }
     if command.program.is_none() {
+        effects.dump = command.wrappers.last().is_some_and(|w| w == "env")
+            && !command.wrappers.iter().any(|w| w == "env-S");
         for word in &command.argv {
             if !matches!(
                 word.role,
-                crate::record::Role::Precommand | crate::record::Role::Assign
+                crate::record::Role::Precommand
+                    | crate::record::Role::Assign
+                    | crate::record::Role::Namespace
             ) {
                 effects
                     .targets
@@ -126,8 +130,10 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             }
         }
         "setopt" | "unsetopt" | "emulate" => effects.gaps.push(CoverageGap::ExecutorDivergence),
-        "set" => effects.dump = args.is_empty(),
-        "typeset" | "declare" => {
+        "set" => {
+            effects.dump = command.shell && !command.argv[index].contains('/') && args.is_empty()
+        }
+        "typeset" | "declare" if command.shell && !command.argv[index].contains('/') => {
             effects.dump = args.is_empty()
                 || args.len() == 1 && args[0].starts_with('-') && args[0].contains(['p', 'x']);
             effects.variable = args
@@ -241,7 +247,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.dump = args.is_empty();
             effects.variable = args.iter().any(|s| secret_name(s));
         }
-        "export" if command.argv[0] == "export" => {
+        "export" if command.shell && !command.argv[index].contains('/') => {
             effects.dump =
                 args.is_empty() || args.iter().any(|s| s.starts_with('-') && s.contains('p'))
         }

@@ -545,10 +545,15 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
         let entry = scope.clone();
         let mut exits = Vec::new();
-        for argv in alternatives {
+        for mut argv in alternatives {
             let mut branch = entry.clone();
             let scope = &mut branch;
-            let program = (!argv[assignments.len()..].is_empty()).then_some(assignments.len());
+            let resolved = super::argv::resolve(
+                &mut argv,
+                &scope.directory.current.render(),
+                self.frontend.host,
+            );
+            let program = resolved.program;
             let prior = command_bindings
                 .keys()
                 .map(|name| (name.clone(), scope.bindings.get(name).cloned()))
@@ -562,7 +567,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     self.armed_word(word, scope, depth)?;
                 }
             }
-            if let Some(index) = program.filter(|i| !self.functions.contains_key(&argv[*i].text)) {
+            if let Some(index) = program.filter(|i| {
+                !self.functions.contains_key(&argv[*i].text)
+                    && (resolved.shell
+                        || argv[*i] == "eval" && resolved.wrappers.iter().any(|w| w == "command"))
+            }) {
                 if argv[index].expands && !self.functions.is_empty() {
                     self.output.gap(CoverageGap::UnsupportedShellSyntax);
                 }
@@ -715,13 +724,14 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
             }
             let command = Command {
-                function: program.is_some_and(|i| self.functions.contains_key(&argv[i].text)),
+                function: resolved.wrappers.is_empty()
+                    && program.is_some_and(|i| self.functions.contains_key(&argv[i].text)),
                 argv,
                 redirects: targets.clone(),
-                cwd: scope.directory.current.render(),
+                cwd: resolved.cwd,
                 program,
-                wrappers: Vec::new(),
-                shell: true,
+                wrappers: resolved.wrappers,
+                shell: resolved.shell,
                 flags: Vec::new(),
                 items: None,
                 stdin: Stdin::None,
@@ -729,9 +739,13 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 nested,
             };
             self.emit(command.clone(), scope);
+            if let Some(source) = resolved.source {
+                self.source(&source, &mut scope.isolated(), depth + 1)?;
+            }
             if let Some(name) = program
                 .and_then(|i| command.argv.get(i))
                 .map(|w| w.text.clone())
+                && command.function
                 && let Some(function) = self.functions.get(&name).cloned()
             {
                 if matches!(name.as_str(), "local" | "declare" | "typeset" | "export") {
@@ -1496,7 +1510,7 @@ pub(super) fn identifier(name: &str) -> bool {
             .enumerate()
             .all(|(i, b)| b == b'_' || b.is_ascii_alphabetic() || i > 0 && b.is_ascii_digit())
 }
-fn assignment(raw: &str) -> Option<(&str, &str)> {
+pub(super) fn assignment(raw: &str) -> Option<(&str, &str)> {
     raw.split_once('=').filter(|(n, _)| identifier(n))
 }
 
