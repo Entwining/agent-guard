@@ -179,3 +179,37 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
     }
     result
 }
+
+pub(crate) fn shell_code_flag(word: &Word) -> bool {
+    word.starts_with('-') && word[1..].chars().all(|c| c.is_ascii_lowercase()) && word.contains('c')
+}
+
+pub(super) fn stdin_kind(command: &crate::record::Command) -> crate::record::Stdin {
+    use crate::record::Stdin;
+    let Some(index) = command.program else {
+        return Stdin::None;
+    };
+    let name = command.argv[index].rsplit('/').next().unwrap_or("");
+    if ["sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh"].contains(&name)
+        && !command.argv[index + 1..].iter().any(shell_code_flag)
+    {
+        return Stdin::Shell;
+    }
+    let name = name.trim_end_matches(|c: char| c.is_ascii_digit() || c == '.');
+    if [
+        "python",
+        "node",
+        "bun",
+        "ruby",
+        "perl",
+        "php",
+        "osascript",
+        "lua",
+        "deno",
+    ]
+    .contains(&name)
+    {
+        return Stdin::Code;
+    }
+    Stdin::None
+}

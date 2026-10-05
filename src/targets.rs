@@ -231,7 +231,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
                     effects.code.push(code.text.clone());
                     claimed.push(index + 1);
                 }
-            } else {
+            } else if command.stdin != crate::record::Stdin::Shell {
                 effects.gaps.push(CoverageGap::UnresolvedTarget);
             }
             for (index, arg) in args.iter().enumerate() {

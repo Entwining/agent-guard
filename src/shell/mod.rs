@@ -4,6 +4,7 @@ mod brush;
 mod cwd;
 mod divergence;
 pub mod lexer;
+mod pipeline;
 mod statements;
 mod words;
 

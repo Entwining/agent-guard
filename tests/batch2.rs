@@ -39,26 +39,24 @@ fn partition(name: &str) {
                 use agent_guard_rust::{EffectRecord, filesystem::Protection};
                 let effects = &result.as_ref().unwrap().effects;
                 assert!(
-                    effects.iter().any(|v| match (effect, v) {
+                    effects.iter().any(|v| matches!(
+                        (effect, v),
                         (
                             "AppData",
                             EffectRecord::ProtectedTarget {
                                 protection: Protection::AppData,
                                 ..
                             },
-                        )
-                        | (
+                        ) | (
                             "CredentialFile",
                             EffectRecord::ProtectedTarget {
                                 protection: Protection::Environment,
                                 ..
                             },
-                        )
-                        | ("EnvironmentDump", EffectRecord::EnvironmentDump)
-                        | ("CredentialVariable", EffectRecord::CredentialVariable)
-                        | ("HiddenContent", EffectRecord::HiddenContent) => true,
-                        _ => false,
-                    }),
+                        ) | ("EnvironmentDump", EffectRecord::EnvironmentDump)
+                            | ("CredentialVariable", EffectRecord::CredentialVariable)
+                            | ("HiddenContent", EffectRecord::HiddenContent)
+                    )),
                     "{}: {result:?}",
                     row["id"]
                 );
@@ -82,4 +80,9 @@ fn partition(name: &str) {
 #[test]
 fn precommand_wrappers_reach_the_actual_program() {
     partition("wrappers");
+}
+
+#[test]
+fn producers_feed_decoded_shell_stdin() {
+    partition("producer");
 }

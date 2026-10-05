@@ -919,6 +919,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         self.merge_bindings(scope, &[before, left_exit, after]);
                     }
                     Operator::Or | Operator::Pipe => {
+                        let start = self.output.script.commands.len();
                         if matches!(operator, Operator::Or) {
                             self.statement(left, scope, depth + 1, source_id, nested)?;
                         } else {
@@ -930,12 +931,25 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                                 nested,
                             )?;
                         }
+                        let middle = self.output.script.commands.len();
                         let mut rhs = if matches!(operator, Operator::Or) {
                             scope.branch()
                         } else {
                             before.isolated()
                         };
                         self.statement(right, &mut rhs, depth + 1, source_id, nested)?;
+                        if matches!(operator, Operator::Pipe) {
+                            let (left, right) =
+                                self.output.script.commands[start..].split_at_mut(middle - start);
+                            let sources = super::pipeline::shell_input(left, right);
+                            for input in sources {
+                                self.source(
+                                    &input.source,
+                                    &mut Scope::new(self.frontend.host.home, &input.cwd),
+                                    depth + 1,
+                                )?;
+                            }
+                        }
                         let lhs = scope.clone();
                         self.merge_bindings(scope, &[lhs, rhs.clone()]);
                         self.merge_directories(scope, &[rhs]);
