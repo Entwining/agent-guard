@@ -764,7 +764,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 pipeline: pipeline.map(|id| (source_id, id)),
                 nested,
             };
-            self.emit(command.clone(), scope);
+            let command = self.emit(command, scope, &resolved.environment);
             if let Some(index) = program.filter(|index| {
                 !command.function
                     && matches!(
@@ -780,9 +780,29 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     scope
                         .bindings
                         .iter()
-                        .filter(|(_, binding)| binding.exported)
+                        .filter(|(name, binding)| {
+                            binding.exported
+                                && !matches!(name.as_str(), "GIT_DIR" | "GIT_WORK_TREE")
+                        })
                         .map(|(name, binding)| (name.clone(), binding.clone())),
                 );
+                for (name, value) in &command.environment {
+                    let value = if value.expands {
+                        BindingValue::RuntimeDerived(value.text.clone())
+                    } else {
+                        BindingValue::Known(value.text.clone())
+                    };
+                    let binding = child
+                        .bindings
+                        .entry(name.clone())
+                        .or_insert_with(|| Binding {
+                            values: Vec::new(),
+                            exported: true,
+                        });
+                    if !binding.values.contains(&value) {
+                        binding.values.push(value);
+                    }
+                }
                 let functions = self.functions.clone();
                 let result = self.source(&pair[1].text, &mut child, depth + 1);
                 self.functions = functions;
@@ -1362,11 +1382,17 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     nested,
                 },
                 scope,
+                &[],
             );
         }
         Ok(())
     }
-    fn emit(&mut self, mut command: Command, scope: &Scope) {
+    fn emit(
+        &mut self,
+        mut command: Command,
+        scope: &Scope,
+        environment: &[super::argv::EnvironmentChange],
+    ) -> Command {
         if let Some(index) = command.program {
             for (name, binding) in scope
                 .bindings
@@ -1388,6 +1414,32 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         }
                     }
                 }
+            }
+        }
+        // D48b applies the wrapper's effective environment before the Git owner
+        // sees it; a child shell inherits the same values, including overrides.
+        for change in environment {
+            match change {
+                super::argv::EnvironmentChange::Clear => command.environment.clear(),
+                super::argv::EnvironmentChange::Unset(name) => {
+                    command.environment.retain(|(key, _)| key != name)
+                }
+                super::argv::EnvironmentChange::Set(name, value)
+                    if matches!(name.as_str(), "GIT_DIR" | "GIT_WORK_TREE") =>
+                {
+                    command.environment.retain(|(key, _)| key != name);
+                    let mut value = value.clone();
+                    if super::lexer::initial_quote(&value.raw) == super::lexer::Quote::Unquoted {
+                        value.text = crate::filesystem::expand_home(
+                            &value.text,
+                            self.frontend.host.home,
+                            self.frontend.host.user,
+                        );
+                        value.value = value.text.clone();
+                    }
+                    command.environment.push((name.clone(), value));
+                }
+                _ => {}
             }
         }
         if command.argv.iter().flat_map(|word| &word.vars).any(|name| {
@@ -1460,6 +1512,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         if self.output.script.commands.len() > 512 {
             self.output.gap(CoverageGap::InspectionBudget);
         }
+        command
     }
     fn track(&mut self, command: &Command, scope: &mut Scope) {
         let Some(index) = command.program else {

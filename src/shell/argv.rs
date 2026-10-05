@@ -7,6 +7,13 @@ pub(super) struct Resolution {
     pub cwd: String,
     pub source: Option<String>,
     pub gap: Option<crate::CoverageGap>,
+    pub environment: Vec<EnvironmentChange>,
+}
+
+pub(super) enum EnvironmentChange {
+    Clear,
+    Unset(String),
+    Set(String, Word),
 }
 
 fn text(argv: &[Word], index: usize) -> &str {
@@ -28,6 +35,7 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
         cwd: cwd.into(),
         source: None,
         gap: None,
+        environment: Vec::new(),
     };
     let mut index = 0;
     while let Some(word) = argv.get(index) {
@@ -135,14 +143,43 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
                             }
                             index += 2;
                         }
-                        "-u" | "-P" => index += 2,
+                        "-i" | "--ignore-environment" => {
+                            result.environment.push(EnvironmentChange::Clear);
+                            index += 1;
+                        }
+                        "-u" | "--unset" => {
+                            if let Some(word) = argv.get(index + 1) {
+                                result
+                                    .environment
+                                    .push(EnvironmentChange::Unset(word.text.clone()));
+                            }
+                            index += 2;
+                        }
+                        "-P" => index += 2,
                         "-S" => {
                             result.source = argv.get(index + 1).map(|w| w.text.clone());
                             result.wrappers.push("env-S".into());
                             index = argv.len();
                         }
-                        option if option.starts_with('-') || option.contains('=') => index += 1,
-                        _ => break,
+                        option if option.starts_with('-') => index += 1,
+                        assignment => {
+                            let Some((name, value)) = assignment.split_once('=') else {
+                                break;
+                            };
+                            let mut value = argv[index].with_text(value.into());
+                            if super::lexer::initial_quote(&value.raw)
+                                == super::lexer::Quote::Unquoted
+                            {
+                                value.raw = value
+                                    .raw
+                                    .split_once('=')
+                                    .map_or(value.raw.clone(), |(_, raw)| raw.into());
+                            }
+                            result
+                                .environment
+                                .push(EnvironmentChange::Set(name.into(), value));
+                            index += 1;
+                        }
                     }
                 }
             }
