@@ -160,7 +160,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         "printf" | "echo" | "print" => {
             effects.targets.extend(
                 args.iter()
-                    .filter(|arg| !arg.starts_with('-'))
+                    .filter(|arg| arg.globs && !arg.starts_with('-'))
                     .map(|arg| Target::from_word(arg, cwd, host, Effect::Name, Walk::None)),
             );
             effects.variable = !(program != "echo" && args.first().is_some_and(|arg| arg == "-v"))
