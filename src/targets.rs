@@ -2,6 +2,7 @@ use crate::{CoverageGap, shell::CommandRecord};
 
 pub use crate::record::Target;
 use crate::record::{Direction, Effect, HostFacts, Via, Walk, Word};
+mod clients;
 #[derive(Debug, Default)]
 pub struct Effects {
     pub targets: Vec<Target>,
@@ -87,6 +88,12 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         })
         .unwrap_or(program);
     let args = &command.argv[index + 1..];
+    if command.argv[index].contains('/') {
+        let mut target =
+            Target::from_word(&command.argv[index], cwd, host, Effect::Use, Walk::Visible);
+        target.via = Via::Option;
+        effects.targets.push(target);
+    }
     if command.stdin == crate::record::Stdin::Code {
         effects.inline.extend(
             command
@@ -266,6 +273,11 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
         "tar" => infer_tar(args, cwd, host, &mut effects),
         "git" => infer_git(args, cwd, host, &mut effects),
+        "ssh" | "scp" | "sftp" | "ssh-keygen" | "dd" | "kubectl" | "npm" => {
+            effects
+                .targets
+                .extend(clients::infer(program, args, cwd, host));
+        }
         "python" | "python3" | "node" | "bun" | "ruby" | "perl" | "php" | "osascript" | "lua"
         | "deno" => {
             effects.gaps.push(CoverageGap::InterpreterChosenRead);
@@ -330,8 +342,12 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.gaps.push(CoverageGap::UnknownProgram {
                 program: program.to_owned(),
             });
-            for arg in args.iter().filter(|s| !s.starts_with('-')) {
-                effects.targets.push(read(arg, false));
+            for arg in args {
+                if let Some(value) = clients::operand_value(arg) {
+                    effects
+                        .targets
+                        .push(read(&arg.with_text(value.into()), false));
+                }
             }
         }
     }
