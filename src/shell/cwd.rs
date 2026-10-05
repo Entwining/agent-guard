@@ -1,4 +1,5 @@
 use super::{Operator, Statement, words};
+use crate::CoverageGap;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum CwdPath {
@@ -99,11 +100,12 @@ fn clean(path: &str) -> String {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Directory {
     pub current: CwdPath,
     pub alternatives: Vec<CwdPath>,
     pub failures: Option<Vec<CwdPath>>,
+    pub gap: Option<CoverageGap>,
 }
 
 impl Directory {
@@ -112,10 +114,11 @@ impl Directory {
             current: CwdPath::initial(path),
             alternatives: Vec::new(),
             failures: None,
+            gap: None,
         }
     }
     pub fn merge(&mut self, candidates: impl Iterator<Item = CwdPath>, home: &str) {
-        self.alternatives = bounded(
+        let (alternatives, gap) = bounded(
             &self.current,
             self.alternatives
                 .iter()
@@ -124,6 +127,8 @@ impl Directory {
                 .collect(),
             home,
         );
+        self.alternatives = alternatives;
+        self.gap = self.gap.take().or(gap);
     }
     pub fn move_to(&mut self, targets: &[String], physical: bool, disputed: bool, home: &str) {
         let move_from = |cwd: &CwdPath| {
@@ -151,12 +156,18 @@ impl Directory {
         for cwd in &self.alternatives {
             candidates.extend(move_from(cwd));
         }
-        self.alternatives = bounded(&next, candidates, home);
+        let (alternatives, gap) = bounded(&next, candidates, home);
+        self.alternatives = alternatives;
+        self.gap = self.gap.take().or(gap);
         self.current = next;
     }
 }
 
-pub(super) fn bounded(current: &CwdPath, candidates: Vec<CwdPath>, home: &str) -> Vec<CwdPath> {
+pub(super) fn bounded(
+    current: &CwdPath,
+    candidates: Vec<CwdPath>,
+    home: &str,
+) -> (Vec<CwdPath>, Option<CoverageGap>) {
     let mut result = Vec::new();
     for path in candidates {
         if &path != current && !result.contains(&path) {
@@ -164,12 +175,15 @@ pub(super) fn bounded(current: &CwdPath, candidates: Vec<CwdPath>, home: &str) -
         }
     }
     if result.len() > 16 {
-        vec![
-            CwdPath::Logical(home.into()),
-            CwdPath::Logical(format!("{home}/Library")),
-        ]
+        (
+            vec![
+                CwdPath::Logical(home.into()),
+                CwdPath::Logical(format!("{home}/Library")),
+            ],
+            Some(CoverageGap::InspectionBudget),
+        )
     } else {
-        result
+        (result, None)
     }
 }
 

@@ -88,3 +88,11 @@ fn or_rhs_uses_left_exit_bindings() {
 fn or_rhs_uses_left_exit_directory() {
     partition("or-directory");
 }
+#[test]
+fn cwd_candidate_loss_refuses_relative_targets() {
+    partition("cwd-budget");
+}
+#[test]
+fn cwd_budget_survives_branch_join() {
+    partition("cwd-budget-join");
+}

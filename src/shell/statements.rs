@@ -282,6 +282,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         for branch in branches {
             candidates.push(branch.directory.current.clone());
             candidates.extend(branch.directory.alternatives.clone());
+            scope.directory.gap = scope.directory.gap.take().or(branch.directory.gap.clone());
         }
         scope
             .directory
@@ -872,6 +873,15 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         Ok(())
     }
     fn emit(&mut self, mut command: Command, scope: &Scope) {
+        if let Some(gap) = &scope.directory.gap {
+            // Only overflow pays for this second inference. A different cwd exposes
+            // target dependencies without inventing a separate adapter role table.
+            let effects = crate::targets::infer(&command, &command.cwd, self.frontend.host);
+            let relocated = crate::targets::infer(&command, "/", self.frontend.host);
+            if command.argv.iter().any(|word| word.pwd) || effects.targets != relocated.targets {
+                self.output.gap(gap.clone());
+            }
+        }
         let data = command
             .redirects
             .iter()
@@ -1258,11 +1268,11 @@ mod tests {
             .collect::<Vec<_>>();
         let current = cwd::CwdPath::Logical("/p".into());
         assert_eq!(
-            cwd::bounded(&current, paths[..16].to_vec(), "/h"),
+            cwd::bounded(&current, paths[..16].to_vec(), "/h").0,
             paths[..16]
         );
         assert_eq!(
-            cwd::bounded(&current, paths, "/h"),
+            cwd::bounded(&current, paths, "/h").0,
             [
                 cwd::CwdPath::Logical("/h".into()),
                 cwd::CwdPath::Logical("/h/Library".into())
