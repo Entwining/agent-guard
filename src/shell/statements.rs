@@ -1045,10 +1045,20 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 let mut inner = scope.branch();
                 inner.directory.failures = None;
                 let mut values = Vec::new();
+                let mut literal = variable.is_some() && !header.is_empty();
+                let mut literal_values = Vec::new();
                 let mut count = Some(0usize);
                 for word in header {
                     let mut width = 0;
                     for expanded in self.expand(word, scope, depth)? {
+                        literal &= word.expansions.is_empty()
+                            && expanded.word.vars.is_empty()
+                            && !expanded.word.expands
+                            && !expanded.word.globs
+                            && !expanded.tilde
+                            && expanded.nested.is_empty()
+                            && expanded.arithmetic.is_empty();
+                        literal_values.push(expanded.word.text.clone());
                         width = width.max(expanded.split.len().max(1));
                         if expanded.word.expands || expanded.word.globs {
                             count = None;
@@ -1075,6 +1085,28 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     }
                     count = count.map(|n| n + width);
                     self.word_use(word, scope, depth, nested)?;
+                }
+                if literal
+                    && literal_values.len() <= 512
+                    && let Some(variable) = variable
+                {
+                    inner.loops.push(Vec::new());
+                    for value in literal_values {
+                        inner.assign(variable.clone(), vec![BindingValue::Known(value)]);
+                        self.run(body, &mut inner, depth + 1, source_id, nested)?;
+                    }
+                    let early = inner.loops.pop().ok_or(CheckError {
+                        kind: crate::CheckErrorKind::GuardFault,
+                    })?;
+                    let mut branches = early
+                        .into_iter()
+                        .map(|state| inner.with_state(state))
+                        .collect::<Vec<_>>();
+                    branches.push(inner.clone());
+                    scope.directory = inner.directory.clone();
+                    self.merge_directories(scope, &branches);
+                    self.merge_bindings(scope, &branches);
+                    return Ok(());
                 }
                 let iterations = if *empty {
                     Some(0)
@@ -1730,13 +1762,7 @@ mod tests {
                 .iter()
                 .any(|path| path.render() == "/h/project")
         );
-        assert!(
-            scope
-                .directory
-                .alternatives
-                .iter()
-                .any(|path| path.render() == "/h")
-        );
+        assert_eq!(scope.directory.current.render(), "/h");
         assert!(
             !result.gaps.contains(&CoverageGap::InspectionBudget),
             "{result:?}"

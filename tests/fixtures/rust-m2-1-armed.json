@@ -14,7 +14,7 @@
     {"id":"unarmed-array-value","partition":"armed-array","source":"arr=(public); printf '%s' \"${arr[0]}\"","expected":"N"},
     {"id":"armed-printf-unmodeled","partition":"armed-printf-fallback","source":"printf -v x '%s%s' 'a[' '$(cat .env)]'; a=(0); echo $((x))","expected":"UR","gap":"UnsupportedShellSyntax","host_source":"printf -v x '%s%s' 'a[' '$(echo HIT >&2; printf 0)]'; a=(0); printf '%s' $((x))"},
     {"id":"unarmed-printf-unmodeled","partition":"armed-printf-fallback","source":"printf -v x '%s%s' pub lic; echo x","expected":"N"},
-    {"id":"armed-append-budget","partition":"armed-append-budget","source":"A=public; B=public; for A in a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21; do :; done; for B in b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 b16 b17 b18 b19 b20 b21 b22 b23; do :; done; A+=$B","expected":"UR","gap":"InspectionBudget"},
+    {"id":"armed-append-budget","partition":"armed-append-budget","source":"A=public; B=public; AS='a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21'; BS='b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 b16 b17 b18 b19 b20 b21 b22 b23'; for A in $AS; do :; done; for B in $BS; do :; done; A+=$B","expected":"UR","gap":"InspectionBudget"},
     {
       "id": "armed-declare-dollar",
       "partition": "armed-expansion",
