@@ -659,7 +659,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                                 nested,
                             )?;
                         }
-                        let mut rhs = before.isolated();
+                        let mut rhs = if matches!(operator, Operator::Or) {
+                            scope.branch()
+                        } else {
+                            before.isolated()
+                        };
                         self.statement(right, &mut rhs, depth + 1, source_id, nested)?;
                         let lhs = scope.clone();
                         self.merge_bindings(scope, &[lhs, rhs.clone()]);

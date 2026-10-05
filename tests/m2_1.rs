@@ -79,3 +79,12 @@ fn visible_file_roots_list() {
 fn hidden_file_roots_read() {
     partition("files-hidden");
 }
+
+#[test]
+fn or_rhs_uses_left_exit_bindings() {
+    partition("or-bindings");
+}
+#[test]
+fn or_rhs_uses_left_exit_directory() {
+    partition("or-directory");
+}

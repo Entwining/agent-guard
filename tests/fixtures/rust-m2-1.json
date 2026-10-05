@@ -10,6 +10,11 @@
     {"id":"rg-files-credential-control","partition":"files-hidden","source":"rg --files ~/.env","expected":"N"},
     {"id":"grep-recursive-files","partition":"files-hidden","source":"grep -r --files ~/Library/Containers/com.example.syn/Data","expected":"D","reason":"App Data"},
     {"id":"rg-hidden-files","partition":"files-hidden","source":"rg --files --hidden ~/.env","expected":"D","reason":"environment"},
-    {"id":"ag-hidden-files","partition":"files-hidden","source":"ag --files --hidden ~/.env","expected":"D","reason":"environment"}
+    {"id":"ag-hidden-files","partition":"files-hidden","source":"ag --files --hidden ~/.env","expected":"D","reason":"environment"},
+    {"id":"f1-or-group","partition":"or-bindings","source":"D=/tmp; { D=~/Library/Containers/com.example.syn/Data; false; } || ls \"$D\"","expected":"D","reason":"App Data","host_source":"D=outer; { D=public; false; } || printf 'D=<%s>\\n' \"$D\""},
+    {"id":"f1-andor","partition":"or-bindings","source":"D=/tmp; D=~/Library/Containers/com.example.syn/Data && false || ls \"$D\"","expected":"D","reason":"App Data","host_source":"D=outer; D=public && false || printf 'D=<%s>\\n' \"$D\""},
+    {"id":"f1-or-test","partition":"or-bindings","source":"D=/tmp; { D=~/Library/Containers/com.example.syn/Data; test -e /nonexistent; } || cat \"$D/x\"","expected":"D","reason":"App Data","host_source":"D=outer; { D=public; test -e /nonexistent; } || printf 'D=<%s>\\n' \"$D\""},
+    {"id":"f1-or-cwd","partition":"or-directory","source":"{ cd ~/Library/Containers/com.example.syn; false; } || ls Data","expected":"D","reason":"App Data","host_source":"{ cd sub; false; } || printf 'cwd=<%s>\\n' \"${PWD##*/}\""},
+    {"id":"f1-ctrl","partition":"or-bindings","source":"D=/tmp; { D=/var; false; } || ls \"$D\"","expected":"N","host_source":"D=outer; { D=public; false; } || printf 'D=<%s>\\n' \"$D\""}
   ]
 }
