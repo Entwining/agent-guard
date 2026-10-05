@@ -109,7 +109,11 @@ pub fn decode(
     if cwd.is_empty() || !std::path::Path::new(&cwd).is_absolute() {
         return Err(malformed());
     }
-    let folded_name = name.to_lowercase();
+    // Go folds each rune independently; full mappings would expand U+0130.
+    let folded_name: String = name
+        .chars()
+        .map(|c| c.to_lowercase().next().unwrap_or(c))
+        .collect();
     let operation = match (consumer, folded_name.as_str()) {
         (Consumer::Claude | Consumer::Codex | Consumer::Pi, "bash") => {
             Operation::Shell(field(&input, "command")?)

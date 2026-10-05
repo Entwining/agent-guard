@@ -1,0 +1,6 @@
+{"rows":[
+ {"id":"dotted-i-protected-write","partition":"case","tool":"WRİTE","expected":"D","input":{"file_path":"$C/data.txt","path":"$C/data.txt","content":"synthetic"}},
+ {"id":"dotted-i-public-write","partition":"case","tool":"WRİTE","expected":"N","input":{"file_path":"$P/out.txt","path":"$P/out.txt","content":"synthetic"}},
+ {"id":"unknown-final-sigma","partition":"case","tool":"ΟΣ","expected":"UC","input":{"file_path":"$C/data.txt","path":"$C/data.txt"}},
+ {"id":"codex-upper-exec-remains-unknown","partition":"case","tool":"EXEC_COMMAND","expected":"UC","input":{"cmd":"cat '$C/data.txt'"}}
+]}
