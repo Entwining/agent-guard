@@ -684,11 +684,7 @@ fn infer_listing(
             &path,
             cwd,
             host,
-            if program == "tree" {
-                Effect::Name
-            } else {
-                Effect::List
-            },
+            Effect::List,
             Walk::Visible,
         ));
     }
@@ -818,6 +814,7 @@ fn infer_search(
     let mut explicit = false;
     let mut names = false;
     let mut hidden = false;
+    let mut recursive = false;
     let mut no_hidden = false;
     let mut unrestricted = 0;
     let mut options = true;
@@ -850,7 +847,10 @@ fn infer_search(
                     unrestricted += 1;
                     hidden |= (program == "ag" || unrestricted >= 2) && !no_hidden;
                 }
-                "recursive" => hidden |= program == "grep",
+                "recursive" => {
+                    recursive = program == "grep";
+                    hidden |= recursive;
+                }
                 _ => {}
             }
             if (if program=="rg" {"regexp file glob iglob type type-not encoding replace color colors sort sortr max-depth max-filesize pre pre-glob engine threads max-columns type-add type-clear path-separator context-separator field-context-separator field-match-separator after-context before-context context max-count ignore-file dfa-size-limit regex-size-limit hyperlink-format"} else {"regexp file include exclude exclude-dir exclude-from label context after-context before-context max-count binary-files devices directories"}).split_whitespace().any(|option|option==key)
@@ -874,6 +874,7 @@ fn infer_search(
                     || program == "ag" && ch == 'u'
                 {
                     hidden = true;
+                    recursive |= program == "grep";
                 }
                 if (if program == "rg" {
                     "efgtTEABCmMjrd"
@@ -904,7 +905,10 @@ fn infer_search(
             });
             if let Some(value) = value {
                 match key.as_str() {
-                    "d" | "directories" if program == "grep" && value == "recurse" => hidden = true,
+                    "d" | "directories" if program == "grep" && value == "recurse" => {
+                        hidden = true;
+                        recursive = true;
+                    }
                     "e" | "regexp" => {
                         explicit = true;
                     }
@@ -941,15 +945,14 @@ fn infer_search(
     }
     effects.hidden_listing = names && hidden;
     effects.hidden_content = hidden && !names;
+    let hidden_walk = recursive || matches!(program, "rg" | "ag") && hidden;
     for root in operands {
         let mut target = Target::from_word(
             &root,
             cwd,
             host,
-            if names && program == "rg" {
+            if names && !hidden_walk {
                 Effect::List
-            } else if names {
-                Effect::Name
             } else {
                 Effect::Read
             },

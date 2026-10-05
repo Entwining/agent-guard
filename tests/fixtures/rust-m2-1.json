@@ -1,0 +1,15 @@
+{
+  "home": "/h", "cwd": "/h/project", "rows": [
+    {"id":"tree-explicit","partition":"tree","source":"tree ~/Library/Containers/com.example.syn/Data","expected":"D","reason":"App Data"},
+    {"id":"tree-cwd","partition":"tree","source":"cd ~/Library/Containers/com.example.syn/Data; tree","expected":"D","reason":"App Data"},
+    {"id":"tree-control","partition":"tree","source":"tree","expected":"N"},
+    {"id":"du-control","partition":"tree","source":"du","expected":"N"},
+    {"id":"grep-files","partition":"files-visible","source":"grep --files ~/Library/Containers/com.example.syn/Data","expected":"D","reason":"App Data"},
+    {"id":"ag-files","partition":"files-visible","source":"ag --files ~/Library/Containers/com.example.syn/Data","expected":"D","reason":"App Data"},
+    {"id":"ack-files","partition":"files-visible","source":"ack --files ~/Library/Containers/com.example.syn/Data","expected":"D","reason":"App Data"},
+    {"id":"rg-files-credential-control","partition":"files-hidden","source":"rg --files ~/.env","expected":"N"},
+    {"id":"grep-recursive-files","partition":"files-hidden","source":"grep -r --files ~/Library/Containers/com.example.syn/Data","expected":"D","reason":"App Data"},
+    {"id":"rg-hidden-files","partition":"files-hidden","source":"rg --files --hidden ~/.env","expected":"D","reason":"environment"},
+    {"id":"ag-hidden-files","partition":"files-hidden","source":"ag --files --hidden ~/.env","expected":"D","reason":"environment"}
+  ]
+}
