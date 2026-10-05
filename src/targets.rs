@@ -480,15 +480,26 @@ fn label_options<'a>(
         if clients::option(program, key).is_none()
             && ["--exclude", "--exclude-dir", "--include"].contains(&key)
         {
-            labelled.to_mut()[index].role = Role::Option(OptionRole::Name);
+            let option_value = if word.value.starts_with('-') {
+                word.value
+                    .split_once('=')
+                    .map_or(word.value.as_str(), |(_, value)| value)
+            } else {
+                &word.value
+            };
             let value = operand_value(word).unwrap_or(&word.text);
-            let mut target = Target::from_word(
-                &word.with_text(value.into()),
-                cwd,
-                host,
-                Effect::Name,
-                Walk::None,
-            );
+            let effect = if value != option_value {
+                Effect::Read
+            } else {
+                Effect::Name
+            };
+            labelled.to_mut()[index].role = Role::Option(if effect == Effect::Name {
+                OptionRole::Name
+            } else {
+                OptionRole::Arg
+            });
+            let mut target =
+                Target::from_word(&word.with_text(value.into()), cwd, host, effect, Walk::None);
             target.via = Via::Option;
             effects.targets.push(target);
         }
