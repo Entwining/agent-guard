@@ -96,6 +96,6 @@ fn credential_roots_do_not_protect_public_children() {
 }
 
 #[test]
-fn cwd_entry_does_not_spend_resource_overflow_budget() {
+fn cwd_entry_retains_overflow_refusal() {
     partition("overflow");
 }

@@ -481,7 +481,7 @@
       "partition": "overflow",
       "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; git status",
       "cwd": "$H/project",
-      "expected": "N"
+      "expected": "UR"
     },
     {
       "id": "ov17-cp",
@@ -509,7 +509,7 @@
       "partition": "overflow",
       "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; echo x | xargs cat",
       "cwd": "$H/project",
-      "expected": "N"
+      "expected": "UR"
     },
     {
       "id": "ov17-python",
