@@ -6,6 +6,7 @@ pub(super) struct Resolution {
     pub shell: bool,
     pub cwd: String,
     pub source: Option<String>,
+    pub gap: Option<crate::CoverageGap>,
 }
 
 fn text(argv: &[Word], index: usize) -> &str {
@@ -26,6 +27,7 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
         shell: true,
         cwd: cwd.into(),
         source: None,
+        gap: None,
     };
     let mut index = 0;
     while let Some(word) = argv.get(index) {
@@ -49,6 +51,9 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
         ]
         .contains(&text(argv, index))
     {
+        result.gap = Some(crate::CoverageGap::UnknownProgram {
+            program: text(argv, index).to_owned(),
+        });
         index = argv.len();
     }
     while index < argv.len() {

@@ -115,6 +115,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         false
     };
     if command.wrappers.iter().any(|w| w == "xargs") {
+        effects.consumes_listing = xargs_content_consumer(program);
         let options = &command.argv[..index];
         for (i, word) in options.iter().enumerate() {
             let file = if word == "-a" || word == "--arg-file" {
@@ -173,7 +174,17 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
                 }
             }
         }
-        "setopt" | "unsetopt" | "emulate" => effects.gaps.push(CoverageGap::ExecutorDivergence),
+        "setopt" | "unsetopt" | "emulate" => {
+            effects.gaps.push(
+                if command.shell && command.argv[..index].iter().all(|w| w.contains('=')) {
+                    CoverageGap::ExecutorDivergence
+                } else {
+                    CoverageGap::UnknownProgram {
+                        program: program.into(),
+                    }
+                },
+            );
+        }
         "set" => {
             effects.dump = command.shell && !command.argv[index].contains('/') && args.is_empty()
         }
@@ -421,13 +432,9 @@ fn infer_wrapper(
         }
     }
     effects.consumes_listing = program == "xargs"
-        && args.get(index).is_some_and(|name| {
-            [
-                "cat", "head", "tail", "less", "more", "bat", "sed", "awk", "jq", "yq", "base64",
-                "xxd", "od", "strings", "sort", "uniq", "cut", "nl", "sh", "bash", "zsh",
-            ]
-            .contains(&name.as_str())
-        });
+        && args
+            .get(index)
+            .is_some_and(|name| xargs_content_consumer(name));
     effects.targets.extend(result.targets);
     effects.gaps.extend(result.gaps);
     effects.code.extend(result.code);
@@ -445,6 +452,14 @@ fn at(path: &str, base: &str) -> String {
     } else {
         format!("{base}/{path}")
     }
+}
+
+fn xargs_content_consumer(name: &str) -> bool {
+    [
+        "cat", "head", "tail", "less", "more", "bat", "sed", "awk", "jq", "yq", "base64", "xxd",
+        "od", "strings", "sort", "uniq", "cut", "nl", "sh", "bash", "zsh",
+    ]
+    .contains(&name)
 }
 
 fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effects) {

@@ -554,6 +554,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 self.frontend.host,
             );
             let program = resolved.program;
+            if let Some(gap) = resolved.gap {
+                self.output.gap(gap);
+            }
             let prior = command_bindings
                 .keys()
                 .map(|name| (name.clone(), scope.bindings.get(name).cloned()))
