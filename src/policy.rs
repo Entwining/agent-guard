@@ -265,11 +265,15 @@ impl Inspection<'_> {
         source: EffectSource,
     ) -> Result<(), CheckError> {
         let mut target = target.clone();
-        let identity = if target.expands && filesystem::appdata_fragment(&target.path) {
-            Identity::Protected(Protection::AppData)
-        } else {
-            self.resolver.target(&mut target, cwd, self.probe)?
-        };
+        // A literal relative ~/ prefix stays anchored at cwd, including with a
+        // runtime-derived suffix. Its link aliases still need normal resolution.
+        let relative_tilde = target.unresolved.starts_with(&format!("{cwd}/~/"));
+        let identity =
+            if target.expands && !relative_tilde && filesystem::appdata_fragment(&target.path) {
+                Identity::Protected(Protection::AppData)
+            } else {
+                self.resolver.target(&mut target, cwd, self.probe)?
+            };
         match identity {
             Identity::Protected(kind) => {
                 let touches = match kind {

@@ -1,0 +1,36 @@
+{
+  "rows": [
+    {
+      "id": "r41-l-literal-prefix",
+      "source": "s=$(echo x); E=\"~/Library/Containers/com.example.syn/Data/$s\"; cat \"$E\"",
+      "expected": "allow",
+      "cwd": "$H/project"
+    },
+    {
+      "id": "r41-l-export",
+      "source": "s=$(echo x); export E=\"~/Library/Containers/com.example.syn/Data/$s\"; cat \"$E\"",
+      "expected": "allow",
+      "cwd": "$H/project"
+    },
+    {
+      "id": "r41-l-declare",
+      "source": "s=$(echo x); declare E=\"~/Library/Containers/com.example.syn/Data/$s\"; cat \"$E\"",
+      "expected": "allow",
+      "cwd": "$H/project"
+    },
+    {
+      "id": "r41-l-glob",
+      "source": "for f in *.txt; do E=\"~/Library/Containers/com.example.syn/Data/$f\"; cat \"$E\"; done",
+      "expected": "allow",
+      "cwd": "$H/project"
+    },
+    {
+      "id": "r41-l-read",
+      "source": "read s < /dev/null; E=\"~/Library/Containers/com.example.syn/Data/$s\"; cat \"$E\"",
+      "expected": "allow",
+      "cwd": "$H/project"
+    }
+    ,{"id":"unquoted-tilde","source":"s=$(echo x); E=~/Library/Containers/com.example.syn/Data/$s; cat \"$E\"","expected":"D","cwd":"$H/project"}
+    ,{"id":"expanded-home","source":"s=$(echo x); E=\"$HOME/Library/Containers/com.example.syn/Data/$s\"; cat \"$E\"","expected":"D","cwd":"$H/project"}
+  ]
+}
