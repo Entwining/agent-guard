@@ -276,7 +276,33 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             infer_listing(program, args, command, cwd, host, &mut effects, depth)
         }
         "tar" => infer_tar(args, cwd, host, &mut effects),
-        "git" => infer_git(args, cwd, host, &mut effects),
+        "git" => {
+            // D48 gives shell-supplied locations the Go option roles
+            // (native/targets/git.go:26-48); Go does not yet infer these env values.
+            for (name, value) in &command.environment {
+                let effect = match name.as_str() {
+                    "GIT_DIR" => Effect::Read,
+                    "GIT_WORK_TREE" => Effect::Enter,
+                    _ => continue,
+                };
+                if !value.text.is_empty() {
+                    let mut target = Target::from_word(
+                        value,
+                        cwd,
+                        host,
+                        effect,
+                        if args.iter().any(|arg| arg == "config") {
+                            Walk::None
+                        } else {
+                            Walk::Visible
+                        },
+                    );
+                    target.via = Via::Option;
+                    effects.targets.push(target);
+                }
+            }
+            infer_git(args, cwd, host, &mut effects);
+        }
         "ssh" | "scp" | "sftp" | "ssh-keygen" | "dd" | "kubectl" | "npm" | "curl" | "wget"
         | "docker" => {
             effects
@@ -431,6 +457,7 @@ pub(crate) fn shows_hidden(args: &[Word]) -> bool {
 fn child(command: &CommandRecord, argv: &[Word], cwd: &str) -> CommandRecord {
     CommandRecord {
         function: false,
+        environment: command.environment.clone(),
         argv: argv.to_vec(),
         redirects: Vec::new(),
         pipeline: command.pipeline,

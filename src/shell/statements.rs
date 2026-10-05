@@ -749,6 +749,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
             }
             let command = Command {
+                environment: Vec::new(),
                 function: resolved.wrappers.is_empty()
                     && program.is_some_and(|i| self.functions.contains_key(&argv[i].text)),
                 argv,
@@ -1347,6 +1348,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             self.emit(
                 Command {
                     function: false,
+                    environment: Vec::new(),
                     argv: vec![expanded.word],
                     redirects: Vec::new(),
                     cwd: scope.directory.current.render(),
@@ -1365,6 +1367,29 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         Ok(())
     }
     fn emit(&mut self, mut command: Command, scope: &Scope) {
+        if let Some(index) = command.program {
+            for (name, binding) in scope
+                .bindings
+                .iter()
+                .filter(|(name, _)| matches!(name.as_str(), "GIT_DIR" | "GIT_WORK_TREE"))
+            {
+                let prefix = command.argv[..index].iter().any(|word| {
+                    matches!(word.role, Role::Assign | Role::Precommand)
+                        && assignment(&word.text).is_some_and(|(key, _)| key == name)
+                });
+                if binding.exported || prefix {
+                    for value in &binding.values {
+                        if let Some(text) = value.lexical() {
+                            let mut word = crate::record::Word::literal(text.clone());
+                            // Assignment expansion has already consumed any unquoted tilde.
+                            word.raw = format!("'{text}'");
+                            word.expands = matches!(value, BindingValue::RuntimeDerived(_));
+                            command.environment.push((name.clone(), word));
+                        }
+                    }
+                }
+            }
+        }
         if command.argv.iter().flat_map(|word| &word.vars).any(|name| {
             scope.bindings.get(name).is_some_and(|binding| {
                 binding.values.iter().any(|value| {

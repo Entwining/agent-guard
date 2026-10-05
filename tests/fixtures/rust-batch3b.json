@@ -166,7 +166,7 @@
       "partition": "gitdir",
       "source": "GIT_DIR=$H/Library/Containers/com.example.syn/Data git status",
       "cwd": "$H/project",
-      "expected": "N"
+      "expected": "D"
     },
     {
       "id": "b3b-ctrl-gitdir",

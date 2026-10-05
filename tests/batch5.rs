@@ -58,3 +58,8 @@ fn literal_for_lists_execute_each_value_exactly() {
 fn unset_removes_only_executed_named_bindings() {
     partition("unset");
 }
+
+#[test]
+fn git_environment_uses_git_directory_roles() {
+    partition("git-environment");
+}
