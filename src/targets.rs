@@ -321,6 +321,29 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             claimed = infer_tar(args, cwd, host, &mut effects);
             generic_walk = Some(Walk::Visible);
         }
+        "jq" | "yq" => {
+            // native/targets/programs.go:172-192 claims the filter, while
+            // -f/--from-file leaves the filter-file operand readable.
+            if !args.iter().any(|arg| arg == "-f" || arg == "--from-file") {
+                let mut operands = args
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, arg)| !arg.starts_with('-'));
+                let first = operands.next();
+                let filter = if program == "yq"
+                    && first.is_some_and(|(_, arg)| {
+                        ["eval", "e", "eval-all", "ea"].contains(&arg.as_str())
+                    }) {
+                    operands.next()
+                } else {
+                    first
+                };
+                if let Some((index, _)) = filter {
+                    claimed.push(index);
+                }
+            }
+            generic_walk = Some(Walk::Visible);
+        }
         "rm" => {
             // native/targets/programs.go:42-48 assigns metadata operands.
             effects.targets.extend(

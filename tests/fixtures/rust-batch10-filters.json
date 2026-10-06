@@ -1,0 +1,7 @@
+{"rows":[
+ {"id":"jq-env-field","partition":"control","expected":"N","input":{"command":"jq '.env' settings.json"}},
+ {"id":"jq-public-filter","partition":"control","expected":"N","input":{"command":"jq '.compiler.version | to_entries[0].key' settings.json"}},
+ {"id":"yq-filter","partition":"control","expected":"N","input":{"command":"yq eval '.env' settings.json"}},
+ {"id":"jq-input","partition":"protected","expected":"D","input":{"command":"jq '.' .env"}},
+ {"id":"jq-filter-file","partition":"protected","expected":"D","input":{"command":"jq -f .env settings.json"}}
+]}
