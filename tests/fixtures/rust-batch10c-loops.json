@@ -1,0 +1,7 @@
+{"rows":[
+ {"id":"curl-repeated-id","partition":"correlation","expected":"N","input":{"command":"for id in a b c d e f g h; do curl -sL \"https://example.test/?id=$id\" -o \"cm_$id.json\" -w \"$id %{http_code}\"; done"}},
+ {"id":"curl-nested","partition":"correlation","expected":"N","input":{"command":"for cat in A B C D E F; do for pg in 1 2 3; do curl \"https://example.test/$cat/$pg\" -o \"$cat-$pg.json\"; done; done"}},
+ {"id":"mkdir-and-python-copy","partition":"correlation","expected":"UC","input":{"command":"W=work; for p in a b c d e f g h i j k l; do mkdir -p $W/$(dirname $p); python3 -c 'print(1)' $p $W/$p; done"}},
+ {"id":"loop-then-function","partition":"scope","expected":"UC","input":{"command":"for p in a b c d; do herdr pane close \"$p\"; done; gid(){ python3 -c 'print(1)'; }; gid"}},
+ {"id":"loop-protected-candidate","partition":"scope","expected":"D","input":{"command":"for p in public .env; do cat \"$p\" \"$p\"; done"}}
+]}

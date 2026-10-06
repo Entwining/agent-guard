@@ -107,6 +107,8 @@ pub struct Observation {
     pub executable_qualifier: bool,
     pub word_coverage: Vec<WordCoverage>,
     pub array_tail_regions: Vec<ArrayTailRegions>,
+    #[cfg(test)]
+    candidate_pairs: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -376,6 +378,16 @@ fn expand_scoped(
                     tilde_assigned,
                 },
             )?;
+            let candidates = expanded
+                .word
+                .vars
+                .iter()
+                .filter_map(|name| context.get(name).map(|value| (name.clone(), value.clone())))
+                .collect::<std::collections::BTreeMap<_, _>>();
+            expanded.word.binding_candidates = candidates.clone();
+            for word in &mut expanded.split {
+                word.binding_candidates = candidates.clone();
+            }
             if expanded.word.vars.iter().any(|name| {
                 scope.bindings.get(name).is_some_and(|binding| {
                     binding.values.iter().any(|value| matches!(value,

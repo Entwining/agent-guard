@@ -661,6 +661,13 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             let mut next = Vec::new();
             for previous in &alternatives {
                 for choice in choices {
+                    #[cfg(test)]
+                    {
+                        self.output.candidate_pairs += 1;
+                    }
+                    if !compatible_arguments(previous, choice) {
+                        continue;
+                    }
                     if next.len() == 512 {
                         self.output.gap(CoverageGap::InspectionBudget);
                         break;
@@ -1252,6 +1259,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         if let Some(last) = literal_values.last() {
                             inner.assign(variable.clone(), vec![BindingValue::Known(last.clone())]);
                         }
+                        inner.conditional_definition = scope.conditional_definition;
                         *scope = inner;
                     } else {
                         self.merge_directories(scope, &[before.clone(), inner.clone()]);
@@ -2447,6 +2455,50 @@ pub(super) fn identifier(name: &str) -> bool {
             .bytes()
             .enumerate()
             .all(|(i, b)| b == b'_' || b.is_ascii_alphabetic() || i > 0 && b.is_ascii_digit())
+}
+
+fn compatible_arguments(previous: &[crate::record::Word], choice: &[crate::record::Word]) -> bool {
+    previous
+        .iter()
+        .filter(|word| !matches!(word.role, Role::Assign | Role::Precommand))
+        .all(|left| {
+            choice.iter().all(|right| {
+                left.binding_candidates.iter().all(|(name, value)| {
+                    right
+                        .binding_candidates
+                        .get(name)
+                        .is_none_or(|other| other == value)
+                })
+            })
+        })
+}
+
+#[cfg(test)]
+mod candidate_cost {
+    #[test]
+    fn repeated_binding_work_grows_quadratically() {
+        let observe = |size| {
+            let items = (0..size)
+                .map(|n| format!("v{n}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let source = format!(
+                "for id in {items}; do curl https://example.test/$id -o file_$id -w $id; done"
+            );
+            let output =
+                crate::shell::observe(&source, crate::shell::Arm::Brush, "/h", "/h/p", true)
+                    .unwrap();
+            assert!(output.gaps.is_empty(), "{:?}", output.gaps);
+            output.candidate_pairs
+        };
+        let small = observe(8);
+        let large = observe(16);
+        println!("candidate pairs: {small} -> {large}");
+        assert!(
+            small > 0 && large <= small * 5,
+            "candidate pair growth: {small} -> {large}"
+        );
+    }
 }
 pub(super) fn assignment(raw: &str) -> Option<(&str, &str)> {
     raw.split_once('=').filter(|(n, _)| identifier(n))
