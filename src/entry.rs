@@ -16,6 +16,7 @@ use std::{
 };
 
 pub const CHECKER_TIMEOUT: Duration = Duration::from_millis(2500);
+pub const SUPERVISOR_TIMEOUT: Duration = Duration::from_millis(2800);
 
 const USAGE: &str = "usage: agent-guard --runtime claude|codex|pi < event.json\n";
 
@@ -111,8 +112,24 @@ pub fn status_code(status: ExitStatus) -> i32 {
 }
 
 pub fn supervise(command: &mut Command) -> io::Result<i32> {
+    let deadline = Instant::now() + SUPERVISOR_TIMEOUT;
     let mut child = command.spawn()?;
-    Ok(status_code(child.wait()?))
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(status_code(status)),
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(2)),
+            result => {
+                // Even a polling or kill error must finish ownership of the child.
+                let killed = child.kill();
+                let waited = child.wait();
+                if let Err(error) = result {
+                    return Err(error);
+                }
+                killed?;
+                return waited.map(status_code);
+            }
+        }
+    }
 }
 
 pub fn run(args: &[String]) -> io::Result<i32> {
