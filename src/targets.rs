@@ -1006,6 +1006,7 @@ fn infer_listing(
     let mut base = cwd.to_owned();
     let mut child_at = None;
     let mut skip = false;
+    let mut hidden = program == "find";
     let mut pattern = program != "fd";
     for (index, arg) in args.iter().enumerate() {
         if arg.role == Role::Option(OptionRole::Name) {
@@ -1070,7 +1071,16 @@ fn infer_listing(
         {
             break;
         }
-        if arg.starts_with('-') {
+        if let Some(flags) = arg.strip_prefix('-') {
+            hidden |= arg == "--hidden"
+                || arg == "--unrestricted"
+                || !arg.starts_with("--")
+                    && flags.chars().all(|letter| letter.is_ascii_alphabetic())
+                    && arg.contains(if program == "fd" {
+                        &['H', 'u'][..]
+                    } else {
+                        &['H', 'u', 'a'][..]
+                    });
             skip = if program == "fd" {
                 [
                     "-d",
@@ -1083,6 +1093,8 @@ fn infer_listing(
                     "--extension",
                     "--type",
                     "--threads",
+                    "--changed-within",
+                    "--changed-before",
                 ]
                 .contains(&arg.as_str())
             } else if program == "du" {
@@ -1122,12 +1134,7 @@ fn infer_listing(
             Walk::Visible,
         ));
     }
-    effects.hidden_listing = program == "find"
-        || args.iter().any(|arg| {
-            arg == "--hidden"
-                || arg == "--unrestricted"
-                || arg.starts_with('-') && arg.contains(['H', 'u', 'a'])
-        });
+    effects.hidden_listing = hidden;
     let children: Vec<(usize, usize)> = if let Some(index) = child_at {
         vec![(index, args.len())]
     } else if program == "find" {
