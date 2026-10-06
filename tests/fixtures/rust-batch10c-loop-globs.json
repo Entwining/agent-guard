@@ -1,0 +1,15 @@
+{"rows":[
+ {"id":"aws-loop-read","partition":"protected","expected":"D","input":{"command":"for f in ~/.aws/*; do cat \"$f\"; done"}},
+ {"id":"aws-loop-copy","partition":"protected","expected":"D","input":{"command":"for f in ~/.aws/*; do x=$f; cat \"$x\"; done"}},
+ {"id":"aws-loop-redirect","partition":"protected","expected":"D","input":{"command":"for f in ~/.aws/*; do cat <\"$f\"; done"}},
+ {"id":"aws-loop-function","partition":"protected","expected":"D","input":{"command":"read_item(){ cat \"$1\"; }; for f in ~/.aws/*; do read_item \"$f\"; done"}},
+ {"id":"aws-fixed-dir","partition":"protected","expected":"D","input":{"command":"for d in ~/.aws; do cat \"$d\"/*; done"}},
+ {"id":"public-loop","partition":"public","expected":"N","input":{"command":"for f in ~/project/*; do cat \"$f\"; done"}},
+ {"id":"public-list","partition":"public","expected":"N","input":{"command":"for f in ~/.aws/*; do ls \"$f\"; done"}},
+ {"id":"public-loop-cd","partition":"cwd","expected":"N","input":{"command":"for d in ~/Code/GitHub/*/; do cd \"$d\" && git config --get remote.origin.url; done"}},
+ {"id":"public-loop-subshell-cd","partition":"cwd","expected":"N","input":{"command":"for d in */; do (cd \"$d\" && cat config); done"}},
+ {"id":"public-direct-cd","partition":"cwd","expected":"N","input":{"command":"cd ~/Code/GitHub/*/ && git log -1"}},
+ {"id":"unknown-direct-cd","partition":"cwd","expected":"N","input":{"command":"cd \"$1\" && git log -1"}},
+ {"id":"appdata-loop-cd","partition":"cwd","expected":"D","input":{"command":"for d in ~/Library/Containers/*/; do cd \"$d\" && cat Data/x; done"}},
+ {"id":"ssh-key-loop-cd","partition":"cwd","expected":"D","input":{"command":"for d in ~/.ssh/*/; do (cd \"$d\" && cat id_ed25519); done"}}
+]}

@@ -2005,7 +2005,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             scope.local(&name);
             scope.assign(
                 name,
-                vec![if word.expands {
+                vec![if word.shell_matches && word.expands {
+                    BindingValue::ShellDerived(word.text.clone())
+                } else if word.shell_matches {
+                    BindingValue::ShellMatches(word.text.clone())
+                } else if word.expands {
                     BindingValue::RuntimeUnknown(None)
                 } else {
                     BindingValue::Known(word.text.clone())
@@ -2214,8 +2218,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             })
             .flat_map(|w| w.bytes().filter(|b| matches!(b, b'L' | b'P')))
             .collect::<Vec<_>>();
-        let physical =
-            modes.contains(&b'P') && operand.is_none_or(|i| !args[i].expands && !args[i].globs);
+        let physical = modes.contains(&b'P')
+            && operand.is_none_or(|i| !args[i].expands && !args[i].globs && !args[i].shell_matches);
         let disputed = physical && modes.last() == Some(&b'L');
         let mut targets = vec![target.clone()];
         let oldpwd = program == "cd" && target == "-";
@@ -2498,6 +2502,41 @@ mod candidate_cost {
             small > 0 && large <= small * 5,
             "candidate pair growth: {small} -> {large}"
         );
+    }
+    #[test]
+    fn glob_directory_work_stays_bounded() {
+        let count = |size, isolated| {
+            let mut source = String::new();
+            for n in 0..size {
+                let body = format!("cd \"$d{n}\"; ls");
+                let body = if isolated { format!("({body})") } else { body };
+                source.push_str(&format!("for d{n} in public*/; do {body}; done;"));
+            }
+            let output =
+                crate::shell::observe(&source, crate::shell::Arm::Brush, "/h", "/h/p", true)
+                    .unwrap();
+            if isolated {
+                assert!(output.gaps.is_empty(), "{:?}", output.gaps);
+            } else {
+                // Repeated relative moves carry cwd across iterations. They keep
+                // the existing convergence limit instead of inventing one cwd.
+                assert!(
+                    output.gaps.contains(&crate::CoverageGap::InspectionBudget),
+                    "{:?}",
+                    output.gaps
+                );
+            }
+            output.candidate_pairs
+        };
+        for isolated in [false, true] {
+            let small = count(2, isolated);
+            let large = count(4, isolated);
+            println!("isolated={isolated}: glob directory candidate pairs: {small} -> {large}");
+            assert!(
+                small > 0 && large <= small * 4,
+                "glob directory work: {small} -> {large}"
+            );
+        }
     }
 }
 pub(super) fn assignment(raw: &str) -> Option<(&str, &str)> {

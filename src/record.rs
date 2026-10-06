@@ -122,6 +122,7 @@ pub struct Redirect {
     pub direction: Direction,
     pub target: String,
     pub globs: bool,
+    pub shell_matches: bool,
     pub expands: bool,
     pub runtime_unknown: bool,
     pub vars: Vec<String>,
@@ -132,6 +133,7 @@ impl Redirect {
             direction,
             target: word.text,
             globs: word.globs,
+            shell_matches: word.shell_matches,
             expands: word.expands,
             runtime_unknown: word.runtime_unknown,
             vars: if matches!(direction, Direction::Heredoc | Direction::Herestring) {
@@ -273,7 +275,7 @@ impl Target {
             format!("{cwd}/{input}")
         };
         Self {
-            glob: word.globs,
+            glob: word.globs || word.shell_matches,
             glob_hidden: !word.globs && !word.shell_matches,
             expands: word.expands,
             runtime_unknown: word.runtime_unknown,

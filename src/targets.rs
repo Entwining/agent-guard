@@ -53,8 +53,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             Walk::None,
             Via::Redirect,
         );
-        target.glob = redirect.globs;
-        target.glob_hidden = !redirect.globs;
+        target.glob = redirect.globs || redirect.shell_matches;
+        target.glob_hidden = !redirect.globs && !redirect.shell_matches;
         target.expands = redirect.expands;
         target.runtime_unknown = redirect.runtime_unknown;
         effects.targets.push(target);
