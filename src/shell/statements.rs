@@ -723,69 +723,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         }
                     }
                     "read" => {
-                        let names: Vec<_> = argv[index + 1..]
-                            .iter()
-                            .filter(|word| identifier(&word.text))
-                            .collect();
-                        let literal = targets.iter().rev().find(|target| {
-                            matches!(
-                                target.direction,
-                                crate::record::Direction::Heredoc
-                                    | crate::record::Direction::Herestring
-                            ) && !target.expands
-                        });
-                        let modeled = names.len() == 1
-                            && argv[index + 1..]
-                                .iter()
-                                .all(|word| identifier(&word.text) || word == "-r")
-                            && (!scope.bindings.contains_key("IFS"))
-                            && (argv.iter().any(|word| word == "-r")
-                                || literal.is_none_or(|literal| !literal.target.contains('\\')));
-                        let eof = targets.iter().any(|target| {
-                            target.direction == crate::record::Direction::In
-                                && target.target == "/dev/null"
-                                && !target.expands
-                        });
-                        for word in &argv[index + 1..] {
-                            if identifier(&word.text) {
-                                let value = if modeled && let Some(literal) = literal {
-                                    BindingValue::Known(
-                                        literal
-                                            .target
-                                            .lines()
-                                            .next()
-                                            .unwrap_or("")
-                                            .trim_matches([' ', '\t'])
-                                            .to_owned(),
-                                    )
-                                } else if modeled && eof {
-                                    BindingValue::Known(String::new())
-                                } else {
-                                    BindingValue::RuntimeUnknown(None)
-                                };
-                                let mut values = vec![value];
-                                // An unsupported option can reject the write in one
-                                // executor (notably zsh's read -a), preserving the old value.
-                                if !modeled && let Some(prior) = scope.bindings.get(&word.text) {
-                                    for value in &prior.values {
-                                        if !values.contains(value) {
-                                            values.push(value.clone());
-                                        }
-                                    }
-                                }
-                                scope.assign(word.text.clone(), values);
-                            }
-                        }
-                        if !modeled
-                            && literal.is_some_and(|literal| {
-                                !matches!(
-                                    super::arithmetic::armed(&literal.target.replace('\\', "")),
-                                    super::arithmetic::Arming::Inert
-                                )
-                            })
-                        {
-                            self.output.gap(CoverageGap::UnsupportedShellSyntax);
-                        }
+                        self.read(&argv[index + 1..], &targets, scope);
                     }
                     _ => {}
                 }
@@ -1313,6 +1251,153 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             }
         }
     }
+    fn read(
+        &mut self,
+        args: &[crate::record::Word],
+        targets: &[crate::record::Redirect],
+        scope: &mut Scope,
+    ) {
+        let mut names = Vec::new();
+        let mut index = 0;
+        let mut raw = false;
+        let mut delimiter = '\n';
+        let mut count = None;
+        let mut input_fd = 0;
+        let mut modeled = true;
+        let mut rejected = false;
+        while let Some(word) = args.get(index) {
+            if word == "--" {
+                index += 1;
+                break;
+            }
+            let Some(flags) = word.strip_prefix('-').filter(|flags| !flags.is_empty()) else {
+                break;
+            };
+            for (at, option) in flags.char_indices() {
+                match option {
+                    'r' => raw = true,
+                    's' => {}
+                    'd' | 'n' | 't' | 'u' | 'a' | 'p' => {
+                        let attached = &flags[at + option.len_utf8()..];
+                        let value = if attached.is_empty() {
+                            index += 1;
+                            args.get(index).map(|word| {
+                                modeled &= !word.expands;
+                                word.text.as_str()
+                            })
+                        } else {
+                            modeled &= !word.expands;
+                            Some(attached)
+                        };
+                        let Some(value) = value else {
+                            modeled = false;
+                            break;
+                        };
+                        match option {
+                            'd' => delimiter = value.chars().next().unwrap_or('\0'),
+                            'n' => match value.parse::<usize>() {
+                                Ok(value) => count = Some(value),
+                                Err(_) => modeled = false,
+                            },
+                            't' => modeled &= value.parse::<f64>().is_ok_and(|value| value > 0.0),
+                            'u' => match value.parse::<usize>() {
+                                Ok(value) => input_fd = value,
+                                Err(_) => modeled = false,
+                            },
+                            'a' => {
+                                rejected = true;
+                                if identifier(value) {
+                                    names.push(value.to_owned());
+                                }
+                            }
+                            'p' => rejected = true,
+                            _ => unreachable!(),
+                        }
+                        break;
+                    }
+                    _ => modeled = false,
+                }
+            }
+            index += 1;
+        }
+        for word in &args[index.min(args.len())..] {
+            if identifier(&word.text) {
+                names.push(word.text.clone());
+            } else {
+                modeled = false;
+            }
+        }
+        let literal = targets.iter().rev().find(|target| {
+            matches!(
+                target.direction,
+                crate::record::Direction::Heredoc | crate::record::Direction::Herestring
+            ) && !target.expands
+        });
+        let eof = targets.iter().any(|target| {
+            target.direction == crate::record::Direction::In
+                && target.target == "/dev/null"
+                && !target.expands
+        });
+        modeled &= !names.is_empty()
+            && !scope.bindings.contains_key("IFS")
+            && (raw || literal.is_none_or(|literal| !literal.target.contains('\\')));
+        let known_input = modeled && !rejected && input_fd == 0;
+        let data = if known_input && let Some(literal) = literal {
+            let data = literal.target.split(delimiter).next().unwrap_or("");
+            Some(
+                data.chars()
+                    .take(count.unwrap_or(usize::MAX))
+                    .collect::<String>(),
+            )
+        } else if known_input && eof {
+            Some(String::new())
+        } else {
+            None
+        };
+        let mut remainder = data.as_deref().unwrap_or("");
+        let total = names.len();
+        for (position, name) in names.into_iter().enumerate() {
+            let value = if data.is_some() {
+                remainder = remainder.trim_start_matches([' ', '\t', '\n']);
+                let (field, rest) = if position + 1 == total {
+                    (remainder.trim_end_matches([' ', '\t', '\n']), "")
+                } else {
+                    let end = remainder.find([' ', '\t', '\n']).unwrap_or(remainder.len());
+                    (&remainder[..end], &remainder[end..])
+                };
+                remainder = rest;
+                BindingValue::Known(field.to_owned())
+            } else {
+                BindingValue::RuntimeUnknown(None)
+            };
+            let mut values = vec![value];
+            // zsh rejects -a/-p, and -n writes an empty value rather than bash's prefix.
+            if count.is_some() && !values.contains(&BindingValue::Known(String::new())) {
+                values.push(BindingValue::Known(String::new()));
+            }
+            if (rejected || !modeled || input_fd != 0)
+                && let Some(prior) = scope.bindings.get(&name)
+            {
+                for value in &prior.values {
+                    if !values.contains(value) {
+                        values.push(value.clone());
+                    }
+                }
+            }
+            scope.assign(name, values);
+        }
+        if !known_input
+            && literal.is_some_and(|literal| {
+                !matches!(
+                    super::arithmetic::armed(&literal.target.replace('\\', "")),
+                    super::arithmetic::Arming::Inert
+                )
+            })
+        {
+            self.output.gap(CoverageGap::UnsupportedShellSyntax);
+        }
+    }
+
     fn declaration(&mut self, argv: &[crate::record::Word], scope: &mut Scope) {
         let Some(program) = argv.first().map(|w| w.text.as_str()) else {
             return;

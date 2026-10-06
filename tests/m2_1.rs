@@ -218,8 +218,8 @@ fn unmodeled_armed_printf_refuses() {
     partition("armed-printf-fallback");
 }
 #[test]
-fn unmodeled_armed_read_refuses() {
-    partition("armed-read-fallback");
+fn delimiter_read_with_armed_data_refuses() {
+    partition("armed-read-delimiter");
 }
 #[test]
 fn positional_values_reach_target_operands() {
