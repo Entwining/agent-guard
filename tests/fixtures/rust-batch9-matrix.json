@@ -1,0 +1,8 @@
+{"rows":[
+ {"id":"matrix-eight","partition":"matrix","expected":"UC","input":{"command":"PV=1; F=2; for a in \"\" \"$PV\" \"$F\"; do for b in \"\" \"$PV\" \"$F\"; do for c in \"\" \"$PV\" \"$F\"; do for d in \"\" \"$PV\" \"$F\"; do for e in \"\" \"$PV\" \"$F\"; do for f in \"\" \"$PV\" \"$F\"; do for g in \"\" \"$PV\" \"$F\"; do for h in \"\" \"$PV\" \"$F\"; do o=$(sh x.sh \"$a\" \"$b\" \"$c\" \"$d\" \"$e\" \"$f\" \"$g\" \"$h\"); done; done; done; done; done; done; done; done"}},
+ {"id":"matrix-protected-candidate","partition":"control","expected":"D","wire_reason":"App Data","input":{"command":"PV=$C/data; F=/synthetic/public; for a in \"$F\" \"$PV\"; do for b in 1 2; do o=$(sh x.sh \"$a\" \"$b\"); done; done"}},
+ {"id":"numeric-fields-invariant","partition":"matrix","expected":"UC","input":{"command":"PV=1; n=0; fail=0; for a in \"\" \"$PV\"; do for b in \"\" \"$PV\"; do o=$(sh x.sh \"$a\" \"$b\"); n=$((n+1)); if [ \"$o\" != public ]; then fail=$((fail+1)); [ $fail -le 3 ] && printf '%s %s %s' \"$a\" \"$b\" \"$o\"; fi; done; done; echo $n"}},
+ {"id":"correlated-carried-path","partition":"control","expected":"D","wire_reason":"App Data","input":{"command":"D=''; for a in public $C/data; do cat \"$D$a\"; D=/synthetic/public; done"}},
+ {"id":"loop-variable-write","partition":"control","expected":"D","wire_reason":"App Data","input":{"command":"for D in public; do D=$C/data; done; cat \"$D\""}},
+ {"id":"carried-read-before-write","partition":"control","expected":"D","wire_reason":"App Data","input":{"command":"PV=$C/data; D=public; for a in 1 2; do cat \"$D\"; D=\"$PV\"; done"}}
+]}

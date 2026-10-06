@@ -62,6 +62,15 @@ pub fn partition(name: &str, packet: &str) {
                 "{consumer}: {}",
                 row["id"]
             );
+            if let Some(reason) = row["wire_reason"].as_str() {
+                assert!(
+                    wire.stderr.contains(reason),
+                    "{consumer}: {}: {}",
+                    row["id"],
+                    wire.stderr
+                );
+                assert!(wire.stderr.contains("recheck"), "{consumer}: {}", row["id"]);
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ const DATA_PROGRAMS: &str = "echo printf print : true false export set unset typ
 
 #[derive(Debug, Default)]
 pub struct Effects {
+    pub(crate) independent_arguments: bool,
     pub targets: Vec<Target>,
     pub gaps: Vec<CoverageGap>,
     pub code: Vec<String>,
@@ -179,6 +180,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
     match program {
         "__observed_stream__" => effects.gaps.push(CoverageGap::UnresolvedTarget),
         "printf" | "echo" | "print" => {
+            effects.independent_arguments = args.iter().all(|arg| !arg.starts_with('-'));
             effects.targets.extend(
                 args.iter()
                     .filter(|arg| arg.globs && !arg.starts_with('-'))
@@ -363,6 +365,9 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             }
         }
         "bash" | "zsh" | "sh" | "dash" | "ksh" | "csh" | "tcsh" => {
+            // Without flags each argument has its own read role; no combination
+            // can select code, consume another argument, or change its target.
+            effects.independent_arguments = args.iter().all(|arg| !arg.starts_with('-'));
             let mut claimed = Vec::new();
             if let Some(index) = args.iter().position(|s| {
                 s.starts_with('-')

@@ -52,6 +52,8 @@ pub(super) struct Scope {
     conditional_definition: bool,
     returns: Vec<BindingState>,
     loops: Vec<Vec<BindingState>>,
+    summarizing_loop: bool,
+    piped: bool,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -78,12 +80,15 @@ impl Scope {
             conditional_definition: false,
             returns: Vec::new(),
             loops: Vec::new(),
+            summarizing_loop: false,
+            piped: false,
         }
     }
     pub fn isolated(&self) -> Self {
         let mut child = self.clone();
         child.returns.clear();
         child.loops.clear();
+        child.summarizing_loop = false;
         child.isolated = true;
         child.directory.failures = None;
         child
@@ -526,7 +531,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             };
             prefixes.push(word);
         }
-        let mut alternatives = vec![prefixes];
+        let mut arguments = Vec::new();
         for raw in argv {
             let declaration = argv.first().is_some_and(|w| {
                 matches!(w.raw.as_str(), "export" | "local" | "declare" | "typeset")
@@ -559,9 +564,72 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
             }
             choices.dedup();
+            arguments.push(choices);
+        }
+        let mut initial = prefixes.clone();
+        for choices in &arguments {
+            if let Some(choice) = choices.first() {
+                initial.extend(choice.clone());
+            }
+        }
+        let resolution = super::argv::resolve(
+            &mut initial,
+            &scope.directory.current.render(),
+            self.frontend.host,
+        );
+        let independent = prefixes.is_empty()
+            && !scope.piped
+            && pipeline.is_none()
+            && resolution.program == Some(0)
+            && resolution.wrappers.is_empty()
+            && !initial[0].expands
+            && !self.functions.contains_key(&initial[0].text)
+            && arguments.first().is_some_and(|choices| choices.len() == 1)
+            && arguments.iter().all(|choices| {
+                !choices.is_empty()
+                    && choices
+                        .iter()
+                        .all(|choice| choice.len() == 1 && !choice[0].starts_with('-'))
+            })
+            && crate::targets::infer(
+                &Command {
+                    argv: initial.clone(),
+                    program: resolution.program,
+                    cwd: resolution.cwd,
+                    wrappers: resolution.wrappers,
+                    shell: resolution.shell,
+                    function: false,
+                    environment: Vec::new(),
+                    redirects: Vec::new(),
+                    flags: Vec::new(),
+                    items: None,
+                    stdin: Stdin::None,
+                    pipeline: None,
+                    nested,
+                },
+                &scope.directory.current.render(),
+                self.frontend.host,
+            )
+            .independent_arguments;
+        let mut alternatives = if independent {
+            vec![initial.clone()]
+        } else {
+            vec![prefixes]
+        };
+        for (index, choices) in arguments.iter().enumerate() {
+            if independent {
+                // Every candidate still reaches its owner; independent fields
+                // need their union, not every Cartesian combination.
+                for choice in choices.iter().skip(1) {
+                    let mut candidate = initial.clone();
+                    candidate[index] = choice[0].clone();
+                    alternatives.push(candidate);
+                }
+                continue;
+            }
             let mut next = Vec::new();
             for previous in &alternatives {
-                for choice in &choices {
+                for choice in choices {
                     if next.len() == 512 {
                         self.output.gap(CoverageGap::InspectionBudget);
                         break;
@@ -1021,13 +1089,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         if matches!(operator, Operator::Or) {
                             self.statement(left, scope, depth + 1, source_id, nested)?;
                         } else {
-                            self.statement(
-                                left,
-                                &mut before.isolated(),
-                                depth + 1,
-                                source_id,
-                                nested,
-                            )?;
+                            let mut producer = before.isolated();
+                            producer.piped = true;
+                            self.statement(left, &mut producer, depth + 1, source_id, nested)?;
                         }
                         let middle = self.output.script.commands.len();
                         let mut rhs = if matches!(operator, Operator::Or) {
@@ -1035,6 +1099,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         } else {
                             before.isolated()
                         };
+                        rhs.piped |= matches!(operator, Operator::Pipe);
                         self.statement(right, &mut rhs, depth + 1, source_id, nested)?;
                         if matches!(operator, Operator::Pipe) {
                             let (left, right) =
@@ -1112,10 +1177,16 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 let mut values = Vec::new();
                 let mut literal = variable.is_some() && !header.is_empty();
                 let mut literal_values = Vec::new();
+                let mut finite = true;
                 let mut count = Some(0usize);
                 for word in header {
                     let mut width = 0;
                     for expanded in self.expand(word, scope, depth)? {
+                        finite &= expanded.word.vars.iter().all(|name| {
+                            scope.bindings.get(name).is_none_or(|binding| {
+                                binding.values.iter().all(|value| value.known().is_some())
+                            })
+                        });
                         literal &= word.expansions.is_empty()
                             && expanded.word.vars.is_empty()
                             && !expanded.word.expands
@@ -1150,6 +1221,44 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     }
                     count = count.map(|n| n + width);
                     self.word_use(word, scope, depth, nested)?;
+                }
+                if !*empty
+                    && count.is_some()
+                    && !values.is_empty()
+                    && finite
+                    && let Some(variable) = variable
+                    && self.loop_body_is_invariant(body, scope, variable, literal)?
+                {
+                    let root = !scope.summarizing_loop;
+                    inner.summarizing_loop = true;
+                    inner.assign(variable.clone(), values);
+                    let mut completed = 0;
+                    loop {
+                        let prior = inner.clone();
+                        self.run(body, &mut inner, depth + 1, source_id, nested)?;
+                        completed += 1;
+                        if !root
+                            || inner.bindings == prior.bindings
+                            || completed >= count.unwrap_or(0)
+                        {
+                            break;
+                        }
+                        if self.inspected >= 512 || completed >= 512 {
+                            self.output.gap(CoverageGap::InspectionBudget);
+                            break;
+                        }
+                    }
+                    inner.summarizing_loop = scope.summarizing_loop;
+                    if literal {
+                        if let Some(last) = literal_values.last() {
+                            inner.assign(variable.clone(), vec![BindingValue::Known(last.clone())]);
+                        }
+                        *scope = inner;
+                    } else {
+                        self.merge_directories(scope, &[before.clone(), inner.clone()]);
+                        self.merge_bindings(scope, &[before, inner]);
+                    }
+                    return Ok(());
                 }
                 if literal
                     && literal_values.len() <= 512
@@ -1229,6 +1338,269 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             }
         }
         Ok(())
+    }
+    fn loop_body_is_invariant(
+        &self,
+        body: &[Statement],
+        scope: &Scope,
+        variable: &str,
+        literal: bool,
+    ) -> Result<bool, CheckError> {
+        let mut inputs = BTreeSet::new();
+        let mut writes = BTreeSet::new();
+        let mut stable = BTreeSet::new();
+        let local = BTreeSet::from([variable.to_owned()]);
+        // A body without a carried input needs one candidate-union analysis.
+        // Stateful builtins, functions, repeated loop names and dynamic writes
+        // retain the sequential/convergence owner and its conservative limits.
+        Ok(
+            self.loop_inputs(body, scope, &local, &mut inputs, &mut writes, &mut stable)?
+                && (!literal || !stable.is_empty())
+                && inputs
+                    .iter()
+                    .all(|name| !writes.contains(name) || stable.contains(name)),
+        )
+    }
+    fn loop_word_inputs(
+        &self,
+        word: &RawWord,
+        scope: &Scope,
+        local: &BTreeSet<String>,
+        inputs: &mut BTreeSet<String>,
+        writes: &mut BTreeSet<String>,
+        stable: &mut BTreeSet<String>,
+    ) -> Result<Option<super::Expanded>, CheckError> {
+        let variables = scope.contexts();
+        let cwd = scope.directory.current.render();
+        let expanded = super::words::expand(
+            &word.raw,
+            &word.syntax,
+            &super::words::ExpansionContext {
+                variables: &variables,
+                runtime_variables: &BTreeSet::new(),
+                cwd: &cwd,
+                host: self.frontend.host,
+                tilde_assigned: true,
+            },
+        )?;
+        if expanded.unsupported
+            || !expanded.references.is_empty()
+            || word
+                .expansions
+                .iter()
+                .any(|e| matches!(e, super::RawExpansion::Variable(_)))
+        {
+            return Ok(None);
+        }
+        for expression in &expanded.arithmetic {
+            let evaluation = super::arithmetic::evaluate(expression, &scope.values())?;
+            if evaluation.bounded || !evaluation.code.is_empty() {
+                return Ok(None);
+            }
+            inputs.extend(
+                evaluation
+                    .names
+                    .into_iter()
+                    .filter(|name| !local.contains(name)),
+            );
+        }
+        for name in &expanded.word.vars {
+            if !local.contains(name) {
+                inputs.insert(name.clone());
+            }
+        }
+        if identifier(&expanded.word.text) && !local.contains(&expanded.word.text) {
+            inputs.insert(expanded.word.text.clone());
+        }
+        let mut sources = expanded.nested.clone();
+        for expansion in &word.expansions {
+            if let super::RawExpansion::Code(source) = expansion
+                && !sources.contains(source)
+            {
+                sources.push(source.clone());
+            }
+        }
+        for source in sources {
+            let Some(body) = super::brush::records(&source, &source)?.records else {
+                return Ok(None);
+            };
+            if !self.loop_inputs(&body, scope, local, inputs, writes, stable)? {
+                return Ok(None);
+            }
+        }
+        Ok(Some(expanded))
+    }
+    fn loop_inputs(
+        &self,
+        body: &[Statement],
+        scope: &Scope,
+        local: &BTreeSet<String>,
+        inputs: &mut BTreeSet<String>,
+        writes: &mut BTreeSet<String>,
+        stable: &mut BTreeSet<String>,
+    ) -> Result<bool, CheckError> {
+        for statement in body {
+            match statement {
+                Statement::Group(body) => {
+                    if !self.loop_inputs(body, scope, local, inputs, writes, stable)? {
+                        return Ok(false);
+                    }
+                }
+                Statement::Conditional {
+                    condition,
+                    then,
+                    otherwise,
+                } => {
+                    for branch in [condition, then, otherwise] {
+                        if !self.loop_inputs(branch, scope, local, inputs, writes, stable)? {
+                            return Ok(false);
+                        }
+                    }
+                }
+                Statement::Binary(Operator::And | Operator::Or, left, right) => {
+                    for branch in [left.as_ref(), right.as_ref()] {
+                        if !self.loop_inputs(
+                            std::slice::from_ref(branch),
+                            scope,
+                            local,
+                            inputs,
+                            writes,
+                            stable,
+                        )? {
+                            return Ok(false);
+                        }
+                    }
+                }
+                Statement::Loop {
+                    variable: Some(variable),
+                    header,
+                    body,
+                    empty: false,
+                } if !header.is_empty() && !local.contains(variable) => {
+                    for word in header {
+                        if self
+                            .loop_word_inputs(word, scope, local, inputs, writes, stable)?
+                            .is_none()
+                        {
+                            return Ok(false);
+                        }
+                    }
+                    writes.insert(variable.clone());
+                    let mut inner = local.clone();
+                    inner.insert(variable.clone());
+                    if !self.loop_inputs(body, scope, &inner, inputs, writes, stable)? {
+                        return Ok(false);
+                    }
+                }
+                Statement::Command {
+                    assignments,
+                    argv,
+                    redirects,
+                    pipeline: None,
+                } => {
+                    if !assignments.is_empty() && !argv.is_empty() {
+                        return Ok(false);
+                    }
+                    for (name, word) in assignments {
+                        if !identifier(name) || local.contains(name) {
+                            return Ok(false);
+                        }
+                        let Some(value) =
+                            self.loop_word_inputs(word, scope, local, inputs, writes, stable)?
+                        else {
+                            return Ok(false);
+                        };
+                        if !value.word.vars.is_empty() {
+                            return Ok(false);
+                        }
+                        if value.word.expands && !value.nested.is_empty() {
+                            stable.insert(name.clone());
+                        } else if value.arithmetic.len() == 1 {
+                            let evaluation =
+                                super::arithmetic::evaluate(&value.arithmetic[0], &scope.values())?;
+                            let self_update = scope.bindings.get(name).is_some_and(|binding| {
+                                binding.values.iter().all(|candidate| match candidate {
+                                    BindingValue::Known(value) => value.parse::<i128>().is_ok(),
+                                    BindingValue::RuntimeUnknown(Some(value)) => value == &word.raw,
+                                    _ => false,
+                                })
+                            });
+                            if evaluation.names.iter().any(|input| input != name) || !self_update {
+                                return Ok(false);
+                            }
+                            stable.insert(name.clone());
+                        }
+                        writes.insert(name.clone());
+                    }
+                    let mut words = Vec::new();
+                    for word in argv {
+                        let Some(value) =
+                            self.loop_word_inputs(word, scope, local, inputs, writes, stable)?
+                        else {
+                            return Ok(false);
+                        };
+                        words.push(value.word);
+                    }
+                    let resolved = super::argv::resolve(
+                        &mut words,
+                        &scope.directory.current.render(),
+                        self.frontend.host,
+                    );
+                    if resolved.source.is_some() {
+                        return Ok(false);
+                    }
+                    if let Some(index) = resolved.program {
+                        let program = &words[index];
+                        if program.expands
+                            || !program.vars.is_empty()
+                            || self.functions.contains_key(&program.text)
+                            || matches!(
+                                program.rsplit('/').next(),
+                                Some(
+                                    "cd" | "pushd"
+                                        | "popd"
+                                        | "read"
+                                        | "set"
+                                        | "unset"
+                                        | "export"
+                                        | "local"
+                                        | "declare"
+                                        | "typeset"
+                                        | "eval"
+                                        | "source"
+                                        | "."
+                                        | "break"
+                                        | "continue"
+                                        | "return"
+                                        | "let"
+                                )
+                            )
+                            || program == "printf"
+                                && words.get(index + 1).is_some_and(|w| w == "-v")
+                        {
+                            return Ok(false);
+                        }
+                    }
+                    for redirect in redirects {
+                        if self
+                            .loop_word_inputs(
+                                &redirect.target,
+                                scope,
+                                local,
+                                inputs,
+                                writes,
+                                stable,
+                            )?
+                            .is_none()
+                        {
+                            return Ok(false);
+                        }
+                    }
+                }
+                _ => return Ok(false),
+            }
+        }
+        Ok(true)
     }
     fn unset(&mut self, argv: &[crate::record::Word], scope: &mut Scope) {
         let mut functions = false;

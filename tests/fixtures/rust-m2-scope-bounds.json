@@ -4,7 +4,7 @@
   "function_runs":"f() ((0)); f \"$A\" \"$B\"",
   "recursive":"f() { f; }; f",
   "contexts":"$A$B$C",
-  "argv":"printf \"$A\" \"$B\" \"$C\"",
+  "argv":"cat \"$A\" \"$B\" \"$C\"",
   "statement":"((0));",
   "unknown_arithmetic":"printf '%s' $((A))"
  }
