@@ -275,6 +275,7 @@ fn expand_scoped(
         &raw.syntax,
         &words::ExpansionContext {
             variables: &first,
+            runtime_variables: &std::collections::BTreeSet::new(),
             host,
             cwd: &cwd,
             tilde_assigned: true,
@@ -297,7 +298,9 @@ fn expand_scoped(
                     // Preserve pre-M2 inference from present lexical candidates;
                     // absence at a join is runtime data, not a scope refusal.
                     if matches!(value, statements::BindingValue::RuntimeUnknown(Some(value)) if value.is_empty())
-                        && binding.values.iter().any(|value| value.known().is_some())
+                        && binding.values.iter().any(|value| {
+                            !matches!(value, statements::BindingValue::RuntimeUnknown(Some(value)) if value.is_empty())
+                        })
                     {
                         continue;
                     }
@@ -346,11 +349,26 @@ fn expand_scoped(
         } else {
             vec![true]
         } {
+            let runtime_variables = seed
+                .word
+                .vars
+                .iter()
+                .filter(|name| {
+                    scope.bindings.get(*name).is_some_and(|binding| {
+                        binding.values.iter().any(|value| {
+                            matches!(value, statements::BindingValue::RuntimeUnknown(Some(value))
+                                if context.get(*name) == Some(value))
+                        })
+                    })
+                })
+                .cloned()
+                .collect();
             let mut expanded = words::expand(
                 &raw.raw,
                 &raw.syntax,
                 &words::ExpansionContext {
                     variables: &context,
+                    runtime_variables: &runtime_variables,
                     host,
                     cwd: &cwd,
                     tilde_assigned,
@@ -415,6 +433,7 @@ struct Expanded {
     tilde: bool,
     parameters: Vec<ParameterRegion>,
     unsupported: bool,
+    lexical_ranges: Vec<std::ops::Range<usize>>,
 }
 
 #[cfg(test)]

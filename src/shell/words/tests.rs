@@ -118,12 +118,14 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
+        lexical_ranges: Vec::new(),
     };
     let error = fill(
         raw,
         &pieces,
         &lexical,
         &ExpansionContext {
+            runtime_variables: &std::collections::BTreeSet::new(),
             variables: &BTreeMap::new(),
             host: crate::record::HostFacts {
                 home: "/synthetic/home",
@@ -194,6 +196,7 @@ fn brush_accepted_word_lexer_refusal_is_unsupported() {
         raw,
         &crate::shell::WordSyntax::Shell,
         &ExpansionContext {
+            runtime_variables: &std::collections::BTreeSet::new(),
             variables: &BTreeMap::new(),
             host: crate::record::HostFacts {
                 home: "/synthetic/home",
@@ -217,6 +220,7 @@ fn outer_early_closer_has_its_own_unsupported_region() {
         raw,
         &crate::shell::WordSyntax::Shell,
         &ExpansionContext {
+            runtime_variables: &std::collections::BTreeSet::new(),
             variables: &BTreeMap::new(),
             host: crate::record::HostFacts {
                 home: "/synthetic/home",
@@ -252,12 +256,14 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
+        lexical_ranges: Vec::new(),
     };
     fill(
         raw,
         &pieces,
         &lexical,
         &ExpansionContext {
+            runtime_variables: &std::collections::BTreeSet::new(),
             variables: &BTreeMap::new(),
             host: crate::record::HostFacts {
                 home: "/synthetic/home",
@@ -292,12 +298,14 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
+        lexical_ranges: Vec::new(),
     };
     fill(
         raw,
         &pieces,
         &lexical,
         &ExpansionContext {
+            runtime_variables: &std::collections::BTreeSet::new(),
             variables: &BTreeMap::new(),
             host: crate::record::HostFacts {
                 home: "/synthetic/home",
@@ -331,12 +339,14 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
+        lexical_ranges: Vec::new(),
     };
     fill(
         raw,
         &pieces,
         &lexical,
         &ExpansionContext {
+            runtime_variables: &std::collections::BTreeSet::new(),
             variables: &BTreeMap::from([("secret".into(), "binding-data".into())]),
             host: crate::record::HostFacts {
                 home: "/synthetic/home",

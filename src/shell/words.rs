@@ -32,6 +32,7 @@ pub(super) fn single_literal(raw: &str) -> Option<String> {
 
 pub(super) struct ExpansionContext<'a> {
     pub variables: &'a BTreeMap<String, String>,
+    pub runtime_variables: &'a std::collections::BTreeSet<String>,
     pub host: crate::record::HostFacts<'a>,
     pub cwd: &'a str,
     pub tilde_assigned: bool,
@@ -53,6 +54,7 @@ pub(super) fn expand(
             tilde: false,
             parameters: Vec::new(),
             unsupported: false,
+            lexical_ranges: Vec::new(),
         });
     }
     let heredoc = matches!(syntax, super::WordSyntax::Heredoc);
@@ -80,6 +82,7 @@ pub(super) fn expand(
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
+        lexical_ranges: Vec::new(),
     };
     out.word.raw = raw.to_owned();
     out.word.globs = braces;
@@ -122,15 +125,25 @@ pub(super) fn expand(
         out.arithmetic.push(raw.to_owned());
     }
     out.word.value = out.word.text.clone();
+    let mut offset = 0;
     out.split = if splitting {
         out.word
             .text
-            .split_whitespace()
+            .split(|ch: char| {
+                let position = offset;
+                offset += ch.len_utf8();
+                ch.is_whitespace()
+                    && !out
+                        .lexical_ranges
+                        .iter()
+                        .any(|range| range.contains(&position))
+            })
+            .filter(|text| !text.is_empty())
             .map(|text| {
                 let mut word = out.word.clone();
                 word.text = text.to_owned();
                 word.value = word.text.clone();
-                // split_whitespace yields slices of this buffer, so their offsets
+                // Splitting yields slices of this buffer, so their offsets
                 // preserve the cwd-origin ranges without a second text search.
                 let start = text.as_ptr() as usize - out.word.text.as_ptr() as usize;
                 let end = start + text.len();
@@ -288,6 +301,7 @@ fn fragment(
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
+        lexical_ranges: Vec::new(),
     };
     let (lexical, error) = super::lexer::Lexed::parameter_fragment(raw, context);
     match error {
@@ -481,6 +495,15 @@ fn fill(
                         out.word.pwd = true;
                         out.word
                             .cwd_ranges
+                            .push(out.word.text.len()..out.word.text.len() + value.len());
+                    }
+                    if plain
+                        .as_ref()
+                        .is_some_and(|name| expansion.runtime_variables.contains(name))
+                    {
+                        // R41 keeps lexical target inference. These bytes describe
+                        // unknown output, so their whitespace is not a field boundary.
+                        out.lexical_ranges
                             .push(out.word.text.len()..out.word.text.len() + value.len());
                     }
                     out.word.text.push_str(value);
