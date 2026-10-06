@@ -1,6 +1,7 @@
 //! Offline preflight trial. No production hook or execution-confinement path uses this package.
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
+#![forbid(unsafe_code)]
 
 use std::fmt;
 
