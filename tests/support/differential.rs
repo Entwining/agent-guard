@@ -411,13 +411,7 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                 !old["advice"].as_array().unwrap().is_empty()
                     && old["advice"].as_array().unwrap().iter().all(|advice| {
                         let expected = advice.as_str().unwrap();
-                        if expected.starts_with("rg -r means --replace.") {
-                            message.contains("-r replaces")
-                                && message.contains("not recursive")
-                                && message.contains("-n")
-                        } else {
-                            message.contains(expected)
-                        }
+                        message.contains(expected)
                     })
             } else {
                 wire.stdout.is_empty()

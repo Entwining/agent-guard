@@ -1087,11 +1087,10 @@ fn assert_observers(row: &Value, actual: &Value) {
         let context = output["hookSpecificOutput"]["additionalContext"]
             .as_str()
             .unwrap();
-        assert_eq!(context.matches("-r replaces").count(), 1);
-        assert!(
-            context.contains("not recursive")
-                && context.contains("project")
-                && context.contains("-n")
+        assert_eq!(context.matches("rg -r means --replace.").count(), 1);
+        assert_eq!(
+            context,
+            "rg -r means --replace. Drop -r; use -n for line numbers, or spell --replace VALUE for an intentional replacement."
         );
     }
     if row

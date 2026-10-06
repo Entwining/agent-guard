@@ -576,8 +576,8 @@ impl Inspection<'_> {
                     rule: DenialRule::HiddenSearch,
                 });
             }
-            // native/rules/workflow.go:13-39 owns usage advice; D22 retains
-            // the trial's replacement wording and consumer-specific rendering.
+            // native/rules/workflow.go:13-39 owns usage advice; consumer
+            // rendering must preserve its public sentences.
             for (applies, advice) in [
                 (effects.replace_advice, Advice::RgReplace),
                 (effects.include_advice, Advice::RgInclude),

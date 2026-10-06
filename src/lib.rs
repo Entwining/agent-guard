@@ -88,7 +88,7 @@ impl Advice {
     pub fn message(&self) -> &'static str {
         match self {
             Self::RgReplace => {
-                "-r replaces matching text; it is not recursive search. Use an explicit project root and -n when line numbers are intended."
+                "rg -r means --replace. Drop -r; use -n for line numbers, or spell --replace VALUE for an intentional replacement."
             }
             Self::RgInclude => {
                 "rg has no --include flag. Filter files with -g GLOB (for example -g '*.ts') or a type filter such as -t ts."
@@ -96,14 +96,6 @@ impl Advice {
             Self::RgBre => {
                 "rg regex is not grep BRE: a\\|b matches a literal pipe. Write alternation as a|b; for a literal pipe, use [|] or -F."
             }
-        }
-    }
-    pub(crate) fn native_message(&self) -> &'static str {
-        match self {
-            Self::RgReplace => {
-                "rg -r means --replace. Drop -r; use -n for line numbers, or spell --replace VALUE for an intentional replacement."
-            }
-            _ => self.message(),
         }
     }
 }

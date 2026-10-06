@@ -86,7 +86,7 @@ pub fn check(
             },
             deadline,
         );
-        let wire = adapters::render_native(consumer, &result);
+        let wire = adapters::render(consumer, &result);
         output.write_all(wire.stdout.as_bytes())?;
         error.write_all(wire.stderr.as_bytes())?;
         Ok(if result.is_err() { 1 } else { wire.exit })

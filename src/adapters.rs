@@ -220,18 +220,6 @@ pub fn recovery_value(recovery: &Recovery) -> Value {
 }
 
 pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wire {
-    render_protocol(consumer, result, Protocol::Tool)
-}
-
-pub(crate) fn render_native(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wire {
-    render_protocol(consumer, result, Protocol::Native)
-}
-
-fn render_protocol(
-    consumer: Consumer,
-    result: &Result<Evaluation, CheckError>,
-    protocol: Protocol,
-) -> Wire {
     let mut wire = Wire {
         exit: 0,
         stdout: String::new(),
@@ -249,27 +237,14 @@ fn render_protocol(
                 if consumer == Consumer::Claude {
                     let context = advice
                         .iter()
-                        .map(|a| {
-                            if protocol == Protocol::Native {
-                                a.native_message()
-                            } else {
-                                a.message()
-                            }
-                        })
+                        .map(|a| a.message())
                         .collect::<Vec<_>>()
                         .join("\n");
-                    wire.stdout = if protocol == Protocol::Native {
-                        // native/core/protocol.go owns the byte order of this protocol.
-                        let context = json!(context);
-                        format!(
-                            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\"additionalContext\":{context}}}}}\n"
-                        )
-                    } else {
-                        format!(
-                            "{}\n",
-                            json!({"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":context}})
-                        )
-                    };
+                    // native/core/protocol.go owns the byte order of this protocol.
+                    let context = json!(context);
+                    wire.stdout = format!(
+                        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\"additionalContext\":{context}}}}}\n"
+                    );
                 }
                 return wire;
             }
