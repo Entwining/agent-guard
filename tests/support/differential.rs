@@ -213,6 +213,36 @@ fn reason_partition(reason: &str) -> &'static str {
     }
 }
 
+fn go_reason_rule(reason: &str) -> &'static str {
+    for (prefix, rule) in [
+        ("This reads a protected", "AppData"),
+        ("A scan rooted", "Broad"),
+        ("This reads a credential", "File"),
+        ("This inline code", "CodeFile"),
+        ("A recursive search", "HiddenSearch"),
+        ("This dumps", "Dump"),
+        ("This prints the value", "Variable"),
+        ("This prints a Git", "Token"),
+        ("This extracts a password", "Keychain"),
+        ("This prints a stored", "StoredSecret"),
+        ("curl verbose", "Trace"),
+        ("This sends", "Upload"),
+        ("This reads private", "Ssh"),
+        ("Grep would search private", "GrepSsh"),
+        ("The agent guard cannot inspect this shell syntax", "Syntax"),
+        (
+            "The agent guard could not complete its symlink check",
+            "Symlink",
+        ),
+    ] {
+        if reason.starts_with(prefix) {
+            return rule;
+        }
+    }
+    assert!(reason.is_empty(), "unclassified Go reason: {reason}");
+    "None"
+}
+
 pub fn report(arm: Arm) -> Vec<Value> {
     report_rows(arm, None)
 }
@@ -384,7 +414,33 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                 },
                 Err(_) => "",
             };
-            let reason_match = if expected == "D" && item["verdict"] == "RETAIN" {
+            let rust_rule = match &actual {
+                Ok(e) => match &e.outcome {
+                    agent_guard_rust::Outcome::ProtectedDenial { reason, .. } => {
+                        format!("{:?}", reason.rule)
+                    }
+                    agent_guard_rust::Outcome::CoverageInsufficient {
+                        cause: agent_guard_rust::CoverageGap::UnsupportedShellSyntax,
+                        disposition: agent_guard_rust::Disposition::RejectUnsupportedSyntax,
+                        ..
+                    } => "Syntax".into(),
+                    _ => "None".into(),
+                },
+                Err(_) => "Fault".into(),
+            };
+            let go_rule = go_reason_rule(old_reason);
+            let same_denial_rule = go_rule != "None" && rust_rule == go_rule;
+            let expected_text = if consumer == Consumer::Claude {
+                format!(
+                    "DENIED: {old_reason} Do NOT bypass this restriction or retry the same blocked command.\n"
+                )
+            } else {
+                format!("{old_reason}\n")
+            };
+            let consumer_text_match = wire.stderr == expected_text;
+            let reason_match = if same_denial_rule {
+                consumer_text_match
+            } else if expected == "D" && item["verdict"] == "RETAIN" {
                 match reason_kind {
                     "AppData" => effect.contains("App Data") || effect.contains("broad recursive"),
                     "credential_file" => {
@@ -556,7 +612,7 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
             } else {
                 "Rust_defect".into()
             };
-            observations.push(json!({"consumer":name,"expected":expected,"actual":actual_class,"coverage":coverage(&actual),"category":category,"permission_match":permission_match,"reason_match":reason_match,"advice_match":advice_match,"changed_contract_match":changed_contract_match,"recovery":recovery,"baseline_reason_partition":reason_kind,"go_deny_rust_permit":!old_reason.is_empty() && ["N","A","UC"].contains(&actual_class),"exit":wire.exit,"stdout":wire.stdout,"stderr":wire.stderr,"probe_count":probe.calls.len()}));
+            observations.push(json!({"consumer":name,"expected":expected,"actual":actual_class,"coverage":coverage(&actual),"category":category,"permission_match":permission_match,"reason_match":reason_match,"same_denial_rule":same_denial_rule,"consumer_text_match":consumer_text_match,"go_rule":go_rule,"rust_rule":rust_rule,"advice_match":advice_match,"changed_contract_match":changed_contract_match,"recovery":recovery,"baseline_reason_partition":reason_kind,"go_deny_rust_permit":!old_reason.is_empty() && ["N","A","UC"].contains(&actual_class),"exit":wire.exit,"stdout":wire.stdout,"stderr":wire.stderr,"probe_count":probe.calls.len()}));
         }
         report.push(json!({"id":id,"family":row["family"],"arm":format!("{arm:?}"),"verdict":item["verdict"],"rule_id":item["rule_id"],"scope":outside,"observations":observations}));
     }

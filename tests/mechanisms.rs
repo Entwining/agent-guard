@@ -229,7 +229,7 @@ fn identity_depth_bound_is_not_syntax_or_success() {
         assert!(
             render(ctx.consumer, &result)
                 .stderr
-                .contains("unresolved resource identity")
+                .contains("explicit public path")
         );
         assert!(matches!(
             result,
@@ -448,8 +448,15 @@ fn protected_cwd_is_an_independent_owner() {
         let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         let result = check(&fixture, &ctx, &mut probe, arm, "printf ok");
         assert_eq!(support::class(&result), "D");
-        let reason = render(ctx.consumer, &result).stderr;
-        assert!(reason.contains("protected cwd"));
+        let Outcome::ProtectedDenial { reason, .. } = &result.as_ref().unwrap().outcome else {
+            panic!("missing protected cwd denial")
+        };
+        assert!(reason.effect.contains("protected cwd"));
+        assert!(
+            render(ctx.consumer, &result)
+                .stderr
+                .contains(reason.rule.message())
+        );
         assert!(probe.calls.is_empty());
     }
 }
@@ -599,7 +606,7 @@ fn inspection_budget_bounds_function_expansion() {
         assert!(
             render(ctx.consumer, &result)
                 .stderr
-                .contains("over-budget function expansion")
+                .contains("explicit public path")
         );
         let declared = shell::observe(
             "f() { cat /h/Library/Containers/c/data; }; printf ok",

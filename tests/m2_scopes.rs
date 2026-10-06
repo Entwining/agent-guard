@@ -42,9 +42,15 @@ fn partition(name: &str) {
             );
             assert!(wire.stdout.is_empty());
             if row["expected"] == "D" {
-                assert!(wire.stderr.contains("credential or environment file"));
+                let agent_guard_rust::Outcome::ProtectedDenial { reason, .. } =
+                    &result.as_ref().unwrap().outcome
+                else {
+                    panic!("missing protected denial")
+                };
+                assert!(wire.stderr.contains(reason.rule.message()));
                 assert!(
-                    wire.stderr
+                    reason
+                        .effect
                         .contains(row["reason"].as_str().unwrap_or("App Data")),
                     "{}: {}",
                     row["id"],

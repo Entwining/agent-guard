@@ -6,6 +6,36 @@ mod support;
 fn every_legacy_row_is_accounted_for() {
     for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let report = differential::report(arm);
+        for row in &report {
+            for observation in row["observations"].as_array().into_iter().flatten() {
+                if matches!(
+                    row["id"].as_str(),
+                    Some("appdata[15]" | "appdata[79]" | "search[86]")
+                ) {
+                    assert_eq!(
+                        observation["rust_rule"], "Broad",
+                        "{}: lexical Library-root scans need the project-scope alternative",
+                        row["id"]
+                    );
+                }
+                assert!(
+                    !observation["stderr"]
+                        .as_str()
+                        .unwrap()
+                        .contains("recovery: {"),
+                    "{} {}: recovery belongs to diagnostics",
+                    row["id"],
+                    observation["consumer"]
+                );
+                if observation["same_denial_rule"] == true {
+                    assert_eq!(
+                        observation["consumer_text_match"], true,
+                        "{} {} {}: consumer reason differs from Go",
+                        row["id"], observation["consumer"], observation["go_rule"]
+                    );
+                }
+            }
+        }
         let defects: Vec<_> = report
             .iter()
             .flat_map(|r| {

@@ -200,8 +200,15 @@ fn directory_targets_keep_name_glob_and_enter_contracts() {
             );
             assert!(wire.stdout.is_empty());
             if row["expected"] == "D" {
+                let agent_guard_rust::Outcome::ProtectedDenial { reason, .. } =
+                    &result.as_ref().unwrap().outcome
+                else {
+                    panic!("missing protected denial")
+                };
+                assert!(wire.stderr.contains(reason.rule.message()));
                 assert!(
-                    wire.stderr
+                    reason
+                        .effect
                         .contains(row["reason"].as_str().unwrap_or("App Data")),
                     "{}: {wire:?}",
                     row["id"]
