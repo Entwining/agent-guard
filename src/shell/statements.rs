@@ -431,6 +431,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         nested: bool,
     ) -> Result<(), CheckError> {
         // Keep compound temporaries off the recursively entered command frame.
+        #[cfg(test)]
+        cwd::count_failure_paths(scope.directory.failures.as_ref().map_or(0, Vec::len));
         let Statement::Command {
             assignments,
             argv,
@@ -996,11 +998,14 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         }
                         self.statement(right, &mut after, depth + 1, source_id, nested)?;
                         let mut failures = left_exit.directory.failures.clone().unwrap_or_default();
-                        failures.extend(after.directory.failures.clone().unwrap_or_default());
+                        cwd::extend_unique(
+                            &mut failures,
+                            after.directory.failures.clone().unwrap_or_default(),
+                        );
                         scope.directory = after.directory.clone();
                         if qualified {
                             scope.directory.failures = outer_failures.map(|mut outer| {
-                                outer.extend(failures.clone());
+                                cwd::extend_unique(&mut outer, failures.clone());
                                 outer
                             });
                             if scope.directory.failures.is_none() {

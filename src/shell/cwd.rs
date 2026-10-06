@@ -148,7 +148,7 @@ impl Directory {
             .collect::<Vec<_>>();
         let mut candidates = Vec::new();
         if let Some(failures) = &mut self.failures {
-            failures.extend(stayed);
+            extend_unique(failures, stayed);
         } else {
             candidates.extend(stayed);
         }
@@ -160,6 +160,19 @@ impl Directory {
         self.alternatives = alternatives;
         self.gap = self.gap.take().or(gap);
         self.current = next;
+    }
+}
+
+pub(super) fn extend_unique(
+    paths: &mut Vec<CwdPath>,
+    candidates: impl IntoIterator<Item = CwdPath>,
+) {
+    // Failure branches are identities, not executions. Repeated && joins must
+    // not duplicate a failed directory into exponentially growing snapshots.
+    for path in candidates {
+        if !paths.contains(&path) {
+            paths.push(path);
+        }
     }
 }
 
@@ -225,4 +238,50 @@ fn movement(statement: &Statement) -> Movement {
 
 pub(super) fn moved_on_success(statement: &Statement) -> bool {
     movement(statement) == Movement::Moved
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static FAILURE_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(super) fn count_failure_paths(paths: usize) {
+    FAILURE_COPIES.with(|count| count.set(count.get() + paths));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failure_collection_has_polynomial_cost() {
+        for zsh in [true, false] {
+            let cost = |parts| {
+                let source = std::iter::once("cd /synthetic/child")
+                    .chain(std::iter::repeat_n("echo public", parts))
+                    .collect::<Vec<_>>()
+                    .join(" && ");
+                FAILURE_COPIES.with(|count| count.set(0));
+                let observation = crate::shell::observe(
+                    &source,
+                    crate::shell::Arm::Brush,
+                    "/synthetic/home",
+                    "/synthetic/work",
+                    zsh,
+                )
+                .unwrap();
+                assert!(observation.gaps.is_empty());
+                FAILURE_COPIES.with(|count| count.get())
+            };
+            let small = cost(4);
+            let large = cost(8);
+            println!("zsh={zsh}: failure-path copies {small} -> {large}");
+            assert!(small > 0);
+            assert!(
+                large <= small * 4,
+                "assertion: failure-path copies {small} -> {large}"
+            );
+        }
+    }
 }
