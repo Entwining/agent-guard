@@ -6,6 +6,7 @@
 use std::fmt;
 
 pub mod adapters;
+pub mod entry;
 pub mod filesystem;
 pub mod limits;
 mod policy;
