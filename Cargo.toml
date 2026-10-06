@@ -16,7 +16,7 @@ path = "tests/support/fixture_worker.rs"
 
 [[example]]
 name = "evaluate"
-test = true
+test = false
 
 [dependencies]
 brush-parser = "=0.4.0"

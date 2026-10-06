@@ -1,6 +1,8 @@
 #[path = "../tests/support/differential.rs"]
 mod differential;
-#[path = "../tests/support/mod.rs"]
+#[path = "support/fixture_paths.rs"]
+mod fixture_paths;
+#[path = "../tests/support/harness.rs"]
 mod support;
 use agent_guard_rust::shell::Arm;
 

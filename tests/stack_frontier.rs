@@ -21,9 +21,7 @@ fn nesting_frontier_completes_on_default_test_stack() {
         return;
     }
     // A fatal stack overflow must fail this assertion without aborting the observer.
-    let log = std::path::PathBuf::from(std::env::var("CARGO_TARGET_DIR").unwrap())
-        .parent()
-        .unwrap()
+    let log = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("stack-frontier-{}.log", std::process::id()));
     let output = File::create(&log).unwrap();
     let started = Instant::now();

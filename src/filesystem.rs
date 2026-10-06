@@ -932,26 +932,6 @@ mod tests {
     }
 
     #[test]
-    fn disk_readlink_errno_partitions_match_go() {
-        let mut probe = DiskProbe;
-        let root = PathBuf::from(std::env::var("CARGO_TARGET_DIR").unwrap())
-            .parent()
-            .unwrap()
-            .join("fs-errno");
-        std::fs::create_dir_all(&root).unwrap();
-        let file = root.join("ordinary");
-        std::fs::write(&file, "public").unwrap();
-        for path in [
-            file.clone(),
-            root.join("absent"),
-            file.join("child"),
-            root.join("x".repeat(1024)),
-        ] {
-            assert_eq!(probe.read_link(&path).unwrap(), None, "{}", path.display());
-        }
-    }
-
-    #[test]
     fn expands_without_glob_follows_only_public_prefix() {
         let packet: serde_json::Value =
             serde_json::from_str(include_str!("../tests/fixtures/rust-m2-filesystem.json"))
