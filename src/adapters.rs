@@ -240,24 +240,7 @@ fn render_protocol(
     let reason = match result {
         Err(error) => {
             wire.exit = 2;
-            wire.stderr = format!(
-                "DENIED: call blocked because the check is incomplete: {error}. {}; recheck before executing the call.\n",
-                match error.kind {
-                    CheckErrorKind::MalformedInput =>
-                        "Repair the event schema and supply an absolute cwd",
-                    CheckErrorKind::InputFailure => "Restore the event input transport",
-                    CheckErrorKind::GuardFault =>
-                        "Have the checker owner repair the failed checker",
-                    CheckErrorKind::ProbeFault =>
-                        "Have the owner repair access to the non-sensitive probe prefix",
-                    CheckErrorKind::ResourceLimit => "Reduce input/nesting to the supported bound",
-                    CheckErrorKind::Deadline =>
-                        "Have the execution owner resolve the timed-out check and account for its children",
-                    CheckErrorKind::Cancelled =>
-                        "Have the execution owner finish cancellation and reap the children",
-                    CheckErrorKind::BrokenEnrollment => "Restore and verify consumer enrollment",
-                }
-            );
+            wire.stderr = denial_text(consumer, error.consumer_message());
             return wire;
         }
         Ok(evaluation) => match &evaluation.outcome {
@@ -296,7 +279,7 @@ fn render_protocol(
                 ..
             } => return wire,
             Outcome::CoverageInsufficient { cause, .. } => {
-                format!("unsupported preflight: {}", coverage_message(cause))
+                crate::policy::refusal_message(cause).to_owned()
             }
         },
     };
@@ -321,33 +304,5 @@ pub fn permits_call(consumer: Consumer, wire: &Wire) -> bool {
     match consumer {
         Consumer::Claude | Consumer::Codex => wire.exit != 2,
         Consumer::Pi => wire.exit == 0,
-    }
-}
-
-fn coverage_message(cause: &crate::CoverageGap) -> &'static str {
-    use crate::CoverageGap::*;
-    match cause {
-        UnsupportedShellSyntax => {
-            "the complete shell input could not be observed; choose a supported explicit operation"
-        }
-        ExecutorDivergence => {
-            "the executor has unsupported Zsh expansion semantics; replace the active construct and recheck"
-        }
-        UnsupportedDialectConstruct => {
-            "the construct is outside the Pi Bash dialect; use Bash-compatible syntax and recheck"
-        }
-        IdentityBound => {
-            "resource identity is unresolved; have its owner repair the alias or supply a verified public target"
-        }
-        InspectionBudget => {
-            "static expansion exceeds the inspection budget; split the operation into bounded explicit calls"
-        }
-        ExecutionOwnerUnavailable => {
-            "no verified execution owner enforces the requested domain; establish that owner"
-        }
-        InterpreterChosenRead => "interpreter-chosen reads are unobserved",
-        UnresolvedTarget => "the target is unresolved",
-        UnknownProgram { .. } => "the program adapter is unavailable",
-        OutsideObservedTool { .. } => "the tool is outside observed coverage",
     }
 }

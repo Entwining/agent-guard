@@ -213,9 +213,12 @@ fn mechanism_rows(owner: &str) {
                         let recovery = recovery.as_ref().unwrap();
                         assert!(!recovery.excluded_scope.is_empty());
                         assert!(!recovery.automatic_application_supported);
-                        assert!(
+                        assert!(if syntax {
+                            wire.stderr.contains("shell syntax")
+                                && wire.stderr.contains("explicit paths")
+                        } else {
                             wire.stderr.contains("unsupported") && wire.stderr.contains("recheck")
-                        );
+                        });
                         assert!(!wire.stderr.contains("checker failed"));
                     }
                 }

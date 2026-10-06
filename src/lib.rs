@@ -204,6 +204,12 @@ pub enum CheckErrorKind {
     BrokenEnrollment,
 }
 
+impl CheckError {
+    pub(crate) fn consumer_message(self) -> &'static str {
+        "The agent guard could not complete this check, so the call is blocked. Have the checker owner repair the failed check, then recheck the call before running it."
+    }
+}
+
 impl From<serde_json::Error> for CheckError {
     fn from(error: serde_json::Error) -> Self {
         let kind = match error.classify() {

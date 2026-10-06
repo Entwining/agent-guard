@@ -91,8 +91,12 @@ fn rows(owner: &str) {
                         );
                     }
                     if class == "UR" {
-                        assert!(wire.stderr.contains("unsupported"));
-                        assert!(wire.stderr.contains("recheck"));
+                        assert!(if *cause == CoverageGap::UnsupportedShellSyntax {
+                            wire.stderr.contains("shell syntax")
+                                && wire.stderr.contains("explicit paths")
+                        } else {
+                            wire.stderr.contains("unsupported") && wire.stderr.contains("recheck")
+                        });
                         assert!(recovery.is_some());
                     }
                     assert!(!wire.stderr.contains("checker failed"));

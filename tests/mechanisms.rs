@@ -96,7 +96,7 @@ fn detector_success_and_failure() {
         assert_eq!(wire.exit, 2);
         assert!(
             wire.stdout.is_empty()
-                && wire.stderr.contains("recheck")
+                && wire.stderr.contains("explicit paths")
                 && !wire.stderr.contains("checker failed")
         );
         let inert = shell::observe("printf '%s' '${(f)v}'", arm, "/h", "/h/p", true).unwrap();

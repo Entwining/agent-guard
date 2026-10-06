@@ -47,6 +47,20 @@ impl DenialRule {
     }
 }
 
+pub(crate) fn refusal_message(cause: &CoverageGap) -> &'static str {
+    match cause {
+        CoverageGap::UnsupportedShellSyntax => {
+            "The agent guard cannot inspect this shell syntax. Rewrite it as a Bash-compatible command with explicit paths, or run a narrower command that the guard can inspect."
+        }
+        CoverageGap::ExecutionOwnerUnavailable => {
+            "The agent guard cannot verify the execution owner for this operation. Have the owner establish and verify the execution boundary, then recheck the call."
+        }
+        _ => {
+            "The agent guard cannot inspect this unsupported or unresolved operation. Replace the unsupported construct with a Bash-compatible command naming an explicit public path, then recheck it."
+        }
+    }
+}
+
 /// Consumer and host facts. Task intent and agent continuations are not guard inputs.
 pub struct Context {
     pub consumer: Consumer,
@@ -790,7 +804,7 @@ mod tests {
         ));
         let wire = adapters::render(context.consumer, &result);
         assert_eq!(wire.exit, 2);
-        assert!(wire.stdout.is_empty() && wire.stderr.contains("filesystem probe failed"));
+        assert!(wire.stdout.is_empty() && wire.stderr.contains("could not complete this check"));
         assert_eq!(probe.calls, 0);
         assert_eq!(loads.get(), 1);
         assert_eq!(context.shell_observation_entries.get(), 0);

@@ -181,7 +181,7 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
     let result: Result<crate::Evaluation, CheckError> = Err(error);
     let wire = crate::adapters::render(crate::adapters::Consumer::Claude, &result);
     assert_eq!(wire.exit, 2);
-    assert!(wire.stderr.contains("checker failed"));
+    assert!(wire.stderr.contains("could not complete this check"));
 }
 
 #[test]

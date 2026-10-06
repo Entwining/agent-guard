@@ -980,7 +980,7 @@ fn assert_effect_or_failure(row: &Value, actual: &Value, conditional: bool) {
         (gap("ExecutorDivergence") || gap("UnsupportedDialectConstruct"))
             && stderr.contains("unsupported")
     } else if required.contains("parse failure") || required.contains("redirection lacks") {
-        gap("UnsupportedShellSyntax") && stderr.contains("complete shell input")
+        gap("UnsupportedShellSyntax") && stderr.contains("shell syntax")
     } else if required.contains("execution owner") {
         gap("ExecutionOwnerUnavailable") && stderr.contains("execution owner")
     } else {

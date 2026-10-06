@@ -34,6 +34,6 @@ fn expired_evaluation_deadline_blocks_every_consumer() {
         let wire = adapters::render(consumer, &result);
         assert_eq!(wire.exit, 2);
         assert!(wire.stdout.is_empty());
-        assert!(wire.stderr.contains("checker deadline exceeded"));
+        assert!(wire.stderr.contains("could not complete this check"));
     }
 }

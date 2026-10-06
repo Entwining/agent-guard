@@ -445,15 +445,15 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                 let excluded = recovery["excluded_scope"].to_string();
                 changed_contract_match &= match contract["expected_coverage"]["cause"].as_str() {
                     Some("identity_bound") => {
-                        wire.stderr.contains("resource identity is unresolved")
+                        wire.stderr.contains("unresolved operation")
                             && excluded.contains("unresolved resource identity")
                     }
                     Some("inspection_budget") => {
-                        wire.stderr.contains("inspection budget")
+                        wire.stderr.contains("unsupported or unresolved operation")
                             && excluded.contains("over-budget function expansion")
                     }
                     Some("unsupported_shell_syntax") => {
-                        wire.stderr.contains("complete shell input")
+                        wire.stderr.contains("shell syntax")
                             && excluded.contains("original unsupported shell")
                     }
                     None => true,
@@ -497,11 +497,11 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                         match contract["expected_coverage"]["error_kind"].as_str() {
                             Some("MalformedInput") => {
                                 wire.exit == 2
-                                    && wire.stderr.contains("invalid event input")
+                                    && wire.stderr.contains("could not complete this check")
                                     && wire.stderr.contains("recheck")
                             }
                             Some("ProbeFault") => {
-                                wire.stderr.contains("non-sensitive probe prefix")
+                                wire.stderr.contains("could not complete this check")
                                     && wire.stderr.contains("repair")
                                     && wire.stderr.contains("recheck")
                             }
