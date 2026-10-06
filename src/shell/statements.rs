@@ -63,6 +63,7 @@ pub(super) struct Scope {
     summarizing_loop: bool,
     piped: bool,
     pipeline_input: Option<Vec<String>>,
+    relative_glob_moves: usize,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -92,6 +93,7 @@ impl Scope {
             summarizing_loop: false,
             piped: false,
             pipeline_input: None,
+            relative_glob_moves: 0,
         }
     }
     pub fn isolated(&self) -> Self {
@@ -309,6 +311,7 @@ impl Scope {
             }
         }
         for branch in branches {
+            self.relative_glob_moves = self.relative_glob_moves.max(branch.relative_glob_moves);
             for state in &branch.returns {
                 if !self.returns.contains(state) {
                     if self.returns.len() == 512 {
@@ -1308,9 +1311,18 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
                 inner.loops.push(Vec::new());
                 self.run(body, &mut inner, depth + 1, source_id, nested)?;
+                let carried_glob_cwd =
+                    iterations.is_none() && inner.relative_glob_moves > before.relative_glob_moves;
+                if carried_glob_cwd {
+                    // Relative matches depend on the header cwd. Repeating a body
+                    // that carries cwd cannot treat the pattern as a fixed pathname.
+                    inner.directory = before.directory.clone();
+                    inner.directory.gap = Some(CoverageGap::IdentityBound);
+                    self.output.gap(CoverageGap::IdentityBound);
+                }
                 let mut branches = vec![before, inner.clone()];
                 let mut completed = 1;
-                while iterations.is_none_or(|n| completed < n) {
+                while !carried_glob_cwd && iterations.is_none_or(|n| completed < n) {
                     let prior = inner.clone();
                     self.run(body, &mut inner, depth + 1, source_id, nested)?;
                     completed += 1;
@@ -2195,6 +2207,17 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let operand = args
             .iter()
             .position(|w| !w.starts_with('-') || program == "cd" && w == "-");
+        if scope.directory.gap == Some(CoverageGap::IdentityBound)
+            && operand.is_some_and(|index| !args[index].starts_with('/'))
+        {
+            // Relative movement cannot refine an unresolved cwd domain.
+            return;
+        }
+        if operand.is_some_and(|index| {
+            (args[index].globs || args[index].shell_matches) && !args[index].starts_with('/')
+        }) {
+            scope.relative_glob_moves += 1;
+        }
         let target = if let Some(operand) = operand {
             args[operand].text.clone()
         } else if program == "cd"
@@ -2505,10 +2528,14 @@ mod candidate_cost {
     }
     #[test]
     fn glob_directory_work_stays_bounded() {
-        let count = |size, isolated| {
+        let count = |size, isolated, branch| {
             let mut source = String::new();
             for n in 0..size {
-                let body = format!("cd \"$d{n}\"; ls");
+                let body = match branch {
+                    0 => format!("cd \"$d{n}\"; ls"),
+                    1 => format!("if printf public; then cd \"$d{n}\"; fi; ls"),
+                    _ => format!("printf public && cd \"$d{n}\"; ls"),
+                };
                 let body = if isolated { format!("({body})") } else { body };
                 source.push_str(&format!("for d{n} in public*/; do {body}; done;"));
             }
@@ -2518,20 +2545,25 @@ mod candidate_cost {
             if isolated {
                 assert!(output.gaps.is_empty(), "{:?}", output.gaps);
             } else {
-                // Repeated relative moves carry cwd across iterations. They keep
-                // the existing convergence limit instead of inventing one cwd.
                 assert!(
-                    output.gaps.contains(&crate::CoverageGap::InspectionBudget),
+                    output.gaps.contains(&crate::CoverageGap::IdentityBound),
+                    "{:?}",
+                    output.gaps
+                );
+                assert!(
+                    !output.gaps.contains(&crate::CoverageGap::InspectionBudget),
                     "{:?}",
                     output.gaps
                 );
             }
             output.candidate_pairs
         };
-        for isolated in [false, true] {
-            let small = count(2, isolated);
-            let large = count(4, isolated);
-            println!("isolated={isolated}: glob directory candidate pairs: {small} -> {large}");
+        for (isolated, branch) in [(false, 0), (true, 0), (false, 1), (false, 2)] {
+            let small = count(2, isolated, branch);
+            let large = count(4, isolated, branch);
+            println!(
+                "isolated={isolated}, branch={branch}: glob directory candidate pairs: {small} -> {large}"
+            );
             assert!(
                 small > 0 && large <= small * 4,
                 "glob directory work: {small} -> {large}"
@@ -2740,6 +2772,14 @@ mod tests {
                 .contains(&BindingValue::Known("/h/public".into()))
         );
         assert_eq!(scope.directory.current.render(), "/h/project");
+    }
+    #[test]
+    fn relative_cd_cannot_refine_a_carried_glob_cwd() {
+        let mut scope = Scope::new("/h", "/h/project");
+        let result = observation("for d in public*/; do cd \"$d\"; done; cd ..", &mut scope);
+        assert!(result.gaps.contains(&CoverageGap::IdentityBound));
+        assert_eq!(scope.directory.current.render(), "/h/project");
+        assert!(scope.directory.alternatives.is_empty());
     }
     #[test]
     fn binding_values_and_exit_snapshots_are_bounded() {
