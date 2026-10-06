@@ -1,0 +1,6 @@
+{"rows":[
+ {"id":"function-unknown-positional","partition":"unknown","expected":"UC","input":{"command":"t(){ printf '%s' \"$2\" | jq -Rs . | bash public; }; t pass 'echo public'"}},
+ {"id":"unknown-value","partition":"unknown","expected":"UC","input":{"command":"X=$(realpath public); printf '%s' \"$X\" | bash"}},
+ {"id":"known-protected-source","partition":"known","expected":"D","input":{"command":"t(){ printf '%s' \"$2\" | bash; }; t pass 'cat .env'"}},
+ {"id":"independent-read","partition":"known","expected":"D","input":{"command":"X=$(cat .env); printf '%s' \"$X\" | bash"}}
+]}

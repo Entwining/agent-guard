@@ -206,6 +206,10 @@ pub(super) fn shell_input(left: &[Command], right: &mut [Command]) -> Vec<InputS
         return Vec::new();
     };
     let args = &producer.argv[index + 1..];
+    if args.iter().any(|word| word.expands || word.runtime_unknown) {
+        // Lexical representatives of unknown output are not executable source.
+        return Vec::new();
+    }
     let source = if name(producer) == Some("printf") {
         let Some(output) = printf_output(args) else {
             return Vec::new();
