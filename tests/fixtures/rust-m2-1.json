@@ -40,7 +40,7 @@
     {"id":"f5-branch-echo","partition":"runtime-target","source":"b=$(git branch --show-current); echo \"$b\"","expected":"N"},
     {"id":"f5-glob-loop","partition":"runtime-target","source":"for f in *.txt; do cat \"$f\"; done","expected":"N"},
     {"id":"f5-mktemp","partition":"runtime-target","source":"f=$(mktemp); echo hi > \"$f\"; cat \"$f\"","expected":"UC"},
-    {"id":"f5-wc","partition":"runtime-target","source":"n=$(wc -l < notes.txt); echo \"$n\"","expected":"UC"},
+    {"id":"f5-wc","partition":"runtime-target","source":"n=$(wc -l < notes.txt); echo \"$n\"","expected":"N"},
     {"id":"f5-read-loop","partition":"runtime-read","source":"git ls-files | while read f; do wc -l \"$f\"; done","expected":"UC"},
     {"id":"f5-pwd","partition":"runtime-target","source":"d=$(pwd); ls \"$d\"","expected":"UC"},
     {"id":"f5-control","partition":"runtime-target","source":"x=hello; echo \"$x\"","expected":"N"},

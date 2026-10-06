@@ -172,7 +172,7 @@
       "id": "c12-while",
       "partition": "batch1-join",
       "source": "i=0; while [ $i -lt 1 ]; do D=/tmp; i=1; done; cat \"$D/notes.txt\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
@@ -242,14 +242,14 @@
       "id": "j-if-unset",
       "partition": "batch1-join",
       "source": "if test -f x; then X=/var; fi; ls \"$X\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
       "id": "j-if-preset-ctrl",
       "partition": "batch1-join",
       "source": "X=/usr; if test -f x; then X=/var; fi; ls \"$X\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
@@ -263,7 +263,7 @@
       "id": "j-and-assign-echo",
       "partition": "batch1-join",
       "source": "test -d build && OUT=build; echo \"$OUT\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
@@ -298,7 +298,7 @@
       "id": "j-or-assign",
       "partition": "batch1-join",
       "source": "test -n \"$X\" || X=/tmp; ls \"$X\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     }
   ]

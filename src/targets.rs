@@ -207,16 +207,20 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
                 })
             }));
         }
-        "df" | "readlink" => {
+        "df" | "stat" | "test" | "[" | "chmod" | "chown" | "chgrp" | "chflags" | "touch"
+        | "rmdir" | "mkdir" | "mv" | "ln" | "wc" | "file" | "shasum" | "sha1sum" | "sha256sum"
+        | "md5" | "md5sum" | "cksum" | "realpath" | "readlink" | "basename" | "dirname" => {
+            // native/targets/programs.go:42-48 assigns metadata, with no walk
+            // for stat/test/[ /mkdir/mv and visible walk for the other entries.
+            let walk = if ["df", "stat", "test", "[", "mkdir", "mv", "readlink"].contains(&program)
+            {
+                Walk::None
+            } else {
+                Walk::Visible
+            };
             effects.targets.extend(args.iter().filter_map(|word| {
                 operand_value(word).map(|value| {
-                    Target::from_word(
-                        &word.with_text(value.into()),
-                        cwd,
-                        host,
-                        Effect::Meta,
-                        Walk::None,
-                    )
+                    Target::from_word(&word.with_text(value.into()), cwd, host, Effect::Meta, walk)
                 })
             }));
         }
