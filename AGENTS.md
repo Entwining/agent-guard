@@ -9,6 +9,7 @@ The production implementation, development tools and runtime/lifecycle harnesses
 `native/shell/` turns shell syntax into command records, `native/targets/` infers read/write roles, `native/filesystem/` resolves resource identity, `native/rules/` decides protection and workflow advice, and `native/core/` orchestrates them. Correct target roles in the program adapter rather than adding a policy rule keyed to a command's shape. Keep secret-dump handling at its existing rule owner rather than growing a speculative command list.
 
 - Read [filesystem instructions](native/filesystem/AGENTS.md) before changing `native/filesystem/` or the Rust filesystem module under `src/`, including glob matching. Check lexical protected paths before probing filesystem identity; a preflight probe must not perform the protected read it is meant to prevent.
+- Read [Rust instructions](src/AGENTS.md) before changing `src/`, `tests/*.rs`, `examples/` or `Cargo.toml`.
 - Preserve the public failure contract when changing the shell entry, runner or checker. Operational errors must not become permission to proceed, and cancellation must include child completion and reaping. Keep internal deadlines below the consumer's hook timeout. Workflow advice must not override a protection decision.
 - Do not add an agent-editable allowlist, bypass switch or equivalent configuration. Keep protection self-contained rather than dependent on user dotfiles. Each denial must provide a concrete safe alternative.
 
