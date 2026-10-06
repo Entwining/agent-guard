@@ -1,0 +1,17 @@
+{"rows":[
+ {"id":"opaque-home","partition":"protected","expected":"D","wire_reason":"broad recursive","input":{"command":"foo ~"}},
+ {"id":"opaque-library","partition":"protected","expected":"D","input":{"command":"foo --root=$HOME/Library"}},
+ {"id":"opaque-root","partition":"protected","expected":"D","input":{"command":"foo /"}},
+ {"id":"make-home","partition":"protected","expected":"D","input":{"command":"make -C ~ all"}},
+ {"id":"opaque-public","partition":"control","expected":"UC","input":{"command":"foo ~/project"}},
+ {"id":"opaque-url","partition":"control","expected":"UC","input":{"command":"foo https://example.invalid/"}},
+ {"id":"opaque-url-data","partition":"control","expected":"UC","input":{"command":"foo https://example.invalid/.env"}},
+ {"id":"file-url-identity","partition":"protected","expected":"D","input":{"command":"foo file://$C/x"}},
+ {"id":"temporary-create-role","partition":"protected","expected":"D","wire_reason":"write","input":{"command":"mktemp $C/public.XXXXXX"}},
+ {"id":"tr-set","partition":"control","expected":"N","input":{"command":"printf public | tr / _"}},
+ {"id":"tr-delete","partition":"control","expected":"N","input":{"command":"printf public | tr -d /"}},
+ {"id":"df-root","partition":"control","expected":"N","input":{"command":"df -h /"}},
+ {"id":"readlink-root","partition":"control","expected":"N","input":{"command":"readlink /"}},
+ {"id":"temporary-root","partition":"control","expected":"UC","input":{"command":"mktemp -d /tmp/public.XXXXXX"}},
+ {"id":"public-list","partition":"control","expected":"N","input":{"command":"ls ~"}}
+]}

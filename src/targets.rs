@@ -190,6 +190,36 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
                 && command.variables().any(|name| secret_name(name));
         }
         "true" | "false" | ":" | "unset" | "local" | "break" | "continue" | "return" => {}
+        "tr" => {}
+        "mktemp" => {
+            effects.gaps.push(CoverageGap::UnknownProgram {
+                program: program.into(),
+            });
+            effects.targets.extend(args.iter().filter_map(|word| {
+                operand_value(word).map(|value| {
+                    Target::from_word(
+                        &word.with_text(value.into()),
+                        cwd,
+                        host,
+                        Effect::Write,
+                        Walk::None,
+                    )
+                })
+            }));
+        }
+        "df" | "readlink" => {
+            effects.targets.extend(args.iter().filter_map(|word| {
+                operand_value(word).map(|value| {
+                    Target::from_word(
+                        &word.with_text(value.into()),
+                        cwd,
+                        host,
+                        Effect::Meta,
+                        Walk::None,
+                    )
+                })
+            }));
+        }
         "read"
             if command.pipeline.is_some()
                 || command.redirects.iter().any(|redirect| {
@@ -403,7 +433,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.gaps.push(CoverageGap::UnknownProgram {
                 program: program.to_owned(),
             });
-            generic_walk = Some(Walk::None);
+            generic_walk = Some(Walk::Visible);
         }
     }
     // Go's generic operand loop owns unclaimed glued values, including readers
@@ -423,7 +453,16 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
                     &arg.with_text(value.into()),
                     cwd,
                     host,
-                    Effect::Read,
+                    if !modelled_program(program)
+                        && value.contains("://")
+                        && !value
+                            .get(..7)
+                            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"))
+                    {
+                        Effect::Name
+                    } else {
+                        Effect::Read
+                    },
                     walk,
                 ));
             }
