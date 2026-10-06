@@ -1,11 +1,22 @@
 # Offline Rust migration evidence
 
-## Current executable boundary (Batch 11)
+## Current executable boundary (Batch 11b)
 
 The Rust trial now implements Go's runner/checker modes, a cooperative 2,500 ms
 checker deadline, and a 2,800 ms supervisor deadline with kill and wait. It is
 registered on no hook path; Go, `bin/agent-guard` and Homebrew remain authoritative.
 The sections below retain their historical entry and acceptance states.
+
+Consumer denials now use rule-owned prose and Go's runtime framing, including
+Claude's bypass warning. Structured Recovery, coverage and diagnostic effects
+remain available through the offline evaluator, without serialization into
+consumer denial text. Advice uses Go's sentences and supported hook payload.
+The contract compares consumer bytes when rule owners agree and records
+different-owner observations separately. App Data versus broad-root prose uses
+Go's lexical reason predicate without changing the conservative protection
+predicate or filesystem probes. Shared-wrapper job-control warnings remain
+host observations; cutover acceptance must verify the wrapper outside the
+sandbox and reopen any warning that persists there.
 
 ## M2.1 acceptance corrections
 

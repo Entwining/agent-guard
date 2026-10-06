@@ -8,6 +8,13 @@ fn every_legacy_row_is_accounted_for() {
         let report = differential::report(arm);
         for row in &report {
             for observation in row["observations"].as_array().into_iter().flatten() {
+                if observation["go_rule"] == "AppData" && observation["actual"] == "D" {
+                    assert_eq!(
+                        observation["rust_rule"], "AppData",
+                        "{}: a protected App Data target needs its rule's alternative",
+                        row["id"]
+                    );
+                }
                 if matches!(
                     row["id"].as_str(),
                     Some("appdata[15]" | "appdata[79]" | "search[86]")

@@ -190,6 +190,49 @@ pub fn appdata_fragment(path: &str) -> bool {
     })
 }
 
+/// Go's public App Data reason is narrower than the trial's conservative
+/// protection predicate. This selects prose only and never permits a target.
+pub(crate) fn appdata_reason(path: &str, home: &str, patterned: bool) -> bool {
+    // native/filesystem/appdata.go:11-54 and glob.go:65-77.
+    let library = format!("{home}/Library/").to_lowercase();
+    let trees = [
+        "containers",
+        "group containers",
+        "mobile documents",
+        "cloudstorage",
+    ];
+    glob::alternatives(path, patterned).iter().any(|candidate| {
+        let candidate = candidate.to_lowercase();
+        if patterned {
+            let parts: Vec<_> = candidate.split('/').collect();
+            for tree in trees {
+                let root = format!("{library}{tree}");
+                let root_parts: Vec<_> = root.split('/').collect();
+                if parts.len() > root_parts.len()
+                    && root_parts.iter().enumerate().all(|(index, part)| {
+                        index == 0 || parts[index] == "**" || glob::component(parts[index], part)
+                    })
+                {
+                    return true;
+                }
+            }
+        }
+        let Some(rest) = candidate.strip_prefix(&library) else {
+            return false;
+        };
+        trees
+            .iter()
+            .any(|tree| rest == *tree || rest.starts_with(&format!("{tree}/")))
+            || patterned && {
+                let fixed = rest
+                    .find(['*', '?', '['])
+                    .map_or(rest, |at| &rest[..at])
+                    .trim_end_matches('/');
+                !fixed.is_empty() && trees.iter().any(|tree| tree.starts_with(fixed))
+            }
+    })
+}
+
 fn lexical_pattern(path: &str, home: &str, patterned: bool) -> Option<Protection> {
     lexical_pattern_mode(path, home, patterned, true)
 }

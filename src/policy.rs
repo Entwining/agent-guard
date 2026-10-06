@@ -641,7 +641,9 @@ fn target_rule(target: &Target, kind: Protection, home: &str) -> DenialRule {
     // native/rules/credentials.go:12-39 distinguishes content from SSH scope;
     // its filesystem owner at :62-88 selects the search-specific alternative.
     if kind == Protection::AppData {
-        if target.via == Via::Scan || filesystem::broad_root(&target.path, home, target.glob) {
+        if !filesystem::appdata_reason(&target.path, home, target.glob)
+            && filesystem::broad_root(&target.path, home, target.glob)
+        {
             DenialRule::Broad
         } else {
             DenialRule::AppData
