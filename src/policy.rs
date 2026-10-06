@@ -265,6 +265,15 @@ impl Inspection<'_> {
         source: EffectSource,
     ) -> Result<(), CheckError> {
         let mut target = target.clone();
+        // Broad traversal is independent of a narrower credential identity.
+        // Decide a lexical root before probes, then check resolved aliases below.
+        let broad_access = target.via != Via::Items
+            && !(target.via == Via::Tool && target.glob)
+            && (target.walk != Walk::None || target.glob)
+            && (target.effect != Effect::Name || target.glob);
+        if broad_access && filesystem::broad_root(&target.path, &self.context.home, target.glob) {
+            self.effect(EffectRecord::BroadRoot);
+        }
         // A literal relative ~/ prefix stays anchored at cwd, including with a
         // runtime-derived suffix. Its link aliases still need normal resolution.
         let relative_tilde = target.unresolved.starts_with(&format!("{cwd}/~/"));
@@ -315,10 +324,7 @@ impl Inspection<'_> {
                     }
                     Identity::Protected(_) => self.context.home.clone(),
                 };
-                if target.walk != Walk::None
-                    && (target.effect != Effect::Name || target.glob)
-                    && filesystem::broad_root(&path, &resolved_home)
-                {
+                if broad_access && filesystem::broad_root(&path, &resolved_home, target.glob) {
                     self.effect(EffectRecord::BroadRoot);
                     self.denial.get_or_insert_with(|| {
                         format!(

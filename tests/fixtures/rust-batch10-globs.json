@@ -1,0 +1,10 @@
+{"rows":[
+ {"id":"public-directory-glob","partition":"control","expected":"N","input":{"command":"cat */package.json"}},
+ {"id":"git-pathspec-glob","partition":"control","expected":"N","input":{"command":"git log --oneline -- \"**/package.json\""}},
+ {"id":"quoted-root-glob","partition":"control","expected":"N","input":{"command":"cat \"$H/**/*.md\""}},
+ {"id":"recursive-home-glob","partition":"protected","expected":"D","wire_reason":"broad recursive","input":{"command":"cat $H/**/*.md"}},
+ {"id":"metadata-recursive-home-glob","partition":"protected","expected":"D","input":{"command":"wc -l $H/**/*.md"}},
+ {"id":"credential-descendant","partition":"protected","expected":"D","input":{"command":"cat private-keys-v1.d/*"}},
+ {"id":"credential-file-glob","partition":"protected","expected":"D","input":{"command":"cat */credentials* */.env*"}},
+ {"id":"aws-file-glob","partition":"protected","expected":"D","input":{"command":"cat .aws/cred*"}}
+]}

@@ -200,21 +200,41 @@ fn lexical_pattern(path: &str, home: &str, patterned: bool) -> Option<Protection
     None
 }
 
-pub fn broad_root(path: &str, home: &str) -> bool {
+pub fn broad_root(path: &str, home: &str, patterned: bool) -> bool {
     let path = path.to_lowercase();
     let home = home.to_lowercase();
-    path == "/"
+    let literal = path == "/"
         || path == home
         || path == format!("{home}/library")
-        || home.starts_with(&format!("{}/", path.trim_end_matches('/')))
-        || path.contains(['*', '?', '[', '{', '('])
-            && [home.clone(), format!("{home}/library")]
-                .iter()
-                .any(|candidate| {
-                    glob::alternatives(&path, true)
-                        .iter()
-                        .any(|pattern| glob::path(pattern, candidate))
-                })
+        || home.starts_with(&format!("{}/", path.trim_end_matches('/')));
+    if literal || !patterned {
+        return literal;
+    }
+    let mut candidates = vec![home.clone(), format!("{home}/library")];
+    for tree in [
+        "containers",
+        "group containers",
+        "mobile documents",
+        "cloudstorage",
+    ] {
+        candidates.push(format!("{home}/library/{tree}"));
+        candidates.push(format!("{home}/library/{tree}/x"));
+    }
+    // Go's recursive-glob owner checks both protected witnesses and the
+    // lexical prefix (native/filesystem/appdata.go:77-91).
+    glob::alternatives(&path, true).iter().any(|pattern| {
+        let prefix = pattern
+            .find(['*', '?', '['])
+            .map_or(pattern.as_str(), |at| &pattern[..at])
+            .trim_end_matches('/');
+        candidates
+            .iter()
+            .any(|candidate| glob::path(pattern, candidate))
+            || pattern.contains("**")
+                && (prefix == home
+                    || prefix == format!("{home}/library")
+                    || home.starts_with(&format!("{prefix}/")))
+    })
 }
 
 fn lexical_candidate(path: &str, home: &str, patterned: bool) -> Option<Protection> {
@@ -308,7 +328,10 @@ fn lexical_candidate(path: &str, home: &str, patterned: bool) -> Option<Protecti
             return Some(Protection::Credential);
         }
         let tail: Vec<_> = listed.trim_start_matches("**/").split('/').collect();
-        if tail.len() > parts.len() || base.trim_matches(['*', '?']).is_empty() {
+        if tail.len() > parts.len()
+            || tail[tail.len() - 1].trim_matches('*').is_empty()
+            || base.trim_matches(['*', '?']).is_empty()
+        {
             continue;
         }
         let offset = parts.len() - tail.len();
@@ -518,7 +541,7 @@ impl<'a> Resolver<'a> {
         }
         // The broad-root owner wins before subordinate SSH metadata comparisons.
         let search = target.walk != Walk::None;
-        if search && broad_root(&resolved, &resolved_home) {
+        if (search || target.glob) && broad_root(&resolved, &resolved_home, target.glob) {
             return Ok(Identity::Public(resolved));
         }
         if matches!(target.effect, Effect::Read | Effect::Write | Effect::List) {
