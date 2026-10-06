@@ -7,7 +7,17 @@ use std::{
 };
 
 fn main() -> io::Result<()> {
-    let mut args = std::env::args().skip(1);
+    let arguments: Vec<String> = std::env::args().skip(1).collect();
+    if arguments.first().is_some_and(|arg| arg == "runner") {
+        std::process::exit(agent_guard_rust::entry::run(&arguments[1..])?);
+    }
+    if arguments
+        .first()
+        .is_some_and(|arg| arg == "--supervised-checker")
+    {
+        return fault_checker(&arguments[1..]);
+    }
+    let mut args = arguments.into_iter();
     let mode = args
         .next()
         .ok_or_else(|| io::Error::other("missing fixture mode"))?;
@@ -32,4 +42,49 @@ fn main() -> io::Result<()> {
     loop {
         std::thread::sleep(Duration::from_millis(10));
     }
+}
+
+fn fault_checker(arguments: &[String]) -> io::Result<()> {
+    let mode = arguments
+        .first()
+        .ok_or_else(|| io::Error::other("missing fault mode"))?;
+    let receipt = arguments
+        .get(1)
+        .ok_or_else(|| io::Error::other("missing receipt"))?;
+    fs::write(receipt, format!("ready:{}\n", std::process::id()))?;
+    if mode == "large-reason" {
+        io::stdout().write_all(&vec![b'O'; 2 * 1024 * 1024])?;
+        io::stderr().write_all(&vec![b'E'; 2 * 1024 * 1024])?;
+        std::process::exit(agent_guard_rust::entry::checker_status(2));
+    }
+    struct FaultInput {
+        panic: bool,
+        cursor: io::Cursor<&'static [u8]>,
+        stalled: bool,
+    }
+    impl io::Read for FaultInput {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            assert!(!self.panic, "fixture checker panic");
+            if !self.stalled {
+                std::thread::sleep(Duration::from_millis(2600));
+                self.stalled = true;
+            }
+            io::Read::read(&mut self.cursor, buffer)
+        }
+    }
+    let home = std::env::var("HOME").map_err(io::Error::other)?;
+    let args = vec!["--runtime".into(), "claude".into(), "--cwd".into(), home];
+    let mut input = FaultInput {
+        panic: mode == "check-panic",
+        cursor: io::Cursor::new(br#"{"tool_name":"Bash","tool_input":{"command":"true"}}"#),
+        stalled: false,
+    };
+    let started = std::time::Instant::now();
+    let status =
+        agent_guard_rust::entry::check(&args, &mut input, &mut io::stdout(), &mut io::stderr());
+    fs::write(
+        format!("{receipt}.elapsed"),
+        started.elapsed().as_micros().to_string(),
+    )?;
+    std::process::exit(agent_guard_rust::entry::checker_status(status));
 }
