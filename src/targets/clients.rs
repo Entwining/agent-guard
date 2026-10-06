@@ -192,6 +192,7 @@ pub(super) fn infer(program: &str, words: &[Word], cwd: &str, host: HostFacts<'_
         "curl" => curl(&mut context),
         "wget" => wget(&mut context),
         "docker" => docker(&mut context),
+        "ctags" => ctags(&mut context),
         "dd" => {
             for (index, word) in words.iter().enumerate() {
                 context.claimed[index] = true;
@@ -206,6 +207,23 @@ pub(super) fn infer(program: &str, words: &[Word], cwd: &str, host: HostFacts<'_
     }
     context.fallback();
     context.targets
+}
+
+fn ctags(context: &mut Context<'_>) {
+    for (index, word) in context.words.iter().enumerate() {
+        if word.role == Role::Path {
+            continue;
+        }
+        let value = word.strip_prefix("--exclude=").or_else(|| {
+            (context.text(index.wrapping_sub(1)) == "--exclude").then_some(word.as_str())
+        });
+        // D54: ctags interprets this pattern value as a file of patterns.
+        if let Some(path) = value.and_then(|value| value.strip_prefix('@'))
+            && !path.is_empty()
+        {
+            context.add(path, Some(index), Effect::Read, None);
+        }
+    }
 }
 
 pub(super) const CURL_VALUE_LETTERS: &str = "AbcCdDeEFHKmoPQrTtuUwxXyYz";

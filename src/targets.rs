@@ -325,6 +325,14 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
                 .targets
                 .extend(clients::infer(program, args, cwd, host));
         }
+        "ctags" => {
+            effects.gaps.push(CoverageGap::UnknownProgram {
+                program: program.to_owned(),
+            });
+            effects
+                .targets
+                .extend(clients::infer(program, args, cwd, host));
+        }
         "python" | "python3" | "node" | "bun" | "ruby" | "perl" | "php" | "osascript" | "lua"
         | "deno" => {
             effects.gaps.push(CoverageGap::InterpreterChosenRead);
@@ -487,19 +495,14 @@ fn label_options<'a>(
             } else {
                 &word.value
             };
-            let value = operand_value(word).unwrap_or(&word.text);
-            let effect = if value != option_value {
-                Effect::Read
-            } else {
-                Effect::Name
-            };
-            labelled.to_mut()[index].role = Role::Option(if effect == Effect::Name {
-                OptionRole::Name
-            } else {
-                OptionRole::Arg
-            });
-            let mut target =
-                Target::from_word(&word.with_text(value.into()), cwd, host, effect, Walk::None);
+            labelled.to_mut()[index].role = Role::Option(OptionRole::Name);
+            let mut target = Target::from_word(
+                &word.with_text(option_value.into()),
+                cwd,
+                host,
+                Effect::Name,
+                Walk::None,
+            );
             target.via = Via::Option;
             effects.targets.push(target);
         }
