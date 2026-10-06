@@ -107,6 +107,7 @@ pub(super) fn expand(
             }
         }
     }
+    mask_background_defaults(&input, &lexical, &mut parser_input);
     let parser_input = String::from_utf8(parser_input).map_err(|_| CheckError {
         kind: CheckErrorKind::GuardFault,
     })?;
@@ -328,13 +329,18 @@ fn fragment(
         None => {}
     }
     out.parameters = parameter_regions(raw, &lexical);
+    let mut parser_input = raw.as_bytes().to_vec();
+    mask_background_defaults(raw, &lexical, &mut parser_input);
+    let parser_input = String::from_utf8(parser_input).map_err(|_| CheckError {
+        kind: CheckErrorKind::GuardFault,
+    })?;
     let pieces = if matches!(
         context.quote,
         super::lexer::Quote::Double | super::lexer::Quote::Gettext
     ) {
-        word::parse_heredoc(raw, &ParserOptions::default())
+        word::parse_heredoc(&parser_input, &ParserOptions::default())
     } else {
-        word::parse(raw, &ParserOptions::default())
+        word::parse(&parser_input, &ParserOptions::default())
     };
     match pieces {
         Ok(pieces) => fill(raw, &pieces, &lexical, expansion, &mut out, &mut false)?,
@@ -342,6 +348,17 @@ fn fragment(
     }
     out.unsupported |= out.parameters.iter().any(|r| !r.supported);
     Ok(out)
+}
+
+fn mask_background_defaults(raw: &str, lexical: &super::lexer::Lexed<'_>, input: &mut [u8]) {
+    // Brush treats ! as an indirect-name prefix even for the background PID.
+    // A supported special parameter preserves its grammar and byte offsets;
+    // evaluation still uses the original, runtime-derived spelling.
+    for (start, _) in raw.match_indices("${!:") {
+        if lexical.context(start).active() {
+            input[start + 2] = b'?';
+        }
+    }
 }
 
 fn merge_fragment(out: &mut Expanded, inner: Expanded, offset: usize) {
@@ -488,14 +505,34 @@ fn fill(
                 }
                 for body in parameter_fragments(expr) {
                     let context = super::lexer::Context {
-                        quote: context.quote,
+                        quote: if matches!(expr, ParameterExpr::ReplaceSubstring { .. }) {
+                            super::lexer::Quote::Unquoted
+                        } else {
+                            context.quote
+                        },
                         parameter_depth: 1,
                         ..super::lexer::Context::default()
                     };
-                    let inner = fragment(body, context, expansion)?;
-                    let offset = spelling.find(body).ok_or(CheckError {
-                        kind: CheckErrorKind::GuardFault,
-                    })?;
+                    let offset = if let Some(offset) = spelling.find(body) {
+                        offset
+                    } else {
+                        let mut parser_spelling = spelling.as_bytes().to_vec();
+                        let fragment_lexical = super::lexer::Lexed::parameter_fragment(
+                            spelling,
+                            super::lexer::Context::default(),
+                        )
+                        .0;
+                        mask_background_defaults(spelling, &fragment_lexical, &mut parser_spelling);
+                        let parser_spelling =
+                            String::from_utf8(parser_spelling).map_err(|_| CheckError {
+                                kind: CheckErrorKind::GuardFault,
+                            })?;
+                        parser_spelling.find(body).ok_or(CheckError {
+                            kind: CheckErrorKind::GuardFault,
+                        })?
+                    };
+                    let inner =
+                        fragment(&spelling[offset..offset + body.len()], context, expansion)?;
                     merge_fragment(out, inner, piece.start_index + offset);
                 }
                 if let Some(value) = plain.as_deref().and_then(|name| {

@@ -313,6 +313,10 @@ impl<'a> Lexed<'a> {
         }
         let start = *cursor;
         let mut parens: usize = 0;
+        let parameter_pattern = end == Some(b'}')
+            && self.source[start..]
+                .trim_start_matches(|ch: char| ch.is_ascii_alphanumeric() || ch == '_')
+                .starts_with('/');
         let mut word_start = true;
         let mut word_groups = Vec::new();
         let mut braces: usize = 0;
@@ -414,7 +418,8 @@ impl<'a> Lexed<'a> {
                 word_start = false;
                 continue;
             }
-            if context.heredoc.is_none() && context.quote == Quote::Unquoted {
+            if context.heredoc.is_none() && (context.quote == Quote::Unquoted || parameter_pattern)
+            {
                 let quote = initial_quote(tail);
                 if quote != Quote::Unquoted {
                     self.quotation(cursor, context, quote, depth)?;

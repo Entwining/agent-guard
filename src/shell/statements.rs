@@ -465,13 +465,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             for value in &values {
                 self.armed_references(&value.word.text, &mut assignment_scope, depth)?;
             }
-            if !argv.is_empty()
-                && values
-                    .iter()
-                    .any(|v| v.word.vars.iter().any(|n| command_bindings.contains_key(n)))
-            {
-                self.output.gap(CoverageGap::UnsupportedShellSyntax);
-            }
             let mut binding = values
                 .iter()
                 .map(|v| assignment_scope.expanded_binding(&v.word, &v.word.text))
@@ -834,7 +827,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         .bindings
                         .iter()
                         .filter(|(name, binding)| {
-                            binding.exported
+                            (binding.exported || prior.contains_key(*name))
                                 && !matches!(name.as_str(), "GIT_DIR" | "GIT_WORK_TREE")
                         })
                         .map(|(name, binding)| (name.clone(), binding.clone())),
