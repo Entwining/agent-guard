@@ -448,6 +448,7 @@ pub fn identify_target(
         crate::record::Via::Operand,
     );
     target.glob = patterned;
+    target.search = search;
     resolver.target(&mut target, cwd, probe)
 }
 
@@ -551,7 +552,7 @@ impl<'a> Resolver<'a> {
                 cwd,
                 self.home,
                 &resolved_home,
-                search,
+                target.search,
                 self.table,
                 probe,
             )? {
@@ -605,9 +606,6 @@ fn same_file(
     resolved_home: &str,
     probe: &mut dyn Probe,
 ) -> Result<bool, CheckError> {
-    if a == b {
-        return Ok(true);
-    }
     let x = checked_stat(a, home, resolved_home, probe)?;
     let y = checked_stat(b, home, resolved_home, probe)?;
     Ok(matches!((x, y), (Some(x), Some(y)) if (x.device, x.inode) == (y.device, y.inode)))
