@@ -955,6 +955,11 @@ fn interpreter_code(program: &str, args: &[Word]) -> (Vec<String>, Vec<usize>) {
             }
         } else if arg.starts_with('-') && !arg.starts_with("--") {
             for (offset, ch) in arg.char_indices().skip(1) {
+                // Perl's in-place suffix is attached only; a bare -i does not
+                // consume the next word (native/shell/interpreters.go:75-77).
+                if program == "perl" && ch == 'i' {
+                    break;
+                }
                 if value.contains(ch) {
                     if offset + 1 == arg.len() {
                         index += 1;

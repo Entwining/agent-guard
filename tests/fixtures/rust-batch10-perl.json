@@ -1,0 +1,6 @@
+{"rows":[
+ {"id":"perl-pi-code","partition":"protected","expected":"D","input":{"command":"perl -pi -e 'open(F,\".env\"); print <F>' README.md"}},
+ {"id":"perl-0pi-code","partition":"protected","expected":"D","input":{"command":"perl -0pi -e 'open(F,\".env\"); print <F>' README.md"}},
+ {"id":"perl-suffix-code","partition":"protected","expected":"D","input":{"command":"perl -pi.bak -e 'open(F,\".env\"); print <F>' README.md"}},
+ {"id":"perl-public-code","partition":"control","expected":"UC","input":{"command":"perl -pi -e 'open(F,\"README.md\"); print <F>' README.md"}}
+]}
