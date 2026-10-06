@@ -1227,7 +1227,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     && !values.is_empty()
                     && finite
                     && let Some(variable) = variable
-                    && self.loop_body_is_invariant(body, scope, variable, literal)?
+                    && self.loop_body_is_invariant(body, scope, variable)?
                 {
                     let root = !scope.summarizing_loop;
                     inner.summarizing_loop = true;
@@ -1344,7 +1344,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         body: &[Statement],
         scope: &Scope,
         variable: &str,
-        literal: bool,
     ) -> Result<bool, CheckError> {
         let mut inputs = BTreeSet::new();
         let mut writes = BTreeSet::new();
@@ -1355,7 +1354,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         // retain the sequential/convergence owner and its conservative limits.
         Ok(
             self.loop_inputs(body, scope, &local, &mut inputs, &mut writes, &mut stable)?
-                && (!literal || !stable.is_empty())
                 && inputs
                     .iter()
                     .all(|name| !writes.contains(name) || stable.contains(name)),
