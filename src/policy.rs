@@ -285,7 +285,10 @@ impl Inspection<'_> {
                 return Ok(());
             };
             Identity::Protected(kind)
-        } else if target.expands && !relative_tilde && filesystem::appdata_fragment(&target.path) {
+        } else if (target.expands || target.runtime_unknown)
+            && !relative_tilde
+            && filesystem::appdata_fragment(&target.path)
+        {
             Identity::Protected(Protection::AppData)
         } else {
             self.resolver.target(&mut target, cwd, self.probe)?

@@ -55,6 +55,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         );
         target.glob = redirect.globs;
         target.expands = redirect.expands;
+        target.runtime_unknown = redirect.runtime_unknown;
         effects.targets.push(target);
     }
     if command.function {

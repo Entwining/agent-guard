@@ -11,6 +11,7 @@ pub struct Word {
     pub text: String,
     pub raw: String,
     pub expands: bool,
+    pub runtime_unknown: bool,
     pub globs: bool,
     pub vars: Vec<String>,
     pub role: Role,
@@ -26,6 +27,7 @@ impl Word {
             value: text.clone(),
             text,
             expands: false,
+            runtime_unknown: false,
             globs: false,
             vars: Vec::new(),
             role: Role::Arg,
@@ -117,6 +119,7 @@ pub struct Redirect {
     pub target: String,
     pub globs: bool,
     pub expands: bool,
+    pub runtime_unknown: bool,
     pub vars: Vec<String>,
 }
 impl Redirect {
@@ -126,6 +129,7 @@ impl Redirect {
             target: word.text,
             globs: word.globs,
             expands: word.expands,
+            runtime_unknown: word.runtime_unknown,
             vars: if matches!(direction, Direction::Heredoc | Direction::Herestring) {
                 word.vars
             } else {
@@ -235,6 +239,7 @@ pub struct Target {
     pub walk: Walk,
     pub sends: bool,
     pub expands: bool,
+    pub runtime_unknown: bool,
     pub via: Via,
     pub search: bool,
     pub command: Option<usize>,
@@ -265,6 +270,7 @@ impl Target {
         Self {
             glob: word.globs,
             expands: word.expands,
+            runtime_unknown: word.runtime_unknown,
             ..Self::new(path, effect, walk, Via::Operand)
         }
     }
@@ -277,6 +283,7 @@ impl Target {
             walk,
             via,
             expands: false,
+            runtime_unknown: false,
             sends: false,
             search: false,
             command: None,

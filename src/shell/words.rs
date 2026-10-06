@@ -363,6 +363,7 @@ fn mask_background_defaults(raw: &str, lexical: &super::lexer::Lexed<'_>, input:
 
 fn merge_fragment(out: &mut Expanded, inner: Expanded, offset: usize) {
     out.unsupported |= inner.unsupported;
+    out.word.runtime_unknown |= inner.word.runtime_unknown;
     for region in inner.parameters {
         if let Some(parent) = out
             .parameters
@@ -552,6 +553,7 @@ fn fill(
                         .as_ref()
                         .is_some_and(|name| expansion.runtime_variables.contains(name))
                     {
+                        out.word.runtime_unknown = true;
                         // R41 keeps lexical target inference. These bytes describe
                         // unknown output, so their whitespace is not a field boundary.
                         out.lexical_ranges
@@ -586,6 +588,10 @@ fn fill(
                         .cwd_ranges
                         .push(out.word.text.len()..out.word.text.len() + expansion.cwd.len());
                     out.word.text.push_str(expansion.cwd);
+                } else if right + 1 == piece.end_index
+                    && let Some(value) = dirname_output(code, expansion)?
+                {
+                    out.word.text.push_str(&value);
                 } else {
                     out.word.text.push_str(&raw[piece.start_index..right + 1]);
                     out.word.expands = true;
@@ -618,6 +624,59 @@ fn fill(
         }
     }
     Ok(())
+}
+
+fn dirname_output(
+    source: &str,
+    context: &ExpansionContext<'_>,
+) -> Result<Option<String>, CheckError> {
+    if !source.trim_start().starts_with("dirname") {
+        return Ok(None);
+    }
+    let parsed = super::brush::records(source, source)?;
+    let Some(records) = parsed.records else {
+        return Ok(None);
+    };
+    let [
+        super::Statement::Command {
+            assignments,
+            argv,
+            redirects,
+            ..
+        },
+    ] = records.as_slice()
+    else {
+        return Ok(None);
+    };
+    if !assignments.is_empty()
+        || !redirects.is_empty()
+        || argv.len() != 2
+        || argv[0].raw != "dirname"
+    {
+        return Ok(None);
+    }
+    let path = expand(&argv[1].raw, &argv[1].syntax, context)?;
+    if path.word.expands
+        || path.word.runtime_unknown
+        || path.word.globs
+        || !path.nested.is_empty()
+        || !path.arithmetic.is_empty()
+        || path.unsupported
+        || path.split.len() != 1
+        || path.word.starts_with('-')
+        || path.word.is_empty()
+        || !path.word.vars.is_empty()
+    {
+        return Ok(None);
+    }
+    // dirname is lexical; realpath depends on filesystem identity and stays unknown.
+    let path = path.word.trim_end_matches('/');
+    let parent = path
+        .rsplit_once('/')
+        .map_or(".", |(parent, _)| parent.trim_end_matches('/'));
+    Ok(Some(
+        if parent.is_empty() { "/" } else { parent }.to_owned(),
+    ))
 }
 
 fn parameter(expr: &ParameterExpr) -> Option<&Parameter> {
