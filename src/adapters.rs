@@ -237,7 +237,7 @@ fn render_protocol(
         stdout: String::new(),
         stderr: String::new(),
     };
-    let (reason, recovery) = match result {
+    let reason = match result {
         Err(error) => {
             wire.exit = 2;
             wire.stderr = format!(
@@ -290,34 +290,30 @@ fn render_protocol(
                 }
                 return wire;
             }
-            Outcome::ProtectedDenial { reason, recovery } => {
-                (reason.effect.clone(), Some(recovery))
-            }
+            Outcome::ProtectedDenial { reason, .. } => reason.rule.message().to_owned(),
             Outcome::CoverageInsufficient {
                 disposition: Disposition::ContinueLimitedPreflight,
                 ..
             } => return wire,
-            Outcome::CoverageInsufficient {
-                cause, recovery, ..
-            } => (
-                format!("unsupported preflight: {}", coverage_message(cause)),
-                recovery.as_ref(),
-            ),
+            Outcome::CoverageInsufficient { cause, .. } => {
+                format!("unsupported preflight: {}", coverage_message(cause))
+            }
         },
     };
     wire.exit = 2;
-    let detail = recovery.map(recovery_value).unwrap_or(Value::Null);
-    wire.stderr = format!(
-        "{}{}; recovery: {}\n",
-        if consumer == Consumer::Claude {
-            "DENIED: "
-        } else {
-            ""
-        },
-        reason,
-        detail
-    );
+    wire.stderr = denial_text(consumer, &reason);
     wire
+}
+
+fn denial_text(consumer: Consumer, reason: &str) -> String {
+    // native/core/protocol.go:76-81 owns consumer framing.
+    if consumer == Consumer::Claude {
+        format!(
+            "DENIED: {reason} Do NOT bypass this restriction or retry the same blocked command.\n"
+        )
+    } else {
+        format!("{reason}\n")
+    }
 }
 
 /// Consumers authorize a call from the hook wire, never from an internal verdict label.

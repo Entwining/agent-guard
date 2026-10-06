@@ -48,9 +48,9 @@ fn rows(owner: &str) {
                         reason.effect.contains(row["reason"].as_str().unwrap()),
                         "denial reason: {row}"
                     );
-                    assert!(wire.stderr.contains(&reason.effect));
+                    assert!(wire.stderr.contains(reason.rule.message()));
                     assert!(!recovery.excluded_scope.is_empty());
-                    assert!(wire.stderr.contains("recheck"));
+                    assert!(!wire.stderr.contains("recovery:"));
                     if matches!(owner, "forwarding" | "framing-sweep") {
                         let protection = if row["reason"] == "private-key" {
                             agent_guard_rust::filesystem::Protection::SshPrivate

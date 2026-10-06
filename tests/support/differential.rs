@@ -375,24 +375,28 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
             let permission_match = actual_class == expected
                 || expected == "N" && ["UC", "A"].contains(&actual_class)
                 || expected == "D" && reason_kind == "syntax" && actual_class == "UR";
+            let effect = match &actual {
+                Ok(e) => match &e.outcome {
+                    agent_guard_rust::Outcome::ProtectedDenial { reason, .. } => {
+                        reason.effect.as_str()
+                    }
+                    _ => "",
+                },
+                Err(_) => "",
+            };
             let reason_match = if expected == "D" && item["verdict"] == "RETAIN" {
                 match reason_kind {
-                    "AppData" => {
-                        wire.stderr.contains("App Data") || wire.stderr.contains("broad recursive")
-                    }
+                    "AppData" => effect.contains("App Data") || effect.contains("broad recursive"),
                     "credential_file" => {
-                        wire.stderr.contains("credential")
-                            || wire.stderr.contains("environment-file")
-                            || wire.stderr.contains("private-key")
+                        effect.contains("credential")
+                            || effect.contains("environment-file")
+                            || effect.contains("private-key")
                     }
-                    "SSH" => {
-                        wire.stderr.contains("private-key")
-                            || wire.stderr.contains("broad recursive")
-                    }
-                    "CodeFile" => wire.stderr.contains("CodeFile"),
-                    "hidden_content" => wire.stderr.contains("hidden"),
-                    "dump" => wire.stderr.contains("environment dump"),
-                    "variable" => wire.stderr.contains("credential variable"),
+                    "SSH" => effect.contains("private-key") || effect.contains("broad recursive"),
+                    "CodeFile" => effect.contains("CodeFile"),
+                    "hidden_content" => effect.contains("hidden"),
+                    "dump" => effect.contains("environment dump"),
+                    "variable" => effect.contains("credential variable"),
                     "syntax" => actual_class == "UR",
                     _ => wire.stderr.contains(old_reason),
                 }
@@ -463,7 +467,7 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                 changed_contract_match &= match contract["reason_contract"]["reason_class"].as_str()
                 {
                     Some("BroadRoot") => {
-                        wire.stderr.contains("broad recursive")
+                        effect.contains("broad recursive")
                             && excluded.contains("outside")
                             && excluded.contains("Library")
                             && excluded.contains(".ssh")
@@ -471,20 +475,18 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                             && excluded.contains("whole-HOME task remains incomplete")
                     }
                     Some("Dump") => {
-                        wire.stderr.contains("environment dump")
+                        effect.contains("environment dump")
                             && excluded.contains("process environment dump")
                             && excluded.contains("protected variable values")
                     }
-                    Some("AppData") => {
-                        wire.stderr.contains("App Data") && excluded.contains("Library")
-                    }
+                    Some("AppData") => effect.contains("App Data") && excluded.contains("Library"),
                     Some("ProtectedCwd") => {
-                        wire.stderr.contains("protected cwd:")
+                        effect.contains("protected cwd:")
                             && excluded.contains("Library")
                             && excluded.contains(".ssh")
                             && match contract["reason_contract"]["protected_resource"].as_str() {
-                                Some("AppData") => wire.stderr.contains("App Data"),
-                                Some("SSH") => wire.stderr.contains("private-key"),
+                                Some("AppData") => effect.contains("App Data"),
+                                Some("SSH") => effect.contains("private-key"),
                                 _ => false,
                             }
                     }

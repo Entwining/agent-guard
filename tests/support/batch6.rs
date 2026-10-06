@@ -63,13 +63,26 @@ pub fn partition(name: &str, packet: &str) {
                 row["id"]
             );
             if let Some(reason) = row["wire_reason"].as_str() {
+                let diagnostic = match &result {
+                    Ok(e) => match &e.outcome {
+                        agent_guard_rust::Outcome::ProtectedDenial { reason, .. } => {
+                            reason.effect.clone()
+                        }
+                        _ => wire.stderr.clone(),
+                    },
+                    Err(error) => error.to_string(),
+                };
                 assert!(
-                    wire.stderr.contains(reason),
+                    diagnostic.contains(reason),
                     "{consumer}: {}: {}",
                     row["id"],
                     wire.stderr
                 );
-                assert!(wire.stderr.contains("recheck"), "{consumer}: {}", row["id"]);
+                assert!(
+                    !wire.stderr.contains("recovery:"),
+                    "{consumer}: {}",
+                    row["id"]
+                );
             }
         }
     }

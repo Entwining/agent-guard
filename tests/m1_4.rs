@@ -176,10 +176,10 @@ fn mechanism_rows(owner: &str) {
                         }),
                         "{row}: {reason:?}"
                     );
-                    assert!(wire.stderr.contains(&reason.effect));
+                    assert!(wire.stderr.contains(reason.rule.message()));
                     assert!(!recovery.excluded_scope.is_empty());
                     assert!(!recovery.automatic_application_supported);
-                    assert!(wire.stderr.contains("recheck"));
+                    assert!(!wire.stderr.contains("recovery:"));
                 }
                 agent_guard_rust::Outcome::CoverageInsufficient {
                     cause, recovery, ..

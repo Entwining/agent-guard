@@ -65,7 +65,7 @@ fn partition(name: &str) {
                     evaluation.outcome,
                     Outcome::ProtectedDenial { .. }
                 ));
-                assert!(wire.stderr.contains("environment-file"));
+                assert!(wire.stderr.contains("credential or environment file"));
                 assert!(
                     evaluation.effects.contains(&EffectRecord::ProtectedTarget {
                         protection: Protection::Environment,

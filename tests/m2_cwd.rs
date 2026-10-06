@@ -262,7 +262,7 @@ fn decided_pwd_and_cdpath_wire_contracts() {
                 assert!(wire.stderr.is_empty());
                 assert_eq!(support::coverage(&result)["state"], "SupportedPreflight");
             } else {
-                assert!(wire.stderr.contains("App Data"));
+                assert!(wire.stderr.contains("app-data"));
             }
         }
     }

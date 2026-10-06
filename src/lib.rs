@@ -111,6 +111,25 @@ impl Advice {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reason {
     pub effect: String,
+    pub rule: DenialRule,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DenialRule {
+    AppData,
+    Broad,
+    File,
+    CodeFile,
+    HiddenSearch,
+    Dump,
+    Variable,
+    Token,
+    Keychain,
+    StoredSecret,
+    Trace,
+    Upload,
+    Ssh,
+    GrepSsh,
 }
 
 /// Event scope survives rendering; choosing and proving a continuation belongs to the agent.

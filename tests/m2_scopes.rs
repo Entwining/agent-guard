@@ -42,7 +42,7 @@ fn partition(name: &str) {
             );
             assert!(wire.stdout.is_empty());
             if row["expected"] == "D" {
-                assert!(wire.stderr.contains("protected"));
+                assert!(wire.stderr.contains("credential or environment file"));
                 assert!(
                     wire.stderr
                         .contains(row["reason"].as_str().unwrap_or("App Data")),

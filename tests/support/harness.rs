@@ -949,28 +949,31 @@ fn assert_effect_or_failure(row: &Value, actual: &Value, conditional: bool) {
         actual["coverage"]["error_kind"] == required
     } else if required.contains("App Data") {
         protected("AppData", false)
-            && stderr.contains("App Data")
+            && stderr.contains("app-data")
             && (!required.contains("nested") && !required.contains("substitution")
                 || effects.iter().any(|effect| {
                     effect["protection"] == "AppData" && effect["source"] == "Nested"
                 }))
     } else if required.contains("SSH") || required.contains("private-key") {
-        protected("SshPrivate", required.contains("write")) && stderr.contains("private-key")
+        protected("SshPrivate", required.contains("write"))
+            && (stderr.contains("credential or environment file")
+                || stderr.contains("private material under ~/.ssh")
+                || stderr.contains("private ~/.ssh"))
     } else if required.contains("broad") {
         effects.iter().any(|effect| effect["kind"] == "BroadRoot")
-            && stderr.contains("HOME")
-            && stderr.contains("excluded")
+            && stderr.contains("home directory")
+            && stderr.contains("Scope the scan to a project path")
     } else if required.contains("inline interpreter") {
         protected("Environment", false)
             && effects
                 .iter()
                 .any(|effect| effect["source"] == "InlineCode")
-            && stderr.contains("CodeFile")
+            && stderr.contains("inline code")
     } else if required.contains("hidden") {
         effects
             .iter()
             .any(|effect| effect["kind"] == "HiddenContent")
-            && stderr.contains("environment")
+            && stderr.contains("hidden files")
     } else if required.contains("environment-file") {
         protected("Environment", false) && stderr.contains("environment")
     } else if required.contains("Zsh") || required.contains("zsh") {
@@ -1017,17 +1020,21 @@ fn assert_observers(row: &Value, actual: &Value) {
         assert_eq!(actual["effects"]["protected_access_count"], 0);
     }
     if class == "D" {
-        assert!(stderr.contains("protected") || stderr.contains("environment dump"));
+        assert!(!stderr.is_empty());
         if id.contains("appdata") || id.contains("alias") || id.contains("qualifier-protected") {
-            assert!(stderr.contains("App Data"));
+            assert!(stderr.contains("app-data"));
         }
         if id.contains("credential") {
-            assert!(stderr.contains("private-key"));
+            assert!(
+                stderr.contains("credential or environment file")
+                    || stderr.contains("private material under ~/.ssh")
+            );
         }
         if id.contains("env") && !id.contains("dump") {
             assert!(stderr.contains("environment"));
         }
-        assert!(stderr.contains("recovery:") && stderr.contains("recheck"));
+        assert!(!stderr.contains("recovery:"));
+        assert!(!actual["recovery"].is_null());
     }
     if class == "F" {
         let expected = row["reason_contract"]["effect_or_failure"]

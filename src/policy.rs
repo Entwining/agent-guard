@@ -1,6 +1,6 @@
 use crate::{
-    Advice, CheckError, CheckErrorKind, Coverage, CoverageGap, Disposition, EffectRecord,
-    EffectSource, Evaluation, Outcome, Reason, Recovery, RecoveryStep,
+    Advice, CheckError, CheckErrorKind, Coverage, CoverageGap, DenialRule, Disposition,
+    EffectRecord, EffectSource, Evaluation, Outcome, Reason, Recovery, RecoveryStep,
     adapters::{self, Consumer, Operation},
     filesystem::{self, Identity, Probe, Protection},
     limits::MAX_INPUT_BYTES,
@@ -8,6 +8,44 @@ use crate::{
     shell::{self, Arm},
     targets::{self, Target},
 };
+
+// native/rules/appdata.go and credentials.go select these sentences by effect;
+// native/reasons/reasons.go owns their public bytes.
+const APPDATA: &str = "This reads a protected macOS app-data directory. Name a specific non-sensitive file under ~/Library/Application Support instead, or ask the user to inspect the protected file and share the needed fact.";
+const BROAD: &str = "A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path.";
+const FILE: &str = "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.";
+const CODE_FILE: &str = "This inline code names a credential or environment file. To write text that mentions the file, use the Write or Edit tool; to run code that needs its values, pass the file through a modelled runtime's option, such as `node --env-file=.env`, though the guard does not control what the runtime does with the contents; otherwise ask the user to inspect the file and share only the fact needed.";
+const HIDDEN_SEARCH: &str = "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.";
+const DUMP: &str = "This dumps environment or shell variables, including secrets. Name the non-sensitive variable needed and read only that variable.";
+const VARIABLE: &str = "This prints the value of a credential variable. Ask the user for the specific non-sensitive fact needed, or let the authorized client consume the credential without printing it.";
+const TOKEN: &str = "This prints a Git hosting token. Use auth status without token-display flags; if authentication needs repair, ask the user to update the credential in their terminal.";
+const KEYCHAIN: &str = "This extracts a password from the macOS Keychain. State the intended use and run the authorized client that consumes it without printing it.";
+const SECRET_PRINT: &str = "This prints a stored secret or access token. Run the command that uses the credential without printing it, or ask the user to run it in their own terminal and share only the non-secret fact needed.";
+const TRACE: &str = "curl verbose or trace output can print HTTP headers including Authorization. Drop -v and --trace; use a normal curl request for the needed result.";
+const UPLOAD: &str = "This sends the contents of a credential file. Send only the required non-sensitive fields explicitly, and let the client obtain authentication from its normal credential source.";
+const SSH: &str = "This reads private material under ~/.ssh. Search public material in the project or request the exact public key or client-config path; ask the user to inspect private material locally if a specific non-sensitive fact is needed.";
+const GREP_SSH: &str = "Grep would search private ~/.ssh material. Narrow the search to a project directory or an exact public key, client config, allowed_signers, or known_hosts file.";
+
+impl DenialRule {
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::AppData => APPDATA,
+            Self::Broad => BROAD,
+            Self::File => FILE,
+            Self::CodeFile => CODE_FILE,
+            Self::HiddenSearch => HIDDEN_SEARCH,
+            Self::Dump => DUMP,
+            Self::Variable => VARIABLE,
+            Self::Token => TOKEN,
+            Self::Keychain => KEYCHAIN,
+            Self::StoredSecret => SECRET_PRINT,
+            Self::Trace => TRACE,
+            Self::Upload => UPLOAD,
+            Self::Ssh => SSH,
+            Self::GrepSsh => GREP_SSH,
+        }
+    }
+}
 
 /// Consumer and host facts. Task intent and agent continuations are not guard inputs.
 pub struct Context {
@@ -126,6 +164,7 @@ fn evaluate_with_catalog_loader(
         arm,
         gaps: Vec::new(),
         denial: None,
+        appdata_reason: None,
         advice: Vec::new(),
         executable_qualifier: false,
         effects: Vec::new(),
@@ -187,27 +226,32 @@ fn evaluate_with_catalog_loader(
         )
     });
     if let Some(EffectRecord::ProtectedTarget { write, source, .. }) = appdata {
-        inspection.denial = Some(match source {
-            EffectSource::Cwd => "protected cwd: read protected App Data".into(),
-            EffectSource::InlineCode => {
-                "CodeFile: inline interpreter token names protected App Data".into()
-            }
-            _ if *write => "write protected location; read protected App Data is excluded".into(),
-            _ => "read protected App Data".into(),
+        inspection.denial = Some(Reason {
+            effect: match source {
+                EffectSource::Cwd => "protected cwd: read protected App Data".into(),
+                EffectSource::InlineCode => {
+                    "CodeFile: inline interpreter token names protected App Data".into()
+                }
+                _ if *write => {
+                    "write protected location; read protected App Data is excluded".into()
+                }
+                _ => "read protected App Data".into(),
+            },
+            rule: inspection.appdata_reason.unwrap_or(DenialRule::AppData),
         });
     } else if inspection.effects.contains(&EffectRecord::BroadRoot) {
-        inspection.denial = Some(format!(
-            "broad recursive root reaches protected locations; HOME {} is excluded",
-            context.home
-        ));
+        inspection.denial = Some(Reason {
+            effect: format!(
+                "broad recursive root reaches protected locations; HOME {} is excluded",
+                context.home
+            ),
+            rule: DenialRule::Broad,
+        });
     }
-    if let Some(effect) = inspection.denial {
-        let recovery = recovery(context, &decoded.cwd, &effect);
+    if let Some(reason) = inspection.denial {
+        let recovery = recovery(context, &decoded.cwd, &reason.effect);
         return Ok(Evaluation {
-            outcome: Outcome::ProtectedDenial {
-                reason: Reason { effect },
-                recovery,
-            },
+            outcome: Outcome::ProtectedDenial { reason, recovery },
             coverage,
             effects: inspection.effects,
         });
@@ -281,7 +325,8 @@ struct Inspection<'a> {
     resolver: filesystem::Resolver<'a>,
     arm: Arm,
     gaps: Vec<CoverageGap>,
-    denial: Option<String>,
+    denial: Option<Reason>,
+    appdata_reason: Option<DenialRule>,
     advice: Vec<Advice>,
     executable_qualifier: bool,
     effects: Vec<EffectRecord>,
@@ -347,17 +392,22 @@ impl Inspection<'_> {
                     _ => target.effect == Effect::Read,
                 };
                 if touches {
+                    let rule = target_rule(&target, kind, &self.context.home);
+                    if kind == Protection::AppData {
+                        self.appdata_reason.get_or_insert(rule);
+                    }
                     self.effect(EffectRecord::ProtectedTarget {
                         protection: kind,
                         write: target.effect == Effect::Write,
                         source,
                     });
-                    self.denial.get_or_insert_with(|| {
-                        if target.effect == Effect::Write {
+                    self.denial.get_or_insert_with(|| Reason {
+                        effect: if target.effect == Effect::Write {
                             format!("write protected location; {} is excluded", kind.effect())
                         } else {
                             kind.effect().to_owned()
-                        }
+                        },
+                        rule,
                     });
                 }
             }
@@ -373,11 +423,12 @@ impl Inspection<'_> {
                 };
                 if broad_access && filesystem::broad_root(&path, &resolved_home, target.glob) {
                     self.effect(EffectRecord::BroadRoot);
-                    self.denial.get_or_insert_with(|| {
-                        format!(
+                    self.denial.get_or_insert_with(|| Reason {
+                        effect: format!(
                             "broad recursive root reaches protected locations; HOME {} is excluded",
                             self.context.home
-                        )
+                        ),
+                        rule: DenialRule::Broad,
                     });
                 }
             }
@@ -394,13 +445,22 @@ impl Inspection<'_> {
         let mut target = Target::new(cwd.to_owned(), Effect::Read, Walk::None, Via::Cwd);
         match self.resolver.target(&mut target, cwd, self.probe)? {
             Identity::Protected(kind) => {
+                if kind == Protection::AppData {
+                    self.appdata_reason.get_or_insert(DenialRule::AppData);
+                }
                 self.effect(EffectRecord::ProtectedTarget {
                     protection: kind,
                     write: false,
                     source: EffectSource::Cwd,
                 });
-                self.denial
-                    .get_or_insert_with(|| format!("protected cwd: {}", kind.effect()));
+                self.denial.get_or_insert_with(|| Reason {
+                    effect: format!("protected cwd: {}", kind.effect()),
+                    rule: if kind == Protection::AppData {
+                        DenialRule::AppData
+                    } else {
+                        DenialRule::Ssh
+                    },
+                });
             }
             Identity::Bound => self.gap(CoverageGap::IdentityBound),
             Identity::Public(_) => {}
@@ -443,7 +503,10 @@ impl Inspection<'_> {
                 }
                 if effects.consumes_listing && hidden_listings.contains(&pipeline) {
                     self.effect(EffectRecord::HiddenContent);
-                    self.denial.get_or_insert_with(||"hidden listing with a content consumer reaches protected environment files".into());
+                    self.denial.get_or_insert_with(|| Reason {
+                        effect: "hidden listing with a content consumer reaches protected environment files".into(),
+                        rule: DenialRule::HiddenSearch,
+                    });
                 }
             }
             for value in effects.gaps {
@@ -457,36 +520,46 @@ impl Inspection<'_> {
             }
             if effects.dump {
                 self.effect(EffectRecord::EnvironmentDump);
-                self.denial
-                    .get_or_insert_with(|| "extract protected environment dump".into());
+                self.denial.get_or_insert_with(|| Reason {
+                    effect: "extract protected environment dump".into(),
+                    rule: DenialRule::Dump,
+                });
             }
             if effects.variable {
                 self.effect(EffectRecord::CredentialVariable);
-                self.denial
-                    .get_or_insert_with(|| "extract protected credential variable".into());
+                self.denial.get_or_insert_with(|| Reason {
+                    effect: "extract protected credential variable".into(),
+                    rule: DenialRule::Variable,
+                });
             }
             if effects.token {
                 self.effect(EffectRecord::HostingToken);
-                self.denial.get_or_insert_with(|| {
-                    "This prints a Git hosting token. Use auth status without token-display flags; if authentication needs repair, ask the user to update the credential in their terminal.".into()
+                self.denial.get_or_insert_with(|| Reason {
+                    effect: TOKEN.into(),
+                    rule: DenialRule::Token,
                 });
             }
             if effects.keychain {
                 self.effect(EffectRecord::Keychain);
-                self.denial.get_or_insert_with(|| "extract a password from the macOS Keychain; run the authorized client that consumes it without printing it".into());
+                self.denial.get_or_insert_with(|| Reason { effect: "extract a password from the macOS Keychain; run the authorized client that consumes it without printing it".into(), rule: DenialRule::Keychain });
             }
             if effects.stored_secret {
                 self.effect(EffectRecord::StoredSecret);
-                self.denial.get_or_insert_with(|| "This prints a stored secret or access token. Run the command that uses the credential without printing it, or ask the user to run it in their own terminal and share only the non-secret fact needed.".into());
+                self.denial.get_or_insert_with(|| Reason {
+                    effect: SECRET_PRINT.into(),
+                    rule: DenialRule::StoredSecret,
+                });
             }
             if effects.trace {
                 self.effect(EffectRecord::NetworkTrace);
-                self.denial.get_or_insert_with(|| "curl verbose or trace output can print authentication headers; drop -v and --trace and use a normal request".into());
+                self.denial.get_or_insert_with(|| Reason { effect: "curl verbose or trace output can print authentication headers; drop -v and --trace and use a normal request".into(), rule: DenialRule::Trace });
             }
             if effects.hidden_content {
                 self.effect(EffectRecord::HiddenContent);
-                self.denial.get_or_insert_with(|| {
-                    "hidden recursive content search reaches protected environment files".into()
+                self.denial.get_or_insert_with(|| Reason {
+                    effect: "hidden recursive content search reaches protected environment files"
+                        .into(),
+                    rule: DenialRule::HiddenSearch,
                 });
             }
             // native/rules/workflow.go:13-39 owns usage advice; D22 retains
@@ -532,9 +605,11 @@ impl Inspection<'_> {
                     self.gaps
                         .retain(|g| *g != CoverageGap::InterpreterChosenRead);
                     if let Some(reason) = self.denial.as_mut() {
-                        *reason = format!(
-                            "CodeFile: inline interpreter token names a protected path; {reason} is excluded"
+                        reason.effect = format!(
+                            "CodeFile: inline interpreter token names a protected path; {} is excluded",
+                            reason.effect
                         );
+                        reason.rule = DenialRule::CodeFile;
                     }
                 } else {
                     self.denial = previous_denial;
@@ -545,6 +620,36 @@ impl Inspection<'_> {
             }
         }
         Ok(())
+    }
+}
+
+fn target_rule(target: &Target, kind: Protection, home: &str) -> DenialRule {
+    // native/rules/credentials.go:12-39 distinguishes content from SSH scope;
+    // its filesystem owner at :62-88 selects the search-specific alternative.
+    if kind == Protection::AppData {
+        if target.via == Via::Scan || filesystem::broad_root(&target.path, home, target.glob) {
+            DenialRule::Broad
+        } else {
+            DenialRule::AppData
+        }
+    } else if target.effect == Effect::Write {
+        DenialRule::Ssh
+    } else if target.walk == Walk::Hidden && target.effect == Effect::Read {
+        DenialRule::HiddenSearch
+    } else if target.effect == Effect::Read
+        && filesystem::credential_read(&target.path, home, target.glob).is_some()
+    {
+        if target.via == Via::Code {
+            DenialRule::CodeFile
+        } else if target.sends {
+            DenialRule::Upload
+        } else {
+            DenialRule::File
+        }
+    } else if target.search {
+        DenialRule::GrepSsh
+    } else {
+        DenialRule::Ssh
     }
 }
 
@@ -628,6 +733,7 @@ mod tests {
                 arm: Arm::Brush,
                 gaps: Vec::new(),
                 denial: None,
+                appdata_reason: None,
                 advice: Vec::new(),
                 executable_qualifier: false,
                 effects: Vec::new(),

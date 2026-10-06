@@ -64,7 +64,7 @@ fn arithmetic_effects_and_consumer_wire() {
             assert!(wire.stdout.is_empty());
             assert!(!wire.stderr.contains("checker failed"));
             if row["expected"] == "D" {
-                assert!(wire.stderr.contains("environment-file"));
+                assert!(wire.stderr.contains("credential or environment file"));
             }
         }
     }

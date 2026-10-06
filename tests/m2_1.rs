@@ -72,8 +72,14 @@ fn partition(name: &str) {
             assert_eq!(wire.exit, if permitted { 0 } else { 2 });
             assert!(wire.stdout.is_empty());
             if let Some(reason) = row["reason"].as_str() {
+                let diagnostic = match &result.as_ref().unwrap().outcome {
+                    agent_guard_rust::Outcome::ProtectedDenial { reason, .. } => {
+                        reason.effect.as_str()
+                    }
+                    _ => wire.stderr.as_str(),
+                };
                 assert!(
-                    wire.stderr.contains(reason),
+                    diagnostic.contains(reason),
                     "{}: {}",
                     row["id"],
                     wire.stderr

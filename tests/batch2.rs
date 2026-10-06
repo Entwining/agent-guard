@@ -66,7 +66,7 @@ fn partition(name: &str) {
                     .is_some_and(|reason| reason.starts_with("This inline code"))
                 {
                     assert!(
-                        wire.stderr.contains("CodeFile"),
+                        wire.stderr.contains("inline code"),
                         "{}: {}",
                         row["id"],
                         wire.stderr

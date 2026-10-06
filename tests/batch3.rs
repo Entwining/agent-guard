@@ -37,8 +37,13 @@ fn partition(name: &str) {
             if row["expected"] == "D" {
                 assert!(!wire.stderr.is_empty());
                 if let Some(reason) = row["reason_contains"].as_str() {
+                    let agent_guard_rust::Outcome::ProtectedDenial { reason: denial, .. } =
+                        &result.as_ref().unwrap().outcome
+                    else {
+                        panic!("missing denial")
+                    };
                     assert!(
-                        wire.stderr.contains(reason),
+                        denial.effect.contains(reason),
                         "{}: {}",
                         row["id"],
                         wire.stderr
