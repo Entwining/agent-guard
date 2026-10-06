@@ -943,7 +943,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 result?;
             }
             Statement::Definition(name, body) => {
-                if scope.isolated || scope.conditional_definition || !scope.frames.is_empty() {
+                if scope.isolated || scope.conditional_definition {
                     self.output.gap(CoverageGap::UnsupportedShellSyntax);
                 }
                 if self
@@ -956,17 +956,24 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         },
                     )
                     .is_some()
+                    && scope.frames.is_empty()
                 {
                     self.output.gap(CoverageGap::UnsupportedShellSyntax);
                 }
                 let mut inner = scope.isolated();
+                // Body inspection must not publish nested definitions or create
+                // an isolated-shell refusal for an ordinary function frame.
+                inner.isolated = scope.isolated;
                 inner.defining = true;
                 inner.enter_function();
                 let inserted = self.running.insert(name.clone());
-                self.run(body, &mut inner, depth + 1, source_id, nested)?;
+                let functions = self.functions.clone();
+                let result = self.run(body, &mut inner, depth + 1, source_id, nested);
+                self.functions = functions;
                 if inserted {
                     self.running.remove(name);
                 }
+                result?;
             }
             Statement::Binary(operator, left, right) => {
                 let before = scope.isolated();
