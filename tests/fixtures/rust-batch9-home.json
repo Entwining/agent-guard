@@ -1,0 +1,12 @@
+{"rows":[
+ {"id":"dollar-hd","partition":"protected","expected":"D","wire_reason":"App Data","input":{"command":"python3 - <<'PY'\nopen(os.path.expandvars('$HOME/Library/Containers/com.synthetic/data'))\nPY"}},
+ {"id":"brace-hd","partition":"protected","expected":"D","wire_reason":"App Data","input":{"command":"python3 - <<'PY'\nopen(os.path.expandvars('${HOME}/Library/Containers/com.synthetic/data'))\nPY"}},
+ {"id":"upper-hd","partition":"protected","expected":"D","wire_reason":"App Data","input":{"command":"python3 - <<'PY'\nopen(os.path.expandvars('$home/LIBRARY/CONTAINERS/com.synthetic/data'))\nPY"}},
+ {"id":"dollar-c","partition":"protected","expected":"D","wire_reason":"App Data","input":{"command":"python3 -c 'open(os.path.expandvars(\"$HOME/Library/Containers/com.synthetic/data\"))'"}},
+ {"id":"brace-c","partition":"protected","expected":"D","wire_reason":"App Data","input":{"command":"python3 -c 'open(os.path.expandvars(\"${HOME}/Library/Containers/com.synthetic/data\"))'"}},
+ {"id":"upper-c","partition":"protected","expected":"D","wire_reason":"App Data","input":{"command":"python3 -c 'open(os.path.expandvars(\"${home}/LIBRARY/CONTAINERS/com.synthetic/data\"))'"}},
+ {"id":"broad-hd","partition":"control","expected":"UC","input":{"command":"python3 - <<'PY'\nopen(os.path.expandvars('$HOME/Library'))\nPY"}},
+ {"id":"public-hd","partition":"control","expected":"UC","input":{"command":"python3 - <<'PY'\nopen(os.path.expandvars('${HOME}/project/README.md'))\nPY"}},
+ {"id":"broad-c","partition":"control","expected":"UC","input":{"command":"python3 -c 'open(os.path.expandvars(\"$HOME/Library\"))'"}},
+ {"id":"public-c","partition":"control","expected":"UC","input":{"command":"python3 -c 'open(os.path.expandvars(\"${HOME}/project/README.md\"))'"}}
+]}

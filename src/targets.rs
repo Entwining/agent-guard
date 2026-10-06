@@ -1479,7 +1479,16 @@ pub fn code_paths(code: &str) -> Vec<String> {
         let ch = code[cursor..].chars().next().unwrap_or_default();
         if ch.is_alphanumeric() || matches!(ch, '.' | '/' | '~' | '_' | '$') {
             let start = cursor;
-            cursor += ch.len_utf8();
+            // Go's uninspectable-code owner recognizes a braced HOME prefix
+            // as one token (native/rules/appdata.go:59).
+            if code[cursor..]
+                .get(..7)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case("${HOME}"))
+            {
+                cursor += 7;
+            } else {
+                cursor += ch.len_utf8();
+            }
             while cursor < code.len() {
                 let next = code[cursor..].chars().next().unwrap_or_default();
                 if !(next.is_alphanumeric() || matches!(next, '.' | '/' | '~' | '_' | '-' | '$')) {
@@ -1498,7 +1507,15 @@ pub fn code_paths(code: &str) -> Vec<String> {
                     )
                     || matches!(code.as_bytes().get(cursor), Some(b'\'' | b'"' | b'`')))
             {
-                paths.push(token.to_owned());
+                let home = ["$HOME/", "${HOME}/"].into_iter().find(|prefix| {
+                    token
+                        .get(..prefix.len())
+                        .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+                });
+                paths.push(home.map_or_else(
+                    || token.to_owned(),
+                    |prefix| format!("~/{}", &token[prefix.len()..]),
+                ));
             }
         } else {
             if matches!(ch, '\'' | '"' | '`')
