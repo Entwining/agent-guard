@@ -285,16 +285,20 @@ const CURL_WRITES: &[&str] = &[
 
 fn curl(context: &mut Context<'_>) {
     let mut index = 0;
+    let mut options = true;
     let mut remote_name = false;
     let mut output_dir = None;
     while let Some(word) = context.words.get(index) {
-        if word == "--" {
-            break;
+        if options && word == "--" {
+            options = false;
+            index += 1;
+            continue;
         }
         let text = word.as_str();
-        remote_name |= ["--remote-name", "--remote-name-all"].contains(&text)
-            || text.starts_with('-') && !text[1..].contains('-') && text.ends_with('O');
-        if text == "--output-dir" || text.starts_with("--output-dir=") {
+        remote_name |= options
+            && (["--remote-name", "--remote-name-all"].contains(&text)
+                || text.starts_with('-') && !text[1..].contains('-') && text.ends_with('O'));
+        if options && (text == "--output-dir" || text.starts_with("--output-dir=")) {
             if !text.contains('=') {
                 index += 1;
             }
@@ -305,9 +309,10 @@ fn curl(context: &mut Context<'_>) {
             index += 1;
             continue;
         }
-        let url = if text
-            .get(..6)
-            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("--url="))
+        let url = if options
+            && text
+                .get(..6)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case("--url="))
         {
             &text[6..]
         } else {
@@ -339,7 +344,7 @@ fn curl(context: &mut Context<'_>) {
             index += 1;
             continue;
         }
-        if word.role == Role::Option(OptionRole::Name) {
+        if !options || word.role == Role::Option(OptionRole::Name) {
             index += 1;
             continue;
         }

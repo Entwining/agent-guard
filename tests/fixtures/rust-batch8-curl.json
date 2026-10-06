@@ -1,0 +1,11 @@
+{"rows":[
+ {"id":"plain","partition":"url","expected":"D","input":{"command":"curl file://$C/data.txt"}},
+ {"id":"double-dash","partition":"url","expected":"D","input":{"command":"curl -- file://$C/data.txt"}},
+ {"id":"silent-double-dash","partition":"url","expected":"D","input":{"command":"curl -s -- file://$C/data.txt"}},
+ {"id":"include-double-dash","partition":"url","expected":"D","input":{"command":"curl --include -- file://$C/data.txt"}},
+ {"id":"output-double-dash-key","partition":"url","expected":"D","input":{"command":"curl -o out.txt -- file://$H/.ssh/id_ed25519"}},
+ {"id":"url-after-http","partition":"url","expected":"D","input":{"command":"curl -- https://example.invalid file://$C/data.txt"}},
+ {"id":"public-url","partition":"control","expected":"N","input":{"command":"curl -- https://example.invalid"}},
+ {"id":"public-file","partition":"control","expected":"N","input":{"command":"curl -- file://$P/input.txt"}},
+ {"id":"literal-option","partition":"control","expected":"N","input":{"command":"curl -- --config=$C/data.txt"}}
+]}
