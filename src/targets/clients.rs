@@ -6,6 +6,7 @@ struct Spec {
     walk: Walk,
     options: &'static [(&'static str, Effect)],
     remote: bool,
+    destination: bool,
 }
 
 fn spec(program: &str) -> Spec {
@@ -14,8 +15,14 @@ fn spec(program: &str) -> Spec {
         walk: Walk::Visible,
         options: &[],
         remote: false,
+        destination: false,
     };
     match program {
+        "cp" => {
+            // native/targets/programs.go:61; infer.go:105-121,203-204.
+            spec.destination = true;
+            spec.options = &[("-t", Effect::Write), ("--target-directory", Effect::Write)];
+        }
         "ssh" => spec.operand = Effect::Name,
         "scp" => spec.remote = true,
         "dd" => spec.walk = Walk::None,
@@ -105,6 +112,15 @@ impl<'a> Context<'a> {
         })
     }
     fn fallback(&mut self) {
+        let into = self.spec.destination
+            && self.words.iter().any(|word| {
+                word.role != Role::Path
+                    && (word.starts_with("--t")
+                        && "--target-directory".starts_with(
+                            word.split_once('=').map_or(word.as_str(), |(key, _)| key),
+                        )
+                        || word.starts_with('-') && !word.starts_with("--") && word.contains('t'))
+            });
         let last = self
             .words
             .iter()
@@ -151,7 +167,10 @@ impl<'a> Context<'a> {
                 continue;
             };
             let mut effect = self.option_effect(index).unwrap_or(self.spec.operand);
-            if self.spec.remote && Some(index) == last && !word.globs {
+            if (self.spec.remote || self.spec.destination && !into)
+                && Some(index) == last
+                && !word.globs
+            {
                 effect = Effect::Write;
             }
             if self.spec.remote && remote(&word.value) {

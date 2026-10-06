@@ -381,8 +381,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             }
             infer_git(args, cwd, host, &mut effects);
         }
-        "ssh" | "scp" | "sftp" | "ssh-keygen" | "dd" | "kubectl" | "npm" | "curl" | "wget"
-        | "docker" => {
+        "cp" | "ssh" | "scp" | "sftp" | "ssh-keygen" | "dd" | "kubectl" | "npm" | "curl"
+        | "wget" | "docker" => {
             effects
                 .targets
                 .extend(clients::infer(program, args, cwd, host));
