@@ -107,6 +107,12 @@ impl<'a> Lexed<'a> {
             .iter()
             .find(|(range, _, _)| range.start == start)
     }
+    pub(super) fn quoted_heredoc_ranges(&self) -> impl Iterator<Item = Range<usize>> + '_ {
+        self.heredocs
+            .iter()
+            .filter(|(_, quoted, _)| *quoted)
+            .map(|(range, _, _)| range.clone())
+    }
     pub fn substitution_body(&self, start: usize) -> Option<Range<usize>> {
         if !self.context(start).active() {
             return None;

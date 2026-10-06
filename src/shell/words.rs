@@ -65,14 +65,6 @@ pub(super) fn expand(
     } else {
         brace_text(raw)?
     };
-    let pieces = if heredoc {
-        word::parse_heredoc(&input, &options)
-    } else {
-        word::parse(&input, &options)
-    }
-    .map_err(|_| CheckError {
-        kind: CheckErrorKind::GuardFault,
-    })?;
     let mut out = Expanded {
         word: Word::literal(String::new()),
         split: Vec::new(),
@@ -104,6 +96,28 @@ pub(super) fn expand(
         Some(super::lexer::LexError::Unterminated { .. }) => out.unsupported = true,
         None => {}
     }
+    // Brush's word parser has no heredoc context inside command substitutions.
+    // Mask inert bodies at identical byte offsets; the lexer and nested command
+    // observation continue to use the original source.
+    let mut parser_input = input.as_bytes().to_vec();
+    for range in lexical.quoted_heredoc_ranges() {
+        for byte in &mut parser_input[range] {
+            if *byte != b'\n' {
+                *byte = b' ';
+            }
+        }
+    }
+    let parser_input = String::from_utf8(parser_input).map_err(|_| CheckError {
+        kind: CheckErrorKind::GuardFault,
+    })?;
+    let pieces = if heredoc {
+        word::parse_heredoc(&parser_input, &options)
+    } else {
+        word::parse(&parser_input, &options)
+    }
+    .map_err(|_| CheckError {
+        kind: CheckErrorKind::GuardFault,
+    })?;
     out.parameters = parameter_regions(&input, &lexical);
     fill(&input, &pieces, &lexical, context, &mut out, &mut splitting)?;
     out.unsupported |= out.parameters.iter().any(|region| !region.supported);
