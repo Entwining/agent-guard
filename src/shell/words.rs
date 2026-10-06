@@ -413,6 +413,7 @@ fn fill(
             }
             continue;
         }
+        let start = out.word.text.len();
         match &piece.piece {
             WordPiece::Text(text) => {
                 out.word.text.push_str(&text.replace("\\\n", ""));
@@ -621,6 +622,16 @@ fn fill(
                 out.word.text.push_str(spelling);
                 out.word.expands = true;
             }
+        }
+        if quoted
+            || matches!(
+                piece.piece,
+                WordPiece::SingleQuotedText(_)
+                    | WordPiece::AnsiCQuotedText(_)
+                    | WordPiece::EscapeSequence(_)
+            )
+        {
+            out.lexical_ranges.push(start..out.word.text.len());
         }
     }
     Ok(())

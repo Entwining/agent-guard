@@ -1,0 +1,6 @@
+{"rows":[
+ {"id":"jq-mixed-filter","partition":"public","expected":"N","input":{"command":"F=x; jq -n 'public // '$F' // 0'"}},
+ {"id":"date-curl-jq","partition":"public","expected":"UC","input":{"command":"now=$(date +%s); for coin in BTC ETH; do curl https://example.test/$coin; jq -n --argjson now \"$now\" 'public // '$coin' // 0'; done"}},
+ {"id":"jq-protected-file","partition":"protected","expected":"D","input":{"command":"F=x; jq 'public // '$F' // 0' .env"}},
+ {"id":"unquoted-expansion-fields","partition":"protected","expected":"D","input":{"command":"F='public .env public'; cat $F' tail'"}}
+]}
