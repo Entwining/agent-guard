@@ -191,9 +191,20 @@ pub fn appdata_fragment(path: &str) -> bool {
 }
 
 fn lexical_pattern(path: &str, home: &str, patterned: bool) -> Option<Protection> {
+    lexical_pattern_mode(path, home, patterned, true)
+}
+
+fn lexical_pattern_mode(
+    path: &str,
+    home: &str,
+    patterned: bool,
+    hidden: bool,
+) -> Option<Protection> {
     // D22 retains conservative group reach; P1 quoting gates brace/glob expansion.
     for candidate in glob::alternatives(path, patterned) {
-        if let Some(kind) = lexical_candidate(&candidate, home, patterned || candidate != path) {
+        if let Some(kind) =
+            lexical_candidate(&candidate, home, patterned || candidate != path, hidden)
+        {
             return Some(kind);
         }
     }
@@ -237,7 +248,7 @@ pub fn broad_root(path: &str, home: &str, patterned: bool) -> bool {
     })
 }
 
-fn lexical_candidate(path: &str, home: &str, patterned: bool) -> Option<Protection> {
+fn lexical_candidate(path: &str, home: &str, patterned: bool, hidden: bool) -> Option<Protection> {
     let spelling = path;
     let path = path.to_lowercase();
     let patterned = patterned && path.contains(['*', '?', '[', '{', '(']);
@@ -338,11 +349,13 @@ fn lexical_candidate(path: &str, home: &str, patterned: bool) -> Option<Protecti
         if tail[..tail.len() - 1]
             .iter()
             .enumerate()
-            .all(|(index, part)| glob::component(parts[offset + index], &part.replace('*', "x")))
+            .all(|(index, part)| {
+                glob::visible_component(parts[offset + index], &part.replace('*', "x"), hidden)
+            })
             && if tail.len() > 1 {
-                glob::intersects(base, tail[tail.len() - 1])
+                glob::visible_intersects(base, tail[tail.len() - 1], hidden)
             } else {
-                glob::component(base, &tail[0].replace('*', "x"))
+                glob::visible_component(base, &tail[0].replace('*', "x"), hidden)
             }
         {
             return Some(Protection::Credential);
@@ -486,7 +499,8 @@ impl<'a> Resolver<'a> {
         if path.ends_with("/.ssh") {
             return Ok(Identity::Protected(Protection::SshPrivate));
         }
-        if let Some(kind) = lexical_pattern(&path, self.home, target.glob) {
+        if let Some(kind) = lexical_pattern_mode(&path, self.home, target.glob, target.glob_hidden)
+        {
             return Ok(Identity::Protected(kind));
         }
         if target.effect == Effect::Read
@@ -528,8 +542,10 @@ impl<'a> Resolver<'a> {
             }
             Resolution::Bound => return Ok(Identity::Bound),
         };
-        if let Some(kind) = lexical_pattern(&resolved, self.home, target.glob)
-            .or_else(|| lexical_pattern(&resolved, &resolved_home, target.glob))
+        if let Some(kind) =
+            lexical_pattern_mode(&resolved, self.home, target.glob, target.glob_hidden).or_else(
+                || lexical_pattern_mode(&resolved, &resolved_home, target.glob, target.glob_hidden),
+            )
         {
             return Ok(Identity::Protected(kind));
         }
@@ -562,6 +578,23 @@ impl<'a> Resolver<'a> {
             }
         }
         Ok(Identity::Public(resolved))
+    }
+}
+
+pub(crate) fn literal_glob_root(path: &str) -> String {
+    glob::escape_literal(path)
+}
+
+#[cfg(test)]
+mod pattern_roots {
+    #[test]
+    fn literal_api_root_does_not_expand_into_a_hidden_directory() {
+        let path = format!("{}/credentials.ts", super::literal_glob_root("a/*"));
+        assert_eq!(super::lexical_pattern_mode(&path, "/h", true, true), None);
+        assert_eq!(
+            super::lexical_pattern_mode("a/*/credentials.ts", "/h", true, true),
+            Some(super::Protection::Credential)
+        );
     }
 }
 

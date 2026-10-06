@@ -13,6 +13,7 @@ pub struct Word {
     pub expands: bool,
     pub runtime_unknown: bool,
     pub globs: bool,
+    pub shell_matches: bool,
     pub vars: Vec<String>,
     pub role: Role,
     pub value: String,
@@ -29,6 +30,7 @@ impl Word {
             expands: false,
             runtime_unknown: false,
             globs: false,
+            shell_matches: false,
             vars: Vec::new(),
             role: Role::Arg,
             pwd: false,
@@ -235,6 +237,7 @@ pub struct Target {
     pub path: String,
     pub unresolved: String,
     pub glob: bool,
+    pub glob_hidden: bool,
     pub effect: Effect,
     pub walk: Walk,
     pub sends: bool,
@@ -269,6 +272,7 @@ impl Target {
         };
         Self {
             glob: word.globs,
+            glob_hidden: !word.globs && !word.shell_matches,
             expands: word.expands,
             runtime_unknown: word.runtime_unknown,
             ..Self::new(path, effect, walk, Via::Operand)
@@ -279,6 +283,7 @@ impl Target {
             unresolved: path.clone(),
             path: crate::filesystem::normalize(&path, "/", "/"),
             glob: false,
+            glob_hidden: true,
             effect,
             walk,
             via,

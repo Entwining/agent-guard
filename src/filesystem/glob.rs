@@ -173,6 +173,32 @@ pub(super) fn component(pattern: &str, subject: &str) -> bool {
     intersects(pattern, &literal)
 }
 
+pub(super) fn visible_component(pattern: &str, subject: &str, hidden: bool) -> bool {
+    (hidden || !subject.starts_with('.') || pattern.starts_with('.') || pattern.starts_with("\\."))
+        && component(pattern, subject)
+}
+
+pub(super) fn visible_intersects(pattern: &str, protected: &str, hidden: bool) -> bool {
+    (hidden
+        || !protected.starts_with('.')
+        || pattern.starts_with('.')
+        || pattern.starts_with("\\."))
+        && intersects(pattern, protected)
+}
+
+pub(super) fn escape_literal(subject: &str) -> String {
+    subject
+        .chars()
+        .flat_map(|ch| {
+            if ['*', '?', '[', '\\'].contains(&ch) {
+                vec!['\\', ch]
+            } else {
+                vec![ch]
+            }
+        })
+        .collect()
+}
+
 pub(super) fn path(pattern: &str, subject: &str) -> bool {
     let p: Vec<_> = pattern.split('/').collect();
     let s: Vec<_> = subject.split('/').collect();

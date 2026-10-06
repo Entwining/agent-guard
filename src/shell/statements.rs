@@ -15,6 +15,8 @@ pub(super) enum BindingValue {
     RuntimeUnknown(Option<String>),
     // Derived text must carry its runtime uncertainty through substitution.
     RuntimeDerived(String),
+    ShellMatches(String),
+    ShellDerived(String),
     Undetermined,
 }
 
@@ -23,14 +25,20 @@ impl BindingValue {
         match self {
             Self::Known(value)
             | Self::RuntimeUnknown(Some(value))
-            | Self::RuntimeDerived(value) => Some(value),
+            | Self::RuntimeDerived(value)
+            | Self::ShellMatches(value)
+            | Self::ShellDerived(value) => Some(value),
             Self::RuntimeUnknown(None) | Self::Undetermined => None,
         }
     }
     pub fn known(&self) -> Option<&String> {
         match self {
             Self::Known(value) => Some(value),
-            Self::RuntimeUnknown(_) | Self::RuntimeDerived(_) | Self::Undetermined => None,
+            Self::RuntimeUnknown(_)
+            | Self::RuntimeDerived(_)
+            | Self::ShellMatches(_)
+            | Self::ShellDerived(_)
+            | Self::Undetermined => None,
         }
     }
 }
@@ -151,6 +159,13 @@ impl Scope {
             .collect::<BTreeMap<_, _>>()
     }
     fn expanded_binding(&self, word: &crate::record::Word, text: &str) -> BindingValue {
+        if word.shell_matches {
+            return if word.globs || word.expands {
+                BindingValue::ShellDerived(text.into())
+            } else {
+                BindingValue::ShellMatches(text.into())
+            };
+        }
         let candidates = word.vars.iter().filter_map(|name| self.bindings.get(name));
         let mut runtime = false;
         let mut representative = false;
@@ -1187,7 +1202,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             if w.expands {
                                 BindingValue::RuntimeUnknown(None)
                             } else if w.globs {
-                                BindingValue::RuntimeUnknown(Some(w.text))
+                                BindingValue::ShellMatches(w.text)
                             } else {
                                 BindingValue::Known(w.text)
                             }
@@ -1195,7 +1210,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         let unsplit = if expanded.word.expands {
                             BindingValue::RuntimeUnknown(None)
                         } else if expanded.word.globs {
-                            BindingValue::RuntimeUnknown(Some(expanded.word.text))
+                            BindingValue::ShellMatches(expanded.word.text)
                         } else {
                             BindingValue::Known(expanded.word.text)
                         };
@@ -2042,7 +2057,14 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             let mut word = crate::record::Word::literal(text.clone());
                             // Assignment expansion has already consumed any unquoted tilde.
                             word.raw = format!("'{text}'");
-                            word.expands = matches!(value, BindingValue::RuntimeDerived(_));
+                            word.expands = matches!(
+                                value,
+                                BindingValue::RuntimeDerived(_) | BindingValue::ShellDerived(_)
+                            );
+                            word.shell_matches = matches!(
+                                value,
+                                BindingValue::ShellMatches(_) | BindingValue::ShellDerived(_)
+                            );
                             command.environment.push((name.clone(), word));
                         }
                     }
@@ -2080,7 +2102,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 binding.values.iter().any(|value| {
                     matches!(
                         value,
-                        BindingValue::RuntimeUnknown(_) | BindingValue::RuntimeDerived(_)
+                        BindingValue::RuntimeUnknown(_)
+                            | BindingValue::RuntimeDerived(_)
+                            | BindingValue::ShellDerived(_)
                     )
                 })
             })
@@ -2196,7 +2220,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         BindingValue::Undetermined => {
                             self.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
-                        BindingValue::RuntimeUnknown(_) | BindingValue::RuntimeDerived(_) => {}
+                        BindingValue::RuntimeUnknown(_)
+                        | BindingValue::RuntimeDerived(_)
+                        | BindingValue::ShellMatches(_)
+                        | BindingValue::ShellDerived(_) => {}
                     }
                 }
             }
@@ -2225,7 +2252,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         BindingValue::Undetermined => {
                             self.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
-                        BindingValue::RuntimeUnknown(_) | BindingValue::RuntimeDerived(_) => {}
+                        BindingValue::RuntimeUnknown(_)
+                        | BindingValue::RuntimeDerived(_)
+                        | BindingValue::ShellMatches(_)
+                        | BindingValue::ShellDerived(_) => {}
                     }
                 }
             }
@@ -2376,7 +2406,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         for value in &values {
             let BindingValue::Known(value) = value else {
                 if value == &BindingValue::Undetermined
-                    || matches!(value, BindingValue::RuntimeDerived(text)
+                    || matches!(value, BindingValue::RuntimeDerived(text) | BindingValue::ShellDerived(text)
                         if !matches!(super::arithmetic::armed(text), super::arithmetic::Arming::Inert))
                 {
                     self.output.gap(CoverageGap::UnsupportedShellSyntax);
@@ -2560,11 +2590,20 @@ mod tests {
         let mut scope = Scope::new("/h", "/p");
         let result = observation(row["source"].as_str().unwrap(), &mut scope);
         assert!(
-            scope.bindings["D"]
-                .values
-                .contains(&BindingValue::RuntimeDerived("public*".into())),
+            scope.bindings["D"].values.iter().any(|value| value
+                .lexical()
+                .is_some_and(|text| text == "public*")
+                && value.known().is_none()),
             "{:?}: {result:?}",
             scope.bindings
+        );
+        assert!(
+            result
+                .script
+                .commands
+                .iter()
+                .flat_map(|command| &command.argv)
+                .any(|word| word.text == "public*" && word.shell_matches)
         );
     }
     #[test]

@@ -54,6 +54,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             Via::Redirect,
         );
         target.glob = redirect.globs;
+        target.glob_hidden = !redirect.globs;
         target.expands = redirect.expands;
         target.runtime_unknown = redirect.runtime_unknown;
         effects.targets.push(target);
@@ -1534,7 +1535,15 @@ fn infer_search(
                 if !glob.starts_with('!') {
                     let mut target = Target::new(
                         crate::filesystem::absolute_input(
-                            &format!("{}/{}", root.text, glob.rsplit('/').next().unwrap_or(glob)),
+                            &format!(
+                                "{}/{}",
+                                if root.globs || root.shell_matches {
+                                    root.text.clone()
+                                } else {
+                                    crate::filesystem::literal_glob_root(&root.text)
+                                },
+                                glob.rsplit('/').next().unwrap_or(glob)
+                            ),
                             cwd,
                             host.home,
                         ),
@@ -1543,6 +1552,7 @@ fn infer_search(
                         Via::Operand,
                     );
                     target.glob = true;
+                    target.glob_hidden = program == "grep" || hidden;
                     effects.targets.push(target);
                 }
             }

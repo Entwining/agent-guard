@@ -311,7 +311,9 @@ fn expand_scoped(
                     let mut context = context.clone();
                     if let statements::BindingValue::Known(value)
                     | statements::BindingValue::RuntimeUnknown(Some(value))
-                    | statements::BindingValue::RuntimeDerived(value) = value
+                    | statements::BindingValue::RuntimeDerived(value)
+                    | statements::BindingValue::ShellMatches(value)
+                    | statements::BindingValue::ShellDerived(value) = value
                     {
                         context.insert(name.clone(), value.clone());
                     } else {
@@ -376,10 +378,24 @@ fn expand_scoped(
             )?;
             if expanded.word.vars.iter().any(|name| {
                 scope.bindings.get(name).is_some_and(|binding| {
-                    binding
-                        .values
-                        .iter()
-                        .any(|value| matches!(value, statements::BindingValue::RuntimeDerived(_)))
+                    binding.values.iter().any(|value| matches!(value,
+                        statements::BindingValue::ShellMatches(text) | statements::BindingValue::ShellDerived(text) if context.get(name) == Some(text)))
+                })
+            }) {
+                expanded.word.shell_matches = true;
+                for word in &mut expanded.split {
+                    word.shell_matches = true;
+                }
+            }
+            if expanded.word.vars.iter().any(|name| {
+                scope.bindings.get(name).is_some_and(|binding| {
+                    binding.values.iter().any(|value| {
+                        matches!(
+                            value,
+                            statements::BindingValue::RuntimeDerived(_)
+                                | statements::BindingValue::ShellDerived(_)
+                        )
+                    })
                 })
             }) {
                 expanded.word.expands = true;
