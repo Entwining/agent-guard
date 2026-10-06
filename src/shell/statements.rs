@@ -172,6 +172,26 @@ impl Scope {
             }
         }
         if derived || (runtime && (word.globs || !representative)) {
+            // Repetition of unknown read fields is not new lexical evidence.
+            // Widen only placeholder-only loop aggregates; any literal path,
+            // arithmetic syntax or code keeps its full candidate text.
+            if !self.loops.is_empty() {
+                let mut fields = Vec::new();
+                let mut placeholders = true;
+                for field in text.split_whitespace() {
+                    let name = field
+                        .strip_prefix("${")
+                        .and_then(|name| name.strip_suffix('}'))
+                        .or_else(|| field.strip_prefix('$'));
+                    placeholders &= name.is_some_and(identifier);
+                    if !fields.contains(&field) {
+                        fields.push(field);
+                    }
+                }
+                if placeholders && !fields.is_empty() {
+                    return BindingValue::RuntimeDerived(fields.join(" "));
+                }
+            }
             BindingValue::RuntimeDerived(text.into())
         } else if runtime || word.expands {
             BindingValue::RuntimeUnknown(Some(text.into()))
