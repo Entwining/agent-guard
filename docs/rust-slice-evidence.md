@@ -1,5 +1,12 @@
 # Offline Rust migration evidence
 
+## Current executable boundary (Batch 11)
+
+The Rust trial now implements Go's runner/checker modes, a cooperative 2,500 ms
+checker deadline, and a 2,800 ms supervisor deadline with kill and wait. It is
+registered on no hook path; Go, `bin/agent-guard` and Homebrew remain authoritative.
+The sections below retain their historical entry and acceptance states.
+
 ## M2.1 acceptance corrections
 
 M2 at `67dde11` was rejected by both acceptance seats. Rulings 38–44

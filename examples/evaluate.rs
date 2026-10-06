@@ -163,7 +163,7 @@ pub(crate) fn guard(request: &Request) -> Value {
                     response["outcome"] = json!("SoftAdvice");
                     response["class"] = json!("A");
                     response["advice"] =
-                        json!(advice.iter().map(|a| &a.message).collect::<Vec<_>>());
+                        json!(advice.iter().map(|a| a.message()).collect::<Vec<_>>());
                 }
                 Outcome::ProtectedDenial { reason, recovery } => {
                     response["outcome"] = json!("ProtectedDenial");

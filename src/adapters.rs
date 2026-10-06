@@ -48,23 +48,58 @@ fn field(input: &Value, key: &str) -> Result<String, CheckError> {
         .ok_or_else(malformed)
 }
 
+fn folded_tool_name(name: &str) -> String {
+    // Go folds each rune independently; full mappings would expand U+0130.
+    name.chars()
+        .map(|c| c.to_lowercase().next().unwrap_or(c))
+        .collect()
+}
+
 pub fn decode(
     consumer: Consumer,
     bytes: &[u8],
     default_cwd: &str,
+) -> Result<CanonicalEvent, CheckError> {
+    decode_protocol(consumer, bytes, default_cwd, Protocol::Tool)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Protocol {
+    Tool,
+    Native,
+}
+
+pub(crate) fn decode_protocol(
+    consumer: Consumer,
+    bytes: &[u8],
+    default_cwd: &str,
+    protocol: Protocol,
 ) -> Result<CanonicalEvent, CheckError> {
     let value: Value =
         serde_json::from_slice(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes))?;
     if !value.is_object() {
         return Err(malformed());
     }
+    if protocol == Protocol::Native
+        && value.get("tool_input").is_none_or(Value::is_null)
+        && value.get("cwd").and_then(Value::as_str).is_none()
+    {
+        return Err(malformed());
+    }
     let normalized = value.get("tool_input").is_some();
-    let (name, input) = if normalized {
+    let (name, input) = if normalized || protocol == Protocol::Native {
         (
-            value
-                .get("tool_name")
-                .and_then(Value::as_str)
-                .ok_or_else(malformed)?,
+            if protocol == Protocol::Native {
+                value
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Bash")
+            } else {
+                value
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .ok_or_else(malformed)?
+            },
             value.get("tool_input").cloned().unwrap_or(Value::Null),
         )
     } else {
@@ -109,28 +144,32 @@ pub fn decode(
     if cwd.is_empty() || !std::path::Path::new(&cwd).is_absolute() {
         return Err(malformed());
     }
-    // Go folds each rune independently; full mappings would expand U+0130.
-    let folded_name: String = name
-        .chars()
-        .map(|c| c.to_lowercase().next().unwrap_or(c))
-        .collect();
+    let folded_name = folded_tool_name(name);
+    // Go's native stdin protocol uses file_path for every runtime; Pi's
+    // tool-facing input is a separate channel whose adapter owns path.
+    let pi_path = if protocol == Protocol::Native {
+        "file_path"
+    } else {
+        "path"
+    };
     let operation = match (consumer, folded_name.as_str()) {
         (Consumer::Claude | Consumer::Codex | Consumer::Pi, "bash") => {
             Operation::Shell(field(&input, "command")?)
         }
         (Consumer::Codex, "exec_command" | "functions.exec_command")
-            if ["exec_command", "functions.exec_command"].contains(&name) =>
+            if protocol == Protocol::Tool
+                && ["exec_command", "functions.exec_command"].contains(&name) =>
         {
             Operation::Shell(field(&input, "cmd")?)
         }
         (Consumer::Claude | Consumer::Codex, "read") => {
             Operation::Read(field(&input, "file_path")?)
         }
-        (Consumer::Pi, "read") => Operation::Read(field(&input, "path")?),
+        (Consumer::Pi, "read") => Operation::Read(field(&input, pi_path)?),
         (Consumer::Claude | Consumer::Codex, "write" | "edit") => {
             Operation::Write(field(&input, "file_path")?)
         }
-        (Consumer::Pi, "write" | "edit") => Operation::Write(field(&input, "path")?),
+        (Consumer::Pi, "write" | "edit") => Operation::Write(field(&input, pi_path)?),
         (Consumer::Claude | Consumer::Codex | Consumer::Pi, "grep") => Operation::Search {
             root: input
                 .get("path")
@@ -181,6 +220,18 @@ pub fn recovery_value(recovery: &Recovery) -> Value {
 }
 
 pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wire {
+    render_protocol(consumer, result, Protocol::Tool)
+}
+
+pub(crate) fn render_native(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wire {
+    render_protocol(consumer, result, Protocol::Native)
+}
+
+fn render_protocol(
+    consumer: Consumer,
+    result: &Result<Evaluation, CheckError>,
+    protocol: Protocol,
+) -> Wire {
     let mut wire = Wire {
         exit: 0,
         stdout: String::new(),
@@ -213,10 +264,29 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
             Outcome::NoObjection => return wire,
             Outcome::SoftAdvice(advice) => {
                 if consumer == Consumer::Claude {
-                    wire.stdout = format!(
-                        "{}\n",
-                        json!({"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":advice.iter().map(|a|a.message.as_str()).collect::<Vec<_>>().join("\n")}})
-                    );
+                    let context = advice
+                        .iter()
+                        .map(|a| {
+                            if protocol == Protocol::Native {
+                                a.native_message()
+                            } else {
+                                a.message()
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    wire.stdout = if protocol == Protocol::Native {
+                        // native/core/protocol.go owns the byte order of this protocol.
+                        let context = json!(context);
+                        format!(
+                            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\"additionalContext\":{context}}}}}\n"
+                        )
+                    } else {
+                        format!(
+                            "{}\n",
+                            json!({"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":context}})
+                        )
+                    };
                 }
                 return wire;
             }

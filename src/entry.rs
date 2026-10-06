@@ -3,7 +3,6 @@
 use crate::{
     Context, Event,
     adapters::{self, Consumer},
-    evaluate_with_deadline,
     filesystem::DiskProbe,
 };
 use std::{
@@ -79,7 +78,7 @@ pub fn check(
             require_execution_owner: false,
             shell_observation_entries: Cell::new(0),
         };
-        let result = evaluate_with_deadline(
+        let result = crate::policy::evaluate_native(
             Event {
                 bytes: &bytes,
                 context: &context,
@@ -87,7 +86,7 @@ pub fn check(
             },
             deadline,
         );
-        let wire = adapters::render(consumer, &result);
+        let wire = adapters::render_native(consumer, &result);
         output.write_all(wire.stdout.as_bytes())?;
         error.write_all(wire.stderr.as_bytes())?;
         Ok(if result.is_err() { 1 } else { wire.exit })
@@ -122,9 +121,7 @@ pub fn supervise(command: &mut Command) -> io::Result<i32> {
                 // Even a polling or kill error must finish ownership of the child.
                 let killed = child.kill();
                 let waited = child.wait();
-                if let Err(error) = result {
-                    return Err(error);
-                }
+                result?;
                 killed?;
                 return waited.map(status_code);
             }

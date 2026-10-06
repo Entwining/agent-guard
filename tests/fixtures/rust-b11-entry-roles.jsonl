@@ -1,0 +1,16 @@
+{"id":"cp-home","command":"cp notes.txt ~","class":"N"}
+{"id":"cp-r-after-dash","command":"cp -x-r notes.txt ~","class":"N"}
+{"id":"cp-r-before-dash","command":"cp -r-x notes.txt ~","class":"D"}
+{"id":"cp-recursive-home","command":"cp -r notes.txt ~","class":"D"}
+{"id":"cp-protected-source","command":"cp $C/data public","class":"D"}
+{"id":"cp-protected-destination","command":"cp notes.txt $C/data","class":"D"}
+{"id":"dotenvx-env-file","command":"dotenvx run --env-file .env -- node app.js","class":"N"}
+{"id":"dotenvx-file","command":"dotenvx run --file .env -- node app.js","class":"N"}
+{"id":"dotenvx-short-file","command":"dotenvx run -f .env -- bun test","class":"N"}
+{"id":"dotenvx-appdata","command":"dotenvx run -f $C/data -- node app.js","class":"D"}
+{"id":"ssh-add-use","command":"ssh-add ~/.ssh/id_rsa","class":"N"}
+{"id":"ssh-add-appdata","command":"ssh-add $C/data","class":"D"}
+{"id":"rsync-destination","command":"rsync -a ~/dotfiles/.config/ ~/.config/","class":"N"}
+{"id":"rsync-source","command":"rsync ~/.npmrc public","class":"D"}
+{"id":"tee-write","command":"tee .env < notes.txt","class":"N"}
+{"id":"tee-protected-read","command":"tee public < .env","class":"D"}

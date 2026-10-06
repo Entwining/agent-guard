@@ -1,9 +1,9 @@
 {"rows":[
  {"id":"ctags-exclude-atfile","partition":"atfile","expected":"D","input":{"command":"ctags -R --exclude=@$C/data.txt src"}},
  {"id":"ctags-separated-atfile","partition":"atfile","expected":"D","input":{"command":"ctags -R --exclude @$C/data.txt src"}},
- {"id":"exclude-at-env","partition":"atfile","expected":"UC","input":{"command":"rsync --exclude=@.env input.txt out.txt"}},
+ {"id":"exclude-at-env","partition":"atfile","expected":"N","input":{"command":"rsync --exclude=@.env input.txt out.txt"}},
  {"id":"include-atfile","partition":"atfile","expected":"UC","input":{"command":"unknown-program --include=@$C/data.txt"}},
  {"id":"exclude-plain-name","partition":"name","expected":"UC","input":{"command":"ctags -R --exclude=$C/data.txt src"}},
- {"id":"exclude-plain-env","partition":"name","expected":"UC","input":{"command":"rsync --exclude=.env input.txt out.txt"}},
+ {"id":"exclude-plain-env","partition":"name","expected":"N","input":{"command":"rsync --exclude=.env input.txt out.txt"}},
  {"id":"public-atfile","partition":"name","expected":"UC","input":{"command":"ctags -R --exclude=@input.txt src"}}
 ]}

@@ -31,7 +31,13 @@ pub fn evaluate(event: Event<'_>) -> Result<Evaluation, CheckError> {
 }
 
 pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, CheckError> {
-    evaluate_with_catalog_loader(event, arm, filesystem::FirmlinkTable::load, None)
+    evaluate_with_catalog_loader(
+        event,
+        arm,
+        filesystem::FirmlinkTable::load,
+        None,
+        adapters::Protocol::Tool,
+    )
 }
 
 pub fn evaluate_with_deadline(
@@ -43,6 +49,20 @@ pub fn evaluate_with_deadline(
         Arm::Brush,
         filesystem::FirmlinkTable::load,
         Some(deadline),
+        adapters::Protocol::Tool,
+    )
+}
+
+pub(crate) fn evaluate_native(
+    event: Event<'_>,
+    deadline: std::time::Instant,
+) -> Result<Evaluation, CheckError> {
+    evaluate_with_catalog_loader(
+        event,
+        Arm::Brush,
+        filesystem::FirmlinkTable::load,
+        Some(deadline),
+        adapters::Protocol::Native,
     )
 }
 
@@ -52,7 +72,7 @@ pub fn evaluate_with_catalog(
     arm: Arm,
     catalog: filesystem::FirmlinkTable,
 ) -> Result<Evaluation, CheckError> {
-    evaluate_with_catalog_loader(event, arm, || Ok(catalog), None)
+    evaluate_with_catalog_loader(event, arm, || Ok(catalog), None, adapters::Protocol::Tool)
 }
 
 fn evaluate_with_catalog_loader(
@@ -60,6 +80,7 @@ fn evaluate_with_catalog_loader(
     arm: Arm,
     load: impl FnOnce() -> Result<filesystem::FirmlinkTable, CheckError>,
     deadline: Option<std::time::Instant>,
+    protocol: adapters::Protocol,
 ) -> Result<Evaluation, CheckError> {
     crate::check_deadline(deadline)?;
     let Event {
@@ -72,7 +93,7 @@ fn evaluate_with_catalog_loader(
             kind: CheckErrorKind::ResourceLimit,
         });
     }
-    let decoded = adapters::decode(context.consumer, bytes, &context.cwd)?;
+    let decoded = adapters::decode_protocol(context.consumer, bytes, &context.cwd, protocol)?;
     crate::check_deadline(deadline)?;
     if let Operation::Outside(tool) = &decoded.operation {
         return Ok(Evaluation {
@@ -470,24 +491,13 @@ impl Inspection<'_> {
             }
             // native/rules/workflow.go:13-39 owns usage advice; D22 retains
             // the trial's replacement wording and consumer-specific rendering.
-            for (applies, message) in [
-                (
-                    effects.replace_advice,
-                    "-r replaces matching text; it is not recursive search. Use an explicit project root and -n when line numbers are intended.",
-                ),
-                (
-                    effects.include_advice,
-                    "rg has no --include flag. Filter files with -g GLOB (for example -g '*.ts') or a type filter such as -t ts.",
-                ),
-                (
-                    effects.bre_advice,
-                    "rg regex is not grep BRE: a\\|b matches a literal pipe. Write alternation as a|b; for a literal pipe, use [|] or -F.",
-                ),
+            for (applies, advice) in [
+                (effects.replace_advice, Advice::RgReplace),
+                (effects.include_advice, Advice::RgInclude),
+                (effects.bre_advice, Advice::RgBre),
             ] {
-                if applies && !self.advice.iter().any(|advice| advice.message == message) {
-                    self.advice.push(Advice {
-                        message: message.into(),
-                    });
+                if applies && !self.advice.contains(&advice) {
+                    self.advice.push(advice);
                 }
             }
             for mut target in effects.targets {
@@ -664,6 +674,7 @@ mod tests {
                 })
             },
             None,
+            adapters::Protocol::Tool,
         );
         assert!(matches!(
             result,

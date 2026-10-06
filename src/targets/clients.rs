@@ -19,12 +19,32 @@ fn spec(program: &str) -> Spec {
     };
     match program {
         "cp" => {
-            // native/targets/programs.go:61; infer.go:105-121,203-204.
+            // native/targets/programs.go:60; infer.go:105-121,203-204.
             spec.destination = true;
             spec.options = &[("-t", Effect::Write), ("--target-directory", Effect::Write)];
+            spec.walk = Walk::None;
         }
         "ssh" => spec.operand = Effect::Name,
         "scp" => spec.remote = true,
+        // native/targets/programs.go:63-68,86-88: these are operand and
+        // option roles, not exceptions to credential protection.
+        "rsync" => {
+            spec.remote = true;
+            spec.options = &[
+                ("--files-from", Effect::Read),
+                ("--exclude-from", Effect::Read),
+                ("--include-from", Effect::Read),
+            ];
+        }
+        "tee" => spec.operand = Effect::Write,
+        "ssh-add" => spec.operand = Effect::Use,
+        "dotenvx" => {
+            spec.options = &[
+                ("-f", Effect::Use),
+                ("--file", Effect::Use),
+                ("--env-file", Effect::Use),
+            ]
+        }
         "dd" => spec.walk = Walk::None,
         "ssh-keygen" => spec.options = &[("-f", Effect::Use)],
         "kubectl" => spec.options = &[("--kubeconfig", Effect::Use)],
@@ -207,6 +227,19 @@ pub(super) fn infer(program: &str, words: &[Word], cwd: &str, host: HostFacts<'_
         targets: Vec::new(),
     };
     match program {
+        "cp" => {
+            if words.iter().any(|word| {
+                word == "--recursive"
+                    || word.strip_prefix('-').is_some_and(|flags| {
+                        flags
+                            .chars()
+                            .take_while(|c| *c != '-')
+                            .any(|c| c == 'r' || c == 'R')
+                    })
+            }) {
+                context.spec.walk = Walk::Visible;
+            }
+        }
         "ssh" | "scp" | "sftp" => ssh(program, &mut context),
         "curl" => curl(&mut context),
         "wget" => wget(&mut context),
