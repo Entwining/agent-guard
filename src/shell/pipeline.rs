@@ -127,6 +127,74 @@ fn producer(commands: &[Command]) -> Option<(&Command, usize)> {
     })
 }
 
+pub(super) fn read_input(
+    commands: &[Command],
+    pipeline: (usize, usize),
+    known: impl Fn(&Word) -> bool,
+) -> Option<Vec<String>> {
+    let mut stages = commands
+        .iter()
+        .rev()
+        .filter(|command| command.pipeline == Some(pipeline));
+    let last = stages.next()?;
+    let spelling = |command: &Command| {
+        command
+            .argv
+            .iter()
+            .map(|word| word.raw.clone())
+            .collect::<Vec<_>>()
+    };
+    let key = spelling(last);
+    let mut outputs = Vec::new();
+    // Only the immediate producer's expanded candidates supply this read.
+    // An earlier echo upstream of an unknown program is not its output.
+    for command in
+        std::iter::once(last).chain(stages.take_while(|command| spelling(command) == key))
+    {
+        if command.function
+            || !command.redirects.is_empty()
+            || !command.wrappers.is_empty()
+            || !command.environment.is_empty()
+        {
+            return None;
+        }
+        let index = command.program?;
+        let args = &command.argv[index + 1..];
+        if args
+            .iter()
+            .any(|word| word.expands || word.globs || !known(word))
+        {
+            return None;
+        }
+        let values = match name(command) {
+            Some("printf") => vec![printf_output(args)?],
+            Some("echo") => {
+                let (args, newline) = if args.first().is_some_and(|word| word == "-n") {
+                    (&args[1..], "")
+                } else {
+                    (args, "\n")
+                };
+                if args.first().is_some_and(|word| word.starts_with('-')) {
+                    return None;
+                }
+                let text = args.iter().map(Word::as_str).collect::<Vec<_>>().join(" ");
+                // bash's default echo retains escapes; zsh's interprets them.
+                vec![
+                    format!("{text}{newline}"),
+                    format!("{}{newline}", unescape(&text, true)),
+                ]
+            }
+            _ => return None,
+        };
+        for output in values {
+            if !outputs.contains(&output) {
+                outputs.push(output);
+            }
+        }
+    }
+    Some(outputs)
+}
+
 pub(super) fn shell_input(left: &[Command], right: &mut [Command]) -> Vec<InputSource> {
     let Some((producer, index)) = producer(left) else {
         return Vec::new();

@@ -2,121 +2,121 @@
   "rows": [
     {
       "id": "a4-read-pipe",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo 'a[$(cat .env)]' | read x; a=(0); echo $((x))",
-      "expected": "UC",
+      "expected": "D",
       "cwd": "/h/project"
     },
     {
       "id": "v1-pipe-read-math",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo 'a[$(cat .env)]' | read x; echo $((x))",
-      "expected": "UC",
+      "expected": "D",
       "cwd": "/h/project"
     },
     {
       "id": "v5-pipe-read-target",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo 'a[$(cat .env)]' | read x; ls \"$x\"",
-      "expected": "UC",
+      "expected": "D",
       "cwd": "/h/project"
     },
     {
       "id": "v16-read-array-math",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo 'a[$(cat .env)]' | read -a arr; echo $((arr))",
-      "expected": "UC",
+      "expected": "UR",
       "cwd": "/h/project"
     },
     {
       "id": "w2-benign-armed-target",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo 'a[$(echo hi)]' | read x; ls \"$x\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
       "id": "w3-plain-target",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo 'plain' | read x; ls \"$x\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
       "id": "w4-printf-armed-target",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "printf '%s\\n' 'a[$(cat .env)]' | read x; ls \"$x\"",
-      "expected": "UC",
+      "expected": "D",
       "cwd": "/h/project"
     },
     {
       "id": "w6-benign-armed-math",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo 'a[$(echo hi)]' | read x; echo $((x))",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
       "id": "w7-bracket-target",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo 'a[1]' | read x; ls \"$x\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
       "id": "w8-armed-r-target",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo 'a[$(cat .env)]' | read -r x; ls \"$x\"",
-      "expected": "UC",
+      "expected": "D",
       "cwd": "/h/project"
     },
     {
       "id": "w11-protectedpath-target",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo $E/other-home/Library/Containers/com.example.syn/Data | read x; ls \"$x\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
       "id": "t5-read-pipe-target",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo plain | read x; ls \"$x\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
       "id": "t6-read-pipe-math",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo plain | read x; echo $((x))",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
       "id": "t16-read-pipe-cd",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo plain | read x; cd \"$x\"; ls notes.txt",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
       "id": "u4-noKnown-pipe-cat",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo P | read D; cat \"$D/notes.txt\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
       "id": "u12-pipe-read-appdata",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo \"$HOME/Library/Containers/com.example.syn/Data\" | read D; cat \"$D/notes.txt\"",
-      "expected": "UC",
+      "expected": "D",
       "cwd": "/h/project"
     },
     {
       "id": "u13-known-other-var",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "E=/tmp; echo P | read D; cat \"$D/notes.txt\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {
@@ -191,9 +191,9 @@
     },
     {
       "id": "c18-pipe-read-then-echo",
-      "partition": "batch1-join",
+      "partition": "pipeline-read",
       "source": "echo P | read D; echo \"$D\"",
-      "expected": "UC",
+      "expected": "N",
       "cwd": "/h/project"
     },
     {

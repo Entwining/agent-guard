@@ -97,6 +97,11 @@ fn partition(name: &str) {
 }
 
 #[test]
+fn pipeline_read_models_known_values_and_refuses_unmodelled_armed_reads() {
+    partition("pipeline-read");
+}
+
+#[test]
 fn runtime_bindings_preserve_known_path_text() {
     partition("batch1-runtime-text");
 }

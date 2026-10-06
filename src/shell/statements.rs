@@ -54,6 +54,7 @@ pub(super) struct Scope {
     loops: Vec<Vec<BindingState>>,
     summarizing_loop: bool,
     piped: bool,
+    pipeline_input: Option<Vec<String>>,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -82,6 +83,7 @@ impl Scope {
             loops: Vec::new(),
             summarizing_loop: false,
             piped: false,
+            pipeline_input: None,
         }
     }
     pub fn isolated(&self) -> Self {
@@ -89,6 +91,7 @@ impl Scope {
         child.returns.clear();
         child.loops.clear();
         child.summarizing_loop = false;
+        child.pipeline_input = None;
         child.isolated = true;
         child.directory.failures = None;
         child
@@ -1057,6 +1060,21 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 let middle = self.output.script.commands.len();
                 let mut rhs = before.isolated();
                 rhs.piped = true;
+                if let Statement::Command {
+                    pipeline: Some(id), ..
+                } = right.as_ref()
+                {
+                    rhs.pipeline_input = super::pipeline::read_input(
+                        &self.output.script.commands[start..middle],
+                        (source_id, *id),
+                        |word| {
+                            producer
+                                .expanded_binding(word, &word.text)
+                                .known()
+                                .is_some()
+                        },
+                    );
+                }
                 self.statement(right, &mut rhs, depth, source_id, nested)?;
                 let (left, right) =
                     self.output.script.commands[start..].split_at_mut(middle - start);
@@ -1734,39 +1752,75 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 && target.target == "/dev/null"
                 && !target.expands
         });
+        let input = if let Some(literal) = literal {
+            Some(vec![literal.target.clone()])
+        } else if eof {
+            Some(vec![String::new()])
+        } else if targets.iter().any(|target| {
+            matches!(
+                target.direction,
+                crate::record::Direction::In
+                    | crate::record::Direction::Heredoc
+                    | crate::record::Direction::Herestring
+            )
+        }) {
+            None
+        } else {
+            scope.pipeline_input.clone()
+        };
         modeled &= !names.is_empty()
             && !scope.bindings.contains_key("IFS")
-            && (raw || literal.is_none_or(|literal| !literal.target.contains('\\')));
+            && (raw
+                || input
+                    .as_ref()
+                    .is_none_or(|values| values.iter().all(|value| !value.contains('\\'))));
         let known_input = modeled && !rejected && input_fd == 0;
-        let data = if known_input && let Some(literal) = literal {
-            let data = literal.target.split(delimiter).next().unwrap_or("");
-            Some(
-                data.chars()
-                    .take(count.unwrap_or(usize::MAX))
-                    .collect::<String>(),
-            )
-        } else if known_input && eof {
-            Some(String::new())
+        let fields = if known_input {
+            input.as_ref().map(|values| {
+                values
+                    .iter()
+                    .map(|value| {
+                        let data = value
+                            .split(delimiter)
+                            .next()
+                            .unwrap_or("")
+                            .chars()
+                            .take(count.unwrap_or(usize::MAX))
+                            .collect::<String>();
+                        let mut remainder = data.as_str();
+                        (0..names.len())
+                            .map(|position| {
+                                remainder = remainder.trim_start_matches([' ', '\t', '\n']);
+                                let (field, rest) = if position + 1 == names.len() {
+                                    (remainder.trim_end_matches([' ', '\t', '\n']), "")
+                                } else {
+                                    let end = remainder
+                                        .find([' ', '\t', '\n'])
+                                        .unwrap_or(remainder.len());
+                                    (&remainder[..end], &remainder[end..])
+                                };
+                                remainder = rest;
+                                field.to_owned()
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>()
+            })
         } else {
             None
         };
-        let mut remainder = data.as_deref().unwrap_or("");
-        let total = names.len();
         for (position, name) in names.into_iter().enumerate() {
-            let value = if data.is_some() {
-                remainder = remainder.trim_start_matches([' ', '\t', '\n']);
-                let (field, rest) = if position + 1 == total {
-                    (remainder.trim_end_matches([' ', '\t', '\n']), "")
-                } else {
-                    let end = remainder.find([' ', '\t', '\n']).unwrap_or(remainder.len());
-                    (&remainder[..end], &remainder[end..])
-                };
-                remainder = rest;
-                BindingValue::Known(field.to_owned())
+            let mut values = Vec::new();
+            if let Some(fields) = &fields {
+                for candidate in fields {
+                    let value = BindingValue::Known(candidate[position].clone());
+                    if !values.contains(&value) {
+                        values.push(value);
+                    }
+                }
             } else {
-                BindingValue::RuntimeUnknown(None)
-            };
-            let mut values = vec![value];
+                values.push(BindingValue::RuntimeUnknown(None));
+            }
             // zsh rejects -a/-p, and -n writes an empty value rather than bash's prefix.
             if count.is_some() && !values.contains(&BindingValue::Known(String::new())) {
                 values.push(BindingValue::Known(String::new()));
@@ -1783,11 +1837,13 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             scope.assign(name, values);
         }
         if !known_input
-            && literal.is_some_and(|literal| {
-                !matches!(
-                    super::arithmetic::armed(&literal.target.replace('\\', "")),
-                    super::arithmetic::Arming::Inert
-                )
+            && input.as_ref().is_some_and(|values| {
+                values.iter().any(|value| {
+                    !matches!(
+                        super::arithmetic::armed(&value.replace('\\', "")),
+                        super::arithmetic::Arming::Inert
+                    )
+                })
             })
         {
             self.output.gap(CoverageGap::UnsupportedShellSyntax);
