@@ -1045,81 +1045,34 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
                 result?;
             }
-            Statement::Binary(operator, left, right) => {
+            Statement::Binary(Operator::And | Operator::Or, _, _) => {
+                self.logical_list(statement, scope, depth, source_id, nested)?;
+            }
+            Statement::Binary(Operator::Pipe, left, right) => {
                 let before = scope.isolated();
-                match operator {
-                    Operator::And => {
-                        let qualified = cwd::moved_on_success(left);
-                        let outer_failures = if qualified {
-                            scope.directory.failures.take()
-                        } else {
-                            None
-                        };
-                        if qualified {
-                            scope.directory.failures = Some(Vec::new());
-                        }
-                        self.statement(left, scope, depth + 1, source_id, nested)?;
-                        let left_exit = scope.clone();
-                        let mut after = scope.branch();
-                        if qualified && !matches!(right.as_ref(), Statement::Command { .. }) {
-                            after.directory.failures = None;
-                        }
-                        self.statement(right, &mut after, depth + 1, source_id, nested)?;
-                        let mut failures = left_exit.directory.failures.clone().unwrap_or_default();
-                        cwd::extend_unique(
-                            &mut failures,
-                            after.directory.failures.clone().unwrap_or_default(),
-                        );
-                        scope.directory = after.directory.clone();
-                        if qualified {
-                            scope.directory.failures = outer_failures.map(|mut outer| {
-                                cwd::extend_unique(&mut outer, failures.clone());
-                                outer
-                            });
-                            if scope.directory.failures.is_none() {
-                                scope
-                                    .directory
-                                    .merge(failures.into_iter(), self.frontend.host.home);
-                            }
-                        }
-                        self.merge_bindings(scope, &[before, left_exit, after]);
-                    }
-                    Operator::Or | Operator::Pipe => {
-                        let start = self.output.script.commands.len();
-                        if matches!(operator, Operator::Or) {
-                            self.statement(left, scope, depth + 1, source_id, nested)?;
-                        } else {
-                            let mut producer = before.isolated();
-                            producer.piped = true;
-                            self.statement(left, &mut producer, depth + 1, source_id, nested)?;
-                        }
-                        let middle = self.output.script.commands.len();
-                        let mut rhs = if matches!(operator, Operator::Or) {
-                            scope.branch()
-                        } else {
-                            before.isolated()
-                        };
-                        rhs.piped |= matches!(operator, Operator::Pipe);
-                        self.statement(right, &mut rhs, depth + 1, source_id, nested)?;
-                        if matches!(operator, Operator::Pipe) {
-                            let (left, right) =
-                                self.output.script.commands[start..].split_at_mut(middle - start);
-                            super::pipeline::mark_walked_input(left, right);
-                            let mut sources = super::pipeline::xargs_replacements(left, right);
-                            sources.extend(super::pipeline::shell_input(left, right));
-                            for input in sources {
-                                self.source(
-                                    &input.source,
-                                    &mut Scope::new(self.frontend.host.home, &input.cwd),
-                                    depth + 1,
-                                )?;
-                            }
-                        }
-                        let lhs = scope.clone();
-                        self.merge_bindings(scope, &[lhs, rhs.clone()]);
-                        self.merge_directories(scope, &[rhs]);
-                    }
+                let start = self.output.script.commands.len();
+                let mut producer = before.isolated();
+                producer.piped = true;
+                self.statement(left, &mut producer, depth, source_id, nested)?;
+                let middle = self.output.script.commands.len();
+                let mut rhs = before.isolated();
+                rhs.piped = true;
+                self.statement(right, &mut rhs, depth, source_id, nested)?;
+                let (left, right) =
+                    self.output.script.commands[start..].split_at_mut(middle - start);
+                super::pipeline::mark_walked_input(left, right);
+                let mut sources = super::pipeline::xargs_replacements(left, right);
+                sources.extend(super::pipeline::shell_input(left, right));
+                for input in sources {
+                    self.source(
+                        &input.source,
+                        &mut Scope::new(self.frontend.host.home, &input.cwd),
+                        depth + 1,
+                    )?;
                 }
+                let lhs = scope.clone();
+                self.merge_bindings(scope, &[lhs, rhs.clone()]);
+                self.merge_directories(scope, &[rhs]);
             }
             Statement::Conditional {
                 condition,
@@ -1335,6 +1288,67 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             }
             Statement::Command { .. } => {
                 self.statement(statement, scope, depth, source_id, nested)?;
+            }
+        }
+        Ok(())
+    }
+    fn logical_list(
+        &mut self,
+        statement: &Statement,
+        scope: &mut Scope,
+        depth: usize,
+        source_id: usize,
+        nested: bool,
+    ) -> Result<(), CheckError> {
+        // The parser's left-associated list does not add syntactic nesting.
+        // Preserve each branch continuation without recursive command frames.
+        let mut frames = Vec::new();
+        let mut current = statement;
+        while let Statement::Binary(operator @ (Operator::And | Operator::Or), left, right) =
+            current
+        {
+            let before = scope.isolated();
+            let qualified = matches!(operator, Operator::And) && cwd::moved_on_success(left);
+            let outer_failures = if qualified {
+                let outer = scope.directory.failures.take();
+                scope.directory.failures = Some(Vec::new());
+                outer
+            } else {
+                None
+            };
+            frames.push((operator, right.as_ref(), before, qualified, outer_failures));
+            current = left;
+        }
+        self.statement(current, scope, depth, source_id, nested)?;
+        while let Some((operator, right, before, qualified, outer_failures)) = frames.pop() {
+            let left_exit = scope.clone();
+            let mut after = scope.branch();
+            if qualified && !matches!(right, Statement::Command { .. }) {
+                after.directory.failures = None;
+            }
+            self.statement(right, &mut after, depth, source_id, nested)?;
+            if matches!(operator, Operator::And) {
+                let mut failures = left_exit.directory.failures.clone().unwrap_or_default();
+                cwd::extend_unique(
+                    &mut failures,
+                    after.directory.failures.clone().unwrap_or_default(),
+                );
+                scope.directory = after.directory.clone();
+                if qualified {
+                    scope.directory.failures = outer_failures.map(|mut outer| {
+                        cwd::extend_unique(&mut outer, failures.clone());
+                        outer
+                    });
+                    if scope.directory.failures.is_none() {
+                        scope
+                            .directory
+                            .merge(failures.into_iter(), self.frontend.host.home);
+                    }
+                }
+                self.merge_bindings(scope, &[before, left_exit, after]);
+            } else {
+                self.merge_bindings(scope, &[left_exit, after.clone()]);
+                self.merge_directories(scope, &[after]);
             }
         }
         Ok(())

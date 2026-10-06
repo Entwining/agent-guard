@@ -1,0 +1,60 @@
+{
+  "rows": [
+    {
+      "id": "bound-and-64",
+      "partition": "list",
+      "expected": "N",
+      "input": {
+        "command": "p1=$(echo 1) && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1"
+      }
+    },
+    {
+      "id": "bound-and-80",
+      "partition": "list",
+      "expected": "N",
+      "input": {
+        "command": "p1=$(echo 1) && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1 && echo $p1"
+      }
+    },
+    {
+      "id": "inline-&&-80",
+      "partition": "list",
+      "expected": "N",
+      "input": {
+        "command": "echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x) && echo $(echo x)"
+      }
+    },
+    {
+      "id": "inline-||-80",
+      "partition": "list",
+      "expected": "N",
+      "input": {
+        "command": "echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x) || echo $(echo x)"
+      }
+    },
+    {
+      "id": "inline-;-80",
+      "partition": "list",
+      "expected": "N",
+      "input": {
+        "command": "echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x); echo $(echo x)"
+      }
+    },
+    {
+      "id": "literal-and-100",
+      "partition": "list",
+      "expected": "N",
+      "input": {
+        "command": "echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x && echo x"
+      }
+    },
+    {
+      "id": "nested-65",
+      "partition": "nested",
+      "expected": "F",
+      "input": {
+        "command": "(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((echo x)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))"
+      }
+    }
+  ]
+}
