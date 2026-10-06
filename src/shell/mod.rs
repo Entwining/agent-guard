@@ -177,10 +177,23 @@ pub fn observe_with_user(
     user: Option<&str>,
     zsh: bool,
 ) -> Result<Observation, CheckError> {
+    observe_with_deadline(source, arm, home, cwd, user, zsh, None)
+}
+
+pub(crate) fn observe_with_deadline(
+    source: &str,
+    arm: Arm,
+    home: &str,
+    cwd: &str,
+    user: Option<&str>,
+    zsh: bool,
+    deadline: Option<std::time::Instant>,
+) -> Result<Observation, CheckError> {
     let host = crate::record::HostFacts { home, user };
     let mut observation = Observation::default();
     let mut scope = statements::Scope::new(home, cwd);
     let mut evaluator = statements::Evaluator::new(Frontend { arm, zsh, host }, &mut observation);
+    evaluator.deadline = deadline;
     evaluator.source(source, &mut scope, 0)?;
     evaluator.finish();
     Ok(observation)
@@ -205,6 +218,7 @@ impl statements::Evaluator<'_, '_> {
             self.output.source_entries += 1;
         }
         let Frontend { arm, zsh, .. } = self.frontend;
+        crate::check_deadline(self.deadline)?;
         if depth > MAX_NESTING {
             return Err(CheckError {
                 kind: CheckErrorKind::ResourceLimit,
@@ -215,6 +229,7 @@ impl statements::Evaluator<'_, '_> {
             return Ok(());
         }
         let original = brush::records(source, source)?;
+        crate::check_deadline(self.deadline)?;
         let source_id = self.output.parse_successes + self.output.parse_failures;
         if original.records.is_some() {
             self.output.parse_successes += 1;

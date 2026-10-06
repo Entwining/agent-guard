@@ -3,7 +3,7 @@
 use crate::{
     Context, Event,
     adapters::{self, Consumer},
-    evaluate,
+    evaluate_with_deadline,
     filesystem::DiskProbe,
 };
 use std::{
@@ -12,7 +12,10 @@ use std::{
     os::fd::AsFd,
     os::unix::process::ExitStatusExt,
     process::{Command, ExitStatus, Stdio},
+    time::{Duration, Instant},
 };
+
+pub const CHECKER_TIMEOUT: Duration = Duration::from_millis(2500);
 
 const USAGE: &str = "usage: agent-guard --runtime claude|codex|pi < event.json\n";
 
@@ -54,6 +57,7 @@ pub fn check(
     output: &mut dyn Write,
     error: &mut dyn Write,
 ) -> i32 {
+    let deadline = Instant::now() + CHECKER_TIMEOUT;
     let Some((consumer, cwd)) = options(args) else {
         let _ = error.write_all(USAGE.as_bytes());
         return 2;
@@ -74,11 +78,14 @@ pub fn check(
             require_execution_owner: false,
             shell_observation_entries: Cell::new(0),
         };
-        let result = evaluate(Event {
-            bytes: &bytes,
-            context: &context,
-            probe: &mut DiskProbe,
-        });
+        let result = evaluate_with_deadline(
+            Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut DiskProbe,
+            },
+            deadline,
+        );
         let wire = adapters::render(consumer, &result);
         output.write_all(wire.stdout.as_bytes())?;
         error.write_all(wire.stderr.as_bytes())?;

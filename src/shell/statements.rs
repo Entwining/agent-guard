@@ -398,6 +398,7 @@ pub(super) struct Evaluator<'a, 'b> {
     inspected: usize,
     function_runs: usize,
     unresolved_calls: Vec<(usize, bool)>,
+    pub(super) deadline: Option<std::time::Instant>,
 }
 
 impl<'a, 'b> Evaluator<'a, 'b> {
@@ -410,6 +411,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             inspected: 0,
             function_runs: 0,
             unresolved_calls: Vec::new(),
+            deadline: None,
         }
     }
     pub fn finish(&mut self) {
@@ -443,6 +445,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             return Ok(());
         }
         for statement in body {
+            crate::check_deadline(self.deadline)?;
             self.inspected += 1;
             if self.inspected > 512 {
                 self.output.gap(CoverageGap::InspectionBudget);

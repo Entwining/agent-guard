@@ -31,7 +31,19 @@ pub fn evaluate(event: Event<'_>) -> Result<Evaluation, CheckError> {
 }
 
 pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, CheckError> {
-    evaluate_with_catalog_loader(event, arm, filesystem::FirmlinkTable::load)
+    evaluate_with_catalog_loader(event, arm, filesystem::FirmlinkTable::load, None)
+}
+
+pub fn evaluate_with_deadline(
+    event: Event<'_>,
+    deadline: std::time::Instant,
+) -> Result<Evaluation, CheckError> {
+    evaluate_with_catalog_loader(
+        event,
+        Arm::Brush,
+        filesystem::FirmlinkTable::load,
+        Some(deadline),
+    )
 }
 
 /// Typed host metadata for isolated evaluations; hook request input has no catalog field.
@@ -40,14 +52,16 @@ pub fn evaluate_with_catalog(
     arm: Arm,
     catalog: filesystem::FirmlinkTable,
 ) -> Result<Evaluation, CheckError> {
-    evaluate_with_catalog_loader(event, arm, || Ok(catalog))
+    evaluate_with_catalog_loader(event, arm, || Ok(catalog), None)
 }
 
 fn evaluate_with_catalog_loader(
     event: Event<'_>,
     arm: Arm,
     load: impl FnOnce() -> Result<filesystem::FirmlinkTable, CheckError>,
+    deadline: Option<std::time::Instant>,
 ) -> Result<Evaluation, CheckError> {
+    crate::check_deadline(deadline)?;
     let Event {
         bytes,
         context,
@@ -59,6 +73,7 @@ fn evaluate_with_catalog_loader(
         });
     }
     let decoded = adapters::decode(context.consumer, bytes, &context.cwd)?;
+    crate::check_deadline(deadline)?;
     if let Operation::Outside(tool) = &decoded.operation {
         return Ok(Evaluation {
             outcome: Outcome::CoverageInsufficient {
@@ -95,6 +110,7 @@ fn evaluate_with_catalog_loader(
         effects: Vec::new(),
         #[cfg(test)]
         source_entries: 0,
+        deadline,
     };
     match &decoded.operation {
         Operation::Read(path) | Operation::Write(path) => inspection.target(
@@ -134,6 +150,7 @@ fn evaluate_with_catalog_loader(
         }
         Operation::Outside(_) => unreachable!(),
     }
+    crate::check_deadline(deadline)?;
     let coverage = if inspection.gaps.is_empty() {
         Coverage::SupportedPreflight
     } else {
@@ -249,6 +266,7 @@ struct Inspection<'a> {
     effects: Vec<EffectRecord>,
     #[cfg(test)]
     source_entries: usize,
+    deadline: Option<std::time::Instant>,
 }
 
 impl Inspection<'_> {
@@ -268,6 +286,7 @@ impl Inspection<'_> {
         cwd: &str,
         source: EffectSource,
     ) -> Result<(), CheckError> {
+        crate::check_deadline(self.deadline)?;
         let mut target = target.clone();
         // Broad traversal is independent of a narrower credential identity.
         // Decide a lexical root before probes, then check resolved aliases below.
@@ -345,6 +364,7 @@ impl Inspection<'_> {
         Ok(())
     }
     fn shell(&mut self, source: &str, cwd: &str, depth: usize) -> Result<(), CheckError> {
+        crate::check_deadline(self.deadline)?;
         if depth > crate::limits::MAX_NESTING {
             return Err(CheckError {
                 kind: CheckErrorKind::ResourceLimit,
@@ -367,13 +387,14 @@ impl Inspection<'_> {
         self.context
             .shell_observation_entries
             .set(self.context.shell_observation_entries.get() + 1);
-        let observation = shell::observe_with_user(
+        let observation = shell::observe_with_deadline(
             source,
             self.arm,
             &self.context.home,
             cwd,
             self.context.user.as_deref(),
             self.context.zsh_executor,
+            self.deadline,
         )?;
         #[cfg(test)]
         {
@@ -385,6 +406,7 @@ impl Inspection<'_> {
         }
         let mut hidden_listings = std::collections::BTreeSet::new();
         for (command_index, command) in observation.script.commands.into_iter().enumerate() {
+            crate::check_deadline(self.deadline)?;
             let cwd = &command.cwd;
             let effects = targets::infer(
                 &command,
@@ -600,6 +622,7 @@ mod tests {
                 executable_qualifier: false,
                 effects: Vec::new(),
                 source_entries: 0,
+                deadline: None,
             };
             inspection
                 .shell(&format!("{}true", "eval ".repeat(n)), &context.cwd, 0)
@@ -640,6 +663,7 @@ mod tests {
                     kind: CheckErrorKind::ProbeFault,
                 })
             },
+            None,
         );
         assert!(matches!(
             result,

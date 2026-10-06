@@ -14,7 +14,19 @@ pub mod record;
 pub mod shell;
 mod targets;
 
-pub use policy::{Context, Event, evaluate, evaluate_with_arm, evaluate_with_catalog};
+pub use policy::{
+    Context, Event, evaluate, evaluate_with_arm, evaluate_with_catalog, evaluate_with_deadline,
+};
+
+pub(crate) fn check_deadline(deadline: Option<std::time::Instant>) -> Result<(), CheckError> {
+    if deadline.is_some_and(|deadline| std::time::Instant::now() >= deadline) {
+        Err(CheckError {
+            kind: CheckErrorKind::Deadline,
+        })
+    } else {
+        Ok(())
+    }
+}
 
 /// A completed preflight decision retains coverage independently of whether the call proceeds.
 #[derive(Debug, Clone, PartialEq, Eq)]
