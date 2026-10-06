@@ -240,6 +240,19 @@ pub(super) fn moved_on_success(statement: &Statement) -> bool {
     movement(statement) == Movement::Moved
 }
 
+pub(super) fn directory_success_guard(statement: &Statement) -> bool {
+    match statement {
+        Statement::Command { argv, .. } => argv
+            .first()
+            .and_then(|word| words::first_literal(&word.raw))
+            .is_some_and(|program| matches!(program.as_str(), "cd" | "pushd" | "popd")),
+        Statement::Binary(Operator::And, left, right) => {
+            directory_success_guard(left) || directory_success_guard(right)
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 std::thread_local! {
     static FAILURE_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };

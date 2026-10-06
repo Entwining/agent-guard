@@ -1334,13 +1334,35 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             } else {
                 None
             };
-            frames.push((operator, right.as_ref(), before, qualified, outer_failures));
+            let definition_on_success = matches!(operator, Operator::And)
+                && (qualified || cwd::directory_success_guard(left));
+            frames.push((
+                operator,
+                right.as_ref(),
+                before,
+                qualified,
+                outer_failures,
+                definition_on_success,
+            ));
             current = left;
         }
         self.statement(current, scope, depth, source_id, nested)?;
-        while let Some((operator, right, before, qualified, outer_failures)) = frames.pop() {
+        while let Some((
+            operator,
+            right,
+            before,
+            qualified,
+            outer_failures,
+            definition_on_success,
+        )) = frames.pop()
+        {
             let left_exit = scope.clone();
             let mut after = scope.branch();
+            // Directory-command success does not require a statically known
+            // destination. Preserve an enclosing if/case uncertainty.
+            if definition_on_success {
+                after.conditional_definition = scope.conditional_definition;
+            }
             if qualified && !matches!(right, Statement::Command { .. }) {
                 after.directory.failures = None;
             }
