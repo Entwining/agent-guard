@@ -93,6 +93,8 @@ fn evaluate_with_catalog_loader(
         advice: Vec::new(),
         executable_qualifier: false,
         effects: Vec::new(),
+        #[cfg(test)]
+        source_entries: 0,
     };
     match &decoded.operation {
         Operation::Read(path) | Operation::Write(path) => inspection.target(
@@ -245,6 +247,8 @@ struct Inspection<'a> {
     advice: Vec<Advice>,
     executable_qualifier: bool,
     effects: Vec<EffectRecord>,
+    #[cfg(test)]
+    source_entries: usize,
 }
 
 impl Inspection<'_> {
@@ -371,6 +375,10 @@ impl Inspection<'_> {
             self.context.user.as_deref(),
             self.context.zsh_executor,
         )?;
+        #[cfg(test)]
+        {
+            self.source_entries += observation.source_entries;
+        }
         self.executable_qualifier |= observation.executable_qualifier;
         for value in observation.gaps {
             self.gap(value);
@@ -564,6 +572,45 @@ mod tests {
         fn stat(&mut self, _: &std::path::Path) -> std::io::Result<Option<filesystem::Metadata>> {
             self.calls += 1;
             Ok(None)
+        }
+    }
+
+    #[test]
+    fn literal_eval_bodies_are_observed_once_in_their_scope() {
+        let context = Context {
+            consumer: Consumer::Claude,
+            home: "/h".into(),
+            user: None,
+            cwd: "/project".into(),
+            zsh_executor: true,
+            require_execution_owner: false,
+            shell_observation_entries: std::cell::Cell::new(0),
+        };
+        for n in [2, 4, 8, 16, 24] {
+            let mut probe = NoProbe { calls: 0 };
+            let catalog = filesystem::FirmlinkTable::from_text("");
+            let mut inspection = Inspection {
+                context: &context,
+                probe: &mut probe,
+                resolver: filesystem::Resolver::new(&context.home, &catalog),
+                arm: Arm::Brush,
+                gaps: Vec::new(),
+                denial: None,
+                advice: Vec::new(),
+                executable_qualifier: false,
+                effects: Vec::new(),
+                source_entries: 0,
+            };
+            inspection
+                .shell(&format!("{}true", "eval ".repeat(n)), &context.cwd, 0)
+                .unwrap();
+            assert!(inspection.denial.is_none());
+            assert!(inspection.gaps.is_empty());
+            assert!(
+                inspection.source_entries <= n + 1,
+                "eval depth {n}: {} observations",
+                inspection.source_entries
+            );
         }
     }
 

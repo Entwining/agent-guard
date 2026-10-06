@@ -447,9 +447,12 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
                 }
             }
         }
-        "eval" => effects
+        // The shell evaluator already observes builtin eval in its binding/cwd
+        // scope. Replaying it here both loses that scope and doubles nested work.
+        "eval" if !command.shell => effects
             .code
             .push(args.iter().map(Word::as_str).collect::<Vec<_>>().join(" ")),
+        "eval" => {}
         "printenv" => {
             effects.dump = args.is_empty();
             effects.variable = args.iter().any(|s| secret_name(s));

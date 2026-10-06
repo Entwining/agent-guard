@@ -109,6 +109,8 @@ pub struct Observation {
     pub array_tail_regions: Vec<ArrayTailRegions>,
     #[cfg(test)]
     candidate_pairs: usize,
+    #[cfg(test)]
+    pub(crate) source_entries: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -198,6 +200,10 @@ impl statements::Evaluator<'_, '_> {
         scope: &mut statements::Scope,
         depth: usize,
     ) -> Result<(), CheckError> {
+        #[cfg(test)]
+        {
+            self.output.source_entries += 1;
+        }
         let Frontend { arm, zsh, .. } = self.frontend;
         if depth > MAX_NESTING {
             return Err(CheckError {
