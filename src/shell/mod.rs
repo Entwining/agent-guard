@@ -226,6 +226,9 @@ impl statements::Evaluator<'_, '_> {
             self.output.source_entries += 1;
         }
         let Frontend { arm, zsh, .. } = self.frontend;
+        // mvdan's lexer ignores NUL bytes, including inside words (lexer.go:78-81).
+        let without_nul = source.contains('\0').then(|| source.replace('\0', ""));
+        let source = without_nul.as_deref().unwrap_or(source);
         crate::check_deadline(self.deadline)?;
         if depth > MAX_NESTING {
             return Err(CheckError {
