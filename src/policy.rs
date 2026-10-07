@@ -729,6 +729,48 @@ mod tests {
     }
 
     #[test]
+    fn inspection_recursion_frontier_is_independent_of_delimiter_depth() {
+        let context = Context {
+            consumer: Consumer::Claude,
+            home: "/h".into(),
+            cwd: "/p".into(),
+            user: None,
+            zsh_executor: true,
+            require_execution_owner: false,
+            shell_observation_entries: std::cell::Cell::new(0),
+        };
+        let table = filesystem::FirmlinkTable::from_text("");
+        let mut probe = NoProbe { calls: 0 };
+        let mut inspection = Inspection {
+            context: &context,
+            probe: &mut probe,
+            resolver: filesystem::Resolver::new(&context.home, &table),
+            arm: Arm::Brush,
+            gaps: Vec::new(),
+            denial: None,
+            appdata_reason: None,
+            advice: Vec::new(),
+            executable_qualifier: false,
+            effects: Vec::new(),
+            source_entries: 0,
+            deadline: None,
+        };
+        inspection.shell("true", &context.cwd, 64).unwrap();
+        assert_eq!(context.shell_observation_entries.get(), 1);
+        assert_eq!(
+            inspection.shell("true", &context.cwd, 65).unwrap_err().kind,
+            CheckErrorKind::ResourceLimit
+        );
+        assert_eq!(
+            inspection
+                .shell("sh -c true", &context.cwd, 64)
+                .unwrap_err()
+                .kind,
+            CheckErrorKind::ResourceLimit
+        );
+    }
+
+    #[test]
     fn literal_eval_bodies_are_observed_once_in_their_scope() {
         let context = Context {
             consumer: Consumer::Claude,

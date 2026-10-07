@@ -861,6 +861,87 @@ mod tests {
     }
 
     #[test]
+    fn item_credentials_exclude_appdata_from_the_credential_partition() {
+        assert_eq!(
+            credential_read("/p/.env", "/h", false),
+            Some(Protection::Environment)
+        );
+        assert_eq!(
+            credential_read("/h/Library/Containers/x", "/h", false),
+            None
+        );
+    }
+
+    #[test]
+    fn credential_root_reads_remain_protected_before_public_alias_resolution() {
+        let table = FirmlinkTable::from_text("");
+        for (effect, via, expected) in [
+            (Effect::Read, Via::Operand, true),
+            (Effect::Use, Via::Operand, false),
+            (Effect::Read, Via::Cwd, false),
+        ] {
+            let mut probe = Mock {
+                links: BTreeMap::from([("/h/.docker".into(), "/public".into())]),
+                calls: Vec::new(),
+            };
+            let mut resolver = Resolver::new("/h", &table);
+            let mut target = Target::new("/h/.docker".into(), effect, Walk::None, via);
+            assert_eq!(
+                matches!(
+                    resolver.target(&mut target, "/p", &mut probe).unwrap(),
+                    Identity::Protected(Protection::Credential)
+                ),
+                expected
+            );
+            if expected {
+                assert!(probe.calls.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn aliased_credential_root_reads_keep_the_post_resolution_role() {
+        let table = FirmlinkTable::from_text("");
+        for (effect, via, expected) in [
+            (Effect::Read, Via::Operand, true),
+            (Effect::Use, Via::Operand, false),
+            (Effect::Read, Via::Cwd, false),
+        ] {
+            let mut probe = Mock {
+                links: BTreeMap::from([("/p/link".into(), "/h/.docker".into())]),
+                calls: Vec::new(),
+            };
+            let mut resolver = Resolver::new("/h", &table);
+            let mut target = Target::new("/p/link".into(), effect, Walk::None, via);
+            assert_eq!(
+                matches!(
+                    resolver.target(&mut target, "/p", &mut probe).unwrap(),
+                    Identity::Protected(Protection::Credential)
+                ),
+                expected
+            );
+            assert!(probe.calls.contains(&"/p/link".to_owned()));
+        }
+    }
+
+    #[test]
+    fn lexical_api_keeps_relative_and_short_pattern_boundaries() {
+        assert_eq!(
+            lexical_pattern("/h/Library/Containers/x", "/h", false),
+            Some(Protection::AppData)
+        );
+        assert_eq!(lexical_pattern("/b*", "/h", true), None);
+        assert_eq!(
+            lexical_pattern(".aws/c*", "/h", true),
+            Some(Protection::Credential)
+        );
+        assert_eq!(
+            lexical_pattern("/.config/gh/host*", "/h", true),
+            Some(Protection::Credential)
+        );
+    }
+
+    #[test]
     fn catalog_controls_physical_parent_transition() {
         let packet: serde_json::Value =
             serde_json::from_str(include_str!("../tests/fixtures/rust-m2-filesystem.json"))
