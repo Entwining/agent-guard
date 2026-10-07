@@ -202,7 +202,7 @@ fn compare(id: &str, source: &str) -> Value {
 }
 
 #[test]
-fn corpus_dev_and_variants_are_parse_only_leads() {
+fn parser_corpus_preserves_spans_and_frozen_agreement() {
     let fixture = support::Fixture::new();
     let mut report = Vec::new();
     let legacy: Vec<Value> = include_str!("fixtures/contract.jsonl")
@@ -270,15 +270,12 @@ fn corpus_dev_and_variants_are_parse_only_leads() {
     for row in &report {
         assert!(row.get("class").is_none() && row.get("observations").is_none());
     }
-    if let Some(path) = std::env::var_os("AG_RUST_PARSE_REPORT") {
-        std::fs::write(
-            path,
-            report.iter().map(|r| format!("{r}\n")).collect::<String>(),
-        )
-        .unwrap();
-    }
-    println!(
-        "{}",
-        json!({"rows":report.len(),"parsed_comparisons":report.iter().filter(|r| r.get("brush").is_some()).count(),"review_leads":report.iter().filter(|r| r["review_lead"]==true).count(),"semantic_observations":0})
+    assert_eq!(
+        report.iter().filter(|r| r.get("brush").is_some()).count(),
+        1397
+    );
+    assert_eq!(
+        report.iter().filter(|r| r["review_lead"] == true).count(),
+        243
     );
 }
