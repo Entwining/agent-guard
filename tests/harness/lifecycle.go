@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -14,7 +15,7 @@ import (
 	"time"
 )
 
-//go:embed testdata/fault.go.txt
+//go:embed testdata/fault.rs.txt
 var faultSource string
 
 var LifecycleFaults = []string{"pipe", "late-start", "startup-stall", "large-reason", "large-stderr", "slow-reason", "no-reason", "checker-failure", "panic", "partial-panic", "hang", "runner-stall", "early-failure", "leftover", "dependency-failure"}
@@ -46,43 +47,35 @@ func injectFault(original, entry, links, fault, control string) (faultPatch, err
 		}
 		return strings.Replace(text, old, next, 1)
 	}
-	runner := replace(original, "func check(args []string) int {", "func check(args []string) int {\nreturn faultChecker(args)\n/*")
-	runner = replace(runner, "\treturn result.Exit\n}", "\treturn result.Exit\n*/\n}")
+	runner := replace(original, "use crate::{", "mod lifecycle_fixture;\n\nuse crate::{")
+	runner = replace(runner, "    let deadline = Instant::now() + CHECKER_TIMEOUT;", "    if let Some(status) = lifecycle_fixture::check(input, output, error) {\n        return status;\n    }\n    let deadline = Instant::now() + CHECKER_TIMEOUT;")
 	if fault == "dependency-failure" {
-		runner = replace(original, "func check(args []string) int {", "func check(args []string) int {\nlogProcess(\"checker\", os.Getpid())\n")
-		links = replace(links, "firmlinkError = e", "firmlinkError = fmt.Errorf(\"synthetic initialization failure\")")
+		value := "Err(std::io::Error::other(\"synthetic initialization failure\"))"
 		if control == "dependency" {
-			links = replace(links, "func InitializationError() error { return firmlinkError }", "func InitializationError() error { return nil }")
+			value = "Ok(String::new())"
 		}
+		links = replace(links, "std::fs::read_to_string(\"/usr/share/firmlinks\")", value)
 	}
-	runner = replace(runner, "func run(args []string) int {", "func run(args []string) int {\nlogProcess(\"runner\", os.Getpid())\n")
+	runner = replace(runner, "pub fn run(args: &[String]) -> io::Result<i32> {", "pub fn run(args: &[String]) -> io::Result<i32> {\n    lifecycle_fixture::log_process(\"runner\", std::process::id());")
+	runner = replace(runner, "pub fn main(args: &[String]) -> i32 {", "pub fn main(args: &[String]) -> i32 {\n    if args.first().is_some_and(|arg| arg == \"--test-descendant\") {\n        return lifecycle_fixture::descendant();\n    }")
 	if fault == "late-start" {
-		runner = replace(runner, "\tself, e := os.Executable()", "\ttime.Sleep(1500*time.Millisecond)\n\tself, e := os.Executable()")
+		runner = replace(runner, "    let mut child = Command::new(std::env::current_exe()?);", "    std::thread::sleep(Duration::from_millis(1500));\n    let mut child = Command::new(std::env::current_exe()?);")
 	}
 	if fault == "startup-stall" {
-		runner = replace(runner, "\tself, e := os.Executable()", "\ttime.Sleep(20*time.Second)\n\tself, e := os.Executable()")
+		runner = replace(runner, "    let mut child = Command::new(std::env::current_exe()?);", "    std::thread::sleep(Duration::from_secs(20));\n    let mut child = Command::new(std::env::current_exe()?);")
 	}
 	if fault == "runner-stall" || fault == "early-failure" {
-		next := "time.Sleep(20*time.Second)"
+		next := "std::thread::sleep(Duration::from_secs(20));\n    child.wait().map(status_code)"
 		if fault == "early-failure" {
-			next = "return 7"
+			next = "Ok(7)"
 		}
-		runner = replace(runner, "\te = child.Run()", "\te = child.Start()\nif e != nil { return 1 }\nwaitReady(\"checker-ready\")\n"+next)
+		runner = replace(runner, "    supervise(&mut child)", "    let mut child = child.spawn()?;\n    lifecycle_fixture::wait_ready(\"checker-ready\");\n    "+next)
 	}
 	if control == "drain" {
-		runner = replace(runner, "child.Stdout = os.Stdout", "child.Stdout = io.Discard")
+		runner = replace(runner, ".stdout(Stdio::inherit())", ".stdout(Stdio::null())")
 	}
 	if control == "stderr-drain" {
-		runner = replace(runner, "child.Stderr = os.Stdout", "child.Stderr = io.Discard")
-	}
-	if fault != "dependency-failure" {
-		unused := []string{`"agentguard/native/core"`, `"path/filepath"`, `"strings"`}
-		if control != "drain" && control != "stderr-drain" {
-			unused = append(unused, `"io"`)
-		}
-		for _, name := range unused {
-			runner = replace(runner, name, "")
-		}
+		runner = replace(runner, ".stderr(Stdio::from(stdout))", ".stderr(Stdio::null())")
 	}
 	if control == "failclosed" {
 		entry = replace(entry, "(*) fail 'guard failed'", "(*) exit 0")
@@ -150,7 +143,7 @@ func LifecycleViolations(fault string, result LifecycleResult) []string {
 		if result.Status != 2 || result.Stdout != "" || !strings.Contains(result.Stderr, "so this call is blocked") {
 			problems = append(problems, "operational failure did not deny")
 		}
-		if (fault == "panic" || fault == "partial-panic") && (strings.Contains(result.Stderr, "synthetic checker panic") || strings.Contains(result.Stderr, "PARTIAL_RESULT_CANARY") || strings.Contains(result.Stderr, "goroutine ")) {
+		if (fault == "panic" || fault == "partial-panic") && (strings.Contains(result.Stderr, "synthetic checker panic") || strings.Contains(result.Stderr, "PARTIAL_RESULT_CANARY") || strings.Contains(result.Stderr, "panicked at") || strings.Contains(result.Stderr, "stack backtrace:")) {
 			problems = append(problems, "checker panic leaked partial output or stack")
 		}
 		if (fault == "slow-reason" || fault == "hang" || fault == "runner-stall" || fault == "startup-stall") && (result.Milliseconds <= 2500 || result.Milliseconds >= 3500) {
@@ -238,7 +231,7 @@ func executeFault(entry, home string, body []byte) (result LifecycleResult, err 
 	return result, err
 }
 
-type LifecycleOptions struct{ Source, Output, Go, Control string }
+type LifecycleOptions struct{ Source, Output, Cargo, Control string }
 
 func RunLifecycle(options LifecycleOptions) error {
 	faults := LifecycleFaults
@@ -258,7 +251,7 @@ func RunLifecycle(options LifecycleOptions) error {
 		return err
 	}
 	build := filepath.Join(output, "test-build")
-	for _, name := range []string{"native", "cmd", "go.mod", "go.sum"} {
+	for _, name := range []string{"src", "tests", "examples", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "VERSION"} {
 		if err = copyTree(filepath.Join(options.Source, name), filepath.Join(build, name)); err != nil {
 			return err
 		}
@@ -267,7 +260,7 @@ func RunLifecycle(options LifecycleOptions) error {
 		data, e := os.ReadFile(filepath.Join(options.Source, name))
 		return string(data), e
 	}
-	original, err := read("cmd/agent-guard/main.go")
+	original, err := read("src/entry.rs")
 	if err != nil {
 		return err
 	}
@@ -275,11 +268,26 @@ func RunLifecycle(options LifecycleOptions) error {
 	if err != nil {
 		return err
 	}
-	links, err := read("native/filesystem/links.go")
+	links, err := read("src/filesystem/links.rs")
 	if err != nil {
 		return err
 	}
-	env := []string{"PATH=/usr/bin:/bin", "HOME=" + build, "TMPDIR=" + output, "GOPROXY=off", "GOMODCACHE=" + os.Getenv("GOMODCACHE"), "GOCACHE=" + os.Getenv("GOCACHE")}
+	cargo, err := exec.LookPath(options.Cargo)
+	if err != nil {
+		return err
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	cache := func(name, directory string) string {
+		if value := os.Getenv(name); value != "" {
+			return value
+		}
+		return filepath.Join(home, directory)
+	}
+	target := filepath.Join(output, "cargo-target")
+	env := []string{"PATH=" + filepath.Dir(cargo) + ":/usr/bin:/bin", "HOME=" + build, "TMPDIR=" + output, "CARGO_NET_OFFLINE=true", "CARGO_HOME=" + cache("CARGO_HOME", ".cargo"), "RUSTUP_HOME=" + cache("RUSTUP_HOME", ".rustup"), "CARGO_TARGET_DIR=" + target}
 	file, err := os.OpenFile(filepath.Join(output, "results.jsonl"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
@@ -291,13 +299,16 @@ func RunLifecycle(options LifecycleOptions) error {
 		if err != nil {
 			return err
 		}
-		for name, text := range map[string]string{"cmd/agent-guard/main.go": patch.Runner, "cmd/agent-guard/fault.go": patch.Fixture, "native/filesystem/links.go": patch.Links} {
+		for name, text := range map[string]string{"src/entry.rs": patch.Runner, "src/entry/lifecycle_fixture.rs": patch.Fixture, "src/filesystem/links.rs": patch.Links} {
+			if err = os.MkdirAll(filepath.Dir(filepath.Join(build, name)), 0700); err != nil {
+				return err
+			}
 			if err = os.WriteFile(filepath.Join(build, name), []byte(text), 0600); err != nil {
 				return err
 			}
 		}
 		binary := filepath.Join(output, "fault-"+fault)
-		compiled, err := runProcess([]string{options.Go, "build", "-trimpath", "-o", binary, "./cmd/agent-guard"}, nil, build, env, 60*time.Second, nil)
+		compiled, err := runProcess([]string{cargo, "build", "--locked", "--release", "--bin", "agent-guard-native"}, nil, build, env, 90*time.Second, nil)
 		if err != nil {
 			return err
 		}
@@ -306,6 +317,9 @@ func RunLifecycle(options LifecycleOptions) error {
 		}
 		if compiled.Status != 0 || compiled.TimedOut {
 			return fmt.Errorf("fault build failed: %s %s", compiled.SpawnError, compiled.Stderr)
+		}
+		if err = copyFile(filepath.Join(target, "release/agent-guard-native"), binary); err != nil {
+			return err
 		}
 		binding, err := hashFile(binary, "agent-guard-native")
 		if err != nil {
@@ -352,11 +366,12 @@ func RunLifecycle(options LifecycleOptions) error {
 			}
 			body := []byte(`{"marker":"synthetic input"}`)
 			if fault == "dependency-failure" {
-				body = []byte(`{"tool_name":"WebFetch","tool_input":{}}`)
+				body = []byte(`{"tool_name":"Bash","tool_input":{"command":"true"}}`)
 			}
 			result, err := executeFault(filepath.Join(bin, "agent-guard"), home, body)
 			if err != nil {
-				return err
+				logErr := writeJSON(filepath.Join(output, fmt.Sprintf("%s-%d-error.json", fault, repeat)), result)
+				return errors.Join(err, logErr)
 			}
 			violations := LifecycleViolations(fault, result)
 			count++
