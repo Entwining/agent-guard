@@ -20,6 +20,8 @@ pub mod fd_option_values_and_child_options_do_not_select_hidden_listing;
 pub mod filters_are_data_and_later_operands_remain_readable;
 #[path = "targets/find_leading_options_preserve_roots.rs"]
 pub mod find_leading_options_preserve_roots;
+#[path = "targets/git_config_values_keep_fallback_read_role.rs"]
+pub mod git_config_values_keep_fallback_read_role;
 #[path = "targets/git_environment_reaches_wrappers_and_child_shells.rs"]
 pub mod git_environment_reaches_wrappers_and_child_shells;
 #[path = "targets/git_owns_quoted_pathspec_globs.rs"]

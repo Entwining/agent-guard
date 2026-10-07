@@ -1,0 +1,5 @@
+{"rows":[
+{"id":"git-config-key-code","partition":"config","input":{"command":"git -c core.sshCommand='cat $H/.ssh/id_ed25519 >&2' fetch"},"expected":"D"},
+{"id":"git-config-credential","partition":"config","input":{"command":"git -c x.y=$H/.aws/credentials status"},"expected":"D"},
+{"id":"git-config-public","partition":"config","input":{"command":"git -c color.ui=auto status"},"expected":"N"}
+]}

@@ -812,6 +812,18 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
                 option_walk,
             ));
         }
+        if arg == "-c"
+            && let Some(value) = args.get(index + 1)
+        {
+            // Go leaves -c's value for the Read operand fallback (git.go:26-48).
+            effects.targets.push(Target::from_word(
+                value,
+                cwd,
+                host,
+                Effect::Read,
+                option_walk,
+            ));
+        }
         index += if takes { 2 } else { 1 };
     }
     let Some(sub) = args.get(index) else {
