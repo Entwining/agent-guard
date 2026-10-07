@@ -159,16 +159,28 @@ fn glob_group_position_and_body() {
             );
         }
         let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        assert_eq!(
-            support::class(&check(
-                &fixture,
-                &ctx,
-                &mut probe,
-                arm,
-                &format!("printf '%s' {}/*(+fixture_filter)", fixture.project)
-            )),
-            "UR"
+        let result = check(
+            &fixture,
+            &ctx,
+            &mut probe,
+            arm,
+            &format!("printf '%s' {}/*(+fixture_filter)", fixture.project),
         );
+        assert_eq!(support::class(&result), "UR");
+        let Outcome::CoverageInsufficient {
+            recovery: Some(recovery),
+            ..
+        } = &result.as_ref().unwrap().outcome
+        else {
+            panic!("missing qualifier recovery")
+        };
+        assert!(
+            recovery
+                .excluded_scope
+                .iter()
+                .any(|scope| scope.contains("Zsh executable qualifier"))
+        );
+        assert!(format!("{:?}", recovery.next_step).contains("qualifier"));
     }
 }
 
@@ -194,7 +206,7 @@ fn lexical_protection_precedes_probe() {
             Arm::Brush,
         );
         assert_eq!(support::class(&result), "D");
-        assert!(probe.calls.is_empty());
+        assert!(probe.calls.is_empty() && probe.stat_calls.is_empty());
     }
 }
 
@@ -324,6 +336,21 @@ fn name_only_listing_and_content_consumer() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
     for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
+        let result = check(
+            &fixture,
+            &ctx,
+            &mut probe,
+            arm,
+            "ls -a /p | printf x; printf \"$(printf ok | xargs cat /p/input.txt)\"",
+        )
+        .unwrap();
+        assert!(
+            !result
+                .effects
+                .contains(&agent_guard_rust::EffectRecord::HiddenContent),
+            "unrelated nested body acquired hidden content: {result:?}"
+        );
         for listing in ["rg --files --hidden", "ls -a"] {
             for (tail, expected) in [
                 ("", "N"),
@@ -535,13 +562,20 @@ fn gate_a_zero_starts_and_bypass_negative() {
     broken_wire.exit = 0;
     assert!(bypass.run(ctx.consumer, &broken_wire, operation).is_some());
     assert_eq!(read_count.get(), 1);
-    let rejected = std::panic::catch_unwind(|| assert_eq!(bypass.operation_start_count, 0));
-    assert!(rejected.is_err());
+    assert_ne!(bypass.operation_start_count, 0);
 }
 
 #[test]
 fn adapters_raw_and_normalized_identity() {
     use agent_guard_rust::adapters::decode;
+    for (consumer, tool, expected) in [
+        (Consumer::Codex, "exec_command", "/workdir"),
+        (Consumer::Codex, "Bash", "/envelope"),
+        (Consumer::Claude, "exec_command", "/envelope"),
+    ] {
+        let bytes = serde_json::to_vec(&json!({"tool_name":tool, "cwd":"/envelope", "tool_input":{"command":"true", "cmd":"true", "workdir":"/workdir"}})).unwrap();
+        assert_eq!(decode(consumer, &bytes, "/fallback").unwrap().cwd, expected);
+    }
     let cases: [(Consumer, Value, Value); 3] = [
         (
             Consumer::Claude,

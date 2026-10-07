@@ -51,6 +51,21 @@ fn partition(name: &str) {
                 }
                 assert!(!result.as_ref().unwrap().effects.is_empty());
                 if row["write"] == true {
+                    let agent_guard_rust::Outcome::ProtectedDenial { reason, .. } =
+                        &result.as_ref().unwrap().outcome
+                    else {
+                        panic!("missing write denial")
+                    };
+                    if row["reason_contains"]
+                        .as_str()
+                        .is_some_and(|text| text.contains("App Data"))
+                    {
+                        assert_eq!(reason.rule, agent_guard_rust::DenialRule::AppData);
+                        assert_eq!(
+                            reason.rule.message(),
+                            "This reads a protected macOS app-data directory. Name a specific non-sensitive file under ~/Library/Application Support instead, or ask the user to inspect the protected file and share the needed fact."
+                        );
+                    }
                     assert!(
                         result
                             .as_ref()
@@ -102,6 +117,33 @@ fn git_grep_attached_file_values_keep_read_roles() {
 #[test]
 fn tar_glued_directory_is_an_extraction_write_root() {
     partition("tar");
+    let fixture = support::Fixture::new();
+    for consumer in ["claude", "codex", "pi"] {
+        let context = fixture.context(&json!({"consumer":consumer, "cwd":"$P"}));
+        let bytes = br#"{"tool_name":"Bash","tool_input":{"command":"tar -xf x.tar -C$HOME/Library/Containers/com.synthetic"}}"#;
+        let result = evaluate_with_arm(
+            Event {
+                bytes,
+                context: &context,
+                probe: &mut support::RecordingProbe::literal_for_quoted_paths(&fixture),
+            },
+            Arm::Brush,
+        )
+        .unwrap();
+        let agent_guard_rust::Outcome::ProtectedDenial { reason, .. } = &result.outcome else {
+            panic!("missing extraction denial")
+        };
+        assert_eq!(reason.rule, agent_guard_rust::DenialRule::AppData);
+        assert!(reason.effect.contains("write protected location"));
+        assert!(result.effects.iter().any(|e| matches!(
+            e,
+            agent_guard_rust::EffectRecord::ProtectedTarget {
+                protection: agent_guard_rust::filesystem::Protection::AppData,
+                write: true,
+                ..
+            }
+        )));
+    }
 }
 
 #[test]

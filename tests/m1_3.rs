@@ -84,6 +84,31 @@ fn dialect_commands_survive_double_quoted_apostrophes() {
 #[test]
 fn equals_process_substitution_extracts_nested_targets() {
     regressions("process");
+    let row = json!({"consumer":"claude", "cwd":"$P", "event":{"tool_name":"Bash", "tool_input":{"command":"cat =(true) .env"}}});
+    let fixture = support::Fixture::new();
+    let context = fixture.context(&row);
+    let bytes = serde_json::to_vec(&row["event"]).unwrap();
+    let result = evaluate_with_arm(
+        Event {
+            bytes: &bytes,
+            context: &context,
+            probe: &mut support::RecordingProbe::literal_for_quoted_paths(&fixture),
+        },
+        Arm::Brush,
+    )
+    .unwrap();
+    assert!(matches!(
+        result.outcome,
+        agent_guard_rust::Outcome::ProtectedDenial { .. }
+    ));
+    assert!(result.effects.iter().any(|e| matches!(
+        e,
+        agent_guard_rust::EffectRecord::ProtectedTarget {
+            protection: agent_guard_rust::filesystem::Protection::Environment,
+            write: false,
+            ..
+        }
+    )));
 }
 #[test]
 fn resolved_unquoted_bindings_keep_bash_glob_reach() {
@@ -139,6 +164,7 @@ struct Oracle {
     compared: usize,
     words: usize,
     nested_scripts: usize,
+    compared_inputs: BTreeSet<String>,
 }
 
 impl Oracle {
@@ -202,6 +228,7 @@ impl Oracle {
                 }
                 let context = lexical.context(base + i);
                 self.compared += 1;
+                self.compared_inputs.insert(id.to_owned());
                 let escaped = matches!(&p.piece, WordPiece::EscapeSequence(_));
                 if context.quote != mode || (escaped && !context.escaped) {
                     self.disagreements.push(json!({"id":id,"token":raw,"byte":base+i,"brush_quote":format!("{mode:?}"),"lexer":format!("{context:?}"),"piece":format!("{:?}",p.piece)}));
@@ -542,6 +569,13 @@ fn lexer_matches_brush_word_quoting() {
         json!({"oracle_inputs":inputs.len(),"fixture_files":files.len(),"tokenized":tokenized,"parsed_programs":parsed_programs,"word_parses":oracle.words,"nested_scripts":oracle.nested_scripts,"compared_bytes":oracle.compared,"tokenizer_refusals":skipped.len(),"tokenizer_refused_inputs":skipped,"known_limits":known_limits,"span_disagreements":oracle.span_disagreements,"token_length_mismatches":oracle.token_length_mismatches,"substitution_end_limits":oracle.substitution_end_limits,"word_refusals":oracle.word_refusals,"nested_refusals":oracle.nested_refusals,"disagreements":oracle.disagreements})
     );
     assert!(oracle.nested_refusals.is_empty());
+    assert!(tokenized > 0 && oracle.words > 0 && oracle.compared > 0);
+    for id in ["00002", "00003"] {
+        assert!(
+            oracle.compared_inputs.contains(id),
+            "uncompared named witness: {id}"
+        );
+    }
     assert!(
         oracle
             .word_refusals
@@ -687,6 +721,10 @@ fn escaped_continuation_token_mapping() {
         let lexical = Lexed::scan(source).unwrap();
         let mut oracle = Oracle::default();
         oracle.compare_tokens(source, tokens, None, &lexical, 0, "F2");
+        assert!(
+            oracle.compared > 0 && oracle.compared_inputs.contains("F2"),
+            "continuation witness was not compared"
+        );
         println!(
             "{}",
             json!({"id":"F2","disagreements":oracle.disagreements})

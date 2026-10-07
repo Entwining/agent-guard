@@ -375,6 +375,25 @@ fn manifest_input_count_matches_its_declared_provenance() {
 #[test]
 fn original_parameter_regions_have_supported_or_refused_coverage() {
     use agent_guard_rust::shell;
+    let supported = shell::observe(
+        "echo ${v:-x}",
+        Arm::Brush,
+        "/synthetic/home",
+        "/synthetic/home/project",
+        true,
+    )
+    .unwrap();
+    assert_eq!(supported.word_coverage.len(), 1);
+    let word = &supported.word_coverage[0];
+    assert!(!word.unsupported);
+    assert_eq!(word.parameters.len(), 1);
+    assert_eq!(
+        (
+            word.parameters[0].range.clone(),
+            word.parameters[0].supported
+        ),
+        (0..7, true)
+    );
     for (body, expected, cause) in [
         (
             "${v@Z}",

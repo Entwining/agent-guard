@@ -8,6 +8,33 @@ fn every_legacy_row_is_accounted_for() {
         let report = differential::report(arm);
         for row in &report {
             for observation in row["observations"].as_array().into_iter().flatten() {
+                assert_eq!(
+                    observation["exit"],
+                    if matches!(
+                        observation["actual"].as_str().unwrap(),
+                        "D" | "UR" | "UO" | "F"
+                    ) {
+                        2
+                    } else {
+                        0
+                    },
+                    "{} public exit",
+                    row["id"]
+                );
+                let advice = observation["actual"] == "A" && observation["consumer"] == "claude";
+                assert_eq!(
+                    !observation["stdout"].as_str().unwrap().is_empty(),
+                    advice,
+                    "{} unexpected or absent advice",
+                    row["id"]
+                );
+                if matches!(observation["actual"].as_str().unwrap(), "N" | "UC" | "A") {
+                    assert!(
+                        observation["stderr"].as_str().unwrap().is_empty(),
+                        "{} unexpected denial",
+                        row["id"]
+                    );
+                }
                 if observation["go_rule"] == "AppData" && observation["actual"] == "D" {
                     assert_eq!(
                         observation["rust_rule"], "AppData",

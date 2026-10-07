@@ -21,9 +21,12 @@ fn unsupported_invocations_fail_without_stdout() {
             .args(&arguments)
             .output()
             .expect("offline binary should start");
-        assert!(!output.status.success(), "arguments: {arguments:?}");
+        assert_eq!(output.status.code(), Some(2), "arguments: {arguments:?}");
         assert!(output.stdout.is_empty(), "arguments: {arguments:?}");
-        assert!(!output.stderr.is_empty());
+        assert_eq!(
+            output.stderr,
+            b"usage: agent-guard --runtime claude|codex|pi < event.json\n"
+        );
     }
 }
 

@@ -4,6 +4,14 @@ use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell::Arm};
 use serde_json::{Value, json};
 
 pub fn partition(name: &str, packet: &str) {
+    partition_with(name, packet, |_, _| {});
+}
+
+pub fn partition_with(
+    name: &str,
+    packet: &str,
+    assertion: impl Fn(&Value, &agent_guard_rust::Evaluation),
+) {
     let fixture = support::Fixture::new();
     let packet: Value = serde_json::from_str(packet).unwrap();
     let rows: Vec<_> = packet["rows"]
@@ -83,6 +91,9 @@ pub fn partition(name: &str, packet: &str) {
                     "{consumer}: {}",
                     row["id"]
                 );
+            }
+            if let Ok(evaluation) = &result {
+                assertion(row, evaluation);
             }
         }
     }

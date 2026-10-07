@@ -2506,6 +2506,62 @@ fn compatible_arguments(previous: &[crate::record::Word], choice: &[crate::recor
 #[cfg(test)]
 mod candidate_cost {
     #[test]
+    fn nested_substitution_work_grows_polynomially() {
+        let count = |levels| {
+            let names = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+            let mut source = String::from("P=1; F=2; ");
+            for name in names.iter().take(levels) {
+                source.push_str(&format!("for {name} in \"\" \"$P\" \"$F\"; do "));
+            }
+            source.push_str("o=$(sh x.sh");
+            for name in names.iter().take(levels) {
+                source.push_str(&format!(" \"${name}\""));
+            }
+            source.push_str(");");
+            source.push_str(&" done;".repeat(levels));
+            let output = crate::shell::observe(
+                &source,
+                crate::shell::Arm::Brush,
+                "/synthetic/home",
+                "/synthetic/work",
+                true,
+            )
+            .unwrap();
+            assert!(
+                output
+                    .script
+                    .commands
+                    .iter()
+                    .any(|c| c.argv.iter().any(|w| w.text == "x.sh")),
+                "nested script operand was lost"
+            );
+            assert!(output.source_entries > 0);
+            assert!(
+                output.source_entries <= levels + 1,
+                "nested source body reparsed for loop combinations: levels={levels}, entries={}",
+                output.source_entries
+            );
+            (
+                output.source_entries,
+                output.parse_successes + output.parse_failures,
+                output.candidate_pairs,
+                output.script.commands.len(),
+            )
+        };
+        let counts = [2, 4, 8].map(count);
+        println!("nested substitution work={counts:?}");
+        for (small, large) in counts.iter().zip(counts.iter().skip(1)) {
+            assert!(
+                large.0 <= small.0 * 4
+                    && large.1 <= small.1 * 4
+                    && large.2 <= small.2 * 8
+                    && large.3 <= small.3 * 4,
+                "nested substitution work: {counts:?}"
+            );
+        }
+    }
+
+    #[test]
     fn repeated_binding_work_grows_quadratically() {
         let observe = |size| {
             let items = (0..size)
@@ -2622,6 +2678,7 @@ mod tests {
         evaluator.finish();
         output
     }
+
     #[test]
     fn binding_join_replaces_the_complete_exit_state() {
         let mut outer = Scope::new("/h", "/p");

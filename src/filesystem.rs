@@ -1005,6 +1005,16 @@ mod tests {
         }
         assert_eq!(probe.calls.iter().filter(|p| p.as_str() == "/h").count(), 2);
         assert!(probe.calls.iter().all(|p| !p.contains("/./")));
+        let mut target = Target::new("//*.txt".into(), Effect::Use, Walk::None, Via::Operand);
+        target.glob = true;
+        assert_eq!(
+            resolver
+                .target(&mut target, "/project", &mut probe)
+                .unwrap(),
+            Identity::Public("/*.txt".into())
+        );
+        // policy::Inspection::target reads unresolved to distinguish relative tilde spellings.
+        assert_eq!(target.unresolved, "//*.txt");
     }
 
     #[test]

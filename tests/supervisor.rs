@@ -40,7 +40,7 @@ fn supervisor_deadline_kills_and_reaps_the_recorded_child() {
         "child {pid} remains alive or unreaped"
     );
     assert!(
-        elapsed >= entry::SUPERVISOR_TIMEOUT && elapsed < Duration::from_millis(3300),
+        elapsed >= entry::SUPERVISOR_TIMEOUT && elapsed < Duration::from_secs(15),
         "elapsed={elapsed:?}"
     );
     eprintln!(

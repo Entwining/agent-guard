@@ -1734,11 +1734,17 @@ mod record_tests {
     #[test]
     fn ls_records_list_effect() {
         for source in ["ls .env", "ls -R public"] {
-            assert!(
-                targets(source)
-                    .iter()
-                    .all(|target| target.effect == Effect::List)
+            let targets = targets(source);
+            assert_eq!(targets.len(), 1);
+            assert_eq!(
+                targets[0].path,
+                if source == "ls .env" {
+                    "/p/.env"
+                } else {
+                    "/p/public"
+                }
             );
+            assert!(targets.iter().all(|target| target.effect == Effect::List));
         }
     }
     #[test]

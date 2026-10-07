@@ -119,6 +119,19 @@ fn resolved_ssh_root_and_parent_inode_identity() {
     let root = fixture.root.join("ssh-store");
     fs::rename(format!("{}/.ssh", fixture.home), &root).unwrap();
     std::os::unix::fs::symlink(&root, format!("{}/.ssh", fixture.home)).unwrap();
+    fs::create_dir(root.join("sub")).unwrap();
+    fs::write(root.join("sub/config.pub"), "synthetic public material").unwrap();
+    let mut ancestry = support::RecordingProbe::literal_for_quoted_paths(&fixture);
+    assert_eq!(
+        filesystem::identify(
+            root.join("sub/config.pub").to_str().unwrap(),
+            &fixture.project,
+            &fixture.home,
+            &mut ancestry
+        )
+        .unwrap(),
+        Identity::Protected(Protection::SshPrivate)
+    );
     for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
         let context = fixture.context(&json!({"consumer":"codex", "cwd":"$P"}));
         let body = serde_json::to_vec(&json!({"tool_name":"Bash", "tool_input":{"command":format!("cat {}", root.display())}})).unwrap();

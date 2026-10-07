@@ -34,6 +34,25 @@ fn regressions(owner: &str) {
                 row["expected"],
                 "{consumer}: {row}"
             );
+            let wire = agent_guard_rust::adapters::render(context.consumer, &result);
+            assert_eq!(
+                wire.exit,
+                if row["expected"] == "D" || row["expected"] == "UR" {
+                    2
+                } else {
+                    0
+                }
+            );
+            assert!(wire.stdout.is_empty(), "unexpected advice: {row}");
+            assert_eq!(
+                wire.stderr.is_empty(),
+                row["expected"] == "N" || row["expected"] == "UC"
+            );
+            if let agent_guard_rust::Outcome::ProtectedDenial { reason, .. } =
+                &result.as_ref().unwrap().outcome
+            {
+                assert!(wire.stderr.contains(reason.rule.message()));
+            }
         }
     }
 }
