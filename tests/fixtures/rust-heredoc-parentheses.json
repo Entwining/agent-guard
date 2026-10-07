@@ -1,0 +1,5 @@
+{"rows":[
+{"id":"heredoc-js","partition":"heredoc","input":{"command":"cat > x.ts <<EOF\nitems.map((x) => x.id)\nEOF"},"expected":"N"},
+{"id":"heredoc-js-quoted","partition":"heredoc","input":{"command":"cat > x.ts <<'EOF'\nitems.map((x) => x.id)\nEOF"},"expected":"N"},
+{"id":"heredoc-code","partition":"heredoc","input":{"command":"cat > x.ts <<EOF\nitems.map((x) => $(cat .env))\nEOF"},"expected":"D"}
+]}

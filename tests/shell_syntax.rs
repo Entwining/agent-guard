@@ -12,6 +12,8 @@ pub mod differential;
 pub mod double_quotes_keep_inner_apostrophes_literal;
 #[path = "shell_syntax/git_owns_quoted_pathspec_globs.rs"]
 pub mod git_owns_quoted_pathspec_globs;
+#[path = "shell_syntax/heredoc_parentheses_remain_data.rs"]
+pub mod heredoc_parentheses_remain_data;
 #[path = "shell_syntax/mixed_quote_fields_do_not_turn_filter_data_into_root_operands.rs"]
 pub mod mixed_quote_fields_do_not_turn_filter_data_into_root_operands;
 #[path = "shell_syntax/nested_parameter_flags_refuse_without_checker_faults.rs"]

@@ -343,7 +343,9 @@ impl<'a> Lexed<'a> {
                 }
                 continue;
             }
-            if tail.starts_with("$((") || (context.unquoted() && tail.starts_with("((")) {
+            if tail.starts_with("$((")
+                || (context.unquoted() && context.heredoc.is_none() && tail.starts_with("(("))
+            {
                 let opening = *cursor;
                 let width = if byte == b'$' { 3 } else { 2 };
                 self.mark(opening..opening + width, context);
