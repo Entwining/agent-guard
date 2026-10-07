@@ -38,7 +38,7 @@ execute only their harness-owned surrogate operations.
 ## Development behavior rows
 
 `rust-slice-dev.jsonl` contains one consumer/scenario per line. The test evaluates
-labelled supported rows through both parser arms and checks the library result,
+labelled supported rows through Brush and checks the library result,
 consumer wire, probes, recovery and closed-operation witnesses.
 
 | Field | Behavior contract |
@@ -77,6 +77,9 @@ event. The lexer/Brush differential consumes shell rows; the report example
 consumes both forms. `lexer_refusal=true` identifies the malformed backtick-child
 partition that Brush tokenizes but the lexer rejects. Tokenizer refusals,
 lexer refusals and actual word comparisons are reported separately.
+The tree-sitter comparison is parse-only: it exercises named successful and
+malformed inputs and validates source spans. Agreement between the parsers is
+not a production decision contract.
 
 Other JSON files hold named mechanism partitions and expected class, effect,
 path identity, gap, reason or advice. Numeric recursion, record, payload and

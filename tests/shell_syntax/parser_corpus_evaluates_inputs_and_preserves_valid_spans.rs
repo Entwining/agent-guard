@@ -198,17 +198,18 @@ fn compare(id: &str, source: &str) -> Value {
     let success = !tree.root_node().has_error();
     let mut t = Spans::default();
     tree_spans(source, tree.root_node(), &mut t);
-    json!({"id":id,"comparison_owner":"parse-only","review_lead":brush.is_ok()!=success || b.statements!=t.statements || b.words!=t.words,"brush":{"success":brush.is_ok(),"statements":b.statements,"words":b.words},"tree":{"success":success,"statements":t.statements,"words":t.words}})
+    json!({"id":id,"brush":{"success":brush.is_ok(),"statements":b.statements,"words":b.words},"tree":{"success":success,"statements":t.statements,"words":t.words}})
 }
 
 #[test]
-fn parser_corpus_preserves_spans_and_frozen_agreement() {
+fn parser_corpus_evaluates_inputs_and_preserves_valid_spans() {
     let fixture = support::Fixture::new();
     let mut inputs = Vec::new();
     let legacy: Vec<Value> = include_str!("../fixtures/contract.jsonl")
         .lines()
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
+    assert!(!legacy.is_empty(), "missing legacy parser partition");
     for row in &legacy {
         let id = format!("{}[{}]", row["family"].as_str().unwrap(), row["index"]);
         inputs.push((
@@ -224,16 +225,26 @@ fn parser_corpus_preserves_spans_and_frozen_agreement() {
         .lines()
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
-    for row in overlay.iter().filter(|r| r["kind"] == "filesystem_link") {
+    let links: Vec<_> = overlay
+        .iter()
+        .filter(|r| r["kind"] == "filesystem_link")
+        .collect();
+    assert!(
+        !links.is_empty(),
+        "missing filesystem-link parser partition"
+    );
+    for row in links {
         inputs.push((
             row["id"].as_str().unwrap().to_owned(),
             Err("setup_metadata"),
         ));
     }
-    for row in support::rows()
-        .iter()
-        .filter(|r| support::is_evaluator_row(r))
-    {
+    let dev: Vec<_> = support::rows()
+        .into_iter()
+        .filter(support::is_evaluator_row)
+        .collect();
+    assert!(!dev.is_empty(), "missing evaluator-row parser partition");
+    for row in &dev {
         let body = fixture.body(row);
         let event = agent_guard_rust::adapters::decode(
             fixture.context(row).consumer,
@@ -278,7 +289,7 @@ fn parser_corpus_preserves_spans_and_frozen_agreement() {
         .iter()
         .map(|(id, source)| match source {
             Ok(source) => compare(id, source),
-            Err(status) => json!({"id":id,"comparison_owner":"parse-only","status":status}),
+            Err(status) => json!({"id":id,"status":status}),
         })
         .collect();
     assert_eq!(
@@ -289,9 +300,27 @@ fn parser_corpus_preserves_spans_and_frozen_agreement() {
         expected_ids,
         "every parser input must be evaluated"
     );
-    for row in &report {
-        assert!(row.get("class").is_none() && row.get("observations").is_none());
+    // Unicode words exercise character-to-byte spans; incomplete syntax exercises errors.
+    for (id, success) in [("variant:10", true), ("variant:12", false)] {
+        let row = report
+            .iter()
+            .find(|row| row["id"] == id)
+            .expect("missing parser witness");
+        for parser in ["brush", "tree"] {
+            assert_eq!(
+                row[parser]["success"], success,
+                "{id}: {parser} parse outcome"
+            );
+            if success {
+                assert!(
+                    !row[parser]["statements"].as_array().unwrap().is_empty(),
+                    "{id}: {parser} statement spans missing"
+                );
+                assert!(
+                    !row[parser]["words"].as_array().unwrap().is_empty(),
+                    "{id}: {parser} word spans missing"
+                );
+            }
+        }
     }
-    assert!(report.iter().any(|row| row["brush"]["success"] == true));
-    assert!(report.iter().any(|row| row["tree"]["success"] == false));
 }

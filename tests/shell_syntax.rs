@@ -20,8 +20,8 @@ pub mod mixed_quote_fields_do_not_turn_filter_data_into_root_operands;
 pub mod nested_parameter_flags_refuse_without_checker_faults;
 #[path = "shell_syntax/nul_command_bytes_follow_go_lexer.rs"]
 pub mod nul_command_bytes_follow_go_lexer;
-#[path = "shell_syntax/parser_corpus_preserves_spans_and_frozen_agreement.rs"]
-pub mod parser_corpus_preserves_spans_and_frozen_agreement;
+#[path = "shell_syntax/parser_corpus_evaluates_inputs_and_preserves_valid_spans.rs"]
+pub mod parser_corpus_evaluates_inputs_and_preserves_valid_spans;
 #[path = "shell_syntax/prefix_assignments_use_prior_prefix_values.rs"]
 pub mod prefix_assignments_use_prior_prefix_values;
 #[path = "support/batch6.rs"]
