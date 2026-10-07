@@ -243,18 +243,44 @@ fn lexical_pattern_mode(
     patterned: bool,
     hidden: bool,
 ) -> Option<Protection> {
+    match lexical_pattern_checked(path, home, patterned, hidden, None) {
+        Ok(result) => result,
+        Err(_) => unreachable!("lexical matching without a deadline cannot expire"),
+    }
+}
+
+fn lexical_pattern_checked(
+    path: &str,
+    home: &str,
+    patterned: bool,
+    hidden: bool,
+    deadline: Option<std::time::Instant>,
+) -> Result<Option<Protection>, CheckError> {
     // D22 retains conservative group reach; P1 quoting gates brace/glob expansion.
     for candidate in glob::alternatives(path, patterned) {
+        crate::check_deadline(deadline)?;
         if let Some(kind) =
             lexical_candidate(&candidate, home, patterned || candidate != path, hidden)
         {
-            return Some(kind);
+            return Ok(Some(kind));
         }
     }
-    None
+    Ok(None)
 }
 
 pub fn broad_root(path: &str, home: &str, patterned: bool) -> bool {
+    match broad_root_checked(path, home, patterned, None) {
+        Ok(result) => result,
+        Err(_) => unreachable!("broad matching without a deadline cannot expire"),
+    }
+}
+
+pub(crate) fn broad_root_checked(
+    path: &str,
+    home: &str,
+    patterned: bool,
+    deadline: Option<std::time::Instant>,
+) -> Result<bool, CheckError> {
     let path = path.to_lowercase();
     let home = home.to_lowercase();
     let literal = path == "/"
@@ -262,7 +288,7 @@ pub fn broad_root(path: &str, home: &str, patterned: bool) -> bool {
         || path == format!("{home}/library")
         || home.starts_with(&format!("{}/", path.trim_end_matches('/')));
     if literal || !patterned {
-        return literal;
+        return Ok(literal);
     }
     let mut candidates = vec![home.clone(), format!("{home}/library")];
     for tree in [
@@ -276,19 +302,26 @@ pub fn broad_root(path: &str, home: &str, patterned: bool) -> bool {
     }
     // Go's recursive-glob owner checks both protected witnesses and the
     // lexical prefix (native/filesystem/appdata.go:77-91).
-    glob::alternatives(&path, true).iter().any(|pattern| {
+    for pattern in glob::alternatives(&path, true) {
+        crate::check_deadline(deadline)?;
         let prefix = pattern
             .find(['*', '?', '['])
             .map_or(pattern.as_str(), |at| &pattern[..at])
             .trim_end_matches('/');
-        candidates
-            .iter()
-            .any(|candidate| glob::path(pattern, candidate))
-            || pattern.contains("**")
-                && (prefix == home
-                    || prefix == format!("{home}/library")
-                    || home.starts_with(&format!("{prefix}/")))
-    })
+        for candidate in &candidates {
+            if glob::path_checked(&pattern, candidate, deadline)? {
+                return Ok(true);
+            }
+        }
+        if pattern.contains("**")
+            && (prefix == home
+                || prefix == format!("{home}/library")
+                || home.starts_with(&format!("{prefix}/")))
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn lexical_candidate(path: &str, home: &str, patterned: bool, hidden: bool) -> Option<Protection> {
@@ -511,11 +544,27 @@ pub fn identify_target(
 pub(crate) struct Resolver<'a> {
     home: &'a str,
     table: &'a FirmlinkTable,
+    deadline: Option<std::time::Instant>,
 }
 
 impl<'a> Resolver<'a> {
     pub(crate) fn new(home: &'a str, table: &'a FirmlinkTable) -> Self {
-        Self { home, table }
+        Self {
+            home,
+            table,
+            deadline: None,
+        }
+    }
+    pub(crate) fn with_deadline(
+        home: &'a str,
+        table: &'a FirmlinkTable,
+        deadline: Option<std::time::Instant>,
+    ) -> Self {
+        Self {
+            home,
+            table,
+            deadline,
+        }
     }
 
     pub(crate) fn home(&mut self, probe: &mut dyn Probe) -> Result<Identity, CheckError> {
@@ -542,8 +591,13 @@ impl<'a> Resolver<'a> {
         if path.ends_with("/.ssh") {
             return Ok(Identity::Protected(Protection::SshPrivate));
         }
-        if let Some(kind) = lexical_pattern_mode(&path, self.home, target.glob, target.glob_hidden)
-        {
+        if let Some(kind) = lexical_pattern_checked(
+            &path,
+            self.home,
+            target.glob,
+            target.glob_hidden,
+            self.deadline,
+        )? {
             return Ok(Identity::Protected(kind));
         }
         if target.effect == Effect::Read
@@ -585,11 +639,20 @@ impl<'a> Resolver<'a> {
             }
             Resolution::Bound => return Ok(Identity::Bound),
         };
-        if let Some(kind) =
-            lexical_pattern_mode(&resolved, self.home, target.glob, target.glob_hidden).or_else(
-                || lexical_pattern_mode(&resolved, &resolved_home, target.glob, target.glob_hidden),
-            )
-        {
+        if let Some(kind) = lexical_pattern_checked(
+            &resolved,
+            self.home,
+            target.glob,
+            target.glob_hidden,
+            self.deadline,
+        )?
+        .or(lexical_pattern_checked(
+            &resolved,
+            &resolved_home,
+            target.glob,
+            target.glob_hidden,
+            self.deadline,
+        )?) {
             return Ok(Identity::Protected(kind));
         }
         if target.effect == Effect::Read
@@ -601,7 +664,9 @@ impl<'a> Resolver<'a> {
         }
         // The broad-root owner wins before subordinate SSH metadata comparisons.
         let search = target.walk != Walk::None;
-        if (search || target.glob) && broad_root(&resolved, &resolved_home, target.glob) {
+        if (search || target.glob)
+            && broad_root_checked(&resolved, &resolved_home, target.glob, self.deadline)?
+        {
             return Ok(Identity::Public(resolved));
         }
         if matches!(target.effect, Effect::Read | Effect::Write | Effect::List) {
@@ -630,6 +695,16 @@ pub(crate) fn literal_glob_root(path: &str) -> String {
 
 #[cfg(test)]
 mod pattern_roots {
+    #[test]
+    fn lexical_candidates_observe_the_evaluation_deadline() {
+        let expired = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        assert_eq!(
+            super::lexical_pattern_checked("public", "/synthetic/home", true, true, Some(expired))
+                .unwrap_err()
+                .kind,
+            crate::CheckErrorKind::Deadline
+        );
+    }
     #[test]
     fn literal_api_root_does_not_expand_into_a_hidden_directory() {
         let path = format!("{}/credentials.ts", super::literal_glob_root("a/*"));

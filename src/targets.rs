@@ -7,6 +7,32 @@ mod secrets;
 const READERS: &str = "cat head tail less more bat sed awk jq yq base64 xxd od strings diff openssl plutil cp tee tar source . sort uniq cut nl fold rev paste comm join iconv hexdump hd zcat gzcat bzcat xzcat ag ack tac column pr vim vi nvim view perl ruby dd scp rsync zip ed ex hg svn sh bash zsh dash ksh wget php zgrep zless zmore";
 const DATA_PROGRAMS: &str = "echo printf print : true false export set unset typeset declare local";
 
+#[cfg(test)]
+mod message_roles {
+    #[test]
+    fn commit_messages_do_not_become_pathspecs() {
+        let host = crate::record::HostFacts {
+            home: "/synthetic/home",
+            user: None,
+        };
+        let observation = crate::shell::observe(
+            "git commit -m 'public message'",
+            crate::shell::Arm::Brush,
+            host.home,
+            "/synthetic/project",
+            true,
+        )
+        .unwrap();
+        let effects = super::infer(&observation.script.commands[0], "/synthetic/project", host);
+        assert!(
+            !effects
+                .targets
+                .iter()
+                .any(|target| target.path.ends_with("public message"))
+        );
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Effects {
     pub(crate) independent_arguments: bool,
@@ -931,6 +957,10 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
     let mut bundle_output = false;
     while index < args.len() {
         let arg = &args[index];
+        if options && sub == "commit" && ["-m", "--message"].contains(&arg.as_str()) {
+            index += 2;
+            continue;
+        }
         let mut option_path = None;
         if sub == "grep" && options {
             if arg == "--" {

@@ -174,7 +174,7 @@ fn evaluate_with_catalog_loader(
     let mut inspection = Inspection {
         context,
         probe,
-        resolver: filesystem::Resolver::new(&context.home, &catalog),
+        resolver: filesystem::Resolver::with_deadline(&context.home, &catalog, deadline),
         arm,
         gaps: Vec::new(),
         denial: None,
@@ -374,7 +374,14 @@ impl Inspection<'_> {
             && !(target.via == Via::Tool && target.glob)
             && (target.walk != Walk::None || target.glob)
             && (target.effect != Effect::Name || target.glob);
-        if broad_access && filesystem::broad_root(&target.path, &self.context.home, target.glob) {
+        if broad_access
+            && filesystem::broad_root_checked(
+                &target.path,
+                &self.context.home,
+                target.glob,
+                self.deadline,
+            )?
+        {
             self.effect(EffectRecord::BroadRoot);
         }
         // A literal relative ~/ prefix stays anchored at cwd, including with a
@@ -435,7 +442,14 @@ impl Inspection<'_> {
                     }
                     Identity::Protected(_) => self.context.home.clone(),
                 };
-                if broad_access && filesystem::broad_root(&path, &resolved_home, target.glob) {
+                if broad_access
+                    && filesystem::broad_root_checked(
+                        &path,
+                        &resolved_home,
+                        target.glob,
+                        self.deadline,
+                    )?
+                {
                     self.effect(EffectRecord::BroadRoot);
                     self.denial.get_or_insert_with(|| Reason {
                         effect: format!(

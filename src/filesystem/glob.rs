@@ -114,6 +114,10 @@ fn accepts(token: &Token, ch: char) -> bool {
 }
 
 pub(super) fn intersects(left: &str, right: &str) -> bool {
+    intersects_counted(left, right, &mut || {})
+}
+
+fn intersects_counted(left: &str, right: &str, comparisons: &mut impl FnMut()) -> bool {
     let left = tokens(left);
     let right = tokens(right);
     let mut pending = vec![(0, 0)];
@@ -136,18 +140,17 @@ pub(super) fn intersects(left: &str, right: &str) -> bool {
             pending.push((i, j + 1));
         }
         if let (Some(x), Some(y)) = (x, y) {
-            let literals = [x, y].into_iter().filter_map(|token| {
-                if let Token::Literal(ch) = token {
-                    Some(*ch)
-                } else {
-                    None
+            let compatible = match (x, y) {
+                (Token::Literal(ch), other) | (other, Token::Literal(ch)) => {
+                    comparisons();
+                    accepts(other, *ch)
                 }
-            });
-            if (0..128)
-                .filter_map(char::from_u32)
-                .chain(literals)
-                .any(|ch| accepts(x, ch) && accepts(y, ch))
-            {
+                _ => (0..128).filter_map(char::from_u32).any(|ch| {
+                    comparisons();
+                    accepts(x, ch) && accepts(y, ch)
+                }),
+            };
+            if compatible {
                 let next = (i + usize::from(!xs), j + usize::from(!ys));
                 if next != (i, j) {
                     pending.push(next);
@@ -200,17 +203,29 @@ pub(super) fn escape_literal(subject: &str) -> String {
 }
 
 pub(super) fn path(pattern: &str, subject: &str) -> bool {
+    match path_checked(pattern, subject, None) {
+        Ok(result) => result,
+        Err(_) => unreachable!("a match without a deadline cannot expire"),
+    }
+}
+
+pub(super) fn path_checked(
+    pattern: &str,
+    subject: &str,
+    deadline: Option<std::time::Instant>,
+) -> Result<bool, crate::CheckError> {
     let p: Vec<_> = pattern.split('/').collect();
     let s: Vec<_> = subject.split('/').collect();
     let mut pending = vec![(0, 0)];
     let mut seen = HashSet::new();
     while let Some((i, j)) = pending.pop() {
+        crate::check_deadline(deadline)?;
         if !seen.insert((i, j)) {
             continue;
         }
         if i == p.len() {
             if j == s.len() {
-                return true;
+                return Ok(true);
             }
             continue;
         }
@@ -223,7 +238,7 @@ pub(super) fn path(pattern: &str, subject: &str) -> bool {
             pending.push((i + 1, j + 1));
         }
     }
-    false
+    Ok(false)
 }
 
 fn brace_members(source: &str) -> Option<(usize, usize, Vec<&str>)> {
@@ -318,4 +333,33 @@ pub(super) fn alternatives(pattern: &str, patterned: bool) -> Vec<String> {
         }
     }
     result
+}
+
+#[cfg(test)]
+mod cost {
+    #[test]
+    fn pattern_state_walk_observes_its_deadline() {
+        let expired = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        assert_eq!(
+            super::path_checked("*public", "x", Some(expired))
+                .unwrap_err()
+                .kind,
+            crate::CheckErrorKind::Deadline
+        );
+    }
+    #[test]
+    fn literal_intersection_work_tracks_pattern_length() {
+        for size in [64, 128, 256] {
+            let left = format!("{}[*].id", "m".repeat(size));
+            let right = format!("{}*.id", "m".repeat(size));
+            let mut comparisons = 0;
+            assert!(super::intersects_counted(&left, &right, &mut || {
+                comparisons += 1
+            }));
+            assert!(
+                comparisons <= 4 * (left.len() + right.len()),
+                "size={size}, comparisons={comparisons}"
+            );
+        }
+    }
 }
