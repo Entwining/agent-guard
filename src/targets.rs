@@ -407,8 +407,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             }
             infer_git(args, cwd, host, &mut effects);
         }
-        "cp" | "rsync" | "tee" | "ssh-add" | "dotenvx" | "ssh" | "scp" | "sftp" | "ssh-keygen"
-        | "dd" | "kubectl" | "npm" | "curl" | "wget" | "docker" => {
+        "cp" | "install" | "rsync" | "tee" | "ssh-add" | "dotenvx" | "ssh" | "scp" | "sftp"
+        | "ssh-keygen" | "dd" | "kubectl" | "npm" | "curl" | "wget" | "docker" => {
             effects
                 .targets
                 .extend(clients::infer(program, args, cwd, host));
@@ -1516,7 +1516,16 @@ fn infer_search(
                         if tail.is_empty() {
                             None
                         } else {
-                            Some(arg.with_text(tail.trim_start_matches('=').to_owned()))
+                            Some(
+                                arg.with_text(
+                                    if program == "rg" {
+                                        tail.trim_start_matches('=')
+                                    } else {
+                                        tail
+                                    }
+                                    .to_owned(),
+                                ),
+                            )
                         },
                     ));
                     break;

@@ -30,6 +30,8 @@ pub mod git_owns_quoted_pathspec_globs;
 pub mod global_option_values_never_consume_an_option;
 #[path = "targets/global_pattern_names_follow_the_generic_owner.rs"]
 pub mod global_pattern_names_follow_the_generic_owner;
+#[path = "targets/grep_equals_values_and_install_destination_keep_owner_roles.rs"]
+pub mod grep_equals_values_and_install_destination_keep_owner_roles;
 #[path = "targets/listing_option_values_and_children.rs"]
 pub mod listing_option_values_and_children;
 #[path = "targets/literal_for_lists_execute_each_value_exactly.rs"]

@@ -18,11 +18,13 @@ fn spec(program: &str) -> Spec {
         destination: false,
     };
     match program {
-        "cp" => {
-            // native/targets/programs.go:60; infer.go:105-121,203-204.
+        "cp" | "install" => {
+            // native/targets/programs.go:60,64; infer.go:105-121,203-204.
             spec.destination = true;
             spec.options = &[("-t", Effect::Write), ("--target-directory", Effect::Write)];
-            spec.walk = Walk::None;
+            if program == "cp" {
+                spec.walk = Walk::None;
+            }
         }
         "ssh" => spec.operand = Effect::Name,
         "scp" => spec.remote = true,
