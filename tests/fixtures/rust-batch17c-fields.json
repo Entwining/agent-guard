@@ -1,0 +1,55 @@
+{
+  "rows": [
+    {
+      "id": "exact-echo-key",
+      "partition": "exact",
+      "input": {
+        "command": "M=\"\"; for f in a '$H/.ssh/id_rsa'; do M=\"$M $f\"; done; echo $M | xargs cat"
+      },
+      "expected": "D",
+      "wire_reason": "extract protected private-key contents"
+    },
+    {
+      "id": "exact-printf-env",
+      "partition": "exact",
+      "input": {
+        "command": "M=\"\"; for f in a .env; do M=\"${M} ${f}\"; done; printf '%s\\n' $M | xargs cat"
+      },
+      "expected": "D",
+      "wire_reason": "extract protected environment-file contents"
+    },
+    {
+      "id": "exact-eval-public",
+      "partition": "exact",
+      "input": {
+        "command": "M=\"\"; for f in a b; do M=\"$M $f\"; done; eval \"cat $M\""
+      },
+      "expected": "N"
+    },
+    {
+      "id": "exact-set-public",
+      "partition": "exact",
+      "input": {
+        "command": "M=\"\"; for f in a b; do M=\"$M $f\"; done; set -- $M; cat \"$@\""
+      },
+      "expected": "UC"
+    },
+    {
+      "id": "exact-eval-appdata",
+      "partition": "exact",
+      "input": {
+        "command": "M=\"\"; for f in a '$C/data.txt'; do M=\"$M $f\"; done; eval \"cat $M\""
+      },
+      "expected": "D",
+      "wire_reason": "App Data"
+    },
+    {
+      "id": "exact-sh-public",
+      "partition": "exact",
+      "input": {
+        "command": "M=\"\"; for f in a b; do M=\"$M $f\"; done; sh -c \"cat $M\""
+      },
+      "expected": "N"
+    }
+  ]
+}

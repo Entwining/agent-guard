@@ -10,6 +10,24 @@ use std::collections::{BTreeMap, BTreeSet};
 #[cfg(test)]
 mod loop_cost {
     #[test]
+    fn unconditional_literal_append_keeps_exact_string() {
+        for width in [4, 8, 16] {
+            let items = (0..width)
+                .map(|n| format!("public{n}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let source = format!("M=prefix; for f in {items}; do M=\"$M $f\"; done; echo \"$M\"");
+            let output =
+                crate::shell::observe(&source, crate::shell::Arm::Brush, "/h", "/h/p", true)
+                    .unwrap();
+            let echo = output.script.commands.last().unwrap();
+            assert_eq!(echo.argv[1].text, format!("prefix {items}"));
+            assert!(!echo.argv[1].cardinality_unknown);
+            assert!(!echo.argv[1].expands);
+        }
+    }
+
+    #[test]
     fn conditional_literal_accumulation_work_grows_polynomially() {
         for bound in [false, true] {
             let count = |width| {
@@ -240,6 +258,7 @@ pub(super) struct Scope {
     loops: Vec<Vec<BindingState>>,
     summarizing_loop: bool,
     bounded_loop: bool,
+    conditional_append: bool,
     piped: bool,
     pipeline_input: Option<Vec<String>>,
     relative_glob_moves: usize,
@@ -271,6 +290,7 @@ impl Scope {
             loops: Vec::new(),
             summarizing_loop: false,
             bounded_loop: false,
+            conditional_append: false,
             piped: false,
             pipeline_input: None,
             relative_glob_moves: 0,
@@ -282,6 +302,7 @@ impl Scope {
         child.loops.clear();
         child.summarizing_loop = false;
         child.bounded_loop = false;
+        child.conditional_append = false;
         child.pipeline_input = None;
         child.isolated = true;
         child.directory.failures = None;
@@ -840,6 +861,13 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         depth: usize,
     ) -> Result<Option<Vec<BindingValue>>, CheckError> {
         if !scope.bounded_loop
+            || !(scope.conditional_append
+                || scope.bindings.get(name).is_some_and(|binding| {
+                    binding
+                        .values
+                        .iter()
+                        .any(|value| matches!(value, BindingValue::RepeatedFields(_)))
+                }))
             || name.ends_with('+')
             || scope
                 .bindings
@@ -1752,8 +1780,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 test.directory.failures = None;
                 self.run(condition, &mut test, depth + 1, source_id, nested)?;
                 let mut yes = test.branch();
+                yes.conditional_append = true;
                 self.run(then, &mut yes, depth + 1, source_id, nested)?;
                 let mut no = test.branch();
+                no.conditional_append = true;
                 self.run(otherwise, &mut no, depth + 1, source_id, nested)?;
                 self.merge_directories(
                     scope,
@@ -1780,6 +1810,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
                 for body in branches {
                     let mut inner = scope.branch();
+                    inner.conditional_append = true;
                     self.run(body, &mut inner, depth + 1, source_id, nested)?;
                     exits.push(inner);
                 }
@@ -1847,6 +1878,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     self.word_use(word, scope, depth, nested)?;
                 }
                 inner.bounded_loop = variable.is_some() && finite && count.is_some();
+                inner.conditional_append = false;
                 if !*empty
                     && count.is_some()
                     && !values.is_empty()
@@ -1878,6 +1910,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     }
                     inner.summarizing_loop = scope.summarizing_loop;
                     inner.bounded_loop = scope.bounded_loop;
+                    inner.conditional_append = scope.conditional_append;
                     if literal {
                         if let Some(last) = literal_values.last() {
                             inner.assign(variable.clone(), vec![BindingValue::Known(last.clone())]);
@@ -2053,6 +2086,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         {
             let left_exit = scope.clone();
             let mut after = scope.branch();
+            after.conditional_append = true;
             // Directory-command success does not require a statically known
             // destination. Preserve an enclosing if/case uncertainty.
             if definition_on_success {

@@ -1,3 +1,5 @@
+#[path = "shell_state/accumulation_consumers_preserve_fields.rs"]
+pub mod accumulation_consumers_preserve_fields;
 #[path = "shell_state/and_chains_preserve_success_and_failure_directories.rs"]
 pub mod and_chains_preserve_success_and_failure_directories;
 #[path = "shell_state/and_success_continuation_defines_public_helpers.rs"]
