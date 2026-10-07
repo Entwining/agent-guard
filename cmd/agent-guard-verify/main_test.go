@@ -62,29 +62,35 @@ func TestInstalledPackage(t *testing.T) {
 	}
 	_, file, _, _ := runtime.Caller(0)
 	source := filepath.Clean(filepath.Join(filepath.Dir(file), "../.."))
-	goBinary := os.Getenv("GO")
-	if goBinary == "" {
-		var err error
-		goBinary, err = exec.LookPath("go")
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	cacheCommand := exec.Command(goBinary, "env", "-json", "GOMODCACHE", "GOCACHE")
-	cacheCommand.Dir = source
-	cacheOutput, err := cacheCommand.Output()
+	cargo, err := exec.LookPath("cargo")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var caches struct{ GOMODCACHE, GOCACHE string }
-	if err := json.Unmarshal(cacheOutput, &caches); err != nil {
-		t.Fatal(err)
-	}
-	build := exec.Command(goBinary, "build", "-trimpath", "-ldflags", "-X main.version=0.0.0", "-o", filepath.Join(filepath.Dir(entry), "agent-guard-native"), "./cmd/agent-guard")
+	target := t.TempDir()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	build := exec.CommandContext(ctx, cargo, "build", "--locked", "--release", "--bin", "agent-guard-native", "--target-dir", target)
 	build.Dir = source
-	build.Env = []string{"HOME=" + root, "PATH=/usr/bin:/bin", "GOMODCACHE=" + caches.GOMODCACHE, "GOCACHE=" + caches.GOCACHE, "GOPROXY=off"}
+	build.Env = os.Environ()
+	build.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	build.Cancel = func() error { return syscall.Kill(-build.Process.Pid, syscall.SIGKILL) }
+	build.WaitDelay = time.Second
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build native: %v: %s", err, output)
+	}
+	native, err := os.ReadFile(filepath.Join(target, "release/agent-guard-native"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filepath.Dir(entry), "agent-guard-native"), native, 0700); err != nil {
+		t.Fatal(err)
+	}
+	version, err := os.ReadFile(filepath.Join(source, "VERSION"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "package/VERSION"), version, 0600); err != nil {
+		t.Fatal(err)
 	}
 	shell, err := os.ReadFile(filepath.Join(source, "bin/agent-guard"))
 	if err != nil {

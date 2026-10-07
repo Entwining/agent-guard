@@ -2,8 +2,6 @@ module agentguard
 
 go 1.27.1
 
-require mvdan.cc/sh/v3 v3.5.0-0.dev.0.20220508140055-b632912cc1a9
-
 require (
 	github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c // indirect
 	golang.org/x/exp/typeparams v0.0.0-20231108232855-2478ac86f678 // indirect
