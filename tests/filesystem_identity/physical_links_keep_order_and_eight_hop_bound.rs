@@ -37,12 +37,14 @@ impl Probe for Mock {
 fn physical_links_keep_order_and_eight_hop_bound() {
     let packet: Value =
         serde_json::from_str(include_str!("../fixtures/rust-m2-filesystem.json")).unwrap();
-    for row in packet["paths"]
+    let rows: Vec<_> = packet["paths"]
         .as_array()
         .unwrap()
         .iter()
         .filter(|r| r.get("catalog").is_none())
-    {
+        .collect();
+    assert!(!rows.is_empty(), "missing physical link partition");
+    for row in rows {
         let mut probe = Mock {
             links: row
                 .get("links")
@@ -100,12 +102,14 @@ fn injected_host_catalog_reaches_all_consumer_boundaries() {
     use agent_guard_rust::{Context, Event, adapters::Consumer, evaluate_with_catalog};
     let packet: Value =
         serde_json::from_str(include_str!("../fixtures/rust-m2-filesystem.json")).unwrap();
-    for row in packet["paths"]
+    let rows: Vec<_> = packet["paths"]
         .as_array()
         .unwrap()
         .iter()
         .filter(|r| r.get("catalog").is_some())
-    {
+        .collect();
+    assert!(!rows.is_empty(), "missing host catalog partition");
+    for row in rows {
         for consumer in [Consumer::Claude, Consumer::Codex, Consumer::Pi] {
             let context = Context {
                 consumer,
@@ -167,7 +171,9 @@ fn directory_targets_keep_name_glob_and_enter_contracts() {
     let packet: Value =
         serde_json::from_str(include_str!("../fixtures/rust-m2-filesystem.json")).unwrap();
     let fixture = support::Fixture::new();
-    for row in packet["rows"].as_array().unwrap() {
+    let rows = packet["rows"].as_array().unwrap();
+    assert!(!rows.is_empty(), "missing directory target partition");
+    for row in rows {
         for consumer in ["claude", "codex", "pi"] {
             let context =
                 fixture.context(&serde_json::json!({"consumer":consumer,"cwd":fixture.project}));

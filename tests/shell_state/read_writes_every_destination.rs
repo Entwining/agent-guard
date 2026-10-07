@@ -32,12 +32,14 @@ fn missing_read_option_values_keep_the_public_failure_contract() {
 fn read_field_split_preserves_the_last_remainder() {
     let packet: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/rust-batch8-read.json")).unwrap();
-    for row in packet["rows"]
+    let rows: Vec<_> = packet["rows"]
         .as_array()
         .unwrap()
         .iter()
         .filter(|row| row["partition"] == "record")
-    {
+        .collect();
+    assert!(!rows.is_empty(), "missing read record partition");
+    for row in rows {
         for consumer in ["claude", "codex", "pi"] {
             let observation = agent_guard_rust::shell::observe(
                 row["input"]["command"].as_str().unwrap(),
@@ -63,6 +65,11 @@ fn read_field_split_preserves_the_last_remainder() {
                 .iter()
                 .map(|value| value.as_str().unwrap())
                 .collect();
+            assert!(
+                !expected.is_empty(),
+                "missing read record expected values: {}",
+                row["id"]
+            );
             assert_eq!(values, expected, "{consumer}: {}", row["id"]);
             assert!(
                 command.argv[command.program.unwrap() + 2..]
@@ -84,6 +91,8 @@ fn read_count_keeps_both_shell_values() {
         .iter()
         .find(|row| row["id"] == "count-record")
         .unwrap();
+    let expected = row["values"].as_array().unwrap();
+    assert!(!expected.is_empty(), "missing count-record expected values");
     for consumer in ["claude", "codex", "pi"] {
         let observation = agent_guard_rust::shell::observe(
             row["input"]["command"].as_str().unwrap(),
@@ -100,7 +109,7 @@ fn read_count_keeps_both_shell_values() {
             .filter(|command| command.program.is_some_and(|i| command.argv[i] == "printf"))
             .map(|command| command.argv.last().unwrap().text.as_str())
             .collect();
-        for expected in row["values"].as_array().unwrap() {
+        for expected in expected {
             assert!(
                 values.contains(&expected.as_str().unwrap()),
                 "{consumer}: both shells must survive: {values:?}"

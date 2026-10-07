@@ -219,6 +219,10 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
         .lines()
         .map(|s| serde_json::from_str(s).unwrap())
         .collect();
+    assert!(
+        !legacy.is_empty(),
+        "missing legacy operation contract partition"
+    );
     let overlay: Vec<Value> = include_str!("../fixtures/rust-contract-classification.jsonl")
         .lines()
         .map(|s| serde_json::from_str(s).unwrap())
@@ -241,6 +245,19 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
         )
         .filter(|id| selected.is_none_or(|selected| selected.contains(&id.as_str())))
         .collect();
+    if let Some(selected) = selected {
+        assert!(!selected.is_empty(), "missing requested contract partition");
+        assert_eq!(
+            expected_ids,
+            selected.iter().map(|id| (*id).to_owned()).collect(),
+            "requested contract partition contains missing IDs"
+        );
+    } else {
+        assert!(
+            !expected_ids.is_empty(),
+            "missing complete contract partition"
+        );
+    }
     let legacy: BTreeMap<_, _> = legacy
         .into_iter()
         .map(|r| {

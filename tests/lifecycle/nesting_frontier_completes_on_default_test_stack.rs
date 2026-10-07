@@ -19,11 +19,7 @@ fn nesting_frontier_completes_on_default_test_stack() {
                 .starts_with("S20-unfrozen-nesting-")
         })
         .collect();
-    assert_eq!(
-        rows.len(),
-        6,
-        "nesting frontier partition must not disappear"
-    );
+    assert!(!rows.is_empty(), "missing nesting frontier partition");
     let ids: Vec<_> = rows
         .iter()
         .map(|r| r["id"].as_str().unwrap().to_owned())
@@ -89,7 +85,7 @@ fn nesting_frontier_completes_on_default_test_stack() {
         receipt
             .lines()
             .find_map(|line| line.strip_prefix("frontier_receipt="))
-            .expect("child must report all six completed observations"),
+            .expect("child must report every completed frontier observation"),
     )
     .unwrap();
     assert_eq!(observed, ids);

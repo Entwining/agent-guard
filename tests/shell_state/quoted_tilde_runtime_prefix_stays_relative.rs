@@ -10,7 +10,9 @@ fn quoted_tilde_runtime_prefix_stays_relative() {
     let fixture = support::Fixture::new();
     let packet: Value =
         serde_json::from_str(include_str!("../fixtures/rust-batch1-b1b.json")).unwrap();
-    for row in packet["rows"].as_array().unwrap() {
+    let rows = packet["rows"].as_array().unwrap();
+    assert!(!rows.is_empty(), "missing quoted-tilde runtime partition");
+    for row in rows {
         for consumer in ["claude", "codex", "pi"] {
             let context = fixture.context(&json!({"consumer":consumer,"cwd":row["cwd"]}));
             let source = row["source"].as_str().unwrap();

@@ -4,10 +4,12 @@ use crate::support;
 fn supported_dev_rows_keep_their_requirement_contract() {
     let mut failures = Vec::new();
     let mut checked = 0;
-    for row in support::rows()
-        .iter()
-        .filter(|r| support::is_evaluator_row(r))
-    {
+    let rows: Vec<_> = support::rows()
+        .into_iter()
+        .filter(support::is_evaluator_row)
+        .collect();
+    assert!(!rows.is_empty(), "missing supported evaluator partition");
+    for row in &rows {
         for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
             let result = support::run(row, arm);
             checked += 1;
@@ -16,6 +18,7 @@ fn supported_dev_rows_keep_their_requirement_contract() {
             }
         }
     }
+    assert!(checked > 0, "supported evaluator partition ran no checks");
     assert!(
         failures.is_empty(),
         "{} failures in {checked} checks:\n{}",
@@ -27,10 +30,15 @@ fn supported_dev_rows_keep_their_requirement_contract() {
 #[test]
 fn declared_metamorphic_variants_preserve_the_contract() {
     let rows = support::rows();
-    for variant in rows
+    let variants: Vec<_> = rows
         .iter()
         .filter(|r| r.get("metamorphic_variant").is_some())
-    {
+        .collect();
+    assert!(
+        !variants.is_empty(),
+        "missing metamorphic variant partition"
+    );
+    for variant in variants {
         let base = rows
             .iter()
             .find(|r| r["id"] == variant["metamorphic_variant"]["base_row_id"])

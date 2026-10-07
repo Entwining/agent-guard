@@ -1065,12 +1065,14 @@ mod tests {
         let packet: serde_json::Value =
             serde_json::from_str(include_str!("../tests/fixtures/rust-m2-filesystem.json"))
                 .unwrap();
-        for row in packet["paths"]
+        let rows: Vec<_> = packet["paths"]
             .as_array()
             .unwrap()
             .iter()
             .filter(|r| r.get("catalog").is_some() && r["operation"] != "shell")
-        {
+            .collect();
+        assert!(!rows.is_empty(), "missing catalog non-shell partition");
+        for row in rows {
             let table = FirmlinkTable::from_text(row["catalog"].as_str().unwrap());
             let mut resolver = Resolver::new("/h", &table);
             let mut probe = Mock {

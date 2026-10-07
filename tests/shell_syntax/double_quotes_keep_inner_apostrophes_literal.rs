@@ -515,6 +515,7 @@ fn lexer_matches_brush_word_quoting() {
         .map(|line| serde_json::from_str::<Value>(line).unwrap())
         .filter(|row| row["source"].is_string())
         .collect();
+    assert!(!inputs.is_empty(), "missing shell-source parser partition");
     let mut oracle = Oracle::default();
     let mut tokenized = 0;
     let mut parsed_programs = 0;
@@ -711,6 +712,10 @@ fn target_tilde_uses_lexical_prefix_context() {
 fn escaped_continuation_token_mapping() {
     let rows: Vec<Value> =
         serde_json::from_str(include_str!("../fixtures/rust-m1-4-oracle.json")).unwrap();
+    assert!(
+        !rows.is_empty(),
+        "missing escaped-continuation oracle partition"
+    );
     for row in rows {
         let source = row["source"].as_str().unwrap();
         let tokens =

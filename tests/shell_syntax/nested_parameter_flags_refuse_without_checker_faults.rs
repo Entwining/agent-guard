@@ -267,11 +267,11 @@ fn original_parameter_regions_have_supported_or_refused_coverage() {
             "per-region support and span: {word:?}"
         );
     }
-    for source in [
-        "echo ${v:-${w:-x}}",
-        "echo '${~v}'",
-        "echo \\${x}",
-        "echo $(echo ${w:-x})",
+    for (source, active) in [
+        ("echo ${v:-${w:-x}}", true),
+        ("echo '${~v}'", false),
+        ("echo \\${x}", false),
+        ("echo $(echo ${w:-x})", true),
     ] {
         let observation = shell::observe(
             source,
@@ -281,13 +281,27 @@ fn original_parameter_regions_have_supported_or_refused_coverage() {
             true,
         )
         .unwrap();
-        assert!(
-            observation
-                .word_coverage
-                .iter()
-                .all(|w| !w.unsupported && w.parameters.iter().all(|r| r.supported)),
-            "supported/literal control: {source}"
-        );
+        if active {
+            assert!(
+                !observation.word_coverage.is_empty(),
+                "missing active word coverage: {source}"
+            );
+            for word in &observation.word_coverage {
+                assert!(
+                    !word.parameters.is_empty(),
+                    "missing active parameter regions: {source}"
+                );
+                assert!(
+                    !word.unsupported && word.parameters.iter().all(|r| r.supported),
+                    "supported control: {source}"
+                );
+            }
+        } else {
+            assert!(
+                observation.word_coverage.is_empty(),
+                "literal control has active word coverage: {source}"
+            );
+        }
         assert!(
             observation.gaps.is_empty(),
             "supported/literal control: {source}"
@@ -321,6 +335,10 @@ fn brush_backtick_leniency_keeps_the_input_and_refusal() {
     use agent_guard_rust::shell::{self, lexer::Lexed};
     let rows: Vec<Value> =
         serde_json::from_str(include_str!("../fixtures/rust-m1-4-known-limits.json")).unwrap();
+    assert!(
+        !rows.is_empty(),
+        "missing malformed backtick-child partition"
+    );
     for row in rows {
         let source = row["source"].as_str().unwrap();
         assert!(

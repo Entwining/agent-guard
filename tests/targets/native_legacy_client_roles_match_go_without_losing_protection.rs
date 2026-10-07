@@ -11,10 +11,12 @@ use std::cell::Cell;
 #[test]
 fn native_legacy_client_roles_match_go_without_losing_protection() {
     let fixture = support::Fixture::new();
-    for row in include_str!("../fixtures/rust-b11-entry-roles.jsonl")
+    let rows: Vec<_> = include_str!("../fixtures/rust-b11-entry-roles.jsonl")
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).unwrap())
-    {
+        .collect();
+    assert!(!rows.is_empty(), "missing native client-role partition");
+    for row in rows {
         for consumer in [Consumer::Claude, Consumer::Codex, Consumer::Pi] {
             let context = Context {
                 consumer,

@@ -1777,12 +1777,14 @@ mod record_tests {
             home: "/h",
             user: None,
         };
-        for row in packet["rows"]
+        let rows: Vec<_> = packet["rows"]
             .as_array()
             .unwrap()
             .iter()
             .filter(|r| r["partition"] == "use")
-        {
+            .collect();
+        assert!(!rows.is_empty(), "missing compound use partition");
+        for row in rows {
             let observation = crate::shell::observe(
                 row["source"].as_str().unwrap(),
                 crate::shell::Arm::Brush,
@@ -1870,12 +1872,14 @@ mod record_tests {
         let packet: serde_json::Value =
             serde_json::from_str(include_str!("../tests/fixtures/rust-m2-filesystem.json"))
                 .unwrap();
-        for row in packet["rows"]
+        let rows: Vec<_> = packet["rows"]
             .as_array()
             .unwrap()
             .iter()
             .filter(|r| r["role"].is_string())
-        {
+            .collect();
+        assert!(!rows.is_empty(), "missing P7 role dependency partition");
+        for row in rows {
             let target = targets(row["source"].as_str().unwrap())
                 .into_iter()
                 .find(|t| t.path.starts_with("/h/Library/Containers"))

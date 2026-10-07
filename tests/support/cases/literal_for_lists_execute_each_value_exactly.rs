@@ -13,7 +13,10 @@ pub fn partition(name: &str) {
         .iter()
         .filter(|row| row["partition"] == name)
         .collect();
-    assert!(!rows.is_empty());
+    assert!(
+        !rows.is_empty(),
+        "missing literal for-list partition {name}"
+    );
     for row in rows {
         for consumer in ["claude", "codex", "pi"] {
             let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));

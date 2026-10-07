@@ -33,7 +33,7 @@ fn argv(source: &str) -> Vec<agent_guard_rust::record::Word> {
     .script
     .commands
     .into_iter()
-    .find(|command| command.program.is_some())
+    .find(|command| command.program.is_some() && !command.nested)
     .unwrap()
     .argv
 }
@@ -97,6 +97,7 @@ fn user_is_a_host_fact() {
 #[test]
 fn pwd_word_semantics() {
     let words = argv("cat ~+/x $(pwd)/x `pwd -P`/x $PWD/x");
+    assert!(!words[1..].is_empty(), "missing pwd word operands");
     for word in &words[1..] {
         assert_eq!(word.text, "/synthetic/home/project/x");
         assert!(word.pwd && !word.expands);

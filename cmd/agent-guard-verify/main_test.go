@@ -66,6 +66,21 @@ func protocolCases() map[string]int {
 func assertProtocolCases(t *testing.T, output string) {
 	t.Helper()
 	want := protocolCases()
+	if len(want) == 0 {
+		t.Fatal("missing protocol case partition")
+	}
+	for _, runtime := range []string{"claude", "codex", "pi"} {
+		found := false
+		for key := range want {
+			if strings.HasPrefix(key, runtime+"\t") {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing protocol case partition for %s", runtime)
+		}
+	}
 	seen := map[string]bool{}
 	for _, line := range strings.Split(output, "\n") {
 		if !strings.HasPrefix(line, "PASS\t") && !strings.HasPrefix(line, "FAIL\t") {
@@ -343,7 +358,11 @@ func assertFixtureDead(t *testing.T, root string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range strings.Fields(string(data)) {
+	pids := strings.Fields(string(data))
+	if len(pids) == 0 {
+		t.Fatal("missing fixture child PID partition")
+	}
+	for _, value := range pids {
 		pid, err := strconv.Atoi(value)
 		if err != nil {
 			t.Fatal(err)

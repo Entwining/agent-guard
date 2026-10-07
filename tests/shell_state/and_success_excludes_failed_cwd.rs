@@ -229,12 +229,17 @@ fn decided_pwd_and_cdpath_wire_contracts() {
     use serde_json::json;
     let packet: Value = serde_json::from_str(include_str!("../fixtures/rust-m2-cwd.json")).unwrap();
     let fixture = support::Fixture::new();
-    for row in packet["rows"]
+    let rows: Vec<_> = packet["rows"]
         .as_array()
         .unwrap()
         .iter()
         .filter(|r| r["expected"].is_string())
-    {
+        .collect();
+    assert!(
+        !rows.is_empty(),
+        "missing cwd consumer expectation partition"
+    );
+    for row in rows {
         let cwd = row["cwd"]
             .as_str()
             .unwrap()

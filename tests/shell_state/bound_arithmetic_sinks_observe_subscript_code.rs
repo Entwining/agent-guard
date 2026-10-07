@@ -28,7 +28,12 @@ fn bodies(source: &str) -> Vec<String> {
 
 #[test]
 fn bound_arithmetic_sinks_observe_subscript_code() {
-    for row in rows().iter().filter(|r| r["sink"].is_string()) {
+    let rows: Vec<_> = rows()
+        .into_iter()
+        .filter(|r| r["sink"].is_string())
+        .collect();
+    assert!(!rows.is_empty(), "missing arithmetic sink partition");
+    for row in rows {
         assert!(
             bodies(row["source"].as_str().unwrap()).contains(&"cat".into()),
             "arithmetic sink {}: {}",
@@ -41,9 +46,11 @@ fn bound_arithmetic_sinks_observe_subscript_code() {
 #[test]
 fn arithmetic_effects_and_consumer_wire() {
     let fixture = support::Fixture::new();
+    let rows = rows();
+    assert!(!rows.is_empty(), "missing arithmetic consumer partition");
     for consumer in ["claude", "codex", "pi"] {
         let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
-        for row in rows() {
+        for row in &rows {
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer == "pi" {"bash"} else {"Bash"},"tool_input":{"command":row["source"]}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
             let result = evaluate_with_arm(
@@ -72,10 +79,15 @@ fn arithmetic_effects_and_consumer_wire() {
 
 #[test]
 fn arithmetic_uses_current_binding_version_and_scope() {
-    for row in rows()
-        .iter()
+    let rows: Vec<_> = rows()
+        .into_iter()
         .filter(|r| !r["sink"].is_string() && r["id"] != "cycle")
-    {
+        .collect();
+    assert!(
+        !rows.is_empty(),
+        "missing arithmetic binding scope partition"
+    );
+    for row in rows {
         assert_eq!(
             bodies(row["source"].as_str().unwrap()).contains(&"cat".into()),
             row["nested"].as_bool().unwrap(),

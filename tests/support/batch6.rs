@@ -19,7 +19,10 @@ pub fn partition_with(
         .iter()
         .filter(|row| row["partition"] == name)
         .collect();
-    assert!(!rows.is_empty());
+    assert!(
+        !rows.is_empty(),
+        "missing program contract partition {name}"
+    );
     for row in rows {
         for consumer in ["claude", "codex", "pi"] {
             let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));

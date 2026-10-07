@@ -635,6 +635,10 @@ mod tests {
     }
     #[test]
     fn complete_alternative_argv() {
+        assert!(
+            !ACCEPTANCE_ARMS.is_empty(),
+            "missing acceptance parser arms"
+        );
         for &arm in ACCEPTANCE_ARMS {
             let obs = observe("p='public protected'; cat $p", arm, "/h", "/h/p", true).unwrap();
             assert!(

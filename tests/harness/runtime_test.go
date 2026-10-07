@@ -251,6 +251,9 @@ func TestRuntimeDriverCompleteAndMissingHook(t *testing.T) {
 			seenClients[client.Runtime] = true
 		}
 		assertRuntimeCases(t, report.Records, ablate)
+		if len(report.Summary) == 0 {
+			t.Fatal("missing runtime summary partition")
+		}
 		for _, summary := range report.Summary {
 			planned := len(RuntimeCorpus) * 3
 			if !seenClients[summary.Runtime] || !summary.Complete || summary.Verified != planned || summary.Matched != planned {
@@ -299,6 +302,9 @@ func assertBinding(t *testing.T, binding Binding, path, name string) {
 
 func assertRuntimeCases(t *testing.T, rows []RuntimeRow, ablate bool) {
 	t.Helper()
+	if len(RuntimeCorpus) == 0 {
+		t.Fatal("missing runtime protocol corpus partition")
+	}
 	want := map[string]RuntimeCase{}
 	for _, runtime := range []string{"claude", "pi", "codex"} {
 		for run := 0; run < 3; run++ {
