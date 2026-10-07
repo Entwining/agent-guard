@@ -572,7 +572,10 @@ fn expand_scoped(
                     .iter()
                     .any(|name| words::parameter_affixes(&raw.raw, name).is_none())
                 {
-                    evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+                    expanded.word.expands = true;
+                    for word in &mut expanded.split {
+                        word.expands = true;
+                    }
                 }
                 // The literal fields are known; their repetition count is not.
                 // Consumers whose roles depend on position need the unknown count.

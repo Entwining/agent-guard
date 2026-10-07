@@ -3078,10 +3078,14 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             self.output.gap(CoverageGap::InspectionBudget);
         }
         if evaluation.names.iter().any(|name| {
-            scope
-                .bindings
-                .get(name)
-                .is_some_and(|b| b.values.contains(&BindingValue::Undetermined))
+            scope.bindings.get(name).is_some_and(|b| {
+                b.values.iter().any(|value| {
+                    matches!(
+                        value,
+                        BindingValue::RepeatedFields(_) | BindingValue::Undetermined
+                    )
+                })
+            })
         }) {
             self.output.gap(CoverageGap::UnsupportedShellSyntax);
         }

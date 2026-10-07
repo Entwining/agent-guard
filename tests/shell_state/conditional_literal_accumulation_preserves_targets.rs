@@ -54,3 +54,11 @@ fn repeated_copies_keep_distinct_resource_prefixes() {
         include_str!("../fixtures/rust-batch17b-accumulation.json"),
     );
 }
+
+#[test]
+fn repeated_public_output_keeps_substitution_observation() {
+    contract::partition(
+        "output",
+        include_str!("../fixtures/rust-batch17b-accumulation.json"),
+    );
+}

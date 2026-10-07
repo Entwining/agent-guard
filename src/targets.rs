@@ -570,8 +570,16 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
     effects.hidden_content |= hidden_items_read;
     // A repetition projects each literal, not every possible argument sequence.
     // Positional roles and executable text cannot use those projections as a
-    // complete command. Independent operand owners above can check their union.
+    // complete command. Independent operand owners above can check their union;
+    // transformations also need a complete resource spelling.
     if !effects.independent_arguments && args.iter().any(|word| word.cardinality_unknown)
+        || args
+            .iter()
+            .any(|word| word.cardinality_unknown && word.expands)
+            && effects
+                .targets
+                .iter()
+                .any(|target| target.effect != Effect::Name)
         || command
             .environment
             .iter()

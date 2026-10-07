@@ -42,6 +42,9 @@
     {"id":"quoted-function-keeps-public-output","partition":"public","input":{"command":"sayit() { echo \"$1\"; }; M=\"\"; for f in public notes; do test -f public || M=\"$M $f\"; done; sayit \"$M\""},"expected":"N"},
     {"id":"function-position-count-is-unmodelled","partition":"roles","input":{"command":"readsecond() { cat $2; }; M=\"\"; for f in public .env; do test -f public || M=\"$M $f\"; done; readsecond $M"},"expected":"UR"},
     {"id":"unbounded-literal-budget","partition":"budget","input":{"command":"s=public; while true; do s=\"$s/public\"; done; cat \"$s\""},"expected":"UR"},
-    {"id":"copy-keeps-distinct-fixed-prefixes","partition":"identity","input":{"command":"if test -f public; then M=public; else M='$C'; fi; for f in notes data; do test -f public || M=\"$M $f\"; done; ALIAS=\"$M\"; cat $ALIAS"},"expected":"D","wire_reason":"App Data"}
+    {"id":"copy-keeps-distinct-fixed-prefixes","partition":"identity","input":{"command":"if test -f public; then M=public; else M='$C'; fi; for f in notes data; do test -f public || M=\"$M $f\"; done; ALIAS=\"$M\"; cat $ALIAS"},"expected":"D","wire_reason":"App Data"},
+    {"id":"substitution-prefix-keeps-public-output","partition":"output","input":{"command":"for i in $(seq 1 2); do M=\"\"; for f in public notes; do test -f public || M=\"$M $f\"; done; echo \"$(printf stamp)$M\"; done"},"expected":"UC"},
+    {"id":"substitution-body-keeps-own-binding","partition":"output","input":{"command":"for i in $(seq 1 2); do M=\"\"; for f in public notes; do test -f public || M=\"$M $f\"; done; n=$(echo $M | wc -w); echo \"count=$n values=$M\"; if [ \"$n\" -eq 2 ]; then break; fi; done"},"expected":"UC"},
+    {"id":"repeated-arithmetic-count","partition":"code","input":{"command":"M=0; for f in 1 2; do test -f public || M=\"$M + $f\"; done; echo \"$((M))\""},"expected":"UR"}
   ]
 }
