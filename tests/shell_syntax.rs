@@ -30,6 +30,8 @@ pub mod quoted_substitution_heredoc_bodies_are_inert_word_data;
 pub mod shell;
 #[path = "shell_syntax/shell_word_blanks_keep_benign_permits.rs"]
 pub mod shell_word_blanks_keep_benign_permits;
+#[path = "shell_syntax/subshell_case_patterns_are_not_group_closers.rs"]
+pub mod subshell_case_patterns_are_not_group_closers;
 pub(crate) mod support;
 #[path = "shell_syntax/visible_shell_matches_and_literal_search_roots_skip_hidden_credentials.rs"]
 pub mod visible_shell_matches_and_literal_search_roots_skip_hidden_credentials;

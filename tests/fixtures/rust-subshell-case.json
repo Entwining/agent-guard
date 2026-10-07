@@ -1,0 +1,4 @@
+{"rows":[
+{"id":"subshell-case","partition":"case","input":{"command":"f=x; (case \"$f\" in a) echo a;; esac)"},"expected":"N"},
+{"id":"subshell-case-protected","partition":"case","input":{"command":"f=x; (case \"$f\" in a) cat .env;; esac)"},"expected":"D"}
+]}

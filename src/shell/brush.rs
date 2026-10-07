@@ -95,14 +95,27 @@ pub(super) fn records(source: &str, parsed: &str) -> Result<Parsed, CheckError> 
     let tokens =
         brush_parser::uncached_tokenize_str(parsed, &brush_parser::TokenizerOptions::default());
     let mut spans: Vec<_> = std::iter::once(0..source.text.len()).collect();
-    if let Ok(tokens) = tokens {
+    if let Ok(tokens) = &tokens {
         for token in tokens {
             spans.push(source.range(token.location())?);
         }
     }
-    let Ok(program) = brush_parser::Parser::builder()
-        .build(std::io::Cursor::new(parsed.as_bytes()))
-        .parse_program()
+    let Ok(mut tokens) = tokens else {
+        return Ok(Parsed {
+            records: None,
+            spans,
+        });
+    };
+    // Brush 0.4's optional final case pattern consumes `esac)` greedily.
+    // A separator before the group closer is equivalent and retains source spans.
+    for index in (1..tokens.len()).rev() {
+        if tokens[index - 1].to_str() == "esac" && tokens[index].to_str() == ")" {
+            let mut span = tokens[index].location().clone();
+            span.end = span.start.clone();
+            tokens.insert(index, brush_parser::Token::Operator("\n".into(), span));
+        }
+    }
+    let Ok(program) = brush_parser::parse_tokens(&tokens, &brush_parser::ParserOptions::default())
     else {
         return Ok(Parsed {
             records: None,
