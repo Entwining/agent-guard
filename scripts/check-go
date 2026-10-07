@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+go=${GO:-go}
+go=$(command -v "$go")
+PATH="$(dirname "$go"):$PATH"
+export PATH
+files=$("$go" list -f '{{range .GoFiles}}{{$.Dir}}/{{.}} {{end}}{{range .TestGoFiles}}{{$.Dir}}/{{.}} {{end}}' ./...)
+# These are ordinary Go source paths owned by this checkout.
+unformatted=$("$go" tool goimports -format-only -local agentguard -l $files)
+[ -z "$unformatted" ] || { printf '%s\n' "$unformatted" 'Run go tool goimports -format-only -local agentguard -w on the listed Go sources.' >&2; exit 1; }
+"$go" vet ./...
+"$go" tool staticcheck ./...
+GORACE=atexit_sleep_ms=0 "$go" test -race -count=1 -timeout=90s ./...

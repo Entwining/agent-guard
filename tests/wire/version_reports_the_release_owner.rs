@@ -2,7 +2,7 @@ use std::process::Command;
 
 #[test]
 fn version_reports_the_release_owner() {
-    let output = Command::new(env!("CARGO_BIN_EXE_agent-guard-rust-slice"))
+    let output = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
         .arg("--version")
         .output()
         .expect("offline binary should start");
@@ -17,7 +17,7 @@ fn version_reports_the_release_owner() {
 #[test]
 fn unsupported_invocations_fail_without_stdout() {
     for arguments in [vec!["--checker"], vec!["--version", "extra"]] {
-        let output = Command::new(env!("CARGO_BIN_EXE_agent-guard-rust-slice"))
+        let output = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
             .args(&arguments)
             .output()
             .expect("offline binary should start");
@@ -46,7 +46,7 @@ fn entry_modes_check_events_and_separate_rejections_from_faults() {
                 ),
                 ("{", 1),
             ] {
-                let mut command = Command::new(env!("CARGO_BIN_EXE_agent-guard-rust-slice"));
+                let mut command = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"));
                 if !mode.is_empty() {
                     command.arg(mode);
                 }
@@ -90,7 +90,7 @@ fn native_protocol_uses_file_path_for_every_consumer() {
         .join(format!("native-fields-{}", std::process::id()));
     fs::create_dir_all(&home).unwrap();
     for consumer in ["claude", "codex", "pi"] {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-rust-slice"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
             .args(["--checker", "--runtime", consumer, "--cwd"])
             .arg(&home)
             .env("HOME", &home)
@@ -118,7 +118,7 @@ fn native_advice_matches_go_text_and_json_bytes() {
     let home = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("native-advice-{}", std::process::id()));
     fs::create_dir_all(&home).unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-rust-slice"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
         .args(["--checker", "--runtime", "claude", "--cwd"])
         .arg(&home)
         .env("HOME", &home)
@@ -163,7 +163,7 @@ fn native_protocol_does_not_fall_through_to_raw_consumer_envelopes() {
             0,
         ),
     ] {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-rust-slice"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
             .args(["--checker", "--runtime", consumer, "--cwd"])
             .arg(&home)
             .env("HOME", &home)

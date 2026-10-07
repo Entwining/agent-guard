@@ -39,7 +39,7 @@ impl Fixture {
         eprintln!("child_pid={pid} reaped=true");
     }
     fn native(&self, args: &[&str], home: &str, event: &[u8]) -> Output {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-rust-slice"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
             .args(args)
             .current_dir(&self.root)
             .env("HOME", home)
@@ -150,7 +150,7 @@ fn shell_entry_rejects_even_an_existing_relative_home() {
     let wrapper = fixture.root.join("bin/agent-guard");
     fs::copy("bin/agent-guard", &wrapper).unwrap();
     std::os::unix::fs::symlink(
-        env!("CARGO_BIN_EXE_agent-guard-rust-slice"),
+        env!("CARGO_BIN_EXE_agent-guard-native"),
         fixture.root.join("bin/agent-guard-native"),
     )
     .unwrap();

@@ -40,7 +40,7 @@ fn native_limits_are_completed_refusals() {
     for consumer in ["claude", "codex", "pi"] {
         for mode in ["--checker", ""] {
             for (bytes, reason, status) in &cases {
-                let mut command = Command::new(env!("CARGO_BIN_EXE_agent-guard-rust-slice"));
+                let mut command = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"));
                 if !mode.is_empty() {
                     command.arg(mode);
                 }

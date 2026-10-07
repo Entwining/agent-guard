@@ -7,7 +7,7 @@ publish = false
 license = "MIT"
 
 [[bin]]
-name = "agent-guard-rust-slice"
+name = "agent-guard-native"
 path = "src/main.rs"
 
 [[bin]]

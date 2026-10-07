@@ -1,7 +1,9 @@
 GO ?= go
 CARGO ?= cargo
 
-.PHONY: build check rust-build rust-check
+.PHONY: build check rust-check
+
+package_target = $(or $(CARGO_TARGET_DIR),$(OUT)/../cargo-target)
 
 define validate_external_directory
 @test -n "$(1)" || { printf '%s\n' 'Set $(2) to a directory outside the checkout.' >&2; exit 1; }
@@ -17,20 +19,15 @@ endef
 
 build:
 	$(call validate_external_directory,$(OUT),OUT)
+	$(call validate_external_directory,$(package_target),CARGO_TARGET_DIR)
+	$(CARGO) build --locked --release --bin agent-guard-native --target-dir "$(package_target)"
 	mkdir -p "$(OUT)/bin"
-	$(GO) build -trimpath -ldflags "-X main.version=$$(cat VERSION)" -o "$(OUT)/bin/agent-guard-native" ./cmd/agent-guard
+	install -m 755 "$(package_target)/release/agent-guard-native" "$(OUT)/bin/agent-guard-native"
 	install -m 755 bin/agent-guard "$(OUT)/bin/agent-guard"
 	install -m 644 VERSION LICENSE README.md "$(OUT)/"
 
-check:
-	GO="$(GO)" native/check
-
-rust-build:
-	$(call validate_external_directory,$(OUT),OUT)
-	$(call validate_external_directory,$(CARGO_TARGET_DIR),CARGO_TARGET_DIR)
-	$(CARGO) build --locked --release --bin agent-guard-rust-slice --target-dir "$(CARGO_TARGET_DIR)"
-	mkdir -p "$(OUT)/bin"
-	install -m 755 "$(CARGO_TARGET_DIR)/release/agent-guard-rust-slice" "$(OUT)/bin/agent-guard-rust-slice"
+check: rust-check
+	GO="$(GO)" scripts/check-go
 
 rust-check:
 	$(call validate_external_directory,$(CARGO_TARGET_DIR),CARGO_TARGET_DIR)
