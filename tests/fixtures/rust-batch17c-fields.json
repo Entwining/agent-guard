@@ -1,6 +1,39 @@
 {
   "rows": [
     {
+      "id": "newline-is-executable-syntax",
+      "partition": "complete",
+      "input": {
+        "command": "M=\"\"; for f in 'public\ncat .env' notes; do test -f public || M=\"$M $f\"; done; eval \"echo $M\""
+      },
+      "expected": "UR"
+    },
+    {
+      "id": "joined-positional-lengths",
+      "partition": "positionals",
+      "input": {
+        "command": "if test -f public; then set -- a; else set -- a .env; fi; cat \"$@\""
+      },
+      "expected": "D",
+      "wire_reason": "extract protected environment-file contents"
+    },
+    {
+      "id": "loop-sh-public",
+      "partition": "complete",
+      "input": {
+        "command": "M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; sh -c \"cat $M\""
+      },
+      "expected": "N"
+    },
+    {
+      "id": "loop-eval-syntax-not-data",
+      "partition": "complete",
+      "input": {
+        "command": "M=\"\"; for f in 'public; echo harmless' notes; do test -f public || M=\"$M $f\"; done; eval \"cat $M\""
+      },
+      "expected": "UR"
+    },
+    {
       "id": "exact-echo-key",
       "partition": "exact",
       "input": {
@@ -93,6 +126,81 @@
         "command": "M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; echo $M | xargs cat"
       },
       "expected": "N"
+    },
+    {
+      "id": "loop-eval-public",
+      "partition": "complete",
+      "input": {
+        "command": "M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; eval \"cat $M\""
+      },
+      "expected": "N"
+    },
+    {
+      "id": "loop-eval-fixed-pattern",
+      "partition": "fixed_roles",
+      "input": {
+        "command": "M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; eval \"grep key $M\""
+      },
+      "expected": "N"
+    },
+    {
+      "id": "loop-sh-fixed-archive",
+      "partition": "fixed_roles",
+      "input": {
+        "command": "M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; sh -c \"tar cf archive.tar $M\""
+      },
+      "expected": "N"
+    },
+    {
+      "id": "loop-eval-varying-pattern",
+      "partition": "complete",
+      "input": {
+        "command": "M=\"\"; for f in key public; do test -f public || M=\"$M $f\"; done; eval \"grep $M\""
+      },
+      "expected": "UR"
+    },
+    {
+      "id": "loop-set-varying-position",
+      "partition": "positionals",
+      "input": {
+        "command": "M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; set -- $M; cat \"$2\""
+      },
+      "expected": "UR"
+    },
+    {
+      "id": "loop-sh-env",
+      "partition": "complete",
+      "input": {
+        "command": "M=\"\"; for f in a .env; do test -f public && M=\"$M $f\"; done; sh -c \"cat $M\""
+      },
+      "expected": "D",
+      "wire_reason": "extract protected environment-file contents"
+    },
+    {
+      "id": "loop-eval-key",
+      "partition": "complete",
+      "input": {
+        "command": "M=\"\"; for f in a '$H/.ssh/id_rsa'; do test -f public || M=\"$M $f\"; done; eval \"cat $M\""
+      },
+      "expected": "D",
+      "wire_reason": "extract protected private-key contents"
+    },
+    {
+      "id": "loop-set-public",
+      "partition": "positionals",
+      "input": {
+        "command": "M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; set -- $M; cat \"$@\""
+      },
+      "expected": "UC"
+    },
+    {
+      "id": "loop-set-appdata",
+      "partition": "positionals",
+      "input": {
+        "command": "M=\"\"; for f in a '$C/data.txt'; do test -f public || M=\"$M $f\"; done; set -- $M; cat \"$@\""
+      },
+      "expected": "D",
+      "wire_reason": "App Data"
     }
   ]
 }

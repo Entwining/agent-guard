@@ -15,3 +15,27 @@ fn producer_candidates_reach_xargs_operands() {
         include_str!("../fixtures/rust-batch17c-fields.json"),
     );
 }
+
+#[test]
+fn complete_value_consumers_keep_independent_field_roles() {
+    contract::partition(
+        "complete",
+        include_str!("../fixtures/rust-batch17c-fields.json"),
+    );
+}
+
+#[test]
+fn positional_sequences_keep_all_operand_candidates() {
+    contract::partition(
+        "positionals",
+        include_str!("../fixtures/rust-batch17c-fields.json"),
+    );
+}
+
+#[test]
+fn fixed_pattern_and_archive_roles_ignore_operand_count() {
+    contract::partition(
+        "fixed_roles",
+        include_str!("../fixtures/rust-batch17c-fields.json"),
+    );
+}

@@ -342,6 +342,12 @@ fn expand_positional_argv(
 ) -> Option<Vec<Expanded>> {
     let list = words::positional_list(&raw.raw)?;
     let mut arguments = scope.positional_words()?;
+    if arguments.iter().any(|word| word.field_count_unknown) {
+        evaluator.output.gap(CoverageGap::UnresolvedTarget);
+        if list.offset != "1" || list.length.is_some() {
+            evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+        }
+    }
     let integer = |text: &str| {
         text.trim().parse::<isize>().ok().or_else(|| {
             scope
@@ -376,6 +382,8 @@ fn expand_positional_argv(
                 joined.expands |= argument.expands;
                 joined.runtime_unknown |= argument.runtime_unknown;
                 joined.shell_matches |= argument.shell_matches;
+                joined.cardinality_unknown |= argument.cardinality_unknown;
+                joined.expands |= argument.cardinality_unknown;
                 for name in &argument.vars {
                     if !joined.vars.contains(name) {
                         joined.vars.push(name.clone());
@@ -438,6 +446,16 @@ fn expand_scoped(
         .iter()
         .collect::<std::collections::BTreeSet<_>>()
     {
+        if name.parse::<usize>().is_ok()
+            && scope.bindings.get("#").is_some_and(|binding| {
+                binding
+                    .values
+                    .iter()
+                    .any(|value| matches!(value, statements::BindingValue::RuntimeDerived(_)))
+            })
+        {
+            evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+        }
         if observe_bindings {
             evaluator.armed_reference(name, scope, depth)?;
         }

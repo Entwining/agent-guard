@@ -325,6 +325,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             );
         }
         "set" => {
+            effects.independent_arguments = args.first().is_some_and(|word| word == "--")
+                && args[1..].iter().all(|word| !word.starts_with('-'));
             effects.dump = command.shell && !command.argv[index].contains('/') && args.is_empty()
         }
         "typeset" | "declare" if command.shell && !command.argv[index].contains('/') => {
@@ -1440,6 +1442,7 @@ fn infer_tar(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
             Walk::None,
         ));
     }
+    effects.independent_arguments = independent_operands(args, &operands);
     for path in operands {
         effects.targets.push(Target::from_word(
             &path.with_text(if path.starts_with('~') {
@@ -1482,6 +1485,19 @@ fn operand_value(word: &Word) -> Option<&str> {
         }
     }
     (!value.is_empty()).then_some(value)
+}
+
+fn independent_operands(args: &[Word], operands: &[Word]) -> bool {
+    let count = args.iter().filter(|word| word.cardinality_unknown).count();
+    count != 0
+        && count
+            == operands
+                .iter()
+                .filter(|word| word.cardinality_unknown)
+                .count()
+        && operands
+            .iter()
+            .all(|word| !word.cardinality_unknown || !word.starts_with('-'))
 }
 
 fn space(c: char) -> bool {
@@ -1640,6 +1656,7 @@ fn infer_search(
     if !explicit && !names && !operands.is_empty() {
         patterns.push(operands.remove(0).text);
     }
+    effects.independent_arguments = independent_operands(args, &operands);
     // native/rules/workflow.go:24-32 applies BRE advice only to pattern roles.
     effects.bre_advice = program == "rg"
         && !fixed
