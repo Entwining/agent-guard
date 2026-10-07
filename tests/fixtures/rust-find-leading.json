@@ -1,0 +1,6 @@
+{"rows":[
+{"id":"find-extended-appdata","partition":"leading","input":{"command":"find -E $H/Library/Containers -type f"},"expected":"D"},
+{"id":"find-x-ssh","partition":"leading","input":{"command":"find -x $H/.ssh -type f"},"expected":"D"},
+{"id":"find-O-ssh","partition":"leading","input":{"command":"find -O2 $H/.ssh -type f"},"expected":"D"},
+{"id":"find-public","partition":"leading","input":{"command":"find -E -x public -type f"},"expected":"N"}
+]}

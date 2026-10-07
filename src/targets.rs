@@ -1095,7 +1095,10 @@ fn infer_listing(
         }
         if program == "find"
             && arg.starts_with(['-', '(', '!'])
-            && !["-H", "-L", "-P"].contains(&arg.as_str())
+            && !arg
+                .strip_prefix('-')
+                .and_then(|flags| flags.chars().next())
+                .is_some_and(|flag| "HLPEXxdsO".contains(flag))
         {
             break;
         }
