@@ -159,7 +159,8 @@ mod loop_cost {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum BindingValue {
     Known(String),
-    RepeatedFields(LiteralRepetition),
+    // Keep the uncommon repetition payload off the recursive evaluator stack.
+    RepeatedFields(Box<LiteralRepetition>),
     // The lexical representative preserves pre-M2 target inference; it is
     // never evidence of the runtime value or its arithmetic contents.
     RuntimeUnknown(Option<String>),
@@ -899,7 +900,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
                 BindingValue::RepeatedFields(mut value) if value.suffix.is_empty() => {
                     value.may_be_empty = false;
-                    value
+                    *value
                 }
                 _ => return Ok(None),
             };
@@ -940,7 +941,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         Ok(Some(
             repeated
                 .into_iter()
-                .map(BindingValue::RepeatedFields)
+                .map(|value| BindingValue::RepeatedFields(Box::new(value)))
                 .collect(),
         ))
     }
