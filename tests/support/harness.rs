@@ -854,15 +854,7 @@ pub fn assert_preflight_tuple(row: &Value, actual: &Value) {
     let expected = if conditional {
         "D".to_owned()
     } else {
-        // D22 changes policy advice for every consumer; the frozen manifest predates it.
-        if matches!(
-            text(row, "id"),
-            "S17-replacement-codex" | "S17-replacement-pi"
-        ) {
-            "A".into()
-        } else {
-            row["outcome_class"].as_str().unwrap().replace('-', "")
-        }
+        row["outcome_class"].as_str().unwrap().replace('-', "")
     };
     assert_eq!(
         actual["class"].as_str().unwrap(),
@@ -885,11 +877,6 @@ pub fn assert_preflight_tuple(row: &Value, actual: &Value) {
     }
     if let Some(expected) = row["expected_coverage"]["gaps"].as_array() {
         let mut expected = expected.clone();
-        if row["parent_task_family_id"] == "runtime-selected-read"
-            && row["provenance_form"] == "runtime_config"
-        {
-            expected = vec![json!("InterpreterChosenRead")];
-        }
         expected.sort_by_key(Value::to_string);
         let mut got = actual["coverage"]["gaps"].as_array().unwrap().clone();
         got.sort_by_key(Value::to_string);

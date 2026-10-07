@@ -137,14 +137,7 @@ fn mechanism_rows(owner: &str) {
                 Arm::Brush,
             );
             let wire = adapters::render(context.consumer, &result);
-            let expected = if matches!(
-                row["id"].as_str(),
-                Some("i4-arith-sub-plain" | "i5-arith-sub-param")
-            ) {
-                "D" // Ruling 16 moves the two recorded arithmetic gaps to P2.
-            } else {
-                row["expected"].as_str().unwrap()
-            };
+            let expected = row["expected"].as_str().unwrap();
             if support::class(&result) != expected
                 || wire.exit != if matches!(expected, "N" | "UC") { 0 } else { 2 }
             {

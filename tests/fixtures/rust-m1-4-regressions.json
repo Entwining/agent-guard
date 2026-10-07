@@ -234,14 +234,14 @@
     "id": "i4-arith-sub-plain",
     "decision_id": "D29/D30",
     "source": "v='a[$(cat .env)]'; echo $((v))",
-    "expected": "N",
+    "expected": "D",
     "owner": "coverage"
   },
   {
     "id": "i5-arith-sub-param",
     "decision_id": "D29/D30",
     "source": "v='a[$(cat .env)]'; echo $((${v}))",
-    "expected": "N",
+    "expected": "D",
     "owner": "coverage"
   },
   {
