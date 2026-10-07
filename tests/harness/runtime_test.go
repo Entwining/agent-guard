@@ -2,6 +2,8 @@ package harness
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -47,13 +49,18 @@ func TestObservationStreamsAndFailure(t *testing.T) {
 	home := t.TempDir()
 	entry := filepath.Join(home, "entry")
 	for _, status := range []int{0, 2, 7} {
-		body := fmt.Sprintf("#!/bin/sh\ncat >/dev/null\nprintf 'synthetic advice\\n'\nprintf 'synthetic reason\\n' >&2\nexit %d\n", status)
+		body := fmt.Sprintf("#!/bin/sh\ncat > forwarded\nprintf 'synthetic advice\\n'\nprintf 'synthetic reason\\n' >&2\nexit %d\n", status)
 		if err := os.WriteFile(entry, []byte(body), 0700); err != nil {
 			t.Fatal(err)
 		}
-		got, err := ObserveHook("claude", entry, home, []byte(`{}`), []string{"HOME=" + home, "PATH=/usr/bin:/bin"}, false)
+		input := []byte(" { \"tool_name\": \"Bash\", \"tool_input\": {\"command\": \"printf public\"}, \"sentinel\": [1, true] }\n")
+		got, err := ObserveHook("claude", entry, home, input, []string{"HOME=" + home, "PATH=/usr/bin:/bin"}, false)
 		if err != nil || got.Status != status || got.Stdout != "synthetic advice\n" || got.Stderr != "synthetic reason\n" || len(got.Survivors) != 0 || got.ObservationError != "" {
 			t.Fatalf("%+v %v", got, err)
+		}
+		forwarded, err := os.ReadFile(filepath.Join(home, "forwarded"))
+		if err != nil || !bytes.Equal(forwarded, input) || !bytes.Equal(got.Input, input) {
+			t.Fatalf("hook input was not byte-preserving: %q: %v", forwarded, err)
 		}
 	}
 	got, err := ObserveHook("codex", filepath.Join(home, "missing"), home, []byte(`{}`), []string{"HOME=" + home}, false)
@@ -215,20 +222,38 @@ func TestRuntimeDriverCompleteAndMissingHook(t *testing.T) {
 		if err = json.Unmarshal(body, &report); err != nil {
 			t.Fatal(err)
 		}
-		if len(report.Records) != 90 || len(report.Manifest) != 2 || len(report.Clients) != 3 {
+		if len(report.Manifest) != 2 || len(report.Clients) != 3 {
 			t.Fatalf("incomplete report: %d rows %d bindings", len(report.Records), len(report.Manifest))
 		}
+		seenBindings := map[string]bool{}
+		for _, binding := range report.Manifest {
+			if (binding.Path != "bin/agent-guard" && binding.Path != "bin/agent-guard-native") || seenBindings[binding.Path] {
+				t.Fatalf("wrong installation binding: %+v", binding)
+			}
+			seenBindings[binding.Path] = true
+			assertBinding(t, binding, filepath.Join(packageBin, filepath.Base(binding.Path)), binding.Path)
+		}
+		seenClients := map[string]bool{}
 		for _, client := range report.Clients {
 			physicalBin, err := filepath.EvalSymlinks(bin)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(client.Executable.SHA256) != 64 || !strings.HasPrefix(client.Executable.Path, physicalBin+"/") || client.Version.Status != 0 || client.Version.Stdout != "synthetic runtime 1\n" {
+			name := client.Runtime
+			if name == "codex" {
+				name = "installed-codex"
+			}
+			path := filepath.Join(physicalBin, name)
+			assertBinding(t, client.Executable, path, path)
+			if seenClients[client.Runtime] || client.Version.Status != 0 || client.Version.Stdout != "synthetic runtime 1\n" {
 				t.Fatalf("client identity incomplete: %+v", client)
 			}
+			seenClients[client.Runtime] = true
 		}
+		assertRuntimeCases(t, report.Records, ablate)
 		for _, summary := range report.Summary {
-			if !summary.Complete || summary.Verified != 30 || summary.Matched != 30 {
+			planned := len(RuntimeCorpus) * 3
+			if !seenClients[summary.Runtime] || !summary.Complete || summary.Verified != planned || summary.Matched != planned {
 				t.Fatalf("%+v", summary)
 			}
 		}
@@ -251,8 +276,54 @@ func TestRuntimeDriverCompleteAndMissingHook(t *testing.T) {
 	if err = json.Unmarshal(body, &report); err != nil {
 		t.Fatal(err)
 	}
-	if len(report.Records) != 1 || report.Summary[0].Planned != 30 || report.Summary[0].Verified != 0 || report.Summary[0].FalseAllow != nil || report.Summary[0].FalseDeny != nil {
+	if len(report.Records) != 1 || report.Records[0].ID != RuntimeCorpus[0].ID || report.Records[0].Runtime != "codex" || report.Records[0].Verdict.Runtime != "unverified" || report.Summary[0].Planned != len(RuntimeCorpus)*3 || report.Summary[0].Verified != 0 || report.Summary[0].FalseAllow != nil || report.Summary[0].FalseDeny != nil {
 		t.Fatalf("missing evidence converted into verdicts: %+v", report.Summary)
+	}
+}
+
+func assertBinding(t *testing.T, binding Binding, path, name string) {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(body)
+	if binding.Path != name || binding.SHA256 != hex.EncodeToString(sum[:]) || binding.Mode != info.Mode().Perm() {
+		t.Fatalf("wrong executable binding: %+v for %s", binding, path)
+	}
+}
+
+func assertRuntimeCases(t *testing.T, rows []RuntimeRow, ablate bool) {
+	t.Helper()
+	want := map[string]RuntimeCase{}
+	for _, runtime := range []string{"claude", "pi", "codex"} {
+		for run := 0; run < 3; run++ {
+			for _, fixture := range RuntimeCorpus {
+				want[fmt.Sprintf("%s/%d/%s", runtime, run, fixture.ID)] = fixture
+			}
+		}
+	}
+	seen := map[string]bool{}
+	for _, row := range rows {
+		key := fmt.Sprintf("%s/%d/%s", row.Runtime, row.Run, row.ID)
+		fixture, exists := want[key]
+		verdict := fixture.Expected
+		if ablate {
+			verdict = "allow"
+		}
+		if !exists || seen[key] || row.Command != fixture.Command || row.Expected != fixture.Expected || row.Verdict.Runtime != verdict || row.Result == nil || len(row.Hooks) != 1 || row.Conflict {
+			t.Fatalf("missing, duplicate or mismatched runtime case: %+v", row)
+		}
+		seen[key] = true
+	}
+	for key := range want {
+		if !seen[key] {
+			t.Fatalf("unevaluated runtime case: %s", key)
+		}
 	}
 }
 
