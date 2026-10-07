@@ -333,15 +333,14 @@ func TestInterruptCleanup(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) })
 			ready := filepath.Join(root, "fixture-pids")
-			until := time.Now().Add(2 * time.Second)
 			for {
 				if _, err := os.Stat(ready); err == nil {
 					break
 				}
-				if time.Now().After(until) {
+				if ctx.Err() != nil {
 					_ = cmd.Process.Kill()
 					_ = cmd.Wait()
-					t.Fatal("fixture did not start")
+					t.Fatalf("verification ended before fixture readiness: %v", ctx.Err())
 				}
 				time.Sleep(10 * time.Millisecond)
 			}
