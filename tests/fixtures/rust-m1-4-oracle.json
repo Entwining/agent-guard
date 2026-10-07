@@ -1,7 +1,6 @@
 [
   {
     "id": "F2-leading-continuation-double",
-    "reviewer": "m1-3-verify-deepseek F2",
     "source": "echo \\\n\"${(f)v}\"",
     "expected": "UR"
   }

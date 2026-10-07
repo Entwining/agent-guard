@@ -9,8 +9,7 @@
       "cwds": [
         "/h/project/link/../.",
         "/nope"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "loop-under-collector",
@@ -21,8 +20,7 @@
       "cwds": [
         "/h/project/link/../.",
         "/nope"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "tilde-actual-protected",
@@ -37,8 +35,7 @@
         "/tmp/Containers",
         "/h/Library/Containers"
       ],
-      "expected": "D",
-      "observation_cwd": "home/Library"
+      "expected": "D"
     },
     {
       "id": "pwd-variable-alternatives",
@@ -50,8 +47,7 @@
         "/public",
         "/h/project"
       ],
-      "paired": true,
-      "observation_cwd": "home/project"
+      "paired": true
     },
     {
       "id": "pwd-tilde-alternatives",
@@ -63,8 +59,7 @@
         "/public",
         "/h/project"
       ],
-      "paired": true,
-      "observation_cwd": "home/project"
+      "paired": true
     },
     {
       "id": "cwd-split-refusal",
@@ -76,8 +71,7 @@
         "/public folder",
         "/h/project"
       ],
-      "gap": "UnsupportedShellSyntax",
-      "observation_cwd": "home/project"
+      "gap": "UnsupportedShellSyntax"
     },
     {
       "id": "cdpath-protected",
@@ -89,8 +83,7 @@
         "/h/project/named",
         "/h/Library/Containers/named"
       ],
-      "expected": "D",
-      "observation_cwd": "home/project"
+      "expected": "D"
     },
     {
       "id": "cdpath-prefix-protected",
@@ -102,8 +95,7 @@
         "/h/project/named",
         "/h/Library/Containers/named"
       ],
-      "expected": "D",
-      "observation_cwd": "home/project"
+      "expected": "D"
     },
     {
       "id": "pwd-protected",
@@ -118,8 +110,7 @@
         "/h/Library/Containers"
       ],
       "pwd": false,
-      "expected": "D",
-      "observation_cwd": "home/project"
+      "expected": "D"
     },
     {
       "id": "pwd-false-denial-control",
@@ -134,8 +125,7 @@
         "/tmp/Containers"
       ],
       "pwd": false,
-      "expected": "N",
-      "observation_cwd": "home/Library"
+      "expected": "N"
     },
     {
       "id": "pwd-relative-protected",
@@ -150,8 +140,7 @@
         "Containers"
       ],
       "pwd": false,
-      "expected": "D",
-      "observation_cwd": "home/Library"
+      "expected": "D"
     },
     {
       "id": "tilde-protected",
@@ -166,8 +155,7 @@
         "/h/Library/Containers",
         "/h/project"
       ],
-      "expected": "D",
-      "observation_cwd": "home/project"
+      "expected": "D"
     },
     {
       "id": "cdpath-persistent",
@@ -179,8 +167,7 @@
         "/h/project/named",
         "/lookup/named",
         "/other/named"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "cdpath-declaration",
@@ -191,8 +178,7 @@
       "cwds": [
         "/h/project/named",
         "/lookup/named"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "cdpath-local",
@@ -203,8 +189,7 @@
       "cwds": [
         "/h/project/named",
         "/lookup/named"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "cdpath-dot",
@@ -214,8 +199,7 @@
       "program": "cat",
       "cwds": [
         "/h/project/named"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "cdpath-absolute",
@@ -225,8 +209,7 @@
       "program": "cat",
       "cwds": [
         "/public"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "cdpath-home",
@@ -236,8 +219,7 @@
       "program": "cat",
       "cwds": [
         "/h"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "cdpath-unknown",
@@ -248,8 +230,7 @@
       "cwds": [
         "/h/project/named"
       ],
-      "absent_gap": "UnsupportedShellSyntax",
-      "observation_cwd": "home/project"
+      "absent_gap": "UnsupportedShellSyntax"
     },
     {
       "id": "and-success",
@@ -259,8 +240,7 @@
       "program": "du",
       "cwds": [
         "/h/project"
-      ],
-      "observation_cwd": "home"
+      ]
     },
     {
       "id": "and-nested-success",
@@ -270,8 +250,7 @@
       "program": "du",
       "cwds": [
         "/h/project"
-      ],
-      "observation_cwd": "home"
+      ]
     },
     {
       "id": "pushd-success",
@@ -281,8 +260,7 @@
       "program": "du",
       "cwds": [
         "/h/project"
-      ],
-      "observation_cwd": "home"
+      ]
     },
     {
       "id": "no-operand-0",
@@ -293,8 +271,7 @@
       "cwds": [
         "/h",
         "/h/project"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "no-operand-1",
@@ -304,8 +281,7 @@
       "program": "du",
       "cwds": [
         "/h"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "no-operand-2",
@@ -315,8 +291,7 @@
       "program": "du",
       "cwds": [
         "/h/."
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "no-operand-3",
@@ -326,8 +301,7 @@
       "program": "du",
       "cwds": [
         "/h"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "no-operand-4",
@@ -337,8 +311,7 @@
       "program": "du",
       "cwds": [
         "/h"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "no-operand-5",
@@ -348,8 +321,7 @@
       "program": "du",
       "cwds": [
         "/h"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "invalid-empty-cd",
@@ -359,8 +331,7 @@
       "program": "du",
       "cwds": [
         "/h/project"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "post-failure",
@@ -372,8 +343,7 @@
         "/h/project/link/../.",
         "/h/project",
         "/nope"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "compound-failure",
@@ -384,8 +354,7 @@
       "cwds": [
         "/h/project/link/../.",
         "/nope"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "function-failure",
@@ -397,8 +366,7 @@
         "/h/project",
         "/nope",
         "/h/project/link/../."
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "substitution-failure",
@@ -410,8 +378,7 @@
       "cwds": [
         "/nope",
         "/h/project/link/../."
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "physical",
@@ -421,8 +388,7 @@
       "program": "cat",
       "cwds": [
         "/h/project/link/../."
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "physical-LP",
@@ -432,8 +398,7 @@
       "program": "cat",
       "cwds": [
         "/h/project/link/../."
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "logical-control",
@@ -443,8 +408,7 @@
       "program": "cat",
       "cwds": [
         "/h/project"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "disputed-PL",
@@ -455,8 +419,7 @@
       "cwds": [
         "/h/project/link/../.",
         "/h/project"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "disputed-glued",
@@ -467,8 +430,7 @@
       "cwds": [
         "/h/project/link/../.",
         "/h/project"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "physical-logical-tail",
@@ -478,8 +440,7 @@
       "program": "cat",
       "cwds": [
         "/h/project/cache-link/../.././Containers"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "clear-physical",
@@ -489,8 +450,7 @@
       "program": "cat",
       "cwds": [
         "/public"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "pwd-data",
@@ -504,8 +464,7 @@
       "words": [
         "/other"
       ],
-      "pwd": false,
-      "observation_cwd": "home/project"
+      "pwd": false
     },
     {
       "id": "pwd-command",
@@ -519,8 +478,7 @@
       "words": [
         "/h/project"
       ],
-      "pwd": true,
-      "observation_cwd": "home/project"
+      "pwd": true
     },
     {
       "id": "pwd-backquote",
@@ -534,8 +492,7 @@
       "words": [
         "/h/project"
       ],
-      "pwd": true,
-      "observation_cwd": "home/project"
+      "pwd": true
     },
     {
       "id": "tilde-union",
@@ -549,8 +506,7 @@
       "words": [
         "/h/project",
         "/other"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "pwd-reset",
@@ -564,8 +520,7 @@
       "words": [
         "/public"
       ],
-      "pwd": true,
-      "observation_cwd": "home/project"
+      "pwd": true
     },
     {
       "id": "pwd-alternatives",
@@ -578,8 +533,7 @@
         "/public"
       ],
       "paired": true,
-      "redirect": "/public/out",
-      "observation_cwd": "home/project"
+      "redirect": "/public/out"
     },
     {
       "id": "pwd-mixed-data",
@@ -591,8 +545,7 @@
         "/h/project",
         "/public"
       ],
-      "paired_data": "/h/project/",
-      "observation_cwd": "home/project"
+      "paired_data": "/h/project/"
     },
     {
       "id": "alternative-failure-collectors",
@@ -607,8 +560,7 @@
         "/b",
         "/c",
         "/d"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "assignment-cwd-range",
@@ -623,8 +575,7 @@
       ],
       "words": [
         "public"
-      ],
-      "observation_cwd": "home/project"
+      ]
     },
     {
       "id": "declaration-cwd-range",
@@ -636,8 +587,7 @@
         "/h/project",
         "/public"
       ],
-      "paired_data": "D=",
-      "observation_cwd": "home/project"
+      "paired_data": "D="
     },
     {
       "id": "split-cwd-range-offset",
@@ -655,8 +605,7 @@
         "/h/project",
         "prefix /public",
         "prefix /h/project"
-      ],
-      "observation_cwd": "home/project"
+      ]
     }
   ]
 }

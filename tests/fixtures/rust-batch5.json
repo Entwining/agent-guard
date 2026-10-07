@@ -47,4 +47,4 @@
  {"id":"bre-path-control","partition":"item5-controls","source":"rg public 'a\\|b'","expected":"N"},
  {"id":"git-credential-status-control","partition":"item5-controls","source":"git credential reject","expected":"N"},
  {"id":"hosting-status-control","partition":"item5-controls","source":"gh auth status","expected":"UC"}
-],"regression_sources":{"overflow":{"fixture":"rust-batch3b.json","ids":["ov17-git","ov17-xargs"]},"contract":{"fixture":"contract.jsonl","ids":["programs[42]","programs[64]","shell[0]","shell[175]","search[50]","search[51]","search[52]","search[53]","search[54]","search[55]","search[62]","credentials[128]","readers[86]"]}}}
+]}

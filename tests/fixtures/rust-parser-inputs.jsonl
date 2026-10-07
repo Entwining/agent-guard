@@ -2846,62 +2846,62 @@
 {"id":"02845","source":"cat < ~"}
 {"id":"02846","source":"cat < ~/Library/Containers/*/data"}
 {"id":"02847","source":"cat \"~/Library/Containers/App/data\""}
-{"id":"02848","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"02849","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/App/data"}
-{"id":"02850","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
+{"id":"02848","source":"cat file:///Users/fixture/.env"}
+{"id":"02849","source":"cat file:///Users/fixture/Library/Containers/App/data"}
+{"id":"02850","source":"cat /Users/fixture/.env"}
 {"id":"02851","source":"cat ./.env"}
-{"id":"02852","source":"cat /System/Volumes/Data/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"02853","source":"cat /system/volumes/data/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
+{"id":"02852","source":"cat /System/Volumes/Data/Users/fixture/.env"}
+{"id":"02853","source":"cat /system/volumes/data/Users/fixture/.env"}
 {"id":"02854","source":"cat ~/./Library/Containers/App/data"}
-{"id":"02855","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/../.env"}
-{"id":"02856","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home//.env"}
-{"id":"02857","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env{}"}
-{"id":"02858","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,CloudStorage}/x"}
-{"id":"02859","source":"cat \"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,CloudStorage}/x\""}
-{"id":"02860","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.ssh/config"}
-{"id":"02861","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.ssh/id_rsa.pub"}
-{"id":"02862","source":"ls /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.ssh"}
-{"id":"02863","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.npmrc"}
-{"id":"02864","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/server.pem"}
-{"id":"02865","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/*.env"}
-{"id":"02866","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/.?nv"}
-{"id":"02867","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,{CloudStorage,Group Containers}}/x"}
-{"id":"02868","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Group Containers,{CloudStorage}}/x"}
-{"id":"02869","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,CloudStorage}/*/x"}
-{"id":"02870","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers}/x"}
-{"id":"02871","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{,CloudStorage}/x"}
-{"id":"02872","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{{Containers},CloudStorage}/x"}
-{"id":"02873","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x"}
-{"id":"02874","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/*(Containers)/x"}
-{"id":"02875","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/@(Containers|CloudStorage)/x"}
-{"id":"02876","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/*(e:'cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env':)"}
-{"id":"02877","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/**/x"}
-{"id":"02878","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/**/Containers/x"}
-{"id":"02879","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.{env,{env}}"}
-{"id":"02880","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env[a-z]"}
-{"id":"02881","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.en[^x]"}
-{"id":"02882","source":"cat \"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home\"/Library/{Containers,CloudStorage}/x"}
-{"id":"02883","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers{1..3}/x"}
-{"id":"02884","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x'"}
-{"id":"02885","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/*(Containers)/x'"}
-{"id":"02886","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/(Containers|CloudStorage)/x'"}
-{"id":"02887","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/(Containers)/x'"}
-{"id":"02888","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.(env)'"}
-{"id":"02889","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/(.env)'"}
-{"id":"02890","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/(.env)"}
-{"id":"02891","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/*/x'"}
-{"id":"02892","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,CloudStorage}/x'"}
-{"id":"02893","source":"cat \"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x\""}
-{"id":"02894","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{foo,bar}/x"}
-{"id":"02895","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{foo,Containers}/x"}
-{"id":"02896","source":"cat \"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{foo,bar}/x\""}
-{"id":"02897","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{foo,CloudStorage}/x"}
-{"id":"02898","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{a..c}/x"}
-{"id":"02899","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{1..3}/x"}
-{"id":"02900","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.{a..c}v"}
-{"id":"02901","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/library/{foo,bar}/x"}
-{"id":"02902","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{foo}/x"}
-{"id":"02903","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{foo,{bar,baz}}/x"}
+{"id":"02855","source":"cat /Users/fixture/project/../.env"}
+{"id":"02856","source":"cat /Users/fixture//.env"}
+{"id":"02857","source":"cat /Users/fixture/.env{}"}
+{"id":"02858","source":"cat /Users/fixture/Library/{Containers,CloudStorage}/x"}
+{"id":"02859","source":"cat \"/Users/fixture/Library/{Containers,CloudStorage}/x\""}
+{"id":"02860","source":"cat /Users/fixture/.ssh/config"}
+{"id":"02861","source":"cat /Users/fixture/.ssh/id_rsa.pub"}
+{"id":"02862","source":"ls /Users/fixture/.ssh"}
+{"id":"02863","source":"cat /Users/fixture/.npmrc"}
+{"id":"02864","source":"cat /Users/fixture/project/server.pem"}
+{"id":"02865","source":"cat /Users/fixture/project/*.env"}
+{"id":"02866","source":"cat /Users/fixture/project/.?nv"}
+{"id":"02867","source":"cat /Users/fixture/Library/{Containers,{CloudStorage,Group Containers}}/x"}
+{"id":"02868","source":"cat /Users/fixture/Library/{Group Containers,{CloudStorage}}/x"}
+{"id":"02869","source":"cat /Users/fixture/Library/{Containers,CloudStorage}/*/x"}
+{"id":"02870","source":"cat /Users/fixture/Library/{Containers}/x"}
+{"id":"02871","source":"cat /Users/fixture/Library/{,CloudStorage}/x"}
+{"id":"02872","source":"cat /Users/fixture/Library/{{Containers},CloudStorage}/x"}
+{"id":"02873","source":"cat /Users/fixture/Library/+(Containers|CloudStorage)/x"}
+{"id":"02874","source":"cat /Users/fixture/Library/*(Containers)/x"}
+{"id":"02875","source":"cat /Users/fixture/Library/@(Containers|CloudStorage)/x"}
+{"id":"02876","source":"cat /Users/fixture/Library/Containers/*(e:'cat /Users/fixture/.env':)"}
+{"id":"02877","source":"cat /Users/fixture/Library/**/x"}
+{"id":"02878","source":"cat /Users/fixture/**/Containers/x"}
+{"id":"02879","source":"cat /Users/fixture/.{env,{env}}"}
+{"id":"02880","source":"cat /Users/fixture/.env[a-z]"}
+{"id":"02881","source":"cat /Users/fixture/.en[^x]"}
+{"id":"02882","source":"cat \"/Users/fixture\"/Library/{Containers,CloudStorage}/x"}
+{"id":"02883","source":"cat /Users/fixture/Library/Containers{1..3}/x"}
+{"id":"02884","source":"cat '/Users/fixture/Library/+(Containers|CloudStorage)/x'"}
+{"id":"02885","source":"cat '/Users/fixture/Library/*(Containers)/x'"}
+{"id":"02886","source":"cat '/Users/fixture/Library/(Containers|CloudStorage)/x'"}
+{"id":"02887","source":"cat '/Users/fixture/Library/(Containers)/x'"}
+{"id":"02888","source":"cat '/Users/fixture/.(env)'"}
+{"id":"02889","source":"cat '/Users/fixture/(.env)'"}
+{"id":"02890","source":"cat /Users/fixture/(.env)"}
+{"id":"02891","source":"cat '/Users/fixture/Library/Containers/*/x'"}
+{"id":"02892","source":"cat '/Users/fixture/Library/{Containers,CloudStorage}/x'"}
+{"id":"02893","source":"cat \"/Users/fixture/Library/+(Containers|CloudStorage)/x\""}
+{"id":"02894","source":"cat /Users/fixture/Library/{foo,bar}/x"}
+{"id":"02895","source":"cat /Users/fixture/Library/{foo,Containers}/x"}
+{"id":"02896","source":"cat \"/Users/fixture/Library/{foo,bar}/x\""}
+{"id":"02897","source":"cat /Users/fixture/Library/{foo,CloudStorage}/x"}
+{"id":"02898","source":"cat /Users/fixture/Library/{a..c}/x"}
+{"id":"02899","source":"cat /Users/fixture/Library/{1..3}/x"}
+{"id":"02900","source":"cat /Users/fixture/.{a..c}v"}
+{"id":"02901","source":"cat /Users/fixture/library/{foo,bar}/x"}
+{"id":"02902","source":"cat /Users/fixture/Library/{foo}/x"}
+{"id":"02903","source":"cat /Users/fixture/Library/{foo,{bar,baz}}/x"}
 {"id":"02904","source":"echo hi > $SECRET"}
 {"id":"02905","source":"cat < $SECRET"}
 {"id":"02906","source":"cat > $SECRET"}
@@ -2943,19 +2943,19 @@
 {"id":"02942","source":"cat <<EOF\n~/Library/Containers/App/data\nEOF"}
 {"id":"02943","source":"cat < ~/Library/Containers/App/data"}
 {"id":"02944","source":"cat < ~"}
-{"id":"02945","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"02946","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/App/data"}
-{"id":"02947","source":"cat /System/Volumes/Data/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
+{"id":"02945","source":"cat file:///Users/fixture/.env"}
+{"id":"02946","source":"cat file:///Users/fixture/Library/Containers/App/data"}
+{"id":"02947","source":"cat /System/Volumes/Data/Users/fixture/.env"}
 {"id":"02948","source":"cat \"~/Library/Containers/App/data\""}
-{"id":"02949","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,{CloudStorage,Group Containers}}/x"}
-{"id":"02950","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{{Containers},CloudStorage}/x"}
-{"id":"02951","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.{env,{env}}"}
-{"id":"02952","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x"}
-{"id":"02953","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/*(Containers)/x"}
-{"id":"02954","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x'"}
-{"id":"02955","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/(Containers)/x'"}
-{"id":"02956","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/(.env)'"}
-{"id":"02957","source":"cat \"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x\""}
+{"id":"02949","source":"cat /Users/fixture/Library/{Containers,{CloudStorage,Group Containers}}/x"}
+{"id":"02950","source":"cat /Users/fixture/Library/{{Containers},CloudStorage}/x"}
+{"id":"02951","source":"cat /Users/fixture/.{env,{env}}"}
+{"id":"02952","source":"cat /Users/fixture/Library/+(Containers|CloudStorage)/x"}
+{"id":"02953","source":"cat /Users/fixture/Library/*(Containers)/x"}
+{"id":"02954","source":"cat '/Users/fixture/Library/+(Containers|CloudStorage)/x'"}
+{"id":"02955","source":"cat '/Users/fixture/Library/(Containers)/x'"}
+{"id":"02956","source":"cat '/Users/fixture/(.env)'"}
+{"id":"02957","source":"cat \"/Users/fixture/Library/+(Containers|CloudStorage)/x\""}
 {"id":"02958","source":"git log -p -- '.e*'"}
 {"id":"02959","source":"git show HEAD -- '*.env'"}
 {"id":"02960","source":"git show 'HEAD:.e*'"}
@@ -2981,12 +2981,12 @@
 {"id":"02980","source":"cat ~/Library/{{Public},{Containers}}/x"}
 {"id":"02981","source":"cat ~/.{aa..bb}v"}
 {"id":"02982","source":"cat ~/.e{n..9..2}v"}
-{"id":"02983","source":"cat FILE:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"02984","source":"cat FiLe:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/App/data"}
-{"id":"02985","source":"cat FiLe:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"02986","source":"cat file:/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"02987","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.ssh/id_rsa"}
-{"id":"02988","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.npmrc"}
+{"id":"02983","source":"cat FILE:///Users/fixture/.env"}
+{"id":"02984","source":"cat FiLe:///Users/fixture/Library/Containers/App/data"}
+{"id":"02985","source":"cat FiLe:///Users/fixture/.env"}
+{"id":"02986","source":"cat file:/Users/fixture/.env"}
+{"id":"02987","source":"cat file:///Users/fixture/.ssh/id_rsa"}
+{"id":"02988","source":"cat file:///Users/fixture/.npmrc"}
 {"id":"02989","source":"echo hi > $SECRET"}
 {"id":"02990","source":"cat < $SECRET"}
 {"id":"02991","source":"echo hi >> $SECRET"}
@@ -3006,13 +3006,13 @@
 {"id":"03005","source":"git grep foo .env"}
 {"id":"03006","source":"git grep foo -- .env"}
 {"id":"03007","source":"git grep -f '.env'"}
-{"id":"03008","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,{CloudStorage,Other}}/x"}
-{"id":"03009","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Public,{CloudStorage,Other}}/x"}
-{"id":"03010","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{{Containers,Other},Public}/x"}
-{"id":"03011","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{{Containers},Public}/x"}
-{"id":"03012","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.{env,{x,y}}"}
-{"id":"03013","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.{{env,x},y}"}
-{"id":"03014","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Public,Containers}/x"}
+{"id":"03008","source":"cat /Users/fixture/Library/{Containers,{CloudStorage,Other}}/x"}
+{"id":"03009","source":"cat /Users/fixture/Library/{Public,{CloudStorage,Other}}/x"}
+{"id":"03010","source":"cat /Users/fixture/Library/{{Containers,Other},Public}/x"}
+{"id":"03011","source":"cat /Users/fixture/Library/{{Containers},Public}/x"}
+{"id":"03012","source":"cat /Users/fixture/.{env,{x,y}}"}
+{"id":"03013","source":"cat /Users/fixture/.{{env,x},y}"}
+{"id":"03014","source":"cat /Users/fixture/Library/{Public,Containers}/x"}
 {"id":"03015","source":"cat $'a\\\\'/{.env,x}"}
 {"id":"03016","source":"cat $'a\\\\\\'b'/{.env,x}"}
 {"id":"03017","source":"cat $'\\x27'/{.env,x}"}
@@ -3540,30 +3540,30 @@
 {"id":"03539","source":"cat '$P/input.txt'"}
 {"id":"03540","source":"cat '$P/input.txt'"}
 {"id":"03541","source":"cat '$P/input.txt'"}
-{"id":"03542","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"input-bytes","point":"boundary","bound":65536,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","frozen_commit":"021ad5d6c213c93997026445d57f73c5ec24a2fb","measurement":"ops-cache:sol/r4b-calibration.jsonl","unit":"complete serialized consumer event bytes"}}}}
-{"id":"03543","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"input-bytes","point":"one-unit-excess","bound":65536,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","frozen_commit":"021ad5d6c213c93997026445d57f73c5ec24a2fb","measurement":"ops-cache:sol/r4b-calibration.jsonl","unit":"complete serialized consumer event bytes"}}}}
-{"id":"03544","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"nesting","point":"boundary","bound":64,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","frozen_commit":"021ad5d6c213c93997026445d57f73c5ec24a2fb","measurement":"ops-cache:sol/r4b-calibration.jsonl","unit":"simultaneous shell nesting depth"}}}}
-{"id":"03545","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"nesting","point":"one-unit-excess","bound":64,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","frozen_commit":"021ad5d6c213c93997026445d57f73c5ec24a2fb","measurement":"ops-cache:sol/r4b-calibration.jsonl","unit":"simultaneous shell nesting depth"}}}}
+{"id":"03542","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"input-bytes","point":"boundary","bound":65536,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","unit":"complete serialized consumer event bytes"}}}}
+{"id":"03543","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"input-bytes","point":"one-unit-excess","bound":65536,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","unit":"complete serialized consumer event bytes"}}}}
+{"id":"03544","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"nesting","point":"boundary","bound":64,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","unit":"simultaneous shell nesting depth"}}}}
+{"id":"03545","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"nesting","point":"one-unit-excess","bound":64,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","unit":"simultaneous shell nesting depth"}}}}
 {"id":"03546","event":{"tool_name":"Bash","tool_input":{"raw_event_bytes":"{"}}}
 {"id":"03547","event":{"tool_name":"Bash","tool_input":{"command":17}}}
 {"id":"03548","source":"cat '$P/input.txt'"}
 {"id":"03549","source":"cat '$P/input.txt'"}
 {"id":"03550","source":"cat '$P/input.txt'"}
 {"id":"03551","source":"cat '$P/input.txt'"}
-{"id":"03552","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"input-bytes","point":"boundary","bound":65536,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","frozen_commit":"021ad5d6c213c93997026445d57f73c5ec24a2fb","measurement":"ops-cache:sol/r4b-calibration.jsonl","unit":"complete serialized consumer event bytes"}}}}
-{"id":"03553","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"input-bytes","point":"one-unit-excess","bound":65536,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","frozen_commit":"021ad5d6c213c93997026445d57f73c5ec24a2fb","measurement":"ops-cache:sol/r4b-calibration.jsonl","unit":"complete serialized consumer event bytes"}}}}
-{"id":"03554","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"nesting","point":"boundary","bound":64,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","frozen_commit":"021ad5d6c213c93997026445d57f73c5ec24a2fb","measurement":"ops-cache:sol/r4b-calibration.jsonl","unit":"simultaneous shell nesting depth"}}}}
-{"id":"03555","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"nesting","point":"one-unit-excess","bound":64,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","frozen_commit":"021ad5d6c213c93997026445d57f73c5ec24a2fb","measurement":"ops-cache:sol/r4b-calibration.jsonl","unit":"simultaneous shell nesting depth"}}}}
+{"id":"03552","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"input-bytes","point":"boundary","bound":65536,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","unit":"complete serialized consumer event bytes"}}}}
+{"id":"03553","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"input-bytes","point":"one-unit-excess","bound":65536,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","unit":"complete serialized consumer event bytes"}}}}
+{"id":"03554","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"nesting","point":"boundary","bound":64,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","unit":"simultaneous shell nesting depth"}}}}
+{"id":"03555","event":{"tool_name":"Bash","tool_input":{"generator":{"kind":"nesting","point":"one-unit-excess","bound":64,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","unit":"simultaneous shell nesting depth"}}}}
 {"id":"03556","event":{"tool_name":"bash","tool_input":{"raw_event_bytes":"{"}}}
 {"id":"03557","event":{"tool_name":"bash","tool_input":{"command":17}}}
 {"id":"03558","source":"cat '$P/input.txt'"}
 {"id":"03559","source":"cat '$P/input.txt'"}
 {"id":"03560","source":"cat '$P/input.txt'"}
 {"id":"03561","source":"cat '$P/input.txt'"}
-{"id":"03562","event":{"tool_name":"bash","tool_input":{"generator":{"kind":"input-bytes","point":"boundary","bound":65536,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","frozen_commit":"021ad5d6c213c93997026445d57f73c5ec24a2fb","measurement":"ops-cache:sol/r4b-calibration.jsonl","unit":"complete serialized consumer event bytes"}}}}
-{"id":"03563","event":{"tool_name":"bash","tool_input":{"generator":{"kind":"input-bytes","point":"one-unit-excess","bound":65536,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","frozen_commit":"021ad5d6c213c93997026445d57f73c5ec24a2fb","measurement":"ops-cache:sol/r4b-calibration.jsonl","unit":"complete serialized consumer event bytes"}}}}
-{"id":"03564","event":{"tool_name":"bash","tool_input":{"generator":{"kind":"nesting","point":"boundary","bound":64,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","frozen_commit":"021ad5d6c213c93997026445d57f73c5ec24a2fb","measurement":"ops-cache:sol/r4b-calibration.jsonl","unit":"simultaneous shell nesting depth"}}}}
-{"id":"03565","event":{"tool_name":"bash","tool_input":{"generator":{"kind":"nesting","point":"one-unit-excess","bound":64,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","frozen_commit":"021ad5d6c213c93997026445d57f73c5ec24a2fb","measurement":"ops-cache:sol/r4b-calibration.jsonl","unit":"simultaneous shell nesting depth"}}}}
+{"id":"03562","event":{"tool_name":"bash","tool_input":{"generator":{"kind":"input-bytes","point":"boundary","bound":65536,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","unit":"complete serialized consumer event bytes"}}}}
+{"id":"03563","event":{"tool_name":"bash","tool_input":{"generator":{"kind":"input-bytes","point":"one-unit-excess","bound":65536,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","unit":"complete serialized consumer event bytes"}}}}
+{"id":"03564","event":{"tool_name":"bash","tool_input":{"generator":{"kind":"nesting","point":"boundary","bound":64,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","unit":"simultaneous shell nesting depth"}}}}
+{"id":"03565","event":{"tool_name":"bash","tool_input":{"generator":{"kind":"nesting","point":"one-unit-excess","bound":64,"base_command":"cat '$P/input.txt'","semantic_padding":"whitespace for input bytes; public-only substitutions for nesting","unit":"simultaneous shell nesting depth"}}}}
 {"id":"03566","source":"python3 '$P/read-config.py' '$P/conf.json'"}
 {"id":"03567","source":"fixture-writer '$P/out.txt'"}
 {"id":"03568","source":"python3 '$P/read-config.py' '$P/conf.json'"}
@@ -3729,28 +3729,28 @@
 {"id":"03728","source":"ls ~/.docker"}
 {"id":"03729","source":"ls -la ~/.ssh"}
 {"id":"03730","source":"ls -R ~/Library/Containers"}
-{"id":"03731","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/.e[n]v"}}}
-{"id":"03732","event":{"tool_name":"Read","tool_input":{"file_path":"file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.ssh/id_rsa"}}}
-{"id":"03733","event":{"tool_name":"Read","tool_input":{"file_path":"File:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/App/x"}}}
-{"id":"03734","event":{"tool_name":"Write","tool_input":{"file_path":"file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/.env","content":"x"}}}
-{"id":"03735","event":{"tool_name":"Grep","tool_input":{"pattern":"x","path":"file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.ssh"}}}
-{"id":"03736","event":{"tool_name":"Grep","tool_input":{"pattern":"x","path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project","glob":".env"}}}
-{"id":"03737","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/{.env,x}"}}}
-{"id":"03738","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/@(.env)'"}
-{"id":"03739","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/*(.env)'"}
-{"id":"03740","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/@(.npmrc)'"}
-{"id":"03741","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/@(.ssh/id_rsa)'"}
-{"id":"03742","source":"ls '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/*(.)'"}
-{"id":"03743","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.ssh/*(.)'"}
+{"id":"03731","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/project/.e[n]v"}}}
+{"id":"03732","event":{"tool_name":"Read","tool_input":{"file_path":"file:///Users/fixture/.ssh/id_rsa"}}}
+{"id":"03733","event":{"tool_name":"Read","tool_input":{"file_path":"File:///Users/fixture/Library/Containers/App/x"}}}
+{"id":"03734","event":{"tool_name":"Write","tool_input":{"file_path":"file:///Users/fixture/project/.env","content":"x"}}}
+{"id":"03735","event":{"tool_name":"Grep","tool_input":{"pattern":"x","path":"file:///Users/fixture/.ssh"}}}
+{"id":"03736","event":{"tool_name":"Grep","tool_input":{"pattern":"x","path":"/Users/fixture/project","glob":".env"}}}
+{"id":"03737","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/project/{.env,x}"}}}
+{"id":"03738","source":"cat '/Users/fixture/project/@(.env)'"}
+{"id":"03739","source":"cat '/Users/fixture/project/*(.env)'"}
+{"id":"03740","source":"cat '/Users/fixture/project/@(.npmrc)'"}
+{"id":"03741","source":"cat '/Users/fixture/project/@(.ssh/id_rsa)'"}
+{"id":"03742","source":"ls '/Users/fixture/project/*(.)'"}
+{"id":"03743","source":"cat '/Users/fixture/.ssh/*(.)'"}
 {"id":"03744","source":"cat '~/.e{n,x}v'"}
 {"id":"03745","source":"cat \"$HOME/project/.e{n,x}v\""}
 {"id":"03746","source":"cat \"$HOME/project/{.env,x}\""}
-{"id":"03747","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/{.env,x}'"}
+{"id":"03747","source":"cat '/Users/fixture/project/{.env,x}'"}
 {"id":"03748","source":"cat \"$HOME/.np{mrc,x}\""}
 {"id":"03749","source":"cat < \"{.env,x}\""}
 {"id":"03750","source":"cat \"$HOME/project/{x,{.env,y}}\""}
-{"id":"03751","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/{.env,x}"}}}
-{"id":"03752","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.np{mrc,x}"}}}
+{"id":"03751","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/project/{.env,x}"}}}
+{"id":"03752","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.np{mrc,x}"}}}
 {"id":"03753","source":"ls \"$HOME/Library/{Containers,x}\""}
 {"id":"03754","source":"cat $'\\''/x/{.env,y}"}
 {"id":"03755","source":"cat $'a\\'b'/.e{n..n}v"}
@@ -3758,8 +3758,8 @@
 {"id":"03757","source":"ls ~/Library/$'x\\'y'/../{Containers,z}"}
 {"id":"03758","source":"cat $'\\''x/.np{mrc,z}"}
 {"id":"03759","source":"cat $'its'/{.env,x}"}
-{"id":"03760","event":{"tool_name":"Grep","tool_input":{"pattern":"x","path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project","glob":"{.env,x}"}}}
-{"id":"03761","event":{"tool_name":"Glob","tool_input":{"pattern":"{.env,x}","path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project"}}}
+{"id":"03760","event":{"tool_name":"Grep","tool_input":{"pattern":"x","path":"/Users/fixture/project","glob":"{.env,x}"}}}
+{"id":"03761","event":{"tool_name":"Glob","tool_input":{"pattern":"{.env,x}","path":"/Users/fixture/project"}}}
 {"id":"03762","source":"ls -R ~/.kube"}
 {"id":"03763","source":"find ~/.docker"}
 {"id":"03764","source":"rg --files ~/.docker"}
@@ -3818,62 +3818,62 @@
 {"id":"03817","source":"cat < ~"}
 {"id":"03818","source":"cat < ~/Library/Containers/*/data"}
 {"id":"03819","source":"cat \"~/Library/Containers/App/data\""}
-{"id":"03820","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"03821","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/App/data"}
-{"id":"03822","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
+{"id":"03820","source":"cat file:///Users/fixture/.env"}
+{"id":"03821","source":"cat file:///Users/fixture/Library/Containers/App/data"}
+{"id":"03822","source":"cat /Users/fixture/.env"}
 {"id":"03823","source":"cat ./.env"}
-{"id":"03824","source":"cat /System/Volumes/Data/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"03825","source":"cat /system/volumes/data/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
+{"id":"03824","source":"cat /System/Volumes/Data/Users/fixture/.env"}
+{"id":"03825","source":"cat /system/volumes/data/Users/fixture/.env"}
 {"id":"03826","source":"cat ~/./Library/Containers/App/data"}
-{"id":"03827","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/../.env"}
-{"id":"03828","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home//.env"}
-{"id":"03829","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env{}"}
-{"id":"03830","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,CloudStorage}/x"}
-{"id":"03831","source":"cat \"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,CloudStorage}/x\""}
-{"id":"03832","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.ssh/config"}
-{"id":"03833","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.ssh/id_rsa.pub"}
-{"id":"03834","source":"ls /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.ssh"}
-{"id":"03835","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.npmrc"}
-{"id":"03836","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/server.pem"}
-{"id":"03837","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/*.env"}
-{"id":"03838","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/.?nv"}
-{"id":"03839","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,{CloudStorage,Group Containers}}/x"}
-{"id":"03840","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Group Containers,{CloudStorage}}/x"}
-{"id":"03841","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,CloudStorage}/*/x"}
-{"id":"03842","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers}/x"}
-{"id":"03843","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{,CloudStorage}/x"}
-{"id":"03844","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{{Containers},CloudStorage}/x"}
-{"id":"03845","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x"}
-{"id":"03846","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/*(Containers)/x"}
-{"id":"03847","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/@(Containers|CloudStorage)/x"}
-{"id":"03848","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/*(e:'cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env':)"}
-{"id":"03849","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/**/x"}
-{"id":"03850","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/**/Containers/x"}
-{"id":"03851","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.{env,{env}}"}
-{"id":"03852","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env[a-z]"}
-{"id":"03853","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.en[^x]"}
-{"id":"03854","source":"cat \"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home\"/Library/{Containers,CloudStorage}/x"}
-{"id":"03855","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers{1..3}/x"}
-{"id":"03856","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x'"}
-{"id":"03857","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/*(Containers)/x'"}
-{"id":"03858","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/(Containers|CloudStorage)/x'"}
-{"id":"03859","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/(Containers)/x'"}
-{"id":"03860","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.(env)'"}
-{"id":"03861","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/(.env)'"}
-{"id":"03862","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/(.env)"}
-{"id":"03863","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/*/x'"}
-{"id":"03864","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,CloudStorage}/x'"}
-{"id":"03865","source":"cat \"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x\""}
-{"id":"03866","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{foo,bar}/x"}
-{"id":"03867","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{foo,Containers}/x"}
-{"id":"03868","source":"cat \"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{foo,bar}/x\""}
-{"id":"03869","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{foo,CloudStorage}/x"}
-{"id":"03870","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{a..c}/x"}
-{"id":"03871","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{1..3}/x"}
-{"id":"03872","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.{a..c}v"}
-{"id":"03873","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/library/{foo,bar}/x"}
-{"id":"03874","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{foo}/x"}
-{"id":"03875","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{foo,{bar,baz}}/x"}
+{"id":"03827","source":"cat /Users/fixture/project/../.env"}
+{"id":"03828","source":"cat /Users/fixture//.env"}
+{"id":"03829","source":"cat /Users/fixture/.env{}"}
+{"id":"03830","source":"cat /Users/fixture/Library/{Containers,CloudStorage}/x"}
+{"id":"03831","source":"cat \"/Users/fixture/Library/{Containers,CloudStorage}/x\""}
+{"id":"03832","source":"cat /Users/fixture/.ssh/config"}
+{"id":"03833","source":"cat /Users/fixture/.ssh/id_rsa.pub"}
+{"id":"03834","source":"ls /Users/fixture/.ssh"}
+{"id":"03835","source":"cat /Users/fixture/.npmrc"}
+{"id":"03836","source":"cat /Users/fixture/project/server.pem"}
+{"id":"03837","source":"cat /Users/fixture/project/*.env"}
+{"id":"03838","source":"cat /Users/fixture/project/.?nv"}
+{"id":"03839","source":"cat /Users/fixture/Library/{Containers,{CloudStorage,Group Containers}}/x"}
+{"id":"03840","source":"cat /Users/fixture/Library/{Group Containers,{CloudStorage}}/x"}
+{"id":"03841","source":"cat /Users/fixture/Library/{Containers,CloudStorage}/*/x"}
+{"id":"03842","source":"cat /Users/fixture/Library/{Containers}/x"}
+{"id":"03843","source":"cat /Users/fixture/Library/{,CloudStorage}/x"}
+{"id":"03844","source":"cat /Users/fixture/Library/{{Containers},CloudStorage}/x"}
+{"id":"03845","source":"cat /Users/fixture/Library/+(Containers|CloudStorage)/x"}
+{"id":"03846","source":"cat /Users/fixture/Library/*(Containers)/x"}
+{"id":"03847","source":"cat /Users/fixture/Library/@(Containers|CloudStorage)/x"}
+{"id":"03848","source":"cat /Users/fixture/Library/Containers/*(e:'cat /Users/fixture/.env':)"}
+{"id":"03849","source":"cat /Users/fixture/Library/**/x"}
+{"id":"03850","source":"cat /Users/fixture/**/Containers/x"}
+{"id":"03851","source":"cat /Users/fixture/.{env,{env}}"}
+{"id":"03852","source":"cat /Users/fixture/.env[a-z]"}
+{"id":"03853","source":"cat /Users/fixture/.en[^x]"}
+{"id":"03854","source":"cat \"/Users/fixture\"/Library/{Containers,CloudStorage}/x"}
+{"id":"03855","source":"cat /Users/fixture/Library/Containers{1..3}/x"}
+{"id":"03856","source":"cat '/Users/fixture/Library/+(Containers|CloudStorage)/x'"}
+{"id":"03857","source":"cat '/Users/fixture/Library/*(Containers)/x'"}
+{"id":"03858","source":"cat '/Users/fixture/Library/(Containers|CloudStorage)/x'"}
+{"id":"03859","source":"cat '/Users/fixture/Library/(Containers)/x'"}
+{"id":"03860","source":"cat '/Users/fixture/.(env)'"}
+{"id":"03861","source":"cat '/Users/fixture/(.env)'"}
+{"id":"03862","source":"cat /Users/fixture/(.env)"}
+{"id":"03863","source":"cat '/Users/fixture/Library/Containers/*/x'"}
+{"id":"03864","source":"cat '/Users/fixture/Library/{Containers,CloudStorage}/x'"}
+{"id":"03865","source":"cat \"/Users/fixture/Library/+(Containers|CloudStorage)/x\""}
+{"id":"03866","source":"cat /Users/fixture/Library/{foo,bar}/x"}
+{"id":"03867","source":"cat /Users/fixture/Library/{foo,Containers}/x"}
+{"id":"03868","source":"cat \"/Users/fixture/Library/{foo,bar}/x\""}
+{"id":"03869","source":"cat /Users/fixture/Library/{foo,CloudStorage}/x"}
+{"id":"03870","source":"cat /Users/fixture/Library/{a..c}/x"}
+{"id":"03871","source":"cat /Users/fixture/Library/{1..3}/x"}
+{"id":"03872","source":"cat /Users/fixture/.{a..c}v"}
+{"id":"03873","source":"cat /Users/fixture/library/{foo,bar}/x"}
+{"id":"03874","source":"cat /Users/fixture/Library/{foo}/x"}
+{"id":"03875","source":"cat /Users/fixture/Library/{foo,{bar,baz}}/x"}
 {"id":"03876","source":"echo hi > $SECRET"}
 {"id":"03877","source":"cat < $SECRET"}
 {"id":"03878","source":"cat > $SECRET"}
@@ -3915,19 +3915,19 @@
 {"id":"03914","source":"cat <<EOF\n~/Library/Containers/App/data\nEOF"}
 {"id":"03915","source":"cat < ~/Library/Containers/App/data"}
 {"id":"03916","source":"cat < ~"}
-{"id":"03917","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"03918","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/App/data"}
-{"id":"03919","source":"cat /System/Volumes/Data/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
+{"id":"03917","source":"cat file:///Users/fixture/.env"}
+{"id":"03918","source":"cat file:///Users/fixture/Library/Containers/App/data"}
+{"id":"03919","source":"cat /System/Volumes/Data/Users/fixture/.env"}
 {"id":"03920","source":"cat \"~/Library/Containers/App/data\""}
-{"id":"03921","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,{CloudStorage,Group Containers}}/x"}
-{"id":"03922","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{{Containers},CloudStorage}/x"}
-{"id":"03923","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.{env,{env}}"}
-{"id":"03924","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x"}
-{"id":"03925","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/*(Containers)/x"}
-{"id":"03926","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x'"}
-{"id":"03927","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/(Containers)/x'"}
-{"id":"03928","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/(.env)'"}
-{"id":"03929","source":"cat \"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x\""}
+{"id":"03921","source":"cat /Users/fixture/Library/{Containers,{CloudStorage,Group Containers}}/x"}
+{"id":"03922","source":"cat /Users/fixture/Library/{{Containers},CloudStorage}/x"}
+{"id":"03923","source":"cat /Users/fixture/.{env,{env}}"}
+{"id":"03924","source":"cat /Users/fixture/Library/+(Containers|CloudStorage)/x"}
+{"id":"03925","source":"cat /Users/fixture/Library/*(Containers)/x"}
+{"id":"03926","source":"cat '/Users/fixture/Library/+(Containers|CloudStorage)/x'"}
+{"id":"03927","source":"cat '/Users/fixture/Library/(Containers)/x'"}
+{"id":"03928","source":"cat '/Users/fixture/(.env)'"}
+{"id":"03929","source":"cat \"/Users/fixture/Library/+(Containers|CloudStorage)/x\""}
 {"id":"03930","source":"git log -p -- '.e*'"}
 {"id":"03931","source":"git show HEAD -- '*.env'"}
 {"id":"03932","source":"git show 'HEAD:.e*'"}
@@ -3953,12 +3953,12 @@
 {"id":"03952","source":"cat ~/Library/{{Public},{Containers}}/x"}
 {"id":"03953","source":"cat ~/.{aa..bb}v"}
 {"id":"03954","source":"cat ~/.e{n..9..2}v"}
-{"id":"03955","source":"cat FILE:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"03956","source":"cat FiLe:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/App/data"}
-{"id":"03957","source":"cat FiLe:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"03958","source":"cat file:/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"03959","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.ssh/id_rsa"}
-{"id":"03960","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.npmrc"}
+{"id":"03955","source":"cat FILE:///Users/fixture/.env"}
+{"id":"03956","source":"cat FiLe:///Users/fixture/Library/Containers/App/data"}
+{"id":"03957","source":"cat FiLe:///Users/fixture/.env"}
+{"id":"03958","source":"cat file:/Users/fixture/.env"}
+{"id":"03959","source":"cat file:///Users/fixture/.ssh/id_rsa"}
+{"id":"03960","source":"cat file:///Users/fixture/.npmrc"}
 {"id":"03961","source":"echo hi > $SECRET"}
 {"id":"03962","source":"cat < $SECRET"}
 {"id":"03963","source":"echo hi >> $SECRET"}
@@ -3978,13 +3978,13 @@
 {"id":"03977","source":"git grep foo .env"}
 {"id":"03978","source":"git grep foo -- .env"}
 {"id":"03979","source":"git grep -f '.env'"}
-{"id":"03980","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Containers,{CloudStorage,Other}}/x"}
-{"id":"03981","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Public,{CloudStorage,Other}}/x"}
-{"id":"03982","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{{Containers,Other},Public}/x"}
-{"id":"03983","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{{Containers},Public}/x"}
-{"id":"03984","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.{env,{x,y}}"}
-{"id":"03985","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.{{env,x},y}"}
-{"id":"03986","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{Public,Containers}/x"}
+{"id":"03980","source":"cat /Users/fixture/Library/{Containers,{CloudStorage,Other}}/x"}
+{"id":"03981","source":"cat /Users/fixture/Library/{Public,{CloudStorage,Other}}/x"}
+{"id":"03982","source":"cat /Users/fixture/Library/{{Containers,Other},Public}/x"}
+{"id":"03983","source":"cat /Users/fixture/Library/{{Containers},Public}/x"}
+{"id":"03984","source":"cat /Users/fixture/.{env,{x,y}}"}
+{"id":"03985","source":"cat /Users/fixture/.{{env,x},y}"}
+{"id":"03986","source":"cat /Users/fixture/Library/{Public,Containers}/x"}
 {"id":"03987","source":"cat $'it\\'s'/{.env,x}"}
 {"id":"03988","source":"cat $'\\''/x/{.env,y}"}
 {"id":"03989","source":"cat $'a\\'b'/.e{n..n}v"}
@@ -4004,7 +4004,7 @@
 {"id":"04003","source":"ls -R ~/.config"}
 {"id":"04004","source":"cat \"$HOME/project/{.env,x}\""}
 {"id":"04005","source":"cat < \"{.env,x}\""}
-{"id":"04006","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/{.env,x}"}}}
+{"id":"04006","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/project/{.env,x}"}}}
 {"id":"04007","source":"cat ~/.e{-1..-1}nv"}
 {"id":"04008","source":"cat $'its'/{.env,x}"}
 {"id":"04009","source":"cat $'\\''{.env,x}"}
@@ -4021,25 +4021,25 @@
 {"id":"04020","source":"git log -p -- .e*"}
 {"id":"04021","source":"cat ~/.e{n..9}v"}
 {"id":"04022","source":"cat ~/.e{+1..+1}nv"}
-{"id":"04023","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/{{Containers},CloudStorage}/x"}
-{"id":"04024","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.{env,{env}}"}
+{"id":"04023","source":"cat /Users/fixture/Library/{{Containers},CloudStorage}/x"}
+{"id":"04024","source":"cat /Users/fixture/.{env,{env}}"}
 {"id":"04025","source":"ls ~/Library/{\"Containers\",Public}"}
-{"id":"04026","source":"cat file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/App/data"}
-{"id":"04027","source":"cat FiLe:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.env"}
-{"id":"04028","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/(Containers)/x'"}
-{"id":"04029","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x'"}
-{"id":"04030","source":"cat \"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x\""}
-{"id":"04031","source":"cat /Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/+(Containers|CloudStorage)/x"}
+{"id":"04026","source":"cat file:///Users/fixture/Library/Containers/App/data"}
+{"id":"04027","source":"cat FiLe:///Users/fixture/.env"}
+{"id":"04028","source":"cat '/Users/fixture/Library/(Containers)/x'"}
+{"id":"04029","source":"cat '/Users/fixture/Library/+(Containers|CloudStorage)/x'"}
+{"id":"04030","source":"cat \"/Users/fixture/Library/+(Containers|CloudStorage)/x\""}
+{"id":"04031","source":"cat /Users/fixture/Library/+(Containers|CloudStorage)/x"}
 {"id":"04032","source":"echo hi > $SECRET"}
 {"id":"04033","source":"echo ok > \"$API_TOKEN_FILE\""}
 {"id":"04034","source":"cat < $SECRET"}
-{"id":"04035","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/@(.env)'"}
-{"id":"04036","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/*(.env)'"}
-{"id":"04037","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/@(.npmrc)'"}
-{"id":"04038","source":"cat '/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/@(.ssh/id_rsa)'"}
-{"id":"04039","event":{"tool_name":"Read","tool_input":{"file_path":"file:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/App/data"}}}
-{"id":"04040","event":{"tool_name":"Read","tool_input":{"file_path":"FiLe:///Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/App/data"}}}
-{"id":"04041","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/project/.e[n]v"}}}
+{"id":"04035","source":"cat '/Users/fixture/project/@(.env)'"}
+{"id":"04036","source":"cat '/Users/fixture/project/*(.env)'"}
+{"id":"04037","source":"cat '/Users/fixture/project/@(.npmrc)'"}
+{"id":"04038","source":"cat '/Users/fixture/project/@(.ssh/id_rsa)'"}
+{"id":"04039","event":{"tool_name":"Read","tool_input":{"file_path":"file:///Users/fixture/Library/Containers/App/data"}}}
+{"id":"04040","event":{"tool_name":"Read","tool_input":{"file_path":"FiLe:///Users/fixture/Library/Containers/App/data"}}}
+{"id":"04041","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/project/.e[n]v"}}}
 {"id":"04042","source":"cat $'a\\\\'/{.env,x}"}
 {"id":"04043","source":"cat $'a\\\\\\'b'/{.env,x}"}
 {"id":"04044","source":"cat $'\\x27'/{.env,x}"}
@@ -4092,9 +4092,9 @@
 {"id":"04091","source":"cat ~/.docker/config.json"}
 {"id":"04092","source":"cp -r ~/.docker /tmp/d"}
 {"id":"04093","source":"ls -R ~/Library/Containers"}
-{"id":"04094","event":{"tool_name":"Grep","tool_input":{"pattern":"token","path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.docker"}}}
-{"id":"04095","event":{"tool_name":"Grep","tool_input":{"pattern":"token","path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.config"}}}
-{"id":"04096","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.docker/config.json"}}}
+{"id":"04094","event":{"tool_name":"Grep","tool_input":{"pattern":"token","path":"/Users/fixture/.docker"}}}
+{"id":"04095","event":{"tool_name":"Grep","tool_input":{"pattern":"token","path":"/Users/fixture/.config"}}}
+{"id":"04096","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.docker/config.json"}}}
 {"id":"04097","source":"v='$(cat ~/.ssh/id_rsa)'; printf %s \"it's\" \"${(e)v}\" "}
 {"id":"04098","source":"v='$(cat ~/.ssh/id_rsa)'; printf %s \"$'\" \"${(e)v}\" "}
 {"id":"04099","source":"v='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\" "}
@@ -4169,13 +4169,13 @@
 {"id":"04168","source":"rg needle ~/.docker"}
 {"id":"04169","source":"ls -R ~/project"}
 {"id":"04170","source":"find ~/Library/Containers"}
-{"id":"04171","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.docker"}}}
-{"id":"04172","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.docker/config.json"}}}
-{"id":"04173","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/Library/Containers/App/data"}}}
-{"id":"04174","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.config"}}}
-{"id":"04175","event":{"tool_name":"Grep","tool_input":{"path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.docker"}}}
-{"id":"04176","event":{"tool_name":"Grep","tool_input":{"path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.config"}}}
-{"id":"04177","event":{"tool_name":"Grep","tool_input":{"path":"/Users/fixture/.cache/guard-fixtures/fixture-seat/r4h-m1-3-home/.config/gh"}}}
+{"id":"04171","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.docker"}}}
+{"id":"04172","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.docker/config.json"}}}
+{"id":"04173","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/Library/Containers/App/data"}}}
+{"id":"04174","event":{"tool_name":"Read","tool_input":{"file_path":"/Users/fixture/.config"}}}
+{"id":"04175","event":{"tool_name":"Grep","tool_input":{"path":"/Users/fixture/.docker"}}}
+{"id":"04176","event":{"tool_name":"Grep","tool_input":{"path":"/Users/fixture/.config"}}}
+{"id":"04177","event":{"tool_name":"Grep","tool_input":{"path":"/Users/fixture/.config/gh"}}}
 {"id":"04178","source":"echo ${v:-${(f)v}}"}
 {"id":"04179","source":"echo ${v:-${(e)v}}"}
 {"id":"04180","source":"echo ${v:-${(q)v}}"}
