@@ -1,0 +1,5 @@
+{"rows":[
+{"id":"ssh-backup","partition":"backup","input":{"command":"cp \"$H/.ssh/known_hosts\" \"$H/.ssh/known_hosts.bak-$(date +%Y%m%d-%H%M%S)\""},"expected":"UC"},
+{"id":"ssh-backup-binding","partition":"backup","input":{"command":"backup=\"$H/.ssh/known_hosts.bak-$(date +%Y%m%d-%H%M%S)\"; cp \"$H/.ssh/known_hosts\" \"$backup\""},"expected":"UC"},
+{"id":"ssh-private-backup","partition":"backup","input":{"command":"cp \"$H/.ssh/id_rsa\" public"},"expected":"D"}
+],"protected_candidate":"/synthetic/home/.ssh/id_rsa"}

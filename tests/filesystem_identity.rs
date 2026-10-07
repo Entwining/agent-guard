@@ -18,6 +18,8 @@ pub mod ordinary_directory_globs_do_not_intersect_wildcard_only_credential_tails
 pub mod physical_links_keep_order_and_eight_hop_bound;
 #[path = "support/batch6.rs"]
 pub mod program_contract;
+#[path = "filesystem_identity/public_ssh_backup_suffixes_keep_lexical_identity.rs"]
+pub mod public_ssh_backup_suffixes_keep_lexical_identity;
 #[path = "filesystem_identity/runtime_unknown_prefix_preserves_appdata_tail_protection.rs"]
 pub mod runtime_unknown_prefix_preserves_appdata_tail_protection;
 #[path = "filesystem_identity/shell.rs"]

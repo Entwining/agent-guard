@@ -306,9 +306,24 @@ pub(super) fn alternatives(pattern: &str, patterned: bool) -> Vec<String> {
                 }
             }
         }
+        if !patterned || !source.contains('(') {
+            continue;
+        }
+        let lexical = crate::shell::lexer::Lexed::parameter_fragment(
+            &source,
+            crate::shell::lexer::Context::default(),
+        )
+        .0;
         if patterned
-            && let Some(left) = source.find('(')
-            && let Some(relative) = source[left + 1..].find(')')
+            && let Some(left) = source.char_indices().find_map(|(at, ch)| {
+                (ch == '('
+                    && source.as_bytes().get(at.wrapping_sub(1)) != Some(&b'$')
+                    && lexical.context(at).command_depth == 0)
+                    .then_some(at)
+            })
+            && let Some(relative) = source[left + 1..].char_indices().find_map(|(at, ch)| {
+                (ch == ')' && lexical.context(left + 1 + at).command_depth == 0).then_some(at)
+            })
         {
             let right = left + 1 + relative;
             let mut start = left;

@@ -696,6 +696,44 @@ pub(crate) fn literal_glob_root(path: &str) -> String {
 #[cfg(test)]
 mod pattern_roots {
     #[test]
+    fn protected_ssh_candidate_is_a_policy_result_before_stat() {
+        struct NoStat {
+            calls: usize,
+        }
+        impl super::Probe for NoStat {
+            fn read_link(
+                &mut self,
+                _: &std::path::Path,
+            ) -> std::io::Result<Option<std::path::PathBuf>> {
+                Ok(None)
+            }
+            fn stat(&mut self, _: &std::path::Path) -> std::io::Result<Option<super::Metadata>> {
+                self.calls += 1;
+                Err(std::io::Error::other("unexpected identity stat"))
+            }
+        }
+        let rows: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/rust-public-ssh-backups.json"
+        ))
+        .unwrap();
+        let candidate = rows["protected_candidate"].as_str().unwrap();
+        let mut probe = NoStat { calls: 0 };
+        let table = super::FirmlinkTable::from_text("");
+        let result = super::ssh_denied(
+            candidate,
+            candidate,
+            "/synthetic/project",
+            "/synthetic/home",
+            "/synthetic/home",
+            false,
+            &table,
+            &mut probe,
+        )
+        .unwrap();
+        assert_eq!(result, Some(true));
+        assert_eq!(probe.calls, 0);
+    }
+    #[test]
     fn lexical_candidates_observe_the_evaluation_deadline() {
         let expired = std::time::Instant::now() - std::time::Duration::from_secs(1);
         assert_eq!(
@@ -800,6 +838,12 @@ fn ssh_denied(
         return Ok(Some(true));
     }
     for candidate in candidates {
+        if lexical(candidate, home)
+            .or_else(|| lexical(candidate, resolved_home))
+            .is_some()
+        {
+            return Ok(Some(true));
+        }
         for root in &roots {
             if same_file(candidate, root, home, resolved_home, probe)? {
                 return Ok(Some(true));

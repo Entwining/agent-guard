@@ -79,7 +79,7 @@ impl<'a> Lexed<'a> {
     pub fn scan(source: &'a str) -> Result<Self, LexError> {
         Self::with_context(source, Context::default())
     }
-    pub(super) fn parameter_fragment(
+    pub(crate) fn parameter_fragment(
         source: &'a str,
         context: Context,
     ) -> (Self, Option<LexError>) {
