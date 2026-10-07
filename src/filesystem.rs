@@ -96,7 +96,7 @@ impl Protection {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Identity {
     Public(String),
     Protected(Protection),
@@ -257,11 +257,16 @@ fn lexical_pattern_checked(
     deadline: Option<std::time::Instant>,
 ) -> Result<Option<Protection>, CheckError> {
     // D22 retains conservative group reach; P1 quoting gates brace/glob expansion.
+    let mut matcher = glob::Matcher::default();
     for candidate in glob::alternatives(path, patterned) {
         crate::check_deadline(deadline)?;
-        if let Some(kind) =
-            lexical_candidate(&candidate, home, patterned || candidate != path, hidden)
-        {
+        if let Some(kind) = lexical_candidate(
+            &candidate,
+            home,
+            patterned || candidate != path,
+            hidden,
+            &mut matcher,
+        ) {
             return Ok(Some(kind));
         }
     }
@@ -302,6 +307,7 @@ pub(crate) fn broad_root_checked(
     }
     // Go's recursive-glob owner checks both protected witnesses and the
     // lexical prefix (native/filesystem/appdata.go:77-91).
+    let mut matcher = glob::Matcher::default();
     for pattern in glob::alternatives(&path, true) {
         crate::check_deadline(deadline)?;
         let prefix = pattern
@@ -309,7 +315,7 @@ pub(crate) fn broad_root_checked(
             .map_or(pattern.as_str(), |at| &pattern[..at])
             .trim_end_matches('/');
         for candidate in &candidates {
-            if glob::path_checked(&pattern, candidate, deadline)? {
+            if matcher.path_checked(&pattern, candidate, deadline)? {
                 return Ok(true);
             }
         }
@@ -324,7 +330,13 @@ pub(crate) fn broad_root_checked(
     Ok(false)
 }
 
-fn lexical_candidate(path: &str, home: &str, patterned: bool, hidden: bool) -> Option<Protection> {
+fn lexical_candidate(
+    path: &str,
+    home: &str,
+    patterned: bool,
+    hidden: bool,
+    matcher: &mut glob::Matcher,
+) -> Option<Protection> {
     let spelling = path;
     let path = path.to_lowercase();
     let patterned = patterned && path.contains(['*', '?', '[', '{', '(']);
@@ -341,10 +353,10 @@ fn lexical_candidate(path: &str, home: &str, patterned: bool, hidden: bool) -> O
         if path == root
             || path.starts_with(&format!("{root}/"))
             || patterned
-                && (glob::path(&path, &root)
+                && (matcher.path(&path, &root)
                     || p.len() > r.len()
                         && r.iter().enumerate().all(|(index, part)| {
-                            p[index] == "**" || glob::component(p[index], part)
+                            p[index] == "**" || matcher.component(p[index], part)
                         }))
         {
             return Some(Protection::AppData);
@@ -352,7 +364,7 @@ fn lexical_candidate(path: &str, home: &str, patterned: bool, hidden: bool) -> O
     }
     let parts: Vec<&str> = path.split('/').collect();
     if let Some(index) = parts.iter().position(|part| {
-        *part == ".ssh" || patterned && part.starts_with('.') && glob::component(part, ".ssh")
+        *part == ".ssh" || patterned && part.starts_with('.') && matcher.component(part, ".ssh")
     }) {
         let original: Vec<_> = spelling.split('/').collect();
         let tail = &original[index + 1..];
@@ -369,7 +381,7 @@ fn lexical_candidate(path: &str, home: &str, patterned: bool, hidden: bool) -> O
             || part.starts_with(".env.")
             || patterned
                 && !part.trim_matches(['*', '?']).is_empty()
-                && (glob::component(part, ".env") || glob::component(part, ".env.x"))
+                && (matcher.component(part, ".env") || matcher.component(part, ".env.x"))
     }) {
         return Some(Protection::Environment);
     }
@@ -411,7 +423,7 @@ fn lexical_candidate(path: &str, home: &str, patterned: bool, hidden: bool) -> O
         }
     }
     for listed in SENSITIVE {
-        if glob::path(listed, &path) {
+        if matcher.path(listed, &path) {
             return Some(Protection::Credential);
         }
         let tail: Vec<_> = listed.trim_start_matches("**/").split('/').collect();
@@ -426,12 +438,12 @@ fn lexical_candidate(path: &str, home: &str, patterned: bool, hidden: bool) -> O
             .iter()
             .enumerate()
             .all(|(index, part)| {
-                glob::visible_component(parts[offset + index], &part.replace('*', "x"), hidden)
+                matcher.visible_component(parts[offset + index], &part.replace('*', "x"), hidden)
             })
             && if tail.len() > 1 {
                 glob::visible_intersects(base, tail[tail.len() - 1], hidden)
             } else {
-                glob::visible_component(base, &tail[0].replace('*', "x"), hidden)
+                matcher.visible_component(base, &tail[0].replace('*', "x"), hidden)
             }
         {
             return Some(Protection::Credential);
@@ -545,6 +557,22 @@ pub(crate) struct Resolver<'a> {
     home: &'a str,
     table: &'a FirmlinkTable,
     deadline: Option<std::time::Instant>,
+    resolved_home: Option<Identity>,
+    targets: std::collections::BTreeMap<TargetIdentity, (Identity, String, String)>,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct TargetIdentity {
+    unresolved: String,
+    cwd: String,
+    effect: crate::record::Effect,
+    walk: crate::record::Walk,
+    via: crate::record::Via,
+    glob: bool,
+    glob_hidden: bool,
+    expands: bool,
+    runtime_unknown: bool,
+    search: bool,
 }
 
 impl<'a> Resolver<'a> {
@@ -553,6 +581,8 @@ impl<'a> Resolver<'a> {
             home,
             table,
             deadline: None,
+            resolved_home: None,
+            targets: std::collections::BTreeMap::new(),
         }
     }
     pub(crate) fn with_deadline(
@@ -564,22 +594,64 @@ impl<'a> Resolver<'a> {
             home,
             table,
             deadline,
+            resolved_home: None,
+            targets: std::collections::BTreeMap::new(),
         }
     }
 
     pub(crate) fn home(&mut self, probe: &mut dyn Probe) -> Result<Identity, CheckError> {
-        Ok(
-            match resolve(self.home, self.home, self.home, None, self.table, probe)? {
-                Resolution::Public(path) => {
-                    Identity::Public(normalize(&path, self.home, self.home))
-                }
-                Resolution::Protected(kind, _) => Identity::Protected(kind),
-                Resolution::Bound => Identity::Bound,
-            },
-        )
+        crate::check_deadline(self.deadline)?;
+        if let Some(home) = &self.resolved_home {
+            return Ok(home.clone());
+        }
+        let home = match resolve(self.home, self.home, self.home, None, self.table, probe)? {
+            Resolution::Public(path) => Identity::Public(normalize(&path, self.home, self.home)),
+            Resolution::Protected(kind, _) => Identity::Protected(kind),
+            Resolution::Bound => Identity::Bound,
+        };
+        self.resolved_home = Some(home.clone());
+        Ok(home)
     }
 
     pub(crate) fn target(
+        &mut self,
+        target: &mut crate::record::Target,
+        cwd: &str,
+        probe: &mut dyn Probe,
+    ) -> Result<Identity, CheckError> {
+        crate::check_deadline(self.deadline)?;
+        let key = TargetIdentity {
+            unresolved: target.unresolved.clone(),
+            cwd: cwd.into(),
+            effect: target.effect,
+            walk: target.walk,
+            via: target.via,
+            glob: target.glob,
+            glob_hidden: target.glob_hidden,
+            expands: target.expands,
+            runtime_unknown: target.runtime_unknown,
+            search: target.search,
+        };
+        // One preflight shares one metadata observation. Roles and pattern
+        // domains stay in the key, and a resolved alias must update both fields.
+        if let Some((identity, path, unresolved)) = self.targets.get(&key) {
+            target.path = path.clone();
+            target.unresolved = unresolved.clone();
+            return Ok(identity.clone());
+        }
+        let identity = self.resolve_target(target, cwd, probe)?;
+        self.targets.insert(
+            key,
+            (
+                identity.clone(),
+                target.path.clone(),
+                target.unresolved.clone(),
+            ),
+        );
+        Ok(identity)
+    }
+
+    fn resolve_target(
         &mut self,
         target: &mut crate::record::Target,
         cwd: &str,
@@ -695,6 +767,92 @@ pub(crate) fn literal_glob_root(path: &str) -> String {
 
 #[cfg(test)]
 mod pattern_roots {
+    #[test]
+    fn repeated_pattern_components_share_match_work() {
+        for size in [8, 16, 32] {
+            let mut matcher = super::glob::Matcher::default();
+            let mut first = None;
+            for _ in 0..size {
+                assert_eq!(
+                    super::lexical_candidate(
+                        "/h/project/public[a-z]/nested/public.json",
+                        "/h",
+                        true,
+                        false,
+                        &mut matcher
+                    ),
+                    None
+                );
+                assert_eq!(
+                    matcher.component_evaluations,
+                    *first.get_or_insert(matcher.component_evaluations),
+                    "size={size}"
+                );
+            }
+            assert!(matcher.component_evaluations > 0);
+        }
+    }
+    #[test]
+    fn repeated_resource_identity_shares_probe_work() {
+        struct Counted {
+            links: usize,
+            stats: usize,
+        }
+        impl super::Probe for Counted {
+            fn read_link(
+                &mut self,
+                path: &std::path::Path,
+            ) -> std::io::Result<Option<std::path::PathBuf>> {
+                self.links += 1;
+                Ok((path == std::path::Path::new("/p/link")).then(|| "/public".into()))
+            }
+            fn stat(&mut self, _: &std::path::Path) -> std::io::Result<Option<super::Metadata>> {
+                self.stats += 1;
+                Ok(None)
+            }
+        }
+        use crate::record::{Effect, Target, Via, Walk};
+        let table = super::FirmlinkTable::from_text("");
+        for size in [8, 16, 32] {
+            let mut resolver = super::Resolver::new("/h", &table);
+            let mut probe = Counted { links: 0, stats: 0 };
+            let mut first = None;
+            for _ in 0..size {
+                let mut target =
+                    Target::new("/p/link/x".into(), Effect::Read, Walk::None, Via::Operand);
+                assert_eq!(
+                    resolver.target(&mut target, "/p", &mut probe).unwrap(),
+                    super::Identity::Public("/public/x".into())
+                );
+                assert_eq!(
+                    (&target.path, &target.unresolved),
+                    (&"/public/x".to_owned(), &"/public/x".to_owned())
+                );
+                let work = (probe.links, probe.stats);
+                assert_eq!(work, *first.get_or_insert(work), "size={size}");
+                assert_eq!(
+                    resolver.home(&mut probe).unwrap(),
+                    super::Identity::Public("/h".into())
+                );
+                assert_eq!(
+                    (probe.links, probe.stats),
+                    work,
+                    "repeated HOME: size={size}"
+                );
+            }
+            assert!(probe.links > 0);
+            let mut root = Target::new("/h/.aws".into(), Effect::List, Walk::None, Via::Operand);
+            assert!(matches!(
+                resolver.target(&mut root, "/p", &mut probe).unwrap(),
+                super::Identity::Public(_)
+            ));
+            root.effect = Effect::Read;
+            assert_eq!(
+                resolver.target(&mut root, "/p", &mut probe).unwrap(),
+                super::Identity::Protected(super::Protection::Credential)
+            );
+        }
+    }
     #[test]
     fn protected_ssh_candidate_is_a_policy_result_before_stat() {
         struct NoStat {

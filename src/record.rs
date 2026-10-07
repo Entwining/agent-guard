@@ -219,7 +219,7 @@ pub struct Script {
     pub uninspectable: Vec<Fragment>,
     pub parse_failed: bool,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Effect {
     Read,
     Write,
@@ -229,13 +229,13 @@ pub enum Effect {
     Enter,
     Use,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Walk {
     None,
     Visible,
     Hidden,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Via {
     Operand,
     Redirect,
