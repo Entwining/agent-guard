@@ -815,7 +815,17 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     }
                     "eval" => {
                         if argv[index + 1..].iter().any(|word| word.expands) {
-                            self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                            self.output.gap(
+                                if argv[index + 1..].iter().any(|word| {
+                                    word.expands && !word.runtime_unknown && !word.vars.is_empty()
+                                }) || !scope.frames.is_empty()
+                                    || !prior.is_empty()
+                                {
+                                    CoverageGap::UnsupportedShellSyntax
+                                } else {
+                                    CoverageGap::UnresolvedTarget
+                                },
+                            );
                         } else {
                             let before = scope.state();
                             self.source(

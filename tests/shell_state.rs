@@ -10,6 +10,8 @@ pub mod benign_nested_loops_do_not_exhaust_inspection;
 pub mod bound_arithmetic_sinks_observe_subscript_code;
 #[path = "support/differential.rs"]
 pub mod differential;
+#[path = "shell_state/eval_runtime_output_is_unresolved_code.rs"]
+pub mod eval_runtime_output_is_unresolved_code;
 #[path = "shell_state/indexed_parameter_expansion_evaluates_binding.rs"]
 pub mod indexed_parameter_expansion_evaluates_binding;
 #[path = "shell_state/literal_for_lists_execute_each_value_exactly.rs"]
