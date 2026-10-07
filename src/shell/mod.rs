@@ -123,6 +123,8 @@ pub struct Observation {
     pub(crate) cwd_candidates: usize,
     #[cfg(test)]
     pub(crate) failure_copies: usize,
+    #[cfg(test)]
+    pub(crate) statement_visits: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -476,14 +478,21 @@ fn expand_scoped(
             contexts = next;
         }
     }
+    let mut nested = Vec::new();
     for expansion in &raw.expansions {
         match expansion {
-            RawExpansion::Code(code) => evaluator.isolated_source(code, scope, depth + 1)?,
+            RawExpansion::Code(code) => {
+                if !nested.contains(code) {
+                    nested.push(code.clone());
+                }
+            }
             RawExpansion::Variable(name) => {
                 if let Some(binding) = scope.bindings.get(name).cloned() {
                     for value in binding.values {
                         if let statements::BindingValue::Known(code) = value {
-                            evaluator.isolated_source(&code, scope, depth + 1)?;
+                            if !nested.contains(&code) {
+                                nested.push(code);
+                            }
                         } else if value == statements::BindingValue::Undetermined {
                             evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
@@ -590,10 +599,15 @@ fn expand_scoped(
                 evaluator.armed_references(expression, scope, depth)?;
             }
             for code in &expanded.nested {
-                evaluator.isolated_source(code, scope, depth + 1)?;
+                if !nested.contains(code) {
+                    nested.push(code.clone());
+                }
             }
             result.push(expanded);
         }
+    }
+    for code in nested {
+        evaluator.isolated_source(&code, scope, depth + 1)?;
     }
     Ok(result)
 }

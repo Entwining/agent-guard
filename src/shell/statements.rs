@@ -10,7 +10,41 @@ use std::collections::{BTreeMap, BTreeSet};
 #[cfg(test)]
 mod loop_cost {
     #[test]
-    fn rejected_loop_stops_at_the_record_budget() {
+    fn unknown_fragment_repetition_converges_before_branching() {
+        let count = |width| {
+            let items = (0..width)
+                .map(|n| format!("public{n}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let source = format!(
+                "for f in {items}; do Q=\"\"; while read id; do Q=\"${{Q}}&x=${{id}}\"; done < \"$f\"; for c in true false; do curl \"https://example.test/?c=${{c}}${{Q}}\" -o public.json; done; done"
+            );
+            let output = crate::shell::observe(
+                &source,
+                crate::shell::Arm::Brush,
+                "/synthetic/home",
+                "/synthetic/project",
+                true,
+            )
+            .unwrap();
+            assert!(
+                !output.gaps.contains(&crate::CoverageGap::InspectionBudget),
+                "width={width}: {:?}",
+                output.gaps
+            );
+            (output.statement_visits, output.script.commands.len())
+        };
+        let counts = [2, 4, 8].map(count);
+        println!("unknown repetition work={counts:?}");
+        for (small, large) in counts.iter().zip(counts.iter().skip(1)) {
+            assert!(
+                small.0 > 0 && large.0 <= small.0 * 3 && large.1 <= small.1 * 3,
+                "{counts:?}"
+            );
+        }
+    }
+    #[test]
+    fn repeated_unknown_hits_converge_before_the_record_budget() {
         for width in [2, 4] {
             let items = (0..width)
                 .map(|n| format!("public{n}"))
@@ -28,12 +62,12 @@ mod loop_cost {
             )
             .unwrap();
             assert!(
-                observation
+                !observation
                     .gaps
                     .contains(&crate::CoverageGap::InspectionBudget)
             );
             assert!(
-                observation.source_entries <= 200,
+                observation.source_entries <= width * 8,
                 "width={width}, recursive sources={}",
                 observation.source_entries
             );
@@ -492,6 +526,57 @@ fn restore_prefix(
     }
 }
 
+fn widen_runtime_repetition(prior: &Scope, next: &mut Scope) {
+    for (name, binding) in &mut next.bindings {
+        let Some(before) = prior.bindings.get(name) else {
+            continue;
+        };
+        for value in &mut binding.values {
+            if !matches!(
+                value,
+                BindingValue::RuntimeUnknown(_)
+                    | BindingValue::RuntimeDerived(_)
+                    | BindingValue::ShellDerived(_)
+            ) {
+                continue;
+            }
+            let Some(text) = value.lexical() else {
+                continue;
+            };
+            for old in &before.values {
+                if old.known().is_some() {
+                    continue;
+                }
+                let Some(old) = old.lexical() else {
+                    continue;
+                };
+                let Some(tail) = text.strip_prefix(old).filter(|tail| !tail.is_empty()) else {
+                    continue;
+                };
+                if let Some(prefix) = old.strip_suffix(tail) {
+                    // A repeated unknown fragment denotes arbitrary repetitions,
+                    // not additional runtime evidence. Keep its fixed prefix and
+                    // suffix; pathname matching must cover the widened middle.
+                    *value = if tail.split('/').any(|part| part == "..") {
+                        // Repeated parent traversal can escape the fixed prefix.
+                        // A pathname pattern cannot represent normalization here.
+                        BindingValue::Undetermined
+                    } else if tail.contains('/') {
+                        let prefix = prefix.strip_suffix("*/**/*").unwrap_or(prefix);
+                        BindingValue::ShellDerived(format!("{prefix}*/**/*{tail}"))
+                    } else {
+                        BindingValue::ShellDerived(format!(
+                            "{}*{tail}",
+                            prefix.trim_end_matches('*')
+                        ))
+                    };
+                    break;
+                }
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 struct Function {
     body: Vec<Statement>,
@@ -554,6 +639,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
         for statement in body {
             crate::check_deadline(self.deadline)?;
+            #[cfg(test)]
+            {
+                self.output.statement_visits += 1;
+            }
             self.inspected += 1;
             if self.inspected > 512 {
                 self.output.gap(CoverageGap::InspectionBudget);
@@ -1575,6 +1664,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     }
                     let prior = inner.clone();
                     self.run(body, &mut inner, depth + 1, source_id, nested)?;
+                    if iterations.is_none() {
+                        widen_runtime_repetition(&prior, &mut inner);
+                    }
                     completed += 1;
                     branches.push(inner.clone());
                     if inner.bindings == prior.bindings
@@ -2798,6 +2890,47 @@ fn compatible_arguments(previous: &[crate::record::Word], choice: &[crate::recor
 
 #[cfg(test)]
 mod candidate_cost {
+    #[test]
+    fn substitution_body_is_observed_once_per_candidate_union() {
+        for width in [2, 4, 8] {
+            let mut output = super::Observation::default();
+            let host = crate::record::HostFacts {
+                home: "/synthetic/home",
+                user: None,
+            };
+            let mut evaluator = super::Evaluator::new(
+                super::Frontend {
+                    arm: crate::shell::Arm::Brush,
+                    zsh: true,
+                    host,
+                },
+                &mut output,
+            );
+            let mut scope = super::Scope::new(host.home, "/synthetic/project");
+            for name in ["a", "b"] {
+                scope.assign(
+                    name.into(),
+                    (0..width)
+                        .map(|n| super::BindingValue::Known(format!("public{n}")))
+                        .collect(),
+                );
+            }
+            evaluator
+                .expand(
+                    &super::RawWord {
+                        raw: "${a}$(printf public)${b}".into(),
+                        syntax: super::WordSyntax::Shell,
+                        expansions: Vec::new(),
+                    },
+                    &mut scope,
+                    0,
+                )
+                .unwrap();
+            assert_eq!(output.source_entries, 1, "width={width}");
+            assert_eq!(output.parse_successes, 1, "width={width}");
+            assert!(output.gaps.is_empty(), "{:?}", output.gaps);
+        }
+    }
     #[test]
     fn nested_substitution_work_grows_polynomially() {
         let count = |levels| {

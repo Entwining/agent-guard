@@ -24,6 +24,8 @@ pub mod loop_cwd_widening_preserves_protected_candidates;
 pub mod matrix_candidates_keep_all_shell_read_operands;
 #[path = "shell_state/nested_functions_follow_dynamic_local_scope.rs"]
 pub mod nested_functions_follow_dynamic_local_scope;
+#[path = "shell_state/ordinary_small_command_cost.rs"]
+pub mod ordinary_small_command_cost;
 #[path = "shell_state/persistent_binding_eligibility.rs"]
 pub mod persistent_binding_eligibility;
 #[path = "shell_state/pipeline_read_models_known_values_and_refuses_unmodelled_armed_reads.rs"]
