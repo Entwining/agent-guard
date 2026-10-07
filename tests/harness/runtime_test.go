@@ -69,6 +69,13 @@ func TestObservationStreamsAndFailure(t *testing.T) {
 	}
 }
 
+func TestProcessWithoutDeadlineCompletes(t *testing.T) {
+	result, err := runProcess([]string{"/bin/sh", "-c", "printf public"}, nil, t.TempDir(), []string{"PATH=/usr/bin:/bin"}, 0, nil)
+	if err != nil || result.TimedOut || result.Status != 0 || result.Stdout != "public" || result.SpawnError != "" || result.WaitError != "" {
+		t.Fatalf("setup process did not complete: %+v %v", result, err)
+	}
+}
+
 func TestProcessTimeoutReapsGroup(t *testing.T) {
 	home := t.TempDir()
 	pidFile := filepath.Join(home, "child")

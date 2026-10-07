@@ -308,7 +308,8 @@ func RunLifecycle(options LifecycleOptions) error {
 			}
 		}
 		binary := filepath.Join(output, "fault-"+fault)
-		compiled, err := runProcess([]string{cargo, "build", "--locked", "--release", "--bin", "agent-guard-native"}, nil, build, env, 90*time.Second, nil)
+		// Compilation prepares the fixture; only the subsequent invocation has a behavior deadline.
+		compiled, err := runProcess([]string{cargo, "build", "--locked", "--release", "--bin", "agent-guard-native"}, nil, build, env, 0, nil)
 		if err != nil {
 			return err
 		}
