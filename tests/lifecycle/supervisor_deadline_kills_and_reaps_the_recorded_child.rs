@@ -33,11 +33,13 @@ fn supervisor_deadline_kills_and_reaps_the_recorded_child() {
         .to_owned();
     let alive = Command::new("/bin/kill")
         .args(["-0", &pid])
+        .env("LC_ALL", "C")
         .output()
         .unwrap();
     assert!(
-        !alive.status.success(),
-        "child {pid} remains alive or unreaped"
+        alive.status.code() == Some(1)
+            && String::from_utf8_lossy(&alive.stderr).contains("No such process"),
+        "child {pid} remains alive or the liveness probe failed: {alive:?}"
     );
     assert!(
         elapsed >= entry::SUPERVISOR_TIMEOUT && elapsed < Duration::from_secs(15),

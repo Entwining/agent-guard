@@ -161,11 +161,30 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
     let bytes =
         serde_json::to_vec(&json!({"tool_name":"Bash","tool_input":{"command":out.nested[0]}}))
             .unwrap();
-    let denial = crate::evaluate(crate::Event {
-        bytes: &bytes,
-        context: &context,
-        probe: &mut crate::filesystem::DiskProbe,
-    })
+    struct NoProbe;
+    impl crate::filesystem::Probe for NoProbe {
+        fn stat(
+            &mut self,
+            _: &std::path::Path,
+        ) -> std::io::Result<Option<crate::filesystem::Metadata>> {
+            Ok(None)
+        }
+        fn read_link(
+            &mut self,
+            _: &std::path::Path,
+        ) -> std::io::Result<Option<std::path::PathBuf>> {
+            Ok(None)
+        }
+    }
+    let denial = crate::evaluate_with_catalog(
+        crate::Event {
+            bytes: &bytes,
+            context: &context,
+            probe: &mut NoProbe,
+        },
+        Arm::Brush,
+        crate::filesystem::FirmlinkTable::from_text(""),
+    )
     .unwrap();
     assert!(matches!(
         denial.outcome,

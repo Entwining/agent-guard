@@ -11,7 +11,9 @@ fn regressions(owner: &str) {
     let fixture = support::Fixture::new();
     for consumer in ["claude", "codex", "pi"] {
         let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
-        for row in rows.iter().filter(|row| row["owner"] == owner) {
+        let selected: Vec<_> = rows.iter().filter(|row| row["owner"] == owner).collect();
+        assert!(!selected.is_empty(), "missing owner {owner}");
+        for row in selected {
             if let Some(divergent) = row["divergent"].as_bool() {
                 let observation = shell::observe_with_user(
                     row["source"].as_str().unwrap(),

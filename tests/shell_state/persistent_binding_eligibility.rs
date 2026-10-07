@@ -11,7 +11,12 @@ fn rows() -> Vec<Value> {
 
 fn partition(name: &str) {
     let fixture = support::Fixture::new();
-    for row in rows().into_iter().filter(|r| r["partition"] == name) {
+    let rows: Vec<_> = rows()
+        .into_iter()
+        .filter(|r| r["partition"] == name)
+        .collect();
+    assert!(!rows.is_empty(), "missing partition {name}");
+    for row in rows {
         for consumer in ["claude", "codex", "pi"] {
             let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer=="pi" {"bash"} else {"Bash"},"tool_input":{"command":row["source"]}})).unwrap();

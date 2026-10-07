@@ -1,72 +1,621 @@
-{"cwd":"home/project","origin":{"path":"coord/m11v/req17.jsonl","sha256":"90da684562902b8bb6a85c528d881c5144014893fbf759c81a68d3f0e1d1bfc2"},"rows":[
-  {"id":"g17-listed-dollar","partition":"existing","source":"x='a[$(cat .env)]'; echo $((x))","expected":"D","nested":true,"scope":"x version 1, arithmetic expansion"},
-  {"id":"g17-listed-dparen","partition":"existing","source":"x='a[$(cat .env)]'; ((x))","expected":"D","nested":true,"scope":"x version 1, arithmetic command"},
-  {"id":"g17-listed-let","partition":"existing","source":"x='a[$(cat .env)]'; let x","expected":"D","nested":true,"scope":"x version 1, let"},
-  {"id":"g17-listed-dbracket","partition":"existing","source":"x='a[$(cat .env)]'; [[ x -eq 0 ]]","expected":"D","nested":true,"scope":"x version 1, arithmetic comparison"},
-  {"id":"g17-listed-subscript","partition":"index-expansion","source":"x='a[$(cat .env)]'; arr=(1 2); echo ${arr[x]}","expected":"D","nested":true,"scope":"x version 1, indexed expansion","host_source":"x='a[$(echo HIT >&2)]'; a=(0); arr=(1 2); printf '%s\n' \"${arr[x]}\""},
-  {"id":"index-length","partition":"index-length","source":"x='a[$(cat .env)]'; arr=(one two); echo ${#arr[x]}","expected":"D","nested":true,"scope":"x version 1, indexed length","host_source":"x='a[$(echo HIT >&2)]'; a=(0); arr=(one two); printf '%s\n' \"${#arr[x]}\""},
-  {"id":"g17-declare-i","partition":"integer-later","source":"x='a[$(cat .env)]'; declare -i n; n=x","expected":"D","nested":true,"scope":"x version 1, n integer before assignment","host_source":"x='a[$(echo HIT >&2)]'; a=(0); declare -i n; n=x; printf public"},
-  {"id":"g17-typeset-i-init","partition":"integer-init","source":"x='a[$(cat .env)]'; typeset -i n=x","expected":"D","nested":true,"scope":"x version 1, integer declaration value","host_source":"x='a[$(echo HIT >&2)]'; a=(0); typeset -i n=x; printf public"},
-  {"id":"g17-substr-offset","partition":"offset","source":"x='a[$(cat .env)]'; s=abc; echo ${s:x}","expected":"D","nested":true,"scope":"x version 1, scalar substring offset","host_source":"x='a[$(echo HIT >&2)]'; a=(0); s=abc; printf '%s\n' \"${s:x}\""},
-  {"id":"g17-substr-length","partition":"length","source":"x='a[$(cat .env)]'; s=abc; echo ${s:0:x}","expected":"D","nested":true,"scope":"x version 1, scalar substring length","host_source":"x='a[$(echo HIT >&2)]'; a=(0); s=abc; printf '%s\n' \"${s:0:x}\""},
-  {"id":"array-offset","partition":"offset","source":"x='a[$(cat .env)]'; arr=(one two); echo ${arr[@]:x:1}","expected":"D","nested":true,"scope":"x version 1, array slice offset","host_source":"x='a[$(echo HIT >&2)]'; a=(0); arr=(one two); printf '%s\n' \"${arr[@]:x:1}\""},
-  {"id":"array-length","partition":"length","source":"x='a[$(cat .env)]'; arr=(one two); echo ${arr[@]:0:x}","expected":"D","nested":true,"scope":"x version 1, array slice length","host_source":"x='a[$(echo HIT >&2)]'; a=(0); arr=(one two); printf '%s\n' \"${arr[@]:0:x}\""},
-  {"id":"g17-for-arith","partition":"existing","source":"x='a[$(cat .env)]'; for ((i=x;i<0;i++)); do :; done","expected":"D","nested":true,"scope":"x version 1, arithmetic loop"},
-  {"id":"g17-elem-assign","partition":"index-assignment","source":"x='a[$(cat .env)]'; z=(); z[x]=1","expected":"D","nested":true,"scope":"x version 1, indexed assignment","host_source":"x='a[$(echo HIT >&2)]'; a=(0); z=(); z[x]=1; printf public"},
-  {"id":"index-declare","partition":"index-declaration","source":"x='a[$(cat .env)]'; declare 'z[x]=1'","expected":"D","nested":true,"scope":"x version 1, declared indexed assignment","host_source":"x='a[$(echo HIT >&2)]'; a=(0); declare 'z[x]=1'; printf public"},
-  {"id":"index-unset","partition":"index-unset","source":"x='a[$(cat .env)]'; z=(one two); unset 'z[x]'","expected":"D","nested":true,"scope":"x version 1, indexed unset","host_source":"x='a[$(echo HIT >&2)]'; a=(0); z=(one two); unset 'z[x]'; printf public"},
-  {"id":"g17-legacy-bracket","partition":"existing","source":"x='a[$(cat .env)]'; echo $[x]","expected":"D","nested":true,"scope":"x version 1, legacy arithmetic expansion"},
-  {"id":"g17-indirect","partition":"existing","source":"x='a[$(cat .env)]'; y=x; echo $((y))","expected":"D","nested":true,"scope":"y version 1 references x version 1"},
-  {"id":"g17-func-local","partition":"existing","source":"f(){ local x='a[$(cat .env)]'; echo $((x)); }; f","expected":"D","nested":true,"scope":"active function-local x"},
-  {"id":"g17-ctrl-benign","partition":"existing","source":"x='a[$(echo hi)]'; echo $((x))","expected":"N","nested":false,"scope":"benign nested arithmetic code"},
-  {"id":"g17-ctrl-test-eq","partition":"conservative","source":"x='a[$(cat .env)]'; [ x -eq 0 ]","expected":"D","nested":true,"scope":"ruling36 accepted conservative bare-name refusal","host_source":"x='a[$(echo HIT >&2)]'; a=(0); [ x -eq 0 ]; printf public"},
-  {"id":"integer-declare-init","partition":"integer-init","source":"x='a[$(cat .env)]'; declare -i n=x","expected":"D","nested":true,"scope":"x version 1, declare integer value","host_source":"x='a[$(echo HIT >&2)]'; a=(0); declare -i n=x; printf public"},
-  {"id":"integer-local-init","partition":"integer-init","source":"f() { local x='a[$(cat .env)]'; local -i n=x; }; f","expected":"D","nested":true,"scope":"local integer initializer reads innermost x","host_source":"a=(0); f() { local x='a[$(echo HIT >&2)]'; local -i n=x; }; f; printf public"},
-  {"id":"integer-typeset-later","partition":"integer-later","source":"x='a[$(cat .env)]'; typeset -i n; n=x","expected":"D","nested":true,"scope":"typeset integer attribute persists","host_source":"x='a[$(echo HIT >&2)]'; a=(0); typeset -i n; n=x; printf public"},
-  {"id":"integer-local-later","partition":"integer-later","source":"f() { local x='a[$(cat .env)]'; local -i n; n=x; }; f","expected":"D","nested":true,"scope":"local integer attribute remains active inside body","host_source":"a=(0); f() { local x='a[$(echo HIT >&2)]'; local -i n; n=x; }; f; printf public"},
-  {"id":"integer-declare-append","partition":"integer-append","source":"x='a[$(cat .env)]'; declare -i n=0; n+=x","expected":"D","nested":true,"scope":"integer append evaluates RHS","host_source":"x='a[$(echo HIT >&2)]'; a=(0); declare -i n=0; n+=x; printf public"},
-  {"id":"integer-typeset-append","partition":"integer-append","source":"x='a[$(cat .env)]'; typeset -i n=0; n+=x","expected":"D","nested":true,"scope":"typeset integer append evaluates RHS","host_source":"x='a[$(echo HIT >&2)]'; a=(0); typeset -i n=0; n+=x; printf public"},
-  {"id":"integer-local-append","partition":"integer-append","source":"f() { local x='a[$(cat .env)]'; local -i n=0; n+=x; }; f","expected":"D","nested":true,"scope":"local integer append evaluates RHS","host_source":"a=(0); f() { local x='a[$(echo HIT >&2)]'; local -i n=0; n+=x; }; f; printf public"},
-  {"id":"integer-join-unknown","partition":"non-armed","source":"x=0; if true; then declare -i n; fi; n=x; printf public","expected":"N","nested":false,"scope":"ruling36 keeps non-armed bindings unchanged","host_source":"x=0; if true; then declare -i n; fi; n=x; printf public"},
-  {"id":"integer-dynamic-name","partition":"non-armed","source":"declare -i \"$NAME\"; printf public","expected":"N","nested":false,"scope":"no lexical armed binding; inherited state remains cutover limit"},
-  {"id":"integer-return-restoration","partition":"attribute-restore","source":"x='a[$(cat .env)]'; n=public; f() { local -i n=0; }; f; n=x; printf '%s' \"$n\"","expected":"D","nested":true,"scope":"later assignment references armed x regardless of integer attributes","host_source":"x='a[$(echo HIT >&2)]'; n=public; f() { local -i n=0; }; f; n=x; printf '%s' \"$n\""},
-  {"id":"integer-outer-restored","partition":"attribute-restore","source":"x='a[$(cat .env)]'; declare -i n=0; f() { local n=public; }; f; n=x","expected":"D","nested":true,"scope":"caller integer attribute restored after local shadow","host_source":"x='a[$(echo HIT >&2)]'; a=(0); declare -i n=0; f() { local n=0; }; f; n=x; printf public"},
-  {"id":"integer-disabled","partition":"attribute-disable","source":"x='a[$(cat .env)]'; declare -i n; declare +i n; n=x; printf '%s' \"$n\"","expected":"D","nested":true,"scope":"ruling36 accepted conservative assignment-reference refusal","host_source":"x='a[$(echo HIT >&2)]'; declare -i n; declare +i n; n=x; printf '%s' \"$n\""},
-  {"id":"integer-rhs-value-boundary","partition":"integer-data","source":"declare -i n='$(cat .env)'; printf public","expected":"N","nested":false,"scope":"literal substitution outside subscript stays arithmetic data","host_source":"declare -i n='$(echo HIT >&2)'; printf public"},
-  {"id":"index-expansion-benign","partition":"index-expansion","source":"x=0; arr=(one two); echo ${arr[x]}","expected":"N","nested":false,"scope":"benign indexed expansion","host_source":"x=0; arr=(one two); printf '%s\n' \"${arr[x]}\""},
-  {"id":"index-length-benign","partition":"index-length","source":"x=0; arr=(one two); echo ${#arr[x]}","expected":"N","nested":false,"scope":"benign indexed length","host_source":"x=0; arr=(one two); printf '%s\n' \"${#arr[x]}\""},
-  {"id":"offset-benign","partition":"offset","source":"x=0; s=abc; echo ${s:x}","expected":"N","nested":false,"scope":"benign scalar offset","host_source":"x=0; s=abc; printf '%s\n' \"${s:x}\""},
-  {"id":"length-benign","partition":"length","source":"x=1; s=abc; echo ${s:0:x}","expected":"N","nested":false,"scope":"benign scalar length","host_source":"x=1; s=abc; printf '%s\n' \"${s:0:x}\""},
-  {"id":"integer-init-benign","partition":"integer-init","source":"x=0; declare -i n=x; printf public","expected":"N","nested":false,"scope":"benign integer initialization","host_source":"x=0; declare -i n=x; printf public"},
-  {"id":"integer-later-benign","partition":"integer-later","source":"x=0; declare -i n; n=x; printf public","expected":"N","nested":false,"scope":"benign later integer assignment","host_source":"x=0; declare -i n; n=x; printf public"},
-  {"id":"integer-append-benign","partition":"integer-append","source":"x=0; declare -i n=0; n+=x; printf public","expected":"N","nested":false,"scope":"benign integer append","host_source":"x=0; declare -i n=0; n+=x; printf public"},
-  {"id":"index-declare-benign","partition":"index-declaration","source":"x=0; declare 'z[x]=1'; printf public","expected":"N","nested":false,"scope":"benign declared index","host_source":"x=0; declare 'z[x]=1'; printf public"},
-  {"id":"index-unset-benign","partition":"index-unset","source":"x=0; z=(one two); unset 'z[x]'; printf public","expected":"N","nested":false,"scope":"benign indexed unset","host_source":"x=0; z=(one two); unset 'z[x]'; printf public"},
-  {"id":"non-sink-printf","partition":"zsh-sinks","source":"x='a[$(cat .env)]'; printf '%d' x","expected":"D","nested":true,"scope":"ruling36 re-witnessed Zsh numeric printf","host_source":"x='a[$(echo HIT >&2)]'; a=(0); printf '%d' x; printf public"},
-  {"id":"non-sink-shift","partition":"zsh-sinks","source":"x='a[$(cat .env)]'; shift x","expected":"D","nested":true,"scope":"ruling36 re-witnessed Zsh shift","host_source":"x='a[$(echo HIT >&2)]'; a=(0); shift x; printf public"},
-  {"id":"non-sink-test","partition":"conservative","source":"x='a[$(cat .env)]'; test x -eq 0","expected":"D","nested":true,"scope":"ruling36 accepted conservative bare-name refusal","host_source":"x='a[$(echo HIT >&2)]'; a=(0); test x -eq 0; printf public"},
-  {"id":"zsh-exit","partition":"zsh-exit","source":"x='a[$(cat .env)]'; a=(0); exit x","expected":"D","nested":true,"scope":"bare-name reference in exit","host_source":"x='a[$(echo HIT >&2)]'; a=(0); exit x"},
-  {"id":"zsh-return","partition":"zsh-sinks","source":"x='a[$(cat .env)]'; a=(0); f() { return x; }; f","expected":"D","nested":true,"scope":"bare-name reference in function return","host_source":"x='a[$(echo HIT >&2)]'; a=(0); f() { return x; }; f; printf public"},
-  {"id":"zsh-repeat","partition":"zsh-repeat","source":"x='a[$(cat .env)]'; a=(0); repeat x :","expected":"D","nested":true,"scope":"bare-name reference in repeat","host_source":"x='a[$(echo HIT >&2)]'; a=(0); repeat x :; printf public"},
-  {"id":"zsh-print-f","partition":"zsh-print","source":"x='a[$(cat .env)]'; a=(0); print -f '%d' x","expected":"D","nested":true,"scope":"bare-name reference in print format arguments","host_source":"x='a[$(echo HIT >&2)]'; a=(0); print -f '%d' x; printf public"},
-  {"id":"zsh-integer","partition":"zsh-sinks","source":"x='a[$(cat .env)]'; a=(0); integer n=x","expected":"D","nested":true,"scope":"assignment value in integer builtin","host_source":"x='a[$(echo HIT >&2)]'; a=(0); integer n=x; printf public"},
-  {"id":"zsh-float","partition":"zsh-sinks","source":"x='a[$(cat .env)]'; a=(0); float n=x","expected":"D","nested":true,"scope":"assignment value in float builtin","host_source":"x='a[$(echo HIT >&2)]'; a=(0); float n=x; printf public"},
-  {"id":"zsh-math-space","partition":"zsh-sinks","source":"x='a[$(cat .env)]'; a=(0); echo $(( x + 0 ))","expected":"D","nested":true,"scope":"arithmetic expression containing a referenced name","host_source":"x='a[$(echo HIT >&2)]'; a=(0); printf '%s' \"$(( x + 0 ))\""},
-  {"id":"zsh-math-int","partition":"zsh-sinks","source":"x='a[$(cat .env)]'; a=(0); echo $(( int(x) ))","expected":"D","nested":true,"scope":"Zsh math function receives the referenced name","host_source":"x='a[$(echo HIT >&2)]'; a=(0); printf '%s' \"$(( int(x) ))\""},
-  {"id":"armed-echo","partition":"conservative","source":"x='a[$(cat .env)]'; echo x","expected":"D","nested":true,"scope":"ruling36 accepted conservative echo refusal","host_source":"x='a[$(echo HIT >&2)]'; a=(0); echo x"},
-  {"id":"armed-ls","partition":"conservative","source":"x='a[$(cat .env)]'; ls x","expected":"D","nested":true,"scope":"ruling36 accepted conservative listing refusal"},
-  {"id":"armed-function","partition":"conservative","source":"x='a[$(cat .env)]'; f() { printf '%s' \"$1\"; }; f x","expected":"D","nested":true,"scope":"any function argument receives the same bare-name owner","host_source":"x='a[$(echo HIT >&2)]'; a=(0); f() { printf '%s' \"$1\"; }; f x"},
-  {"id":"armed-assignment-expression","partition":"references","source":"x='a[$(cat .env)]'; n=x+0; printf public","expected":"D","nested":true,"scope":"assignment expression references armed name","host_source":"x='a[$(echo HIT >&2)]'; a=(0); declare -i n; n=x+0; printf public"},
-  {"id":"armed-candidate-join","partition":"references","source":"x=0; if true; then x='a[$(cat .env)]'; fi; echo x","expected":"D","nested":true,"scope":"one armed candidate makes the reference armed","host_source":"x=0; if true; then x='a[$(echo HIT >&2)]'; fi; a=(0); printf '%d' x"},
-  {"id":"armed-nested-parameter","partition":"lexer-arming","source":"x='a[${q:-$(cat .env)}]'; echo x","expected":"D","nested":true,"scope":"lexer finds substitution inside a nested expansion","host_source":"x='a[${q:-$(echo HIT >&2)}]'; a=(0); printf '%d' x"},
-  {"id":"armed-backquote","partition":"lexer-arming","source":"x='a[`cat .env`]'; echo x","expected":"D","nested":true,"scope":"lexer finds a backquote inside a named subscript","host_source":"x='a[`echo HIT >&2`]'; a=(0); printf '%d' x"},
-  {"id":"inert-outside-subscript","partition":"lexer-arming","source":"x='$(cat .env)'; printf '%d' x","expected":"N","nested":false,"scope":"substitution outside a named subscript remains inert binding data","host_source":"x='$(echo HIT >&2)'; printf '%d' x"},
-  {"id":"inert-nameless-bracket","partition":"lexer-arming","source":"x='[$(cat .env)]'; echo x","expected":"N","nested":false,"scope":"brackets without a variable name are not math-armed","host_source":"x='[$(echo HIT >&2)]'; echo x"},
-  {"id":"inert-no-reference","partition":"non-armed","source":"x='a[$(cat .env)]'; echo public","expected":"N","nested":false,"scope":"arming alone does not enqueue the stored data","host_source":"x='a[$(echo HIT >&2)]'; echo public"},
-  {"id":"inert-value-expansion","partition":"references","source":"x='a[$(cat .env)]'; printf '%s' \"$x\"","expected":"D","nested":true,"scope":"ruling42 observes armed value expansion at the general reference owner","host_source":"x='a[$(echo HIT >&2)]'; printf '%s' \"$x\""},
-  {"id":"inert-benign-bare-name","partition":"non-armed","source":"x=0; echo x","expected":"N","nested":false,"scope":"non-armed bare-name argument stays unchanged","host_source":"x=0; echo x"},
-  {"id":"armed-recursion","partition":"bounds","source":"x='x[$(echo hi)]'; echo x","expected":"UR","nested":false,"scope":"armed recursion uses the existing ruling16 bound"},
-  {"id":"armed-unclosed-subscript","partition":"bounds","source":"x='a[$(echo hi)'; echo x","expected":"UR","nested":false,"scope":"unresolved arming refuses an unclosed named subscript"},
-  {"id":"armed-lexer-bound","partition":"bounds","source":"x='a[$($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($(echo public)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))]'; echo x","expected":"F","nested":false,"scope":"existing frontdoor ResourceLimit; binding classifier independently refuses"},
-  {"id":"armed-local-version","partition":"references","source":"x='a[$(cat .env)]'; f() { local x=0; echo x; }; f","expected":"N","nested":false,"scope":"innermost non-armed local replaces the armed caller during the call","host_source":"x='a[$(echo HIT >&2)]'; a=(0); f() { local x=0; printf '%d' x; }; f"}
-]}
+{
+  "cwd": "home/project",
+  "rows": [
+    {
+      "id": "g17-listed-dollar",
+      "partition": "existing",
+      "source": "x='a[$(cat .env)]'; echo $((x))",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, arithmetic expansion"
+    },
+    {
+      "id": "g17-listed-dparen",
+      "partition": "existing",
+      "source": "x='a[$(cat .env)]'; ((x))",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, arithmetic command"
+    },
+    {
+      "id": "g17-listed-let",
+      "partition": "existing",
+      "source": "x='a[$(cat .env)]'; let x",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, let"
+    },
+    {
+      "id": "g17-listed-dbracket",
+      "partition": "existing",
+      "source": "x='a[$(cat .env)]'; [[ x -eq 0 ]]",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, arithmetic comparison"
+    },
+    {
+      "id": "g17-listed-subscript",
+      "partition": "index-expansion",
+      "source": "x='a[$(cat .env)]'; arr=(1 2); echo ${arr[x]}",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, indexed expansion",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); arr=(1 2); printf '%s\n' \"${arr[x]}\""
+    },
+    {
+      "id": "index-length",
+      "partition": "index-length",
+      "source": "x='a[$(cat .env)]'; arr=(one two); echo ${#arr[x]}",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, indexed length",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); arr=(one two); printf '%s\n' \"${#arr[x]}\""
+    },
+    {
+      "id": "g17-declare-i",
+      "partition": "integer-later",
+      "source": "x='a[$(cat .env)]'; declare -i n; n=x",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, n integer before assignment",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); declare -i n; n=x; printf public"
+    },
+    {
+      "id": "g17-typeset-i-init",
+      "partition": "integer-init",
+      "source": "x='a[$(cat .env)]'; typeset -i n=x",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, integer declaration value",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); typeset -i n=x; printf public"
+    },
+    {
+      "id": "g17-substr-offset",
+      "partition": "offset",
+      "source": "x='a[$(cat .env)]'; s=abc; echo ${s:x}",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, scalar substring offset",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); s=abc; printf '%s\n' \"${s:x}\""
+    },
+    {
+      "id": "g17-substr-length",
+      "partition": "length",
+      "source": "x='a[$(cat .env)]'; s=abc; echo ${s:0:x}",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, scalar substring length",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); s=abc; printf '%s\n' \"${s:0:x}\""
+    },
+    {
+      "id": "array-offset",
+      "partition": "offset",
+      "source": "x='a[$(cat .env)]'; arr=(one two); echo ${arr[@]:x:1}",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, array slice offset",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); arr=(one two); printf '%s\n' \"${arr[@]:x:1}\""
+    },
+    {
+      "id": "array-length",
+      "partition": "length",
+      "source": "x='a[$(cat .env)]'; arr=(one two); echo ${arr[@]:0:x}",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, array slice length",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); arr=(one two); printf '%s\n' \"${arr[@]:0:x}\""
+    },
+    {
+      "id": "g17-for-arith",
+      "partition": "existing",
+      "source": "x='a[$(cat .env)]'; for ((i=x;i<0;i++)); do :; done",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, arithmetic loop"
+    },
+    {
+      "id": "g17-elem-assign",
+      "partition": "index-assignment",
+      "source": "x='a[$(cat .env)]'; z=(); z[x]=1",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, indexed assignment",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); z=(); z[x]=1; printf public"
+    },
+    {
+      "id": "index-declare",
+      "partition": "index-declaration",
+      "source": "x='a[$(cat .env)]'; declare 'z[x]=1'",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, declared indexed assignment",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); declare 'z[x]=1'; printf public"
+    },
+    {
+      "id": "index-unset",
+      "partition": "index-unset",
+      "source": "x='a[$(cat .env)]'; z=(one two); unset 'z[x]'",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, indexed unset",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); z=(one two); unset 'z[x]'; printf public"
+    },
+    {
+      "id": "g17-legacy-bracket",
+      "partition": "existing",
+      "source": "x='a[$(cat .env)]'; echo $[x]",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, legacy arithmetic expansion"
+    },
+    {
+      "id": "g17-indirect",
+      "partition": "existing",
+      "source": "x='a[$(cat .env)]'; y=x; echo $((y))",
+      "expected": "D",
+      "nested": true,
+      "scope": "y version 1 references x version 1"
+    },
+    {
+      "id": "g17-func-local",
+      "partition": "existing",
+      "source": "f(){ local x='a[$(cat .env)]'; echo $((x)); }; f",
+      "expected": "D",
+      "nested": true,
+      "scope": "active function-local x"
+    },
+    {
+      "id": "g17-ctrl-benign",
+      "partition": "existing",
+      "source": "x='a[$(echo hi)]'; echo $((x))",
+      "expected": "N",
+      "nested": false,
+      "scope": "benign nested arithmetic code"
+    },
+    {
+      "id": "g17-ctrl-test-eq",
+      "partition": "conservative",
+      "source": "x='a[$(cat .env)]'; [ x -eq 0 ]",
+      "expected": "D",
+      "nested": true,
+      "scope": "ruling36 accepted conservative bare-name refusal",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); [ x -eq 0 ]; printf public"
+    },
+    {
+      "id": "integer-declare-init",
+      "partition": "integer-init",
+      "source": "x='a[$(cat .env)]'; declare -i n=x",
+      "expected": "D",
+      "nested": true,
+      "scope": "x version 1, declare integer value",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); declare -i n=x; printf public"
+    },
+    {
+      "id": "integer-local-init",
+      "partition": "integer-init",
+      "source": "f() { local x='a[$(cat .env)]'; local -i n=x; }; f",
+      "expected": "D",
+      "nested": true,
+      "scope": "local integer initializer reads innermost x",
+      "host_source": "a=(0); f() { local x='a[$(echo HIT >&2)]'; local -i n=x; }; f; printf public"
+    },
+    {
+      "id": "integer-typeset-later",
+      "partition": "integer-later",
+      "source": "x='a[$(cat .env)]'; typeset -i n; n=x",
+      "expected": "D",
+      "nested": true,
+      "scope": "typeset integer attribute persists",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); typeset -i n; n=x; printf public"
+    },
+    {
+      "id": "integer-local-later",
+      "partition": "integer-later",
+      "source": "f() { local x='a[$(cat .env)]'; local -i n; n=x; }; f",
+      "expected": "D",
+      "nested": true,
+      "scope": "local integer attribute remains active inside body",
+      "host_source": "a=(0); f() { local x='a[$(echo HIT >&2)]'; local -i n; n=x; }; f; printf public"
+    },
+    {
+      "id": "integer-declare-append",
+      "partition": "integer-append",
+      "source": "x='a[$(cat .env)]'; declare -i n=0; n+=x",
+      "expected": "D",
+      "nested": true,
+      "scope": "integer append evaluates RHS",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); declare -i n=0; n+=x; printf public"
+    },
+    {
+      "id": "integer-typeset-append",
+      "partition": "integer-append",
+      "source": "x='a[$(cat .env)]'; typeset -i n=0; n+=x",
+      "expected": "D",
+      "nested": true,
+      "scope": "typeset integer append evaluates RHS",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); typeset -i n=0; n+=x; printf public"
+    },
+    {
+      "id": "integer-local-append",
+      "partition": "integer-append",
+      "source": "f() { local x='a[$(cat .env)]'; local -i n=0; n+=x; }; f",
+      "expected": "D",
+      "nested": true,
+      "scope": "local integer append evaluates RHS",
+      "host_source": "a=(0); f() { local x='a[$(echo HIT >&2)]'; local -i n=0; n+=x; }; f; printf public"
+    },
+    {
+      "id": "integer-join-unknown",
+      "partition": "non-armed",
+      "source": "x=0; if true; then declare -i n; fi; n=x; printf public",
+      "expected": "N",
+      "nested": false,
+      "scope": "ruling36 keeps non-armed bindings unchanged",
+      "host_source": "x=0; if true; then declare -i n; fi; n=x; printf public"
+    },
+    {
+      "id": "integer-dynamic-name",
+      "partition": "non-armed",
+      "source": "declare -i \"$NAME\"; printf public",
+      "expected": "N",
+      "nested": false,
+      "scope": "no lexical armed binding; inherited state remains cutover limit"
+    },
+    {
+      "id": "integer-return-restoration",
+      "partition": "attribute-restore",
+      "source": "x='a[$(cat .env)]'; n=public; f() { local -i n=0; }; f; n=x; printf '%s' \"$n\"",
+      "expected": "D",
+      "nested": true,
+      "scope": "later assignment references armed x regardless of integer attributes",
+      "host_source": "x='a[$(echo HIT >&2)]'; n=public; f() { local -i n=0; }; f; n=x; printf '%s' \"$n\""
+    },
+    {
+      "id": "integer-outer-restored",
+      "partition": "attribute-restore",
+      "source": "x='a[$(cat .env)]'; declare -i n=0; f() { local n=public; }; f; n=x",
+      "expected": "D",
+      "nested": true,
+      "scope": "caller integer attribute restored after local shadow",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); declare -i n=0; f() { local n=0; }; f; n=x; printf public"
+    },
+    {
+      "id": "integer-disabled",
+      "partition": "attribute-disable",
+      "source": "x='a[$(cat .env)]'; declare -i n; declare +i n; n=x; printf '%s' \"$n\"",
+      "expected": "D",
+      "nested": true,
+      "scope": "ruling36 accepted conservative assignment-reference refusal",
+      "host_source": "x='a[$(echo HIT >&2)]'; declare -i n; declare +i n; n=x; printf '%s' \"$n\""
+    },
+    {
+      "id": "integer-rhs-value-boundary",
+      "partition": "integer-data",
+      "source": "declare -i n='$(cat .env)'; printf public",
+      "expected": "N",
+      "nested": false,
+      "scope": "literal substitution outside subscript stays arithmetic data",
+      "host_source": "declare -i n='$(echo HIT >&2)'; printf public"
+    },
+    {
+      "id": "index-expansion-benign",
+      "partition": "index-expansion",
+      "source": "x=0; arr=(one two); echo ${arr[x]}",
+      "expected": "N",
+      "nested": false,
+      "scope": "benign indexed expansion",
+      "host_source": "x=0; arr=(one two); printf '%s\n' \"${arr[x]}\""
+    },
+    {
+      "id": "index-length-benign",
+      "partition": "index-length",
+      "source": "x=0; arr=(one two); echo ${#arr[x]}",
+      "expected": "N",
+      "nested": false,
+      "scope": "benign indexed length",
+      "host_source": "x=0; arr=(one two); printf '%s\n' \"${#arr[x]}\""
+    },
+    {
+      "id": "offset-benign",
+      "partition": "offset",
+      "source": "x=0; s=abc; echo ${s:x}",
+      "expected": "N",
+      "nested": false,
+      "scope": "benign scalar offset",
+      "host_source": "x=0; s=abc; printf '%s\n' \"${s:x}\""
+    },
+    {
+      "id": "length-benign",
+      "partition": "length",
+      "source": "x=1; s=abc; echo ${s:0:x}",
+      "expected": "N",
+      "nested": false,
+      "scope": "benign scalar length",
+      "host_source": "x=1; s=abc; printf '%s\n' \"${s:0:x}\""
+    },
+    {
+      "id": "integer-init-benign",
+      "partition": "integer-init",
+      "source": "x=0; declare -i n=x; printf public",
+      "expected": "N",
+      "nested": false,
+      "scope": "benign integer initialization",
+      "host_source": "x=0; declare -i n=x; printf public"
+    },
+    {
+      "id": "integer-later-benign",
+      "partition": "integer-later",
+      "source": "x=0; declare -i n; n=x; printf public",
+      "expected": "N",
+      "nested": false,
+      "scope": "benign later integer assignment",
+      "host_source": "x=0; declare -i n; n=x; printf public"
+    },
+    {
+      "id": "integer-append-benign",
+      "partition": "integer-append",
+      "source": "x=0; declare -i n=0; n+=x; printf public",
+      "expected": "N",
+      "nested": false,
+      "scope": "benign integer append",
+      "host_source": "x=0; declare -i n=0; n+=x; printf public"
+    },
+    {
+      "id": "index-declare-benign",
+      "partition": "index-declaration",
+      "source": "x=0; declare 'z[x]=1'; printf public",
+      "expected": "N",
+      "nested": false,
+      "scope": "benign declared index",
+      "host_source": "x=0; declare 'z[x]=1'; printf public"
+    },
+    {
+      "id": "index-unset-benign",
+      "partition": "index-unset",
+      "source": "x=0; z=(one two); unset 'z[x]'; printf public",
+      "expected": "N",
+      "nested": false,
+      "scope": "benign indexed unset",
+      "host_source": "x=0; z=(one two); unset 'z[x]'; printf public"
+    },
+    {
+      "id": "non-sink-printf",
+      "partition": "zsh-sinks",
+      "source": "x='a[$(cat .env)]'; printf '%d' x",
+      "expected": "D",
+      "nested": true,
+      "scope": "ruling36 re-witnessed Zsh numeric printf",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); printf '%d' x; printf public"
+    },
+    {
+      "id": "non-sink-shift",
+      "partition": "zsh-sinks",
+      "source": "x='a[$(cat .env)]'; shift x",
+      "expected": "D",
+      "nested": true,
+      "scope": "ruling36 re-witnessed Zsh shift",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); shift x; printf public"
+    },
+    {
+      "id": "non-sink-test",
+      "partition": "conservative",
+      "source": "x='a[$(cat .env)]'; test x -eq 0",
+      "expected": "D",
+      "nested": true,
+      "scope": "ruling36 accepted conservative bare-name refusal",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); test x -eq 0; printf public"
+    },
+    {
+      "id": "zsh-exit",
+      "partition": "zsh-exit",
+      "source": "x='a[$(cat .env)]'; a=(0); exit x",
+      "expected": "D",
+      "nested": true,
+      "scope": "bare-name reference in exit",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); exit x"
+    },
+    {
+      "id": "zsh-return",
+      "partition": "zsh-sinks",
+      "source": "x='a[$(cat .env)]'; a=(0); f() { return x; }; f",
+      "expected": "D",
+      "nested": true,
+      "scope": "bare-name reference in function return",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); f() { return x; }; f; printf public"
+    },
+    {
+      "id": "zsh-repeat",
+      "partition": "zsh-repeat",
+      "source": "x='a[$(cat .env)]'; a=(0); repeat x :",
+      "expected": "D",
+      "nested": true,
+      "scope": "bare-name reference in repeat",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); repeat x :; printf public"
+    },
+    {
+      "id": "zsh-print-f",
+      "partition": "zsh-print",
+      "source": "x='a[$(cat .env)]'; a=(0); print -f '%d' x",
+      "expected": "D",
+      "nested": true,
+      "scope": "bare-name reference in print format arguments",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); print -f '%d' x; printf public"
+    },
+    {
+      "id": "zsh-integer",
+      "partition": "zsh-sinks",
+      "source": "x='a[$(cat .env)]'; a=(0); integer n=x",
+      "expected": "D",
+      "nested": true,
+      "scope": "assignment value in integer builtin",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); integer n=x; printf public"
+    },
+    {
+      "id": "zsh-float",
+      "partition": "zsh-sinks",
+      "source": "x='a[$(cat .env)]'; a=(0); float n=x",
+      "expected": "D",
+      "nested": true,
+      "scope": "assignment value in float builtin",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); float n=x; printf public"
+    },
+    {
+      "id": "zsh-math-space",
+      "partition": "zsh-sinks",
+      "source": "x='a[$(cat .env)]'; a=(0); echo $(( x + 0 ))",
+      "expected": "D",
+      "nested": true,
+      "scope": "arithmetic expression containing a referenced name",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); printf '%s' \"$(( x + 0 ))\""
+    },
+    {
+      "id": "zsh-math-int",
+      "partition": "zsh-sinks",
+      "source": "x='a[$(cat .env)]'; a=(0); echo $(( int(x) ))",
+      "expected": "D",
+      "nested": true,
+      "scope": "Zsh math function receives the referenced name",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); printf '%s' \"$(( int(x) ))\""
+    },
+    {
+      "id": "armed-echo",
+      "partition": "conservative",
+      "source": "x='a[$(cat .env)]'; echo x",
+      "expected": "D",
+      "nested": true,
+      "scope": "ruling36 accepted conservative echo refusal",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); echo x"
+    },
+    {
+      "id": "armed-ls",
+      "partition": "conservative",
+      "source": "x='a[$(cat .env)]'; ls x",
+      "expected": "D",
+      "nested": true,
+      "scope": "ruling36 accepted conservative listing refusal"
+    },
+    {
+      "id": "armed-function",
+      "partition": "conservative",
+      "source": "x='a[$(cat .env)]'; f() { printf '%s' \"$1\"; }; f x",
+      "expected": "D",
+      "nested": true,
+      "scope": "any function argument receives the same bare-name owner",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); f() { printf '%s' \"$1\"; }; f x"
+    },
+    {
+      "id": "armed-assignment-expression",
+      "partition": "references",
+      "source": "x='a[$(cat .env)]'; n=x+0; printf public",
+      "expected": "D",
+      "nested": true,
+      "scope": "assignment expression references armed name",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); declare -i n; n=x+0; printf public"
+    },
+    {
+      "id": "armed-candidate-join",
+      "partition": "references",
+      "source": "x=0; if true; then x='a[$(cat .env)]'; fi; echo x",
+      "expected": "D",
+      "nested": true,
+      "scope": "one armed candidate makes the reference armed",
+      "host_source": "x=0; if true; then x='a[$(echo HIT >&2)]'; fi; a=(0); printf '%d' x"
+    },
+    {
+      "id": "armed-nested-parameter",
+      "partition": "lexer-arming",
+      "source": "x='a[${q:-$(cat .env)}]'; echo x",
+      "expected": "D",
+      "nested": true,
+      "scope": "lexer finds substitution inside a nested expansion",
+      "host_source": "x='a[${q:-$(echo HIT >&2)}]'; a=(0); printf '%d' x"
+    },
+    {
+      "id": "armed-backquote",
+      "partition": "lexer-arming",
+      "source": "x='a[`cat .env`]'; echo x",
+      "expected": "D",
+      "nested": true,
+      "scope": "lexer finds a backquote inside a named subscript",
+      "host_source": "x='a[`echo HIT >&2`]'; a=(0); printf '%d' x"
+    },
+    {
+      "id": "inert-outside-subscript",
+      "partition": "lexer-arming",
+      "source": "x='$(cat .env)'; printf '%d' x",
+      "expected": "N",
+      "nested": false,
+      "scope": "substitution outside a named subscript remains inert binding data",
+      "host_source": "x='$(echo HIT >&2)'; printf '%d' x"
+    },
+    {
+      "id": "inert-nameless-bracket",
+      "partition": "lexer-arming",
+      "source": "x='[$(cat .env)]'; echo x",
+      "expected": "N",
+      "nested": false,
+      "scope": "brackets without a variable name are not math-armed",
+      "host_source": "x='[$(echo HIT >&2)]'; echo x"
+    },
+    {
+      "id": "inert-no-reference",
+      "partition": "non-armed",
+      "source": "x='a[$(cat .env)]'; echo public",
+      "expected": "N",
+      "nested": false,
+      "scope": "arming alone does not enqueue the stored data",
+      "host_source": "x='a[$(echo HIT >&2)]'; echo public"
+    },
+    {
+      "id": "inert-value-expansion",
+      "partition": "references",
+      "source": "x='a[$(cat .env)]'; printf '%s' \"$x\"",
+      "expected": "D",
+      "nested": true,
+      "scope": "ruling42 observes armed value expansion at the general reference owner",
+      "host_source": "x='a[$(echo HIT >&2)]'; printf '%s' \"$x\""
+    },
+    {
+      "id": "inert-benign-bare-name",
+      "partition": "non-armed",
+      "source": "x=0; echo x",
+      "expected": "N",
+      "nested": false,
+      "scope": "non-armed bare-name argument stays unchanged",
+      "host_source": "x=0; echo x"
+    },
+    {
+      "id": "armed-recursion",
+      "partition": "bounds",
+      "source": "x='x[$(echo hi)]'; echo x",
+      "expected": "UR",
+      "nested": false,
+      "scope": "armed recursion uses the existing ruling16 bound"
+    },
+    {
+      "id": "armed-unclosed-subscript",
+      "partition": "bounds",
+      "source": "x='a[$(echo hi)'; echo x",
+      "expected": "UR",
+      "nested": false,
+      "scope": "unresolved arming refuses an unclosed named subscript"
+    },
+    {
+      "id": "armed-lexer-bound",
+      "partition": "bounds",
+      "source": "x='a[$($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($(echo public)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))]'; echo x",
+      "expected": "F",
+      "nested": false,
+      "scope": "existing frontdoor ResourceLimit; binding classifier independently refuses"
+    },
+    {
+      "id": "armed-local-version",
+      "partition": "references",
+      "source": "x='a[$(cat .env)]'; f() { local x=0; echo x; }; f",
+      "expected": "N",
+      "nested": false,
+      "scope": "innermost non-armed local replaces the armed caller during the call",
+      "host_source": "x='a[$(echo HIT >&2)]'; a=(0); f() { local x=0; printf '%d' x; }; f"
+    }
+  ]
+}

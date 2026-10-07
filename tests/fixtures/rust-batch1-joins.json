@@ -75,7 +75,8 @@
       "partition": "pipeline-read",
       "source": "echo $E/other-home/Library/Containers/com.example.syn/Data | read x; ls \"$x\"",
       "expected": "N",
-      "cwd": "/h/project"
+      "cwd": "/h/project",
+      "expand_markers": true
     },
     {
       "id": "t5-read-pipe-target",

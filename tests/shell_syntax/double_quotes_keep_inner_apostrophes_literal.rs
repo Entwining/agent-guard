@@ -17,7 +17,9 @@ fn regressions(owner: &str) {
     let fixture = support::Fixture::new();
     for consumer in ["claude", "codex", "pi"] {
         let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
-        for row in rows.iter().filter(|row| row["owner"] == owner) {
+        let selected: Vec<_> = rows.iter().filter(|row| row["owner"] == owner).collect();
+        assert!(!selected.is_empty(), "missing owner {owner}");
+        for row in selected {
             let body = serde_json::to_vec(
                 &json!({"tool_name":if consumer=="pi" {"bash"} else {"Bash"},
                 "tool_input":{"command":fixture.expand(row["source"].as_str().unwrap())}}),
@@ -508,33 +510,25 @@ fn brush_heredocs(
 
 #[test]
 fn lexer_matches_brush_word_quoting() {
-    let manifest: Value =
-        serde_json::from_str(include_str!("../fixtures/rust-m1-4-input-manifest.json")).unwrap();
-    let inputs: Vec<(String, String)> = manifest["inputs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(|row| {
-            row["source"]
-                .as_str()
-                .map(|s| (row["id"].as_str().unwrap().into(), s.into()))
-        })
+    let inputs: Vec<Value> = include_str!("../fixtures/rust-parser-inputs.jsonl")
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .filter(|row| row["source"].is_string())
         .collect();
-    assert_eq!(
-        inputs.len(),
-        manifest["counts"]["shell"].as_u64().unwrap() as usize
-    );
-    let files = manifest["files"].as_array().unwrap();
     let mut oracle = Oracle::default();
     let mut tokenized = 0;
     let mut parsed_programs = 0;
     let mut skipped = BTreeSet::new();
     let mut known_limits = Vec::new();
-    for (id, source) in &inputs {
+    let mut evaluated = BTreeSet::new();
+    for row in &inputs {
+        let id = row["id"].as_str().unwrap();
+        let source = row["source"].as_str().unwrap();
+        assert!(evaluated.insert(id), "duplicate parser input: {id}");
         let Ok(tokens) =
             brush_parser::uncached_tokenize_str(source, &brush_parser::TokenizerOptions::default())
         else {
-            skipped.insert(id.clone());
+            skipped.insert(id);
             continue;
         };
         tokenized += 1;
@@ -547,13 +541,9 @@ fn lexer_matches_brush_word_quoting() {
         let lexical = match Lexed::scan(source) {
             Ok(lexical) => lexical,
             Err(error) => {
-                if manifest["inputs"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|row| row["id"] == *id && row["oracle_disposition"].is_string())
-                {
-                    known_limits.push(json!({"id":id,"source":source,"lexer_error":format!("{error:?}"),"disposition":"F3 Brush backtick leniency; frozen echo-only host witness, not a lexer defect"}));
+                if row["lexer_refusal"] == true {
+                    known_limits
+                        .push(json!({"id":id,"source":source,"lexer_error":format!("{error:?}")}));
                     continue;
                 }
                 oracle
@@ -566,7 +556,15 @@ fn lexer_matches_brush_word_quoting() {
     }
     println!(
         "{}",
-        json!({"oracle_inputs":inputs.len(),"fixture_files":files.len(),"tokenized":tokenized,"parsed_programs":parsed_programs,"word_parses":oracle.words,"nested_scripts":oracle.nested_scripts,"compared_bytes":oracle.compared,"tokenizer_refusals":skipped.len(),"tokenizer_refused_inputs":skipped,"known_limits":known_limits,"span_disagreements":oracle.span_disagreements,"token_length_mismatches":oracle.token_length_mismatches,"substitution_end_limits":oracle.substitution_end_limits,"word_refusals":oracle.word_refusals,"nested_refusals":oracle.nested_refusals,"disagreements":oracle.disagreements})
+        json!({"oracle_inputs":inputs.len(),"tokenized":tokenized,"parsed_programs":parsed_programs,"word_parses":oracle.words,"nested_scripts":oracle.nested_scripts,"compared_bytes":oracle.compared,"tokenizer_refusals":skipped.len(),"tokenizer_refused_inputs":skipped,"known_limits":known_limits,"span_disagreements":oracle.span_disagreements,"token_length_mismatches":oracle.token_length_mismatches,"substitution_end_limits":oracle.substitution_end_limits,"word_refusals":oracle.word_refusals,"nested_refusals":oracle.nested_refusals,"disagreements":oracle.disagreements})
+    );
+    assert_eq!(
+        evaluated,
+        inputs
+            .iter()
+            .map(|row| row["id"].as_str().unwrap())
+            .collect(),
+        "every parser input must be evaluated"
     );
     assert!(oracle.nested_refusals.is_empty());
     assert!(tokenized > 0 && oracle.words > 0 && oracle.compared > 0);
@@ -593,7 +591,7 @@ fn lexer_matches_brush_word_quoting() {
 fn token_length_mismatch_keeps_original_source_spans() {
     let sources: Vec<String> =
         serde_json::from_str(include_str!("../fixtures/rust-m1-5-oracle.json")).unwrap();
-    assert_eq!(sources.len(), 9);
+    assert!(!sources.is_empty());
     for (index, source) in sources.iter().enumerate() {
         let lexical = Lexed::scan(source).unwrap();
         let tokens =

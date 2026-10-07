@@ -593,9 +593,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
     ) -> Result<(), CheckError> {
         // Keep compound temporaries off the recursively entered command frame.
         #[cfg(test)]
-        cwd::count_failure_paths(scope.directory.failures.as_ref().map_or(0, Vec::len));
-        #[cfg(test)]
         {
+            self.output.failure_copies += scope.directory.failures.as_ref().map_or(0, Vec::len);
             self.output.cwd_candidates += scope.directory.alternatives.len() + 1;
         }
         let Statement::Command {
@@ -3010,7 +3009,10 @@ mod tests {
             Vec::new(),
             0,
         );
-        assert_eq!(sole.unwrap().len(), 1);
+        let sole = sole.unwrap();
+        assert_eq!(sole.len(), 1);
+        assert!(sole[0].word.runtime_unknown);
+        assert!(sole[0].word.text.is_empty());
         let (mixed, _) = expand_candidates(
             vec![
                 BindingValue::RuntimeUnknown(Some(String::new())),
@@ -3340,15 +3342,18 @@ mod tests {
             .collect::<Vec<_>>();
         let current = cwd::CwdPath::Logical("/p".into());
         assert_eq!(
-            cwd::bounded(&current, paths[..16].to_vec(), "/h").0,
-            paths[..16]
+            cwd::bounded(&current, paths[..16].to_vec(), "/h"),
+            (paths[..16].to_vec(), None)
         );
         assert_eq!(
-            cwd::bounded(&current, paths, "/h").0,
-            [
-                cwd::CwdPath::Logical("/h".into()),
-                cwd::CwdPath::Logical("/h/Library".into())
-            ]
+            cwd::bounded(&current, paths, "/h"),
+            (
+                vec![
+                    cwd::CwdPath::Logical("/h".into()),
+                    cwd::CwdPath::Logical("/h/Library".into())
+                ],
+                Some(crate::CoverageGap::InspectionBudget)
+            )
         );
     }
 }

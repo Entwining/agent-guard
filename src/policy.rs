@@ -851,9 +851,17 @@ mod tests {
                 deadline: None,
             };
             inspection
-                .shell(&format!("{}true", "eval ".repeat(n)), &context.cwd, 0)
+                .shell(&format!("{}cat .env", "eval ".repeat(n)), &context.cwd, 0)
                 .unwrap();
-            assert!(inspection.denial.is_none());
+            assert_eq!(
+                inspection.denial.as_ref().unwrap().rule,
+                crate::DenialRule::File
+            );
+            assert!(inspection.effects.contains(&EffectRecord::ProtectedTarget {
+                protection: filesystem::Protection::Environment,
+                write: false,
+                source: EffectSource::Nested,
+            }));
             assert!(inspection.gaps.is_empty());
             assert!(
                 inspection.source_entries <= n + 1,

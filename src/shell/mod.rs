@@ -121,6 +121,8 @@ pub struct Observation {
     pub(crate) source_entries: usize,
     #[cfg(test)]
     pub(crate) cwd_candidates: usize,
+    #[cfg(test)]
+    pub(crate) failure_copies: usize,
 }
 
 #[derive(Debug, Clone)]

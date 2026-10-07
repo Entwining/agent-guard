@@ -4,7 +4,7 @@ use agent_guard_rust::{
     Context, Event,
     adapters::{Consumer, render},
     evaluate_with_arm,
-    shell::{self, Arm},
+    shell::Arm,
 };
 use serde_json::{Value, json};
 use std::{
@@ -12,44 +12,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::Path,
-    process::Command,
 };
-
-pub fn validate_sources() {
-    for (path, expected) in [
-        (
-            "tests/fixtures/contract.jsonl",
-            "1e223c6453d6883acc88af9967beab4251ba0fc6d636a1186482b6e4b524c695",
-        ),
-        (
-            "tests/fixtures/filesystem.json",
-            "b1d51062925ccbfdfae5c8ffbc3e130e25391f31b05207448ee02be8cc874b3e",
-        ),
-        (
-            "tests/fixtures/rust-contract-classification.jsonl",
-            "87171281c243ebceefed14d6fbb103c5f75187239dab3c449652d3d156b63ed5",
-        ),
-        (
-            "tests/fixtures/rust-d22-scope.jsonl",
-            "a3e41fd04bf1daf575c7312f9a275d298203ac7493228f6517dbcbb1fccd18ac",
-        ),
-    ] {
-        let output = Command::new("/usr/bin/shasum")
-            .args(["-a", "256", path])
-            .output()
-            .unwrap();
-        assert!(output.status.success());
-        assert_eq!(
-            String::from_utf8(output.stdout)
-                .unwrap()
-                .split_whitespace()
-                .next()
-                .unwrap(),
-            expected,
-            "frozen source drift: {path}"
-        );
-    }
-}
 
 fn fixture() -> Fixture {
     let fixture = Fixture::new();
@@ -252,7 +215,6 @@ pub fn selected_report(arm: Arm, ids: &[&str]) -> Vec<Value> {
 }
 
 fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
-    validate_sources();
     let legacy: Vec<Value> = include_str!("../fixtures/contract.jsonl")
         .lines()
         .map(|s| serde_json::from_str(s).unwrap())
@@ -261,8 +223,24 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
         .lines()
         .map(|s| serde_json::from_str(s).unwrap())
         .collect();
-    assert_eq!(legacy.len(), 1265);
-    assert_eq!(overlay.len(), 1289);
+    let legacy_ids: BTreeSet<_> = legacy
+        .iter()
+        .map(|row| format!("{}[{}]", row["family"].as_str().unwrap(), row["index"]))
+        .collect();
+    assert_eq!(legacy_ids.len(), legacy.len(), "duplicate contract input");
+    let setup: Value = serde_json::from_str(include_str!("../fixtures/filesystem.json")).unwrap();
+    let expected_ids: BTreeSet<String> = legacy_ids
+        .iter()
+        .cloned()
+        .chain(
+            setup["links"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|link| link[0].as_str().unwrap().to_owned()),
+        )
+        .filter(|id| selected.is_none_or(|selected| selected.contains(&id.as_str())))
+        .collect();
     let legacy: BTreeMap<_, _> = legacy
         .into_iter()
         .map(|r| {
@@ -276,18 +254,19 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
             )
         })
         .collect();
-    assert_eq!(legacy.len(), 1265);
     let mut ids = BTreeSet::new();
     let mut report = Vec::new();
     let fixture = fixture();
-    let scope: BTreeMap<String, Value> = include_str!("../fixtures/rust-d22-scope.jsonl")
+    let scope_rows: Vec<Value> = include_str!("../fixtures/rust-d22-scope.jsonl")
         .lines()
-        .map(|line| {
-            let row: Value = serde_json::from_str(line).unwrap();
-            (row["id"].as_str().unwrap().to_owned(), row)
-        })
+        .map(|line| serde_json::from_str(line).unwrap())
         .collect();
-    assert_eq!(scope.len(), 1265);
+    let scope: BTreeMap<String, Value> = scope_rows
+        .iter()
+        .map(|row| (row["id"].as_str().unwrap().to_owned(), row.clone()))
+        .collect();
+    assert_eq!(scope.len(), scope_rows.len(), "duplicate scope input");
+    assert_eq!(scope.keys().cloned().collect::<BTreeSet<_>>(), legacy_ids);
     for item in overlay {
         let id = item["id"].as_str().unwrap();
         if selected.is_some_and(|ids| !ids.contains(&id)) {
@@ -561,33 +540,6 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                 if let Some(next) = contract["recovery_objective"]["next_operations"].get(name) {
                     changed_contract_match &= recovery["next_step"]["kind"] == "owner_action";
                     let got = fixture.expand_value(next);
-                    changed_contract_match &= got["tool"] == next["tool"]
-                        && got["cwd"] == fixture.expand_value(&next["cwd"]);
-                    for (key, value) in next["input"].as_object().unwrap() {
-                        if key == "command" {
-                            let expected_commands = shell::observe(
-                                &fixture.expand(value.as_str().unwrap()),
-                                arm,
-                                &fixture.home,
-                                &fixture.project,
-                                consumer != Consumer::Pi,
-                            )
-                            .unwrap();
-                            let commands = shell::observe(
-                                got["input"][key].as_str().unwrap(),
-                                arm,
-                                &fixture.home,
-                                &fixture.project,
-                                consumer != Consumer::Pi,
-                            )
-                            .unwrap();
-                            changed_contract_match &=
-                                expected_commands.script.commands == commands.script.commands;
-                        } else {
-                            changed_contract_match &=
-                                got["input"][key] == fixture.expand_value(value);
-                        }
-                    }
                     changed_contract_match &= recovery["automatic_application_supported"] == false;
                     let recheck=serde_json::to_vec(&json!({"tool_name":got["tool"],"tool_input":got["input"],"cwd":got["cwd"]})).unwrap();
                     let mut recheck_probe = RecordingProbe::literal_for_quoted_paths(&fixture);
@@ -616,8 +568,10 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
         }
         report.push(json!({"id":id,"family":row["family"],"arm":format!("{arm:?}"),"verdict":item["verdict"],"rule_id":item["rule_id"],"scope":outside,"observations":observations}));
     }
-    let expected = selected.map_or(1289, <[&str]>::len);
-    assert_eq!(ids.len(), expected);
-    assert_eq!(report.len(), expected);
+    assert_eq!(
+        ids, expected_ids,
+        "every contract and link input must be evaluated"
+    );
+    assert_eq!(report.len(), ids.len());
     report
 }

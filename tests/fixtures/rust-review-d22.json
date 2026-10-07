@@ -1,89 +1,837 @@
 [
-{"id":"wire-json","finding":["B1","M6"],"group":"wire","raw":"{","class":"F","exit":2},
-{"id":"wire-field","finding":["B1"],"group":"wire","event":{"tool_name":"Bash","tool_input":null},"class":"F","exit":2},
-{"id":"test-substitution","finding":["B2"],"group":"shell","command":"[[ -n $(cat .env) ]]","class":"D"},
-{"id":"arithmetic-substitution","finding":["B2"],"group":"shell","command":"(( $(cat .env | wc -c) > 0 ))","class":"D"},
-{"id":"case-subject","finding":["B2"],"group":"shell","command":"case $(cat .env) in *) :;; esac","class":"D"},
-{"id":"case-pattern","finding":["B2"],"group":"shell","command":"case x in $(cat .env)) :;; esac","class":"D"},
-{"id":"for-substitution","finding":["B2","F4"],"group":"shell","command":"for x in a $(cat .env); do :; done","class":"D"},
-{"id":"for-union","finding":["F4"],"group":"shell","command":"for f in a '$P/.env'; do cat $f; done","class":"D"},
-{"id":"for-single","finding":["F4"],"group":"shell","command":"for f in '$P/.env'; do cat $f; done","class":"D"},
-{"id":"for-quoted","finding":["F4"],"group":"shell","command":"for f in a '$P/.env'; do cat \"$f\"; done","class":"D"},
-{"id":"for-no-read","finding":["F4"],"group":"shell","command":"for f in '$P/.env'; do :; done","class":"N","control":true},
-{"id":"shell-lc-ssh","finding":["B3","F6"],"group":"program","command":"bash -lc 'cat ~/.ssh/id_rsa'","class":"D"},
-{"id":"shell-lc-appdata","finding":["B3"],"group":"program","command":"bash -lc 'cat ~/Library/Containers/com.example.fixture/data.txt'","class":"D"},
-{"id":"shell-ec","finding":["B3","F6"],"group":"program","command":"sh -ec 'cat .env'","class":"D"},
-{"id":"shell-zsh-lc","finding":["B3"],"group":"program","command":"zsh -lc 'cat .env'","class":"D"},
-{"id":"shell-zsh-fc","finding":["F6"],"group":"program","command":"zsh -fc 'cat \"$P/.env\"'","class":"D"},
-{"id":"shell-bash-lc","finding":["F6"],"group":"program","command":"bash -lc 'cat \"$P/.env\"'","class":"D"},
-{"id":"shell-positional","finding":["B3"],"group":"program","command":"bash -c 'cat \"$1\"' _ ~/.ssh/id_rsa","class":"D"},
-{"id":"shell-script","finding":["B3"],"group":"program","command":"bash script.sh ~/.ssh/id_rsa","class":"D"},
-{"id":"interpreter-script","finding":["B3"],"group":"program","command":"python3 script.py .env","class":"D"},
-{"id":"python-Ic","finding":["B3"],"group":"program","command":"python3 -Ic 'print(open(\".env\").read())'","class":"D"},
-{"id":"node-p","finding":["B3"],"group":"program","command":"node -p 'require(\"fs\").readFileSync(\".env\",\"utf8\")'","class":"D"},
-{"id":"python-positional","finding":["B3"],"group":"program","command":"python3 -c 'import sys;print(open(sys.argv[1]).read())' ~/.ssh/id_rsa","class":"D"},
-{"id":"python-uc","finding":["F5"],"group":"program","command":"python3 -uc 'open(\"$P/.env\")'","class":"D"},
-{"id":"python-Bc","finding":["F5"],"group":"program","command":"python3 -Bc 'open(\"$P/.env\")'","class":"D"},
-{"id":"node-pe","finding":["F5"],"group":"program","command":"node -pe '1'","class":"UC","gaps":["InterpreterChosenRead"]},
-{"id":"grep-E-env","finding":["B4","F1"],"group":"program","command":"grep -E TOKEN .env","class":"D"},
-{"id":"grep-E-ssh","finding":["B4"],"group":"program","command":"grep -E BEGIN ~/.ssh/id_rsa","class":"D"},
-{"id":"grep-E-appdata","finding":["B4"],"group":"program","command":"grep -E x ~/Library/Containers/com.example.fixture/data.txt","class":"D"},
-{"id":"grep-E-needle","finding":["F1"],"group":"program","command":"grep -E needle '$P/.env'","class":"D"},
-{"id":"grep-nE","finding":["F1"],"group":"program","command":"grep -nE needle '$P/.env'","class":"D"},
-{"id":"glob-ssh","finding":["M1"],"group":"identity","command":"cat ~/.ss?/id_rsa","class":"D"},
-{"id":"glob-library","finding":["M1"],"group":"identity","command":"cat ~/Lib*/Containers/com.example.fixture/data.txt","class":"D"},
-{"id":"glob-env","finding":["M1"],"group":"identity","command":"cat .en?","class":"D"},
-{"id":"glob-containers","finding":["M1"],"group":"identity","command":"cat ~/Lib*/Cont*/com.example.fixture/data.txt","class":"D"},
-{"id":"glob-ssh-star","finding":["M1"],"group":"identity","command":"cat ~/.s*/id_rsa","class":"D"},
-{"id":"glob-redirect","finding":["M1"],"group":"identity","command":"cat < .en*","class":"D"},
-{"id":"group-env","finding":["F2"],"group":"identity","command":"cat '$P/@(.env)'","class":"N","decision_id":"D26","requirement":"2d: quoted parenthesized groups stay literal"},
-{"id":"group-filter-env","finding":["F2"],"group":"identity","command":"cat '$P/*(.env)'","class":"N","decision_id":"D26","requirement":"2d: quoted parenthesized groups stay literal"},
-{"id":"group-npmrc","finding":["F2"],"group":"identity","command":"cat '$P/@(.npmrc)'","class":"N","decision_id":"D26","requirement":"2d: quoted parenthesized groups stay literal"},
-{"id":"group-ssh","finding":["F2"],"group":"identity","command":"cat '$P/@(.ssh/id_rsa)'","class":"N","decision_id":"D26","requirement":"2d: quoted parenthesized groups stay literal"},
-{"id":"group-ls-control","finding":["F2"],"group":"identity","command":"ls '$P/*(.)'","class":"N","control":true},
-{"id":"group-protected-prefix","finding":["F2"],"group":"identity","command":"cat '$H/.ssh/*(.)'","class":"D","control":true},
-{"id":"read-write-redirect","finding":["F3","F18"],"group":"shell","command":"cat <> '$P/.env'","class":"D"},
-{"id":"read-write-fd3","finding":["F3"],"group":"shell","command":"cat 3<> '$P/.env'","class":"D"},
-{"id":"read-write-fd0","finding":["F3"],"group":"shell","command":"cat 0<> '$P/.env'","class":"D"},
-{"id":"line-continuation","finding":["F18"],"group":"shell","command":"cat .env\\\n","class":"D"},
-{"id":"xargs-null","finding":["M2"],"group":"program","command":"rg --files --hidden -0 | xargs -0 cat","class":"D"},
-{"id":"xargs-head","finding":["M2"],"group":"program","command":"ls -A | xargs head","class":"D"},
-{"id":"xargs-count","finding":["F15"],"group":"program","command":"ls -a '$P' | xargs -n1 cat","class":"D"},
-{"id":"xargs-explicit-root","finding":["F15"],"group":"program","command":"rg --files --hidden '$P' | xargs -0 cat","class":"D"},
-{"id":"variable-display","finding":["M3"],"group":"program","command":"echo $AWS_SECRET_ACCESS_KEY","class":"D"},
-{"id":"shell-set","finding":["M3"],"group":"program","command":"set","class":"D"},
-{"id":"env-assignment","finding":["F8"],"group":"program","command":"env NAME=value","class":"D"},
-{"id":"env-unset","finding":["F8"],"group":"program","command":"env -u HOME","class":"D"},
-{"id":"env-split-code","finding":["F8"],"group":"program","command":"env -S 'cat .env'","class":"D"},
-{"id":"ssh-config","finding":["F7"],"group":"identity","command":"cat '$H/.ssh/config'","class":"N"},
-{"id":"ssh-public-key","finding":["F7"],"group":"identity","command":"cat '$H/.ssh/id_rsa.pub'","class":"N"},
-{"id":"ssh-known-hosts","finding":["F7"],"group":"identity","command":"cat '$H/.ssh/known_hosts'","class":"N"},
-{"id":"ssh-directory","finding":["F7"],"group":"identity","command":"ls '$H/.ssh'","class":"D","control":true},
-{"id":"detector-newline","finding":["F9"],"group":"shell","command":"printf x\nsetopt SH_WORD_SPLIT\nprintf ok","class":"UR"},
-{"id":"detector-and","finding":["F9"],"group":"shell","command":"true && setopt SH_WORD_SPLIT","class":"UR"},
-{"id":"detector-then","finding":["F9"],"group":"shell","command":"if true; then setopt SH_WORD_SPLIT; fi","class":"UR"},
-{"id":"detector-or","finding":["F9"],"group":"shell","command":"false || unsetopt SH_WORD_SPLIT","class":"UR"},
-{"id":"detector-do","finding":["F9"],"group":"shell","command":"for f in a; do emulate zsh; done","class":"UR"},
-{"id":"detector-else","finding":["F9"],"group":"shell","command":"if false; then :; else setopt SH_WORD_SPLIT; fi","class":"UR"},
-{"id":"detector-brace","finding":["F9"],"group":"shell","command":"{ setopt SH_WORD_SPLIT; }","class":"UR"},
-{"id":"home-alias","finding":["F10"],"group":"identity","command":"ls -R ~","setup":"home-alias","class":"D"},
-{"id":"non-utf8-link","finding":["F11"],"group":"identity","command":"cat bad-link/data.txt","setup":"non-utf8-link","class":"UR","gaps":["IdentityBound"]},
-{"id":"recovery-oracle","finding":["M5"],"group":"metadata","command":"cat '$C/data.txt'","class":"D","owner_action":true,"no_oracle":true},
-{"id":"home-reason","finding":["F13"],"group":"metadata","command":"rg needle '$H'","class":"D","reason":"HOME"},
-{"id":"quoted-qualifier-recovery","finding":["m1"],"group":"metadata","command":"setopt extendedglob; printf '%s' 'x(e:y'","class":"UR","not_qualifier":true},
-{"id":"protected-cwd-alias","finding":["m2"],"group":"metadata","command":"printf ok","cwd":"$P/data-link/com.example.fixture","class":"D"},
-{"id":"empty-event-cwd","finding":["m3"],"group":"metadata","command":"cat data-link/com.example.fixture/data.txt","event_cwd":"","class":"F","exit":2},
-{"id":"relative-event-cwd","finding":["m3"],"group":"metadata","command":"cat com.example.fixture/data.txt","event_cwd":"data-link","class":"F","exit":2},
-{"id":"exec-workdir","finding":["m4"],"group":"metadata","tool":"exec_command","input":{"cmd":"cat data.txt","workdir":"$C"},"event_cwd":"$P","class":"D"},
-{"id":"advice-codex","finding":["m5"],"group":"metadata","consumer":"codex","command":"rg -r replacement needle '$P'","class":"A","exit":0,"stdout":""},
-{"id":"advice-pi","finding":["m5"],"group":"metadata","consumer":"pi","command":"rg -r replacement needle '$P'","class":"A","exit":0,"stdout":""},
-{"id":"fd-home","finding":["M4"],"group":"program","command":"fd x","cwd":"$H","class":"D"},
-{"id":"tree-home","finding":["M4"],"group":"program","command":"tree","cwd":"$H","class":"D"},
-{"id":"ag-home","finding":["M4"],"group":"program","command":"ag needle","cwd":"$H","class":"D"},
-{"id":"ack-home","finding":["M4"],"group":"program","command":"ack needle","cwd":"$H","class":"D"},
-{"id":"find-home","finding":["M4"],"group":"program","command":"find ~ -name x","class":"D"},
-{"id":"du-home","finding":["M4"],"group":"program","command":"du -a ~","class":"D"},
-{"id":"tar-appdata","finding":["M4"],"group":"program","command":"tar czf out.tar ~/Library","class":"D"},
-{"id":"cd-state","finding":["M4"],"group":"program","command":"cd ~/Library; cd Containers/com.example.fixture; cat data.txt","class":"D"},
-{"id":"xargs-count-separated","finding":["M2","F15"],"group":"program","command":"rg --files --hidden | xargs -n 1 cat","class":"D"}
+  {
+    "id": "wire-json",
+    "finding": [
+      "B1",
+      "M6"
+    ],
+    "group": "wire",
+    "raw": "{",
+    "class": "F",
+    "exit": 2
+  },
+  {
+    "id": "wire-field",
+    "finding": [
+      "B1"
+    ],
+    "group": "wire",
+    "event": {
+      "tool_name": "Bash",
+      "tool_input": null
+    },
+    "class": "F",
+    "exit": 2
+  },
+  {
+    "id": "test-substitution",
+    "finding": [
+      "B2"
+    ],
+    "group": "shell",
+    "command": "[[ -n $(cat .env) ]]",
+    "class": "D"
+  },
+  {
+    "id": "arithmetic-substitution",
+    "finding": [
+      "B2"
+    ],
+    "group": "shell",
+    "command": "(( $(cat .env | wc -c) > 0 ))",
+    "class": "D"
+  },
+  {
+    "id": "case-subject",
+    "finding": [
+      "B2"
+    ],
+    "group": "shell",
+    "command": "case $(cat .env) in *) :;; esac",
+    "class": "D"
+  },
+  {
+    "id": "case-pattern",
+    "finding": [
+      "B2"
+    ],
+    "group": "shell",
+    "command": "case x in $(cat .env)) :;; esac",
+    "class": "D"
+  },
+  {
+    "id": "for-substitution",
+    "finding": [
+      "B2",
+      "F4"
+    ],
+    "group": "shell",
+    "command": "for x in a $(cat .env); do :; done",
+    "class": "D"
+  },
+  {
+    "id": "for-union",
+    "finding": [
+      "F4"
+    ],
+    "group": "shell",
+    "command": "for f in a '$P/.env'; do cat $f; done",
+    "class": "D"
+  },
+  {
+    "id": "for-single",
+    "finding": [
+      "F4"
+    ],
+    "group": "shell",
+    "command": "for f in '$P/.env'; do cat $f; done",
+    "class": "D"
+  },
+  {
+    "id": "for-quoted",
+    "finding": [
+      "F4"
+    ],
+    "group": "shell",
+    "command": "for f in a '$P/.env'; do cat \"$f\"; done",
+    "class": "D"
+  },
+  {
+    "id": "for-no-read",
+    "finding": [
+      "F4"
+    ],
+    "group": "shell",
+    "command": "for f in '$P/.env'; do :; done",
+    "class": "N",
+    "control": true
+  },
+  {
+    "id": "shell-lc-ssh",
+    "finding": [
+      "B3",
+      "F6"
+    ],
+    "group": "program",
+    "command": "bash -lc 'cat ~/.ssh/id_rsa'",
+    "class": "D"
+  },
+  {
+    "id": "shell-lc-appdata",
+    "finding": [
+      "B3"
+    ],
+    "group": "program",
+    "command": "bash -lc 'cat ~/Library/Containers/com.example.fixture/data.txt'",
+    "class": "D"
+  },
+  {
+    "id": "shell-ec",
+    "finding": [
+      "B3",
+      "F6"
+    ],
+    "group": "program",
+    "command": "sh -ec 'cat .env'",
+    "class": "D"
+  },
+  {
+    "id": "shell-zsh-lc",
+    "finding": [
+      "B3"
+    ],
+    "group": "program",
+    "command": "zsh -lc 'cat .env'",
+    "class": "D"
+  },
+  {
+    "id": "shell-zsh-fc",
+    "finding": [
+      "F6"
+    ],
+    "group": "program",
+    "command": "zsh -fc 'cat \"$P/.env\"'",
+    "class": "D"
+  },
+  {
+    "id": "shell-bash-lc",
+    "finding": [
+      "F6"
+    ],
+    "group": "program",
+    "command": "bash -lc 'cat \"$P/.env\"'",
+    "class": "D"
+  },
+  {
+    "id": "shell-positional",
+    "finding": [
+      "B3"
+    ],
+    "group": "program",
+    "command": "bash -c 'cat \"$1\"' _ ~/.ssh/id_rsa",
+    "class": "D"
+  },
+  {
+    "id": "shell-script",
+    "finding": [
+      "B3"
+    ],
+    "group": "program",
+    "command": "bash script.sh ~/.ssh/id_rsa",
+    "class": "D"
+  },
+  {
+    "id": "interpreter-script",
+    "finding": [
+      "B3"
+    ],
+    "group": "program",
+    "command": "python3 script.py .env",
+    "class": "D"
+  },
+  {
+    "id": "python-Ic",
+    "finding": [
+      "B3"
+    ],
+    "group": "program",
+    "command": "python3 -Ic 'print(open(\".env\").read())'",
+    "class": "D"
+  },
+  {
+    "id": "node-p",
+    "finding": [
+      "B3"
+    ],
+    "group": "program",
+    "command": "node -p 'require(\"fs\").readFileSync(\".env\",\"utf8\")'",
+    "class": "D"
+  },
+  {
+    "id": "python-positional",
+    "finding": [
+      "B3"
+    ],
+    "group": "program",
+    "command": "python3 -c 'import sys;print(open(sys.argv[1]).read())' ~/.ssh/id_rsa",
+    "class": "D"
+  },
+  {
+    "id": "python-uc",
+    "finding": [
+      "F5"
+    ],
+    "group": "program",
+    "command": "python3 -uc 'open(\"$P/.env\")'",
+    "class": "D"
+  },
+  {
+    "id": "python-Bc",
+    "finding": [
+      "F5"
+    ],
+    "group": "program",
+    "command": "python3 -Bc 'open(\"$P/.env\")'",
+    "class": "D"
+  },
+  {
+    "id": "node-pe",
+    "finding": [
+      "F5"
+    ],
+    "group": "program",
+    "command": "node -pe '1'",
+    "class": "UC",
+    "gaps": [
+      "InterpreterChosenRead"
+    ]
+  },
+  {
+    "id": "grep-E-env",
+    "finding": [
+      "B4",
+      "F1"
+    ],
+    "group": "program",
+    "command": "grep -E TOKEN .env",
+    "class": "D"
+  },
+  {
+    "id": "grep-E-ssh",
+    "finding": [
+      "B4"
+    ],
+    "group": "program",
+    "command": "grep -E BEGIN ~/.ssh/id_rsa",
+    "class": "D"
+  },
+  {
+    "id": "grep-E-appdata",
+    "finding": [
+      "B4"
+    ],
+    "group": "program",
+    "command": "grep -E x ~/Library/Containers/com.example.fixture/data.txt",
+    "class": "D"
+  },
+  {
+    "id": "grep-E-needle",
+    "finding": [
+      "F1"
+    ],
+    "group": "program",
+    "command": "grep -E needle '$P/.env'",
+    "class": "D"
+  },
+  {
+    "id": "grep-nE",
+    "finding": [
+      "F1"
+    ],
+    "group": "program",
+    "command": "grep -nE needle '$P/.env'",
+    "class": "D"
+  },
+  {
+    "id": "glob-ssh",
+    "finding": [
+      "M1"
+    ],
+    "group": "identity",
+    "command": "cat ~/.ss?/id_rsa",
+    "class": "D"
+  },
+  {
+    "id": "glob-library",
+    "finding": [
+      "M1"
+    ],
+    "group": "identity",
+    "command": "cat ~/Lib*/Containers/com.example.fixture/data.txt",
+    "class": "D"
+  },
+  {
+    "id": "glob-env",
+    "finding": [
+      "M1"
+    ],
+    "group": "identity",
+    "command": "cat .en?",
+    "class": "D"
+  },
+  {
+    "id": "glob-containers",
+    "finding": [
+      "M1"
+    ],
+    "group": "identity",
+    "command": "cat ~/Lib*/Cont*/com.example.fixture/data.txt",
+    "class": "D"
+  },
+  {
+    "id": "glob-ssh-star",
+    "finding": [
+      "M1"
+    ],
+    "group": "identity",
+    "command": "cat ~/.s*/id_rsa",
+    "class": "D"
+  },
+  {
+    "id": "glob-redirect",
+    "finding": [
+      "M1"
+    ],
+    "group": "identity",
+    "command": "cat < .en*",
+    "class": "D"
+  },
+  {
+    "id": "group-env",
+    "finding": [
+      "F2"
+    ],
+    "group": "identity",
+    "command": "cat '$P/@(.env)'",
+    "class": "N",
+    "requirement": "2d: quoted parenthesized groups stay literal"
+  },
+  {
+    "id": "group-filter-env",
+    "finding": [
+      "F2"
+    ],
+    "group": "identity",
+    "command": "cat '$P/*(.env)'",
+    "class": "N",
+    "requirement": "2d: quoted parenthesized groups stay literal"
+  },
+  {
+    "id": "group-npmrc",
+    "finding": [
+      "F2"
+    ],
+    "group": "identity",
+    "command": "cat '$P/@(.npmrc)'",
+    "class": "N",
+    "requirement": "2d: quoted parenthesized groups stay literal"
+  },
+  {
+    "id": "group-ssh",
+    "finding": [
+      "F2"
+    ],
+    "group": "identity",
+    "command": "cat '$P/@(.ssh/id_rsa)'",
+    "class": "N",
+    "requirement": "2d: quoted parenthesized groups stay literal"
+  },
+  {
+    "id": "group-ls-control",
+    "finding": [
+      "F2"
+    ],
+    "group": "identity",
+    "command": "ls '$P/*(.)'",
+    "class": "N",
+    "control": true
+  },
+  {
+    "id": "group-protected-prefix",
+    "finding": [
+      "F2"
+    ],
+    "group": "identity",
+    "command": "cat '$H/.ssh/*(.)'",
+    "class": "D",
+    "control": true
+  },
+  {
+    "id": "read-write-redirect",
+    "finding": [
+      "F3",
+      "F18"
+    ],
+    "group": "shell",
+    "command": "cat <> '$P/.env'",
+    "class": "D"
+  },
+  {
+    "id": "read-write-fd3",
+    "finding": [
+      "F3"
+    ],
+    "group": "shell",
+    "command": "cat 3<> '$P/.env'",
+    "class": "D"
+  },
+  {
+    "id": "read-write-fd0",
+    "finding": [
+      "F3"
+    ],
+    "group": "shell",
+    "command": "cat 0<> '$P/.env'",
+    "class": "D"
+  },
+  {
+    "id": "line-continuation",
+    "finding": [
+      "F18"
+    ],
+    "group": "shell",
+    "command": "cat .env\\\n",
+    "class": "D"
+  },
+  {
+    "id": "xargs-null",
+    "finding": [
+      "M2"
+    ],
+    "group": "program",
+    "command": "rg --files --hidden -0 | xargs -0 cat",
+    "class": "D"
+  },
+  {
+    "id": "xargs-head",
+    "finding": [
+      "M2"
+    ],
+    "group": "program",
+    "command": "ls -A | xargs head",
+    "class": "D"
+  },
+  {
+    "id": "xargs-count",
+    "finding": [
+      "F15"
+    ],
+    "group": "program",
+    "command": "ls -a '$P' | xargs -n1 cat",
+    "class": "D"
+  },
+  {
+    "id": "xargs-explicit-root",
+    "finding": [
+      "F15"
+    ],
+    "group": "program",
+    "command": "rg --files --hidden '$P' | xargs -0 cat",
+    "class": "D"
+  },
+  {
+    "id": "variable-display",
+    "finding": [
+      "M3"
+    ],
+    "group": "program",
+    "command": "echo $AWS_SECRET_ACCESS_KEY",
+    "class": "D"
+  },
+  {
+    "id": "shell-set",
+    "finding": [
+      "M3"
+    ],
+    "group": "program",
+    "command": "set",
+    "class": "D"
+  },
+  {
+    "id": "env-assignment",
+    "finding": [
+      "F8"
+    ],
+    "group": "program",
+    "command": "env NAME=value",
+    "class": "D"
+  },
+  {
+    "id": "env-unset",
+    "finding": [
+      "F8"
+    ],
+    "group": "program",
+    "command": "env -u HOME",
+    "class": "D"
+  },
+  {
+    "id": "env-split-code",
+    "finding": [
+      "F8"
+    ],
+    "group": "program",
+    "command": "env -S 'cat .env'",
+    "class": "D"
+  },
+  {
+    "id": "ssh-config",
+    "finding": [
+      "F7"
+    ],
+    "group": "identity",
+    "command": "cat '$H/.ssh/config'",
+    "class": "N"
+  },
+  {
+    "id": "ssh-public-key",
+    "finding": [
+      "F7"
+    ],
+    "group": "identity",
+    "command": "cat '$H/.ssh/id_rsa.pub'",
+    "class": "N"
+  },
+  {
+    "id": "ssh-known-hosts",
+    "finding": [
+      "F7"
+    ],
+    "group": "identity",
+    "command": "cat '$H/.ssh/known_hosts'",
+    "class": "N"
+  },
+  {
+    "id": "ssh-directory",
+    "finding": [
+      "F7"
+    ],
+    "group": "identity",
+    "command": "ls '$H/.ssh'",
+    "class": "D",
+    "control": true
+  },
+  {
+    "id": "detector-newline",
+    "finding": [
+      "F9"
+    ],
+    "group": "shell",
+    "command": "printf x\nsetopt SH_WORD_SPLIT\nprintf ok",
+    "class": "UR"
+  },
+  {
+    "id": "detector-and",
+    "finding": [
+      "F9"
+    ],
+    "group": "shell",
+    "command": "true && setopt SH_WORD_SPLIT",
+    "class": "UR"
+  },
+  {
+    "id": "detector-then",
+    "finding": [
+      "F9"
+    ],
+    "group": "shell",
+    "command": "if true; then setopt SH_WORD_SPLIT; fi",
+    "class": "UR"
+  },
+  {
+    "id": "detector-or",
+    "finding": [
+      "F9"
+    ],
+    "group": "shell",
+    "command": "false || unsetopt SH_WORD_SPLIT",
+    "class": "UR"
+  },
+  {
+    "id": "detector-do",
+    "finding": [
+      "F9"
+    ],
+    "group": "shell",
+    "command": "for f in a; do emulate zsh; done",
+    "class": "UR"
+  },
+  {
+    "id": "detector-else",
+    "finding": [
+      "F9"
+    ],
+    "group": "shell",
+    "command": "if false; then :; else setopt SH_WORD_SPLIT; fi",
+    "class": "UR"
+  },
+  {
+    "id": "detector-brace",
+    "finding": [
+      "F9"
+    ],
+    "group": "shell",
+    "command": "{ setopt SH_WORD_SPLIT; }",
+    "class": "UR"
+  },
+  {
+    "id": "home-alias",
+    "finding": [
+      "F10"
+    ],
+    "group": "identity",
+    "command": "ls -R ~",
+    "setup": "home-alias",
+    "class": "D"
+  },
+  {
+    "id": "non-utf8-link",
+    "finding": [
+      "F11"
+    ],
+    "group": "identity",
+    "command": "cat bad-link/data.txt",
+    "setup": "non-utf8-link",
+    "class": "UR",
+    "gaps": [
+      "IdentityBound"
+    ]
+  },
+  {
+    "id": "recovery-oracle",
+    "finding": [
+      "M5"
+    ],
+    "group": "metadata",
+    "command": "cat '$C/data.txt'",
+    "class": "D",
+    "owner_action": true,
+    "no_oracle": true
+  },
+  {
+    "id": "home-reason",
+    "finding": [
+      "F13"
+    ],
+    "group": "metadata",
+    "command": "rg needle '$H'",
+    "class": "D",
+    "reason": "HOME"
+  },
+  {
+    "id": "quoted-qualifier-recovery",
+    "finding": [
+      "m1"
+    ],
+    "group": "metadata",
+    "command": "setopt extendedglob; printf '%s' 'x(e:y'",
+    "class": "UR",
+    "not_qualifier": true
+  },
+  {
+    "id": "protected-cwd-alias",
+    "finding": [
+      "m2"
+    ],
+    "group": "metadata",
+    "command": "printf ok",
+    "cwd": "$P/data-link/com.example.fixture",
+    "class": "D"
+  },
+  {
+    "id": "empty-event-cwd",
+    "finding": [
+      "m3"
+    ],
+    "group": "metadata",
+    "command": "cat data-link/com.example.fixture/data.txt",
+    "event_cwd": "",
+    "class": "F",
+    "exit": 2
+  },
+  {
+    "id": "relative-event-cwd",
+    "finding": [
+      "m3"
+    ],
+    "group": "metadata",
+    "command": "cat com.example.fixture/data.txt",
+    "event_cwd": "data-link",
+    "class": "F",
+    "exit": 2
+  },
+  {
+    "id": "exec-workdir",
+    "finding": [
+      "m4"
+    ],
+    "group": "metadata",
+    "tool": "exec_command",
+    "input": {
+      "cmd": "cat data.txt",
+      "workdir": "$C"
+    },
+    "event_cwd": "$P",
+    "class": "D"
+  },
+  {
+    "id": "advice-codex",
+    "finding": [
+      "m5"
+    ],
+    "group": "metadata",
+    "consumer": "codex",
+    "command": "rg -r replacement needle '$P'",
+    "class": "A",
+    "exit": 0,
+    "stdout": ""
+  },
+  {
+    "id": "advice-pi",
+    "finding": [
+      "m5"
+    ],
+    "group": "metadata",
+    "consumer": "pi",
+    "command": "rg -r replacement needle '$P'",
+    "class": "A",
+    "exit": 0,
+    "stdout": ""
+  },
+  {
+    "id": "fd-home",
+    "finding": [
+      "M4"
+    ],
+    "group": "program",
+    "command": "fd x",
+    "cwd": "$H",
+    "class": "D"
+  },
+  {
+    "id": "tree-home",
+    "finding": [
+      "M4"
+    ],
+    "group": "program",
+    "command": "tree",
+    "cwd": "$H",
+    "class": "D"
+  },
+  {
+    "id": "ag-home",
+    "finding": [
+      "M4"
+    ],
+    "group": "program",
+    "command": "ag needle",
+    "cwd": "$H",
+    "class": "D"
+  },
+  {
+    "id": "ack-home",
+    "finding": [
+      "M4"
+    ],
+    "group": "program",
+    "command": "ack needle",
+    "cwd": "$H",
+    "class": "D"
+  },
+  {
+    "id": "find-home",
+    "finding": [
+      "M4"
+    ],
+    "group": "program",
+    "command": "find ~ -name x",
+    "class": "D"
+  },
+  {
+    "id": "du-home",
+    "finding": [
+      "M4"
+    ],
+    "group": "program",
+    "command": "du -a ~",
+    "class": "D"
+  },
+  {
+    "id": "tar-appdata",
+    "finding": [
+      "M4"
+    ],
+    "group": "program",
+    "command": "tar czf out.tar ~/Library",
+    "class": "D"
+  },
+  {
+    "id": "cd-state",
+    "finding": [
+      "M4"
+    ],
+    "group": "program",
+    "command": "cd ~/Library; cd Containers/com.example.fixture; cat data.txt",
+    "class": "D"
+  },
+  {
+    "id": "xargs-count-separated",
+    "finding": [
+      "M2",
+      "F15"
+    ],
+    "group": "program",
+    "command": "rg --files --hidden | xargs -n 1 cat",
+    "class": "D"
+  }
 ]

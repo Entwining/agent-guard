@@ -1,23 +1,133 @@
 [
-  {"id":"ansi-prefix-list","owner":"brace_text","source":"cat $'it\\'s'/{.env,x}","expected":"D"},
-  {"id":"ansi-quote-directory","owner":"brace_text","source":"cat $'\\''/x/{.env,y}","expected":"D"},
-  {"id":"ansi-prefix-sequence","owner":"brace_text","source":"cat $'a\\'b'/.e{n..n}v","expected":"D"},
-  {"id":"ansi-home-list","owner":"brace_text","source":"cat ~/$'it\\'s'/../.e{n,x}v","expected":"D"},
-  {"id":"ansi-appdata-list","owner":"brace_text","source":"ls ~/Library/$'x\\'y'/../{Containers,z}","expected":"D"},
-  {"id":"ansi-npmrc-list","owner":"brace_text","source":"cat $'\\''x/.np{mrc,z}","expected":"D"},
-  {"id":"ansi-member-list","owner":"brace_group","source":"cat {$'it\\'s',.env}","expected":"D"},
-  {"id":"ansi-inert-divergence","owner":"divergence_literal","source":"printf %s $'it\\'s ${(f)v}'","expected":"N"},
-  {"id":"ansi-active-qualifier","owner":"divergence_closing","source":"printf %s *(e:printf $'it\\'s':)","expected":"UR","decision_id":"D1"},
-  {"id":"ansi-heredoc-literal","owner":"divergence_heredoc","source":"cat <<$'EOF'\n${(f)v}\nEOF","expected":"UR","divergent":false},
-  {"id":"gettext-heredoc-literal","owner":"divergence_heredoc","source":"cat <<$\"EOF\"\n${(f)v}\nEOF","expected":"UR","divergent":false},
-  {"id":"ansi-heredoc-escaped-delimiter","owner":"divergence_heredoc","source":"cat <<$'E\\'OF'\n${(f)v}\nE'OF","expected":"UR","divergent":false},
-  {"id":"ansi-heredoc-active-tail","owner":"divergence_heredoc","source":"cat <<$'EOF'\n${(f)v}\nEOF\nprintf %s \"${(f)v}\"","expected":"UR","divergent":true,"decision_id":"D1"},
-  {"id":"list-docker","owner":"credential_effect","source":"ls -R ~/.docker","expected":"N"},
-  {"id":"list-kube","owner":"credential_effect","source":"ls -R ~/.kube","expected":"N"},
-  {"id":"list-cargo","owner":"credential_effect","source":"ls -R ~/.cargo","expected":"N"},
-  {"id":"list-config","owner":"credential_effect","source":"ls -R ~/.config","expected":"N"},
-  {"id":"literal-shell-brace","owner":"literal_brace","source":"cat \"$HOME/project/{.env,x}\"","expected":"N","decision_id":"D27"},
-  {"id":"literal-redirect-brace","owner":"literal_brace","source":"cat < \"{.env,x}\"","expected":"N","decision_id":"D27"},
-  {"id":"literal-tool-brace","owner":"literal_brace","tool":"Read","path":"$P/{.env,x}","expected":"N","decision_id":"D27"},
-  {"id":"signed-negative-sequence","owner":"literal_brace","source":"cat ~/.e{-1..-1}nv","expected":"N","decision_id":"D26"}
+  {
+    "id": "ansi-prefix-list",
+    "owner": "brace_text",
+    "source": "cat $'it\\'s'/{.env,x}",
+    "expected": "D"
+  },
+  {
+    "id": "ansi-quote-directory",
+    "owner": "brace_text",
+    "source": "cat $'\\''/x/{.env,y}",
+    "expected": "D"
+  },
+  {
+    "id": "ansi-prefix-sequence",
+    "owner": "brace_text",
+    "source": "cat $'a\\'b'/.e{n..n}v",
+    "expected": "D"
+  },
+  {
+    "id": "ansi-home-list",
+    "owner": "brace_text",
+    "source": "cat ~/$'it\\'s'/../.e{n,x}v",
+    "expected": "D"
+  },
+  {
+    "id": "ansi-appdata-list",
+    "owner": "brace_text",
+    "source": "ls ~/Library/$'x\\'y'/../{Containers,z}",
+    "expected": "D"
+  },
+  {
+    "id": "ansi-npmrc-list",
+    "owner": "brace_text",
+    "source": "cat $'\\''x/.np{mrc,z}",
+    "expected": "D"
+  },
+  {
+    "id": "ansi-member-list",
+    "owner": "brace_group",
+    "source": "cat {$'it\\'s',.env}",
+    "expected": "D"
+  },
+  {
+    "id": "ansi-inert-divergence",
+    "owner": "divergence_literal",
+    "source": "printf %s $'it\\'s ${(f)v}'",
+    "expected": "N"
+  },
+  {
+    "id": "ansi-active-qualifier",
+    "owner": "divergence_closing",
+    "source": "printf %s *(e:printf $'it\\'s':)",
+    "expected": "UR"
+  },
+  {
+    "id": "ansi-heredoc-literal",
+    "owner": "divergence_heredoc",
+    "source": "cat <<$'EOF'\n${(f)v}\nEOF",
+    "expected": "UR",
+    "divergent": false
+  },
+  {
+    "id": "gettext-heredoc-literal",
+    "owner": "divergence_heredoc",
+    "source": "cat <<$\"EOF\"\n${(f)v}\nEOF",
+    "expected": "UR",
+    "divergent": false
+  },
+  {
+    "id": "ansi-heredoc-escaped-delimiter",
+    "owner": "divergence_heredoc",
+    "source": "cat <<$'E\\'OF'\n${(f)v}\nE'OF",
+    "expected": "UR",
+    "divergent": false
+  },
+  {
+    "id": "ansi-heredoc-active-tail",
+    "owner": "divergence_heredoc",
+    "source": "cat <<$'EOF'\n${(f)v}\nEOF\nprintf %s \"${(f)v}\"",
+    "expected": "UR",
+    "divergent": true
+  },
+  {
+    "id": "list-docker",
+    "owner": "credential_effect",
+    "source": "ls -R ~/.docker",
+    "expected": "N"
+  },
+  {
+    "id": "list-kube",
+    "owner": "credential_effect",
+    "source": "ls -R ~/.kube",
+    "expected": "N"
+  },
+  {
+    "id": "list-cargo",
+    "owner": "credential_effect",
+    "source": "ls -R ~/.cargo",
+    "expected": "N"
+  },
+  {
+    "id": "list-config",
+    "owner": "credential_effect",
+    "source": "ls -R ~/.config",
+    "expected": "N"
+  },
+  {
+    "id": "literal-shell-brace",
+    "owner": "literal_brace",
+    "source": "cat \"$HOME/project/{.env,x}\"",
+    "expected": "N"
+  },
+  {
+    "id": "literal-redirect-brace",
+    "owner": "literal_brace",
+    "source": "cat < \"{.env,x}\"",
+    "expected": "N"
+  },
+  {
+    "id": "literal-tool-brace",
+    "owner": "literal_brace",
+    "tool": "Read",
+    "path": "$P/{.env,x}",
+    "expected": "N"
+  },
+  {
+    "id": "signed-negative-sequence",
+    "owner": "literal_brace",
+    "source": "cat ~/.e{-1..-1}nv",
+    "expected": "N"
+  }
 ]

@@ -3,16 +3,6 @@ pub mod cases;
 use cases::*;
 
 #[test]
-fn manifest_input_count_matches_its_declared_provenance() {
-    let manifest: Value =
-        serde_json::from_str(include_str!("../fixtures/rust-m1-4-input-manifest.json")).unwrap();
-    assert_eq!(
-        manifest["inputs"].as_array().unwrap().len(),
-        manifest["counts"]["inputs"].as_u64().unwrap() as usize
-    );
-}
-
-#[test]
 fn probe_fault_stays_fault_with_independently_observed_denial() {
     use agent_guard_rust::{CheckErrorKind, shell};
     struct Fault;

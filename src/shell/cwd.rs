@@ -299,19 +299,7 @@ pub(super) fn directory_success_guard(statement: &Statement) -> bool {
 }
 
 #[cfg(test)]
-std::thread_local! {
-    static FAILURE_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-#[cfg(test)]
-pub(super) fn count_failure_paths(paths: usize) {
-    FAILURE_COPIES.with(|count| count.set(count.get() + paths));
-}
-
-#[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn failure_collection_has_polynomial_cost() {
         for zsh in [true, false] {
@@ -320,7 +308,6 @@ mod tests {
                     .chain(std::iter::repeat_n("echo public", parts))
                     .collect::<Vec<_>>()
                     .join(" && ");
-                FAILURE_COPIES.with(|count| count.set(0));
                 let observation = crate::shell::observe(
                     &source,
                     crate::shell::Arm::Brush,
@@ -330,10 +317,11 @@ mod tests {
                 )
                 .unwrap();
                 assert!(observation.gaps.is_empty());
-                FAILURE_COPIES.with(|count| count.get())
+                observation.failure_copies
             };
             let small = cost(4);
             let large = cost(8);
+            assert_eq!(cost(4), small, "each observation owns its counter");
             println!("zsh={zsh}: failure-path copies {small} -> {large}");
             assert!(small > 0);
             assert!(

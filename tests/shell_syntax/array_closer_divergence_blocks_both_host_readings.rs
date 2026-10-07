@@ -17,7 +17,9 @@ fn rows(owner: &str) {
     let mut failures = Vec::new();
     for consumer in ["claude", "codex", "pi"] {
         let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
-        for row in rows.iter().filter(|r| r["owner"] == owner) {
+        let selected: Vec<_> = rows.iter().filter(|r| r["owner"] == owner).collect();
+        assert!(!selected.is_empty(), "missing owner {owner}");
+        for row in selected {
             let source = row["source"].as_str().unwrap();
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer == "pi" {"bash"} else {"Bash"},"tool_input":{"command":source}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);

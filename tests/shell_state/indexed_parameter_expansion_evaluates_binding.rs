@@ -12,12 +12,15 @@ fn packet() -> Value {
 
 fn partition(name: &str) {
     let fixture = support::Fixture::new();
-    for row in packet()["rows"]
+    let packet = packet();
+    let rows: Vec<_> = packet["rows"]
         .as_array()
         .unwrap()
         .iter()
         .filter(|row| row["partition"] == name)
-    {
+        .collect();
+    assert!(!rows.is_empty(), "missing partition {name}");
+    for row in rows {
         let source = row["source"].as_str().unwrap();
         let observation = shell::observe(source, Arm::Brush, "/h", "/h/project", true).unwrap();
         let nested_read = observation.script.commands.iter().any(|command| {

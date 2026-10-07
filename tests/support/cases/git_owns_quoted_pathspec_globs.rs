@@ -14,7 +14,9 @@ pub fn regressions(owner: &str) {
     let fixture = support::Fixture::new();
     for consumer in ["claude", "codex", "pi"] {
         let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
-        for row in rows.iter().filter(|r| r["owner"] == owner) {
+        let selected: Vec<_> = rows.iter().filter(|r| r["owner"] == owner).collect();
+        assert!(!selected.is_empty(), "missing owner {owner}");
+        for row in selected {
             let body = serde_json::to_vec(&json!({
                 "tool_name":if consumer == "pi" {"bash"} else {"Bash"},
                 "tool_input":{"command":fixture.expand(row["source"].as_str().unwrap())}

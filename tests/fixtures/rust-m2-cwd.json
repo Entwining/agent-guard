@@ -1,29 +1,29 @@
 {
   "rows": [
-  {
-    "id": "conditional-under-collector",
-    "partition": "conditional-collector",
-    "source": "cd -P link/.. && eval 'if :; then cd /nope; cat z; fi'",
-    "cwd": "/h/project",
-    "program": "cat",
-    "cwds": [
-      "/h/project/link/../.",
-      "/nope"
-    ],
-    "observation_cwd": "home/project"
-  },
-  {
-    "id": "loop-under-collector",
-    "partition": "loop-collector",
-    "source": "cd -P link/.. && eval 'for i in 1; do cd /nope; cat z; done'",
-    "cwd": "/h/project",
-    "program": "cat",
-    "cwds": [
-      "/h/project/link/../.",
-      "/nope"
-    ],
-    "observation_cwd": "home/project"
-  },
+    {
+      "id": "conditional-under-collector",
+      "partition": "conditional-collector",
+      "source": "cd -P link/.. && eval 'if :; then cd /nope; cat z; fi'",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/link/../.",
+        "/nope"
+      ],
+      "observation_cwd": "home/project"
+    },
+    {
+      "id": "loop-under-collector",
+      "partition": "loop-collector",
+      "source": "cd -P link/.. && eval 'for i in 1; do cd /nope; cat z; done'",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/link/../.",
+        "/nope"
+      ],
+      "observation_cwd": "home/project"
+    },
     {
       "id": "tilde-actual-protected",
       "partition": "pwd-tilde-protected",
@@ -38,7 +38,6 @@
         "/h/Library/Containers"
       ],
       "expected": "D",
-      "decision_id": "D28-TILDE",
       "observation_cwd": "home/Library"
     },
     {
@@ -91,7 +90,6 @@
         "/h/Library/Containers/named"
       ],
       "expected": "D",
-      "decision_id": "D28-CDPATH",
       "observation_cwd": "home/project"
     },
     {
@@ -105,7 +103,6 @@
         "/h/Library/Containers/named"
       ],
       "expected": "D",
-      "decision_id": "D28-CDPATH",
       "observation_cwd": "home/project"
     },
     {
@@ -122,7 +119,6 @@
       ],
       "pwd": false,
       "expected": "D",
-      "decision_id": "D28-PWD",
       "observation_cwd": "home/project"
     },
     {
@@ -139,7 +135,6 @@
       ],
       "pwd": false,
       "expected": "N",
-      "decision_id": "D28-PWD",
       "observation_cwd": "home/Library"
     },
     {
@@ -156,7 +151,6 @@
       ],
       "pwd": false,
       "expected": "D",
-      "decision_id": "D26",
       "observation_cwd": "home/Library"
     },
     {
@@ -173,7 +167,6 @@
         "/h/project"
       ],
       "expected": "D",
-      "decision_id": "D28-TILDE",
       "observation_cwd": "home/project"
     },
     {
@@ -187,7 +180,6 @@
         "/lookup/named",
         "/other/named"
       ],
-      "decision_id": "D28-CDPATH",
       "observation_cwd": "home/project"
     },
     {
@@ -200,7 +192,6 @@
         "/h/project/named",
         "/lookup/named"
       ],
-      "decision_id": "D28-CDPATH",
       "observation_cwd": "home/project"
     },
     {
@@ -213,7 +204,6 @@
         "/h/project/named",
         "/lookup/named"
       ],
-      "decision_id": "D28-CDPATH",
       "observation_cwd": "home/project"
     },
     {
@@ -605,37 +595,68 @@
       "observation_cwd": "home/project"
     },
     {
-      "id":"alternative-failure-collectors",
-      "partition":"alternative-collectors",
-      "source":"if :; then S='cd /a && cd /b'; else S='cd /c && cd /d'; fi; cd /start && eval \"$S\"; cat z",
-      "cwd":"/h/project","program":"cat",
-      "cwds":["/h/project","/start","/a","/b","/c","/d"],
-      "observation_cwd":"home/project"
+      "id": "alternative-failure-collectors",
+      "partition": "alternative-collectors",
+      "source": "if :; then S='cd /a && cd /b'; else S='cd /c && cd /d'; fi; cd /start && eval \"$S\"; cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project",
+        "/start",
+        "/a",
+        "/b",
+        "/c",
+        "/d"
+      ],
+      "observation_cwd": "home/project"
     },
     {
-      "id":"assignment-cwd-range",
-      "partition":"assignment-projection",
-      "source":"cd /public; D=$(pwd) printf public",
-      "cwd":"/h/project","program":"printf","nested":false,
-      "cwds":["/h/project","/public"],"words":["public"],
-      "observation_cwd":"home/project"
+      "id": "assignment-cwd-range",
+      "partition": "assignment-projection",
+      "source": "cd /public; D=$(pwd) printf public",
+      "cwd": "/h/project",
+      "program": "printf",
+      "nested": false,
+      "cwds": [
+        "/h/project",
+        "/public"
+      ],
+      "words": [
+        "public"
+      ],
+      "observation_cwd": "home/project"
     },
     {
-      "id":"declaration-cwd-range",
-      "partition":"declaration-projection",
-      "source":"cd /public; export D=$(pwd)",
-      "cwd":"/h/project","program":"export",
-      "cwds":["/h/project","/public"],"paired_data":"D=",
-      "observation_cwd":"home/project"
+      "id": "declaration-cwd-range",
+      "partition": "declaration-projection",
+      "source": "cd /public; export D=$(pwd)",
+      "cwd": "/h/project",
+      "program": "export",
+      "cwds": [
+        "/h/project",
+        "/public"
+      ],
+      "paired_data": "D=",
+      "observation_cwd": "home/project"
     },
     {
-      "id":"split-cwd-range-offset",
-      "partition":"split-range-projection",
-      "source":"cd /public; D='prefix '; cat $D$PWD",
-      "cwd":"/h/project","program":"cat",
-      "cwds":["/h/project","/public"],
-      "words":["prefix","/public","/h/project","prefix /public","prefix /h/project"],
-      "observation_cwd":"home/project"
+      "id": "split-cwd-range-offset",
+      "partition": "split-range-projection",
+      "source": "cd /public; D='prefix '; cat $D$PWD",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project",
+        "/public"
+      ],
+      "words": [
+        "prefix",
+        "/public",
+        "/h/project",
+        "prefix /public",
+        "prefix /h/project"
+      ],
+      "observation_cwd": "home/project"
     }
   ]
 }

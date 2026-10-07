@@ -1,87 +1,87 @@
-`contract.jsonl` contains 1,265 behavior partitions, each with Claude Code, Codex and Pi expectations for verdicts, denial reasons and advice. `$H` and `$R` denote the synthetic home and its parent; `$U` denotes the synthetic username. Command placeholders do not replace longer shell variable names. `filesystem.json` declares empty files and links created inside that synthetic home.
+Fixtures contain synthetic inputs and expected behavior. Migration discussions,
+review provenance and source hashes belong in Git history and local records.
+Adding a behavior partition does not require updating a corpus-size assertion.
 
-The initial expectations were captured from the v0.5.0 implementation at `a8c3a38f6c1f1be473ed869c8e1d74a038a31b75`. They are regression data, not an executable reference implementation. Update them only for an intentional contract change, together with a regression that explains it. Go tests always load these fixtures; no exporter or environment opt-in is required.
+`contract.jsonl` holds consumer expectations for verdicts, denial reasons and
+advice. `rust-contract-classification.jsonl` selects the applicable expectation:
+`RETAIN` uses the original consumer expectation; `CHANGE` supplies the typed
+outcome, coverage, reason, advice and recovery contract. Contract IDs join by
+`family[index]`. Filesystem-link IDs join by relative link path and validate
+setup metadata, not a checker operation. Every input must be accounted for,
+including rows classified outside a supported mechanism's scope.
 
-## Rust slice development manifest
+`filesystem.json` declares empty surrogate files, directories and links inside
+the fixture home. `rust-d22-scope.jsonl` supplies program-selection and unresolved
+input labels used by the differential report. These labels do not establish
+installed-hook or runtime acceptance.
 
-`rust-slice-dev.jsonl` is a requirement-owned development manifest, with one consumer/scenario case per line. It merges the round-1 Sol and DeepSeek scenarios with decisions v2.3 and the R4 development corrections. `make rust-check` loads all 260 labelled rows: 248 counted non-writer cases, nine metamorphic variants and three owned-writer experiments. The two parser arms assert the library tuple, consumer wire, recovery and closed-operation observers. Go results are comparators, not labels. This file contains development cases only; it neither imports nor establishes coverage of the independent held-out set.
+## Synthetic paths and inputs
 
-Source paths beginning `fixture-reference/` refer to `/Users/fixture/.local/state/guard-fixtures/migration-fixtures/`. The normative record is `decisions.md` v2.4: D17–D21 and the R2-Q1 clarification override earlier text; C5 final replaces the proposed C5. `origin_ids` identifies merged scenarios in `r1/sol-slice-design.md` and `r1/deepseek-challenge.md`; fixture family/index references identify historical comparators. A source object has `path` or `url`, plus a named `section`; no source's current Go output supplies the expected label.
+`$E` is a harness-owned temporary root; `$H=$E/home`, `$P=$H/project`, and
+`$C=$H/Library/Containers/com.example.fixture`. `$R` denotes the synthetic home's
+parent and `$U` the synthetic username. Expand complete marker tokens, including
+quoted data, without replacing prefixes of `$HOME` or another shell variable.
+The evaluation context and executed fixture helper use the same synthetic HOME.
+Generic foreign-home paths such as `/Users/me` and `/Users/fixture` are inert
+inputs; they do not refer to the invoker's home. Volume aliases are synthetic
+inputs for the documented macOS path-resolution contract.
 
-### Synthetic inputs
+The `base-v1` setup contains owner-created UTF-8 surrogates: `input.txt` contains
+`needle\n.env\nprocess.env.SHELL\n`, `notes.txt` contains `ORIGINAL_NOTES\n`,
+`untracked-work.txt` contains `UNTRACKED_WORK\n`, and `out.txt` contains `KEEP\n`.
+`fixture.txt` initially does not exist. Protected-name surrogates contain only
+`SYNTHETIC_CANARY\n`, never credentials. Per-row files, links and faults extend
+this setup. A session ID denotes a fixture session, never a live session.
+Submitted shell text is inspected, not executed. Closed operation witnesses
+execute only their harness-owned surrogate operations.
 
-`$E` is a new external harness-owned directory; `$H=$E/home`, `$P=$H/project`, and `$C=$H/Library/Containers/com.example.fixture`. These are substitution markers, including inside quoted source/data, not real shell variables. Replace only complete marker tokens, never prefixes of `$HOME` or another shell variable. The Shell environment binds its actual `HOME` to the synthetic `$H`. No row authorizes executing submitted Shell, reading real stores/App Data, changing permissions, or resuming the stopped OS experiment.
+## Development behavior rows
 
-Every row names `synthetic_setup.profile=base-v1`, which declares only owner-created UTF-8 surrogates: `$P/input.txt` is `needle\n.env\nprocess.env.SHELL\n`; `$P/notes.txt` is `ORIGINAL_NOTES\n`; `$P/untracked-work.txt` is `UNTRACKED_WORK\n`; `$P/out.txt` is `KEEP\n`; `$P/fixture.txt` starts absent. `$C/data.txt`, `$H/.ssh/id_rsa`, and `$P/.env` each hold `SYNTHETIC_CANARY\n`, never credentials. `$P/data-link` points to `$H/Library/Containers`. Per-row `files`, copy, target and fault declarations extend or replace this setup. A session ID in a `write_stdin` input denotes a fixture session, never a live session.
+`rust-slice-dev.jsonl` contains one consumer/scenario per line. The test evaluates
+labelled supported rows through both parser arms and checks the library result,
+consumer wire, probes, recovery and closed-operation witnesses.
 
-The evaluator only observes input. A separate closed, harness-owned operation may supply the named task/effect witness and positive control. A recording Probe checks lexical protection before each probe, stops before protected App Data, and uses only readlink on safe prefixes in the selected alias traversal. Witnesses must detect actual surrogate access, not infer absence from empty stdout. The offline driver is Gate A's surrogate; its permit control starts and completes, denied/failed checks have zero operation starts, and bypassing the gate must fail that assertion. Installed Gate A and actual execution Gate B remain separate open gates.
-
-### Row schema
-
-| Field | Contract |
+| Field | Behavior contract |
 | --- | --- |
-| `id` | Unique scenario/consumer ID. |
-| `parent_task_family_id` | Requirement-owned split unit, independent of consumer and expected outcome; all cases of a parent stay together. A held-out parent must differ from every dev row in the same partition in task objective and at least one of program, resource class or sink class; consumer, quoting, spelling, path text and outer command are strata. |
-| `requirement_sources`, `origin_ids` | Governing requirements and merged scenario provenance. |
-| `consumer` | `claude`, `codex`, `pi`, or `owned-writer` for the three writer experiments. |
-| `dialect_executor_assumption` | `syntax` is `bash`, `zsh`, `common` or `none`, based on verified executor context: Pi `/bin/bash`, Codex Zsh 5.9, Claude Zsh on this host. Structured/non-shell inputs use `none`; `common` is reserved for an explicitly shared syntax contract. Tool name is not executor attestation. Pi Zsh-only input uses `construct_dialect=zsh` and coverage cause `unsupported_dialect_construct`, without claiming Zsh execution. |
-| `provenance_form` | Direct operand, data/code sink, expansion, external script/config, interactive input, fault or boundary recipe. |
-| `tool`, `input`, `cwd` | Consumer-native offline event fields and synthetic cwd. Codex equivalents of Read/Grep use Bash. Pi uses lowercase tool names and native `path`; adapter projection is separate. `raw_event_bytes` replaces the serialized event for malformed-JSON cases. |
-| `task_objective`, `synthetic_setup` | Intended result and base profile plus case-specific resources/faults. Cwd alone does not supply the user's objective. |
-| `allowed_effects`, `prohibited_effects` | Effects observed in the closed witness and claims/effects that must be rejected. Limited continuation does not promise that a hidden dynamic protected effect is prevented. |
-| `outcome_class` | N, A, D, U-C, U-R, U-O, F, W; `null` when unresolved. |
-| `expected_coverage` | Supported/limited preflight, named outside-tool coverage, failed check, owned writer, or unresolved. Failed checks have no completed Evaluation. |
-| `reason_contract` | Semantic effect/failure, concrete operation or owner-action alternative and excluded scope; no exact Go sentence or raw event/value requirement. Quiet outcomes have no reason. |
-| `advice_expectation` | Presence/absence and exact consumer; A is Claude offline context only, and protection always takes priority. |
-| `recovery_objective` | Rechecked next operation or explicit owner action, task result, excluded scope and automatic-application support; `null` where no recovery applies. A narrowed result cannot complete a whole-HOME task. |
-| `observer` | Required outcome/wire, probe order, operation-start, task/effect, state or lifecycle observations. The test driver checks these requirements; the declarations themselves are not recorded passes. |
-| `coverage_limit`, `status` | Evidence boundary and `labelled` or `unresolved`. `labelled` means a requirement label is assigned, not implementation acceptance. |
-| `competing_readings` | Required for unresolved rows: candidate outcomes/coverage and their rationale. Unresolved rows are excluded from protection denominators until adjudicated. |
-| `conditional_outcome` | Frozen S14 rule: U-R for active unsupported Zsh syntax; D is mandatory if independent nested-effect extraction identifies the protected read. Both branches block original execution. This is a settled condition, not permission to choose whichever label is easier. |
-| `partition_counted`, `metamorphic_variant` | Every row has a Boolean `partition_counted`. The nine unsetopt/emulate/quoted-qualifier variants set it to false and name `base_row_id`, `varied_fact`, and `exclude_from_partition_counts=true`; they stay executable cases but add no partition count. Other rows set it to true. This does not include unresolved or W cases in protection denominators. |
-| `fault_injection`, `go_comparator`, `writer_state` | Optional explicit injection, historical comparator, or durable writer state. |
+| `id`, `consumer` | Unique case identity and `claude`, `codex`, `pi`, or `owned-writer`. |
+| `tool`, `input`, `cwd` | Consumer-native input and synthetic cwd; malformed cases may provide `raw_event_bytes`. |
+| `dialect_executor_assumption` | Trusted fixture executor context; tool names are not executor attestation. |
+| `provenance_form` | Input mechanism, including the required-execution-owner boundary. |
+| `task_objective`, `synthetic_setup` | Intended task and base profile with case-specific resources. |
+| `outcome_class`, `expected_coverage` | Expected typed decision and coverage; a failed check has no completed Evaluation. |
+| `reason_contract`, `advice_expectation` | Required semantic reason and concrete alternative, or absence of reason/advice. |
+| `recovery_objective` | Rechecked same-consumer operation or owner action, result, excluded scope and automatic-application boundary. |
+| `allowed_effects`, `prohibited_effects`, `observer` | Closed-witness requirements; their declarations are not recorded passes. |
+| `conditional_outcome` | Unsupported active syntax refuses; independently identified protected effects must still deny. |
+| `metamorphic_variant` | Base case and varied fact whose unchanged behavior is checked. |
+| `fault_injection`, `writer_state` | Explicit synthetic fault or durable fixture-writer state. |
+| `status`, `coverage_limit` | Label status and evidence scope, including unresolved cases. |
 
-N permits quiet ordinary work; A permits with relevant soft advice; D denies an identified protected effect. U-C continues the existing limited preflight quietly while preserving the gap in the library record. U-R rejects an input the checker cannot support within its syntax/dialect, inspection-budget or resource-identity bounds; its reason names the actual bound and a concrete continuation. U-O reports the missing verified execution owner for a newly required guarantee. F blocks on operational failure, never an empty success. W records `Committed`, `Conflict` or `PartialStagedFailure` in the single harness-owned writer and is excluded from every protection denominator; it promises no production Write/Edit/Bash preservation.
+N permits quietly; A permits with applicable advice; D denies a protected effect.
+U-C preserves a limited-preflight gap with quiet wire; U-R rejects an unsupported
+syntax, inspection-budget or identity case; U-O requires a verified execution
+owner. F blocks on operational failure. W describes the harness-owned writer,
+not production write preservation. A project-scoped continuation does not
+complete a whole-HOME task. A coverage gap is not proof of runtime confinement.
 
-The named classification step `effect-sink-v2` derives effect and sink from the requirement-owned operation: structured path fields and modeled argv roles supply read/write/search/list operands; shell pattern arguments, messages and quoted data heredocs remain data; substitutions, interpreter/eval sources and unquoted heredoc expansions carry nested code effects. Inline interpreter code keeps path-shaped token extraction, except a token immediately preceded by a backslash is not a path candidate (C5 final). A protected candidate is D with the CodeFile reason and a structured Write/Edit literal-data alternative; plain mentions such as `print('.env')` remain conservative denials. No protected candidate is U-C with an interpreter-chosen-read gap and quiet wire, including the escaped-regex case and inline config-selected reads. Languages dropping unknown escapes and string concatenation remain uncovered; no per-language print/open table is implied. Unknown programs retain their gap while explicit protected operands still deny; unknown tools retain their tool class without inventing an effect adapter. Resource class follows lexical scope and the selected alias. Apply this derivation before the D9 six-axis stratification key (consumer, tool class, effect, outcome class, resource class, sink class), with dialect/executor state and provenance as additional axes. These axes never replace the parent-family split unit.
+The recording Probe checks lexical protection before each probe. App Data
+traversal uses safe-prefix readlink; stat/inode checks belong to SSH identity.
+Closed witnesses observe surrogate effects and operation starts; empty stdout
+does not prove that no protected access occurred. Protocol, hook loading,
+lifecycle and actual client acceptance remain separate checks.
 
-Ordinary `+(a|b).txt`, `*(.)` and `!(x)` remain globs, with conservative Bash-extglob/Zsh reach, and the public cases stay N. Only a parenthesized group ending the glob word is a qualifier candidate; code detection requires `+` or `e` followed by a non-alphanumeric delimiter inside the group body. A prefix extglob operator is not inside that body. In particular, `!(x)` ends in a group but its body has neither code trigger. Executable qualifier bodies and active parameter flags/process substitution/options remain U-R/D; inert quoted data stays N. The detector runs on checked original byte spans after parser success and failure; both parser arms and the mechanism tests exercise this boundary. Whole-script parse failure independently remains U-R. Any verdict-ablation claim must account for that independent rejection rather than call unchanged rejection detector evidence.
+## Parser and mechanism corpora
 
-HOME-rooted structured Grep includes explicit, empty and omitted paths and a HOME root with a glob. Its reason names broad traversal and a project-scope continuation, including excluded HOME scope; it does not inherit Go's credential-specific reason. Probe EACCES is F; the legacy classification overlay rejects resource-identity bounds as U-R. The development alias pair covers a single public in-project link declared by its row (`$P/input-link -> input.txt`) and the existing protected data-link; additional chains/firmlinks/loops and SSH identity stat/inode remain outside this selected development slice. S01 credential/environment-file observers assert their own direct lexical protection before probes. Shell redirect pairs cover public/protected SSH write-target decisions only. Codex `apply_patch` uses patch text under `command` and remains outside P1 coverage, as does `write_stdin`; neither is a fallback for a blocked Bash call.
+`rust-parser-inputs.jsonl` contains only an ID and shell source or structured
+event. The lexer/Brush differential consumes shell rows; the report example
+consumes both forms. `lexer_refusal=true` identifies the malformed backtick-child
+partition that Brush tokenizes but the lexer rejects. Tokenizer refusals,
+lexer refusals and actual word comparisons are reported separately.
 
-D16 settles project-rooted name-only hidden listings as N with SupportedPreflight, no reason and no advice; the old HiddenSearch denial remains a comparator for the intended difference. D21 keeps non-recursive `ls` of HOME, Library or `/` at N; `-R`/`--recursive`, including combined short flags, makes those roots broad traversal and D. Protected identities and hidden listings with content consumers remain D. Hidden recursive content search has its own denial and content-access observer. S05 is removed because its preflight input duplicates S04; S04's reason states excluded HOME scope and cannot present a project result as a whole-HOME result.
-
-The twelve S20 recipes are labelled after public-only release calibration. Commit `021ad5d6c213c93997026445d57f73c5ec24a2fb` froze 65,536 serialized consumer-event bytes and 64 simultaneous substitution/group delimiters before the evaluator consumed them. Each recipe materializes the manifest's numeric bound independently of the implementation constant: the boundary yields N and one-unit excess yields F/ResourceLimit before parser/probe entry. [The limits record](../../docs/rust-slice-limits.md) names the raw 90-observation sweep and its evidence limits.
-
-Dispatch/harness partitions (outside-tool coverage, malformed event, probe fault, resource bounds, later input and required execution owner) are dev-only in P1. Adversarial partitions are scored separately. Identical preflight inputs must carry identical outcome classes. These allocation rules do not establish held-out coverage or authorize reading a held-out set.
-
-## Rust contract classification overlay
-
-`rust-contract-classification.jsonl` joins the unchanged legacy inputs to the Rust requirement rulings. It contains one record per `contract.jsonl` family/index (1,265), then one per `filesystem.json` link path (24), in Luna's order. The Rust differential test and report example account for every row through both parser arms. Input-mechanism selectors name out-of-slice rows before comparing expectations; those rows still have reported evaluations. The legacy vocabulary is projected through each consumer adapter, including historical Codex Read/Grep/Write/Edit shapes, without claiming those shapes are enrolled runtime tools. Link rows validate setup metadata only. Go continues to consume its original expectations. Do not overwrite those expectations or use Go output to select Rust labels.
-
-| Field | Contract |
-| --- | --- |
-| `id`, `kind` | Legacy `family[index]` with `kind=contract`, or the exact relative link path with `kind=filesystem_link`. IDs are unique across all 1,289 records. |
-| `rule_id`, `original_classification` | Luna's unchanged selection rule and `retain` / `re-adjudicate` provenance. These are selectors, not Rust outcomes. |
-| `verdict`, `status`, `consumers` | Final `RETAIN` / `CHANGE`, `status=labelled`; each contract applies to `claude,codex,pi`, links to no consumer wire. No metamorphic variants exist in this overlay. |
-| `source` | Original fixture path plus family/index, or link_path/target. Link records preserve setup metadata, not a verdict about an operation on the link. Legacy tool/input fields use the original fixture vocabulary; canonical consumer event projection remains the adapter's owner. |
-| `requirement_sources` | Luna selection, deepseek-adjudication, decisions v2.2, and applicable coordinator rulings. C1–C4 apply over the adjudication; C5 final replaces proposed C5. |
-| `expectation_source` | RETAIN only: original contract `expected` object, including all consumers' reason/advice expectations, or the unchanged link source. No duplicate output strings. |
-| `new_expectation` | CHANGE only: `outcome_class`, `expected_coverage`, `reason_contract`, `advice_expectation`, and `recovery_objective`. It replaces the old expectation for Rust only. |
-| `expected_coverage` | SupportedPreflight for identified effects/name-only listing; LimitedPreflight with the actual syntax, inspection-budget or identity gap for U-R; NotCompleted/ProbeFault for F. Outcome/coverage are semantic fixture labels, not proof the current Rust types/evaluator implement every gap. |
-| `reason_contract` | Required semantic cause and concrete alternative elements for D/U-R/F; absent for N. A resource bound is not a syntax error, and an EACCES fault is not permission. |
-| `advice_expectation` | Explicit absent advice for every consumer on all fifteen CHANGE records. RETAIN advice comes from the original consumer expectation. |
-| `recovery_objective` | Rechecked canonical operations under `next_operations` keyed by consumer, a concrete `owner_action`, or the original permitted listing; task result, excluded scope and automatic-application support stay explicit. The synthetic search continuation uses pattern `x` and preserves the original glob; it establishes project scope, not a match or completion of a whole-HOME request. |
-
-The 142 re-adjudicated contract records resolve to CHANGE 13 / RETAIN 129. D21 changes two R1 records, appdata[92] and credentials[87], to D under D17's protected-cwd rule; R1 therefore contributes CHANGE 2 / RETAIN 1,121. All 24 links are RETAIN, including FS2 project/loop-a. Overall: CHANGE 15 / RETAIN 1,274. No other overlay row changed. The two new recovery checks establish a declared public read control after leaving the protected cwd, without completing the original listing. R2f keeps all 25 CodeFile denials under C5 final. C1 keeps protected-cwd denials; C2 keeps the known conservative env -i denials without a speculative dump-rule refinement.
-
-The source hashes bind this classification to exact inputs:
-
-| Input | SHA-256 |
-| --- | --- |
-| `tests/fixtures/contract.jsonl` | `1e223c6453d6883acc88af9967beab4251ba0fc6d636a1186482b6e4b524c695` |
-| `tests/fixtures/filesystem.json` | `b1d51062925ccbfdfae5c8ffbc3e130e25391f31b05207448ee02be8cc874b3e` |
-| `tests/fixtures/rust-contract-classification.jsonl` (D21) | `af65478c60c1a997a01d1e0bd4bd00a174c6351a998eb1f62b800a5ccb4a27c4` |
-| `fixture-reference/r3/luna-classification.jsonl` | `960f64d997e266c8dc0024458182825e5514926d82cf92abdf29eff18492c057` |
-
-A fixture consumer must reject missing/duplicate IDs, source-hash drift, rule-id drift or a verdict outside the final adjudication before using the overlay. Classification does not claim P1 implementation, installed protocol, hook loading, execution confinement or write-preservation acceptance.
+Other JSON files hold named mechanism partitions and expected class, effect,
+path identity, gap, reason or advice. Numeric recursion, record, payload and
+alias-hop bounds are behavioral boundaries: their exact-limit and excess cases
+are independent fixtures. Large-output sizes exercise complete pipe drainage.
+Assertions about those bounds differ from assertions about a corpus's current
+size. Update expected behavior only for an intentional contract change, with a
+regression that distinguishes it and a mechanism ablation.

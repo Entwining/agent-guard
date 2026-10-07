@@ -51,7 +51,34 @@ fn partition(name: &str) {
             if let Some(cwd) = row["cwd"].as_str() {
                 context.cwd = cwd.replace("/h", &fixture.home);
             }
-            let bytes = serde_json::to_vec(&json!({"tool_name":if consumer=="pi" {"bash"} else {"Bash"},"tool_input":{"command":row["source"]}})).unwrap();
+            let source = if row["expand_markers"] == true {
+                fixture.expand_value(&row["source"])
+            } else {
+                row["source"].clone()
+            };
+            if row["expand_markers"] == true {
+                let observation = agent_guard_rust::shell::observe(
+                    source.as_str().unwrap(),
+                    Arm::Brush,
+                    &context.home,
+                    &context.cwd,
+                    context.zsh_executor,
+                )
+                .unwrap();
+                assert!(
+                    observation.script.commands.iter().any(|command| {
+                        command
+                            .program
+                            .is_some_and(|index| command.argv[index] == "ls")
+                            && command
+                                .argv
+                                .iter()
+                                .any(|word| word.text.starts_with(fixture.root.to_str().unwrap()))
+                    }),
+                    "the known foreign-home path must reach the listing sink"
+                );
+            }
+            let bytes = serde_json::to_vec(&json!({"tool_name":if consumer=="pi" {"bash"} else {"Bash"},"tool_input":{"command":source}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
             let result = evaluate_with_arm(
                 Event {

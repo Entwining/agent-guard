@@ -5,12 +5,14 @@ use std::collections::BTreeSet;
 
 fn partition(name: &str) {
     let packet: Value = serde_json::from_str(include_str!("../fixtures/rust-m2-cwd.json")).unwrap();
-    for row in packet["rows"]
+    let rows: Vec<_> = packet["rows"]
         .as_array()
         .unwrap()
         .iter()
         .filter(|r| r["partition"] == name)
-    {
+        .collect();
+    assert!(!rows.is_empty(), "missing partition {name}");
+    for row in rows {
         let result = shell::observe(
             row["source"].as_str().unwrap(),
             Arm::Brush,

@@ -39,15 +39,10 @@ impl agent_guard_rust::filesystem::Probe for NoIoProbe {
 }
 
 fn main() {
-    let manifest: Value = serde_json::from_str(include_str!(
-        "../tests/fixtures/rust-m1-4-input-manifest.json"
-    ))
-    .unwrap();
-    let rows = manifest["inputs"].as_array().unwrap();
-    assert_eq!(
-        rows.len(),
-        manifest["counts"]["inputs"].as_u64().unwrap() as usize
-    );
+    let rows: Vec<Value> = include_str!("../tests/fixtures/rust-parser-inputs.jsonl")
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
     for consumer in ["claude", "codex", "pi"] {
         let context = agent_guard_rust::Context {
             consumer: match consumer {
@@ -62,7 +57,7 @@ fn main() {
             require_execution_owner: false,
             shell_observation_entries: std::cell::Cell::new(0),
         };
-        for row in rows {
+        for row in &rows {
             let mut event = if let Some(source) = row["source"].as_str() {
                 json!({"tool_name":if consumer=="pi" {"bash"} else {"Bash"},"tool_input":{"command":source}})
             } else {

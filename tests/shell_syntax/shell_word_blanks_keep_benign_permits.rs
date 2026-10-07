@@ -13,10 +13,15 @@ fn rows(owner: &str, expected: &[&str]) {
     let fixture = support::Fixture::new();
     for consumer in ["claude", "codex", "pi"] {
         let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
-        for row in rows
+        let selected: Vec<_> = rows
             .iter()
             .filter(|r| r["owner"] == owner && expected.contains(&r["expected"].as_str().unwrap()))
-        {
+            .collect();
+        assert!(
+            !selected.is_empty(),
+            "missing owner {owner} with outcomes {expected:?}"
+        );
+        for row in selected {
             let source = row["source"].as_str().unwrap();
             let input = |source: &str| {
                 serde_json::to_vec(&json!({

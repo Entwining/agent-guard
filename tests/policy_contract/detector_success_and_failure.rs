@@ -39,7 +39,10 @@ fn name_only_listing_and_content_consumer() {
             &ctx,
             &mut probe,
             arm,
-            "ls -a /p | printf x; printf \"$(printf ok | xargs cat /p/input.txt)\"",
+            &format!(
+                "ls -a '{}' | printf x; printf \"$(printf ok | xargs cat '{}/input.txt')\"",
+                fixture.project, fixture.project
+            ),
         )
         .unwrap();
         assert!(
@@ -187,12 +190,21 @@ fn protected_cwd_is_an_independent_owner() {
 
 #[test]
 fn broad_root_recovery_preserves_excluded_scope() {
-    for row in support::rows().iter().filter(|r| {
-        r["id"]
-            .as_str()
-            .unwrap()
-            .starts_with("S04-shell-home-explicit")
-    }) {
+    let rows = support::rows();
+    let selected: Vec<_> = rows
+        .iter()
+        .filter(|r| {
+            r["id"]
+                .as_str()
+                .unwrap()
+                .starts_with("S04-shell-home-explicit")
+        })
+        .collect();
+    assert!(
+        !selected.is_empty(),
+        "missing explicit HOME recovery partition"
+    );
+    for row in selected {
         let result = support::run(row, Arm::Brush);
         support::assert_tuple(row, &result);
         let scope = result["recovery"]["excluded_scope"].to_string();

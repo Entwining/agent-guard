@@ -27,14 +27,15 @@ impl Fixture {
     fn reaped(&self) {
         let receipt = fs::read_to_string(self.root.join("pid")).unwrap();
         let pid = receipt.trim().strip_prefix("ready:").unwrap();
+        let result = Command::new("/bin/kill")
+            .args(["-0", pid])
+            .env("LC_ALL", "C")
+            .output()
+            .unwrap();
         assert!(
-            !Command::new("/bin/kill")
-                .args(["-0", pid])
-                .output()
-                .unwrap()
-                .status
-                .success(),
-            "recorded child {pid} remains alive or unreaped"
+            result.status.code() == Some(1)
+                && String::from_utf8_lossy(&result.stderr).contains("No such process"),
+            "recorded child {pid} remains alive or the liveness probe failed: {result:?}"
         );
         eprintln!("child_pid={pid} reaped=true");
     }

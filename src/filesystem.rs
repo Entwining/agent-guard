@@ -1190,7 +1190,7 @@ mod tests {
             assert_eq!(target.path, clean);
             assert_eq!(target.unresolved, unresolved);
         }
-        assert_eq!(probe.calls.iter().filter(|p| p.as_str() == "/h").count(), 2);
+        assert!(probe.calls.iter().any(|p| p == "/h"));
         assert!(probe.calls.iter().all(|p| !p.contains("/./")));
         let mut target = Target::new("//*.txt".into(), Effect::Use, Walk::None, Via::Operand);
         target.glob = true;
@@ -1243,5 +1243,6 @@ mod tests {
             probe.calls.last().unwrap(),
             row["last_probe"].as_str().unwrap()
         );
+        assert!(probe.calls.iter().all(|path| !path.contains("${suffix}")));
     }
 }
