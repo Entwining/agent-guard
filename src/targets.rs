@@ -39,6 +39,9 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         return effects;
     }
     for redirect in &command.redirects {
+        if redirect.stream.is_some() {
+            continue;
+        }
         if matches!(
             redirect.direction,
             Direction::Heredoc | Direction::Herestring
@@ -103,6 +106,29 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
     let args = &command.argv[index + 1..];
     let args = label_options(program, args, cwd, host, &mut effects);
     let args = args.as_ref();
+    if !command.wrappers.iter().any(|wrapper| wrapper == "xargs") {
+        for stream in list_file_sources(command) {
+            if let crate::record::StreamOutput::Known(outputs) = stream {
+                for output in outputs {
+                    for path in output.lines().filter(|line| !line.is_empty()) {
+                        effects.targets.push(Target::from_word(
+                            &Word::literal(path.into()),
+                            cwd,
+                            host,
+                            if program == "du" {
+                                Effect::List
+                            } else {
+                                Effect::Read
+                            },
+                            Walk::None,
+                        ));
+                    }
+                }
+            } else {
+                effects.gaps.push(CoverageGap::UnresolvedTarget);
+            }
+        }
+    }
     if command.argv[index].contains('/') {
         let mut target =
             Target::from_word(&command.argv[index], cwd, host, Effect::Use, Walk::Visible);
@@ -753,6 +779,36 @@ fn xargs_content_consumer(name: &str) -> bool {
         "od", "strings", "sort", "uniq", "cut", "nl", "sh", "bash", "zsh",
     ]
     .contains(&name)
+}
+
+pub(crate) fn list_file_sources(command: &CommandRecord) -> Vec<&crate::record::StreamOutput> {
+    let name = command
+        .program
+        .and_then(|index| command.argv.get(index))
+        .map_or("", |word| word.rsplit('/').next().unwrap_or(word));
+    let xargs = command.wrappers.iter().any(|wrapper| wrapper == "xargs");
+    command
+        .argv
+        .iter()
+        .enumerate()
+        .filter_map(|(index, word)| {
+            let stream = word.stream.as_deref()?;
+            let option = word.split_once('=').map_or_else(
+                || {
+                    command
+                        .argv
+                        .get(index.wrapping_sub(1))
+                        .map_or("", Word::as_str)
+                },
+                |(option, _)| option,
+            );
+            ((xargs && ["-a", "--arg-file"].contains(&option))
+                || (name == "tar" && option == "-T")
+                || (["tar", "rsync"].contains(&name) && option == "--files-from")
+                || (["sort", "du"].contains(&name) && option == "--files0-from"))
+                .then_some(stream)
+        })
+        .collect()
 }
 
 fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effects) {

@@ -30,6 +30,8 @@ pub mod pipeline_read_models_known_values_and_refuses_unmodelled_armed_reads;
 pub mod pipeline_read_receives_protected_and_armed_producer_values;
 #[path = "shell_state/prefix_assignments_use_prior_prefix_values.rs"]
 pub mod prefix_assignments_use_prior_prefix_values;
+#[path = "shell_state/process_streams_feed_item_and_stdin_consumers.rs"]
+pub mod process_streams_feed_item_and_stdin_consumers;
 #[path = "support/batch6.rs"]
 pub mod program_contract;
 #[path = "shell_state/quoted_tilde_runtime_prefix_stays_relative.rs"]

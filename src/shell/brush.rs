@@ -235,8 +235,18 @@ fn walk_command(
             }
         }
         Command::Compound(compound, redirects) => {
-            redirect_list(source, redirects.as_ref(), output)?;
-            walk_compound(source, compound, output)?;
+            let mut body = Vec::new();
+            walk_compound(source, compound, &mut body)?;
+            if redirects.is_some() {
+                let mut prefix = Vec::new();
+                redirect_list(source, redirects.as_ref(), &mut prefix)?;
+                if let Some(Statement::Command { redirects, .. }) = prefix.pop() {
+                    output.extend(prefix);
+                    output.push(Statement::Redirected(redirects, body));
+                }
+            } else {
+                output.extend(body);
+            }
         }
         Command::Function(function) => {
             let mut body = Vec::new();
@@ -508,13 +518,29 @@ fn item_record(
             }
         }
         CommandPrefixOrSuffixItem::IoRedirect(value) => redirect(source, value, redirects, output)?,
-        CommandPrefixOrSuffixItem::ProcessSubstitution(_, group) => {
+        CommandPrefixOrSuffixItem::ProcessSubstitution(kind, group) => {
             let mut records = Vec::new();
             walk_list(source, &group.list, &mut records)?;
-            output.push(Statement::Substitution(records));
+            if matches!(kind, ProcessSubstitutionKind::Write) {
+                output.push(Statement::Substitution(records.clone()));
+            }
+            let mut prefix = String::new();
+            let start = source.range(&group.loc)?.start.saturating_sub(1);
+            if let Some(previous) = argv.last()
+                && source.text[..start].ends_with(&previous.raw)
+            {
+                prefix = argv.pop().map_or(String::new(), |word| word.raw);
+            }
             argv.push(Word {
                 raw: "__observed_stream__".into(),
-                syntax: super::WordSyntax::Shell,
+                syntax: if matches!(kind, ProcessSubstitutionKind::Read) {
+                    super::WordSyntax::ProcessInput(Box::new(super::ProcessInput {
+                        body: records,
+                        prefix,
+                    }))
+                } else {
+                    super::WordSyntax::Shell
+                },
                 expansions: Vec::new(),
             });
         }
@@ -568,10 +594,31 @@ fn redirect(
                 },
             });
         }
-        IoRedirect::File(_, _, IoFileRedirectTarget::ProcessSubstitution(_, group)) => {
+        IoRedirect::File(_, kind, IoFileRedirectTarget::ProcessSubstitution(process, group)) => {
             let mut records = Vec::new();
             walk_list(source, &group.list, &mut records)?;
-            output.push(Statement::Substitution(records));
+            if matches!(process, ProcessSubstitutionKind::Read) {
+                redirects.push(Redirect {
+                    target: Word {
+                        raw: "__observed_stream__".into(),
+                        expansions: Vec::new(),
+                        syntax: super::WordSyntax::ProcessInput(Box::new(super::ProcessInput {
+                            body: records,
+                            prefix: String::new(),
+                        })),
+                    },
+                    direction: if matches!(
+                        kind,
+                        IoFileRedirectKind::Read | IoFileRedirectKind::DuplicateInput
+                    ) {
+                        crate::record::Direction::In
+                    } else {
+                        crate::record::Direction::Out
+                    },
+                });
+            } else {
+                output.push(Statement::Substitution(records));
+            }
         }
         IoRedirect::HereDocument(_, doc) => {
             let Some(span) = &doc.doc.loc else {

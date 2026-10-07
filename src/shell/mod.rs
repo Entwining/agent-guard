@@ -22,10 +22,17 @@ pub const ACCEPTANCE_ARMS: &[Arm] = &[Arm::Brush];
 
 #[derive(Debug, Clone)]
 enum WordSyntax {
+    ProcessInput(Box<ProcessInput>),
     Shell,
     Heredoc,
     Arithmetic,
     Literal,
+}
+
+#[derive(Debug, Clone)]
+struct ProcessInput {
+    body: Vec<Statement>,
+    prefix: String,
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +53,7 @@ struct RawRedirect {
 }
 #[derive(Debug, Clone)]
 enum Statement {
+    Redirected(Vec<RawRedirect>, Vec<Statement>),
     UnsupportedSyntax,
     Group(Vec<Statement>),
     Subshell(Vec<Statement>),
@@ -283,6 +291,41 @@ impl statements::Evaluator<'_, '_> {
     }
 }
 
+fn expand_process_input(
+    input: &ProcessInput,
+    scope: &mut statements::Scope,
+    evaluator: &mut statements::Evaluator<'_, '_>,
+    depth: usize,
+) -> Result<Vec<Expanded>, CheckError> {
+    let start = evaluator.output.script.commands.len();
+    let mut inner = scope.isolated();
+    evaluator.run(
+        &input.body,
+        &mut inner,
+        depth + 1,
+        evaluator.output.parse_successes,
+        true,
+    )?;
+    let output = pipeline::process_output(&evaluator.output.script.commands[start..]);
+    let mut word = Word::literal(format!("{}__observed_stream__", input.prefix));
+    word.stream = Some(Box::new(output.map_or(
+        crate::record::StreamOutput::Unknown,
+        crate::record::StreamOutput::Known,
+    )));
+    Ok(vec![Expanded {
+        split: vec![word.clone()],
+        word,
+        positional: false,
+        nested: Vec::new(),
+        arithmetic: Vec::new(),
+        references: Vec::new(),
+        tilde: false,
+        parameters: Vec::new(),
+        unsupported: false,
+        lexical_ranges: Vec::new(),
+    }])
+}
+
 fn expand_positional_argv(
     raw: &RawWord,
     scope: &statements::Scope,
@@ -359,6 +402,9 @@ fn expand_scoped(
     depth: usize,
     observe_bindings: bool,
 ) -> Result<Vec<Expanded>, CheckError> {
+    if let WordSyntax::ProcessInput(input) = &raw.syntax {
+        return expand_process_input(input, scope, evaluator, depth);
+    }
     if let Some(arguments) = expand_positional_argv(raw, scope, evaluator) {
         return Ok(arguments);
     }

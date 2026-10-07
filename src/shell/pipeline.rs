@@ -132,10 +132,21 @@ pub(super) fn read_input(
     pipeline: (usize, usize),
     known: impl Fn(&Word) -> bool,
 ) -> Option<Vec<String>> {
-    let mut stages = commands
+    let stages = commands
         .iter()
         .rev()
         .filter(|command| command.pipeline == Some(pipeline));
+    producer_outputs(stages, known)
+}
+
+pub(super) fn process_output(commands: &[Command]) -> Option<Vec<String>> {
+    producer_outputs(commands.iter().rev(), |word| !word.runtime_unknown)
+}
+
+fn producer_outputs<'a>(
+    mut stages: impl Iterator<Item = &'a Command>,
+    known: impl Fn(&Word) -> bool,
+) -> Option<Vec<String>> {
     let last = stages.next()?;
     let spelling = |command: &Command| {
         command

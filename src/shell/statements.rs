@@ -1000,6 +1000,25 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
             }
             if command.wrappers.iter().any(|w| w == "xargs") && command.program.is_some() {
+                let streams = command
+                    .redirects
+                    .iter()
+                    .filter(|redirect| redirect.direction == crate::record::Direction::In)
+                    .filter_map(|redirect| redirect.stream.as_deref())
+                    .chain(crate::targets::list_file_sources(&command));
+                for stream in streams {
+                    if let crate::record::StreamOutput::Known(outputs) = stream {
+                        for output in outputs {
+                            for input in super::pipeline::xargs_here_input(&command, output) {
+                                self.source(
+                                    &input.source,
+                                    &mut Scope::new(self.frontend.host.home, &input.cwd),
+                                    depth + 1,
+                                )?;
+                            }
+                        }
+                    }
+                }
                 for redirect in &command.redirects {
                     if matches!(
                         redirect.direction,
@@ -1081,6 +1100,54 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         nested: bool,
     ) -> Result<(), CheckError> {
         match statement {
+            Statement::Redirected(redirects, body) => {
+                let prior = scope.pipeline_input.take();
+                let mut targets = Vec::new();
+                for redirect in redirects {
+                    for expanded in self.expand(&redirect.target, scope, depth)? {
+                        if redirect.direction == crate::record::Direction::In {
+                            scope.pipeline_input = match expanded.word.stream.as_deref() {
+                                Some(crate::record::StreamOutput::Known(output)) => {
+                                    Some(output.clone())
+                                }
+                                _ => None,
+                            };
+                        } else if matches!(
+                            redirect.direction,
+                            crate::record::Direction::Heredoc
+                                | crate::record::Direction::Herestring
+                        ) && !expanded.word.expands
+                        {
+                            scope.pipeline_input = Some(vec![expanded.word.text.clone()]);
+                        }
+                        targets.push(crate::record::Redirect::from_word(
+                            expanded.word,
+                            redirect.direction,
+                        ));
+                    }
+                }
+                self.emit(
+                    Command {
+                        function: false,
+                        environment: Vec::new(),
+                        argv: Vec::new(),
+                        redirects: targets,
+                        cwd: scope.directory.current.render(),
+                        program: None,
+                        wrappers: Vec::new(),
+                        shell: true,
+                        flags: Vec::new(),
+                        items: None,
+                        stdin: Stdin::None,
+                        pipeline: None,
+                        nested,
+                    },
+                    scope,
+                    &[],
+                );
+                self.run(body, scope, depth + 1, source_id, nested)?;
+                scope.pipeline_input = prior;
+            }
             Statement::ArrayAssignment {
                 name,
                 values,
@@ -1907,7 +1974,15 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 && target.target == "/dev/null"
                 && !target.expands
         });
-        let input = if let Some(literal) = literal {
+        let process = targets.iter().rev().find(|target| {
+            target.direction == crate::record::Direction::In && target.stream.is_some()
+        });
+        let input = if let Some(process) = process {
+            match process.stream.as_deref() {
+                Some(crate::record::StreamOutput::Known(output)) => Some(output.clone()),
+                _ => None,
+            }
+        } else if let Some(literal) = literal {
             Some(vec![literal.target.clone()])
         } else if eof {
             Some(vec![String::new()])

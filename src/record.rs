@@ -20,6 +20,13 @@ pub struct Word {
     pub value: String,
     pub pwd: bool,
     pub cwd_ranges: Vec<std::ops::Range<usize>>,
+    pub stream: Option<Box<StreamOutput>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreamOutput {
+    Known(Vec<String>),
+    Unknown,
 }
 
 impl Word {
@@ -37,6 +44,7 @@ impl Word {
             role: Role::Arg,
             pwd: false,
             cwd_ranges: Vec::new(),
+            stream: None,
         }
     }
     pub fn as_str(&self) -> &str {
@@ -119,6 +127,7 @@ pub enum Direction {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Redirect {
+    pub stream: Option<Box<StreamOutput>>,
     pub direction: Direction,
     pub target: String,
     pub globs: bool,
@@ -130,6 +139,7 @@ pub struct Redirect {
 impl Redirect {
     pub fn from_word(word: Word, direction: Direction) -> Self {
         Self {
+            stream: word.stream,
             direction,
             target: word.text,
             globs: word.globs,
