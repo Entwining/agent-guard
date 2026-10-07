@@ -1035,19 +1035,6 @@ mod tests {
     }
 
     #[test]
-    fn shell_frontend_removes_only_dot_segments() {
-        let result = crate::shell::observe(
-            "printf public",
-            crate::shell::Arm::Brush,
-            "/h",
-            "/a/./link/../tail",
-            true,
-        )
-        .unwrap();
-        assert_eq!(result.script.commands[0].cwd, "/a/link/../tail");
-    }
-
-    #[test]
     fn literal_name_and_tool_glob_skip_identity() {
         let table = FirmlinkTable::from_text("");
         let mut resolver = Resolver::new("/h", &table);

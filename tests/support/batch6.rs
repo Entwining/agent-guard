@@ -1,5 +1,4 @@
-#[path = "mod.rs"]
-mod support;
+use crate::support;
 use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell::Arm};
 use serde_json::{Value, json};
 
