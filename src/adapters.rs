@@ -75,6 +75,11 @@ pub(crate) fn decode_protocol(
     default_cwd: &str,
     protocol: Protocol,
 ) -> Result<CanonicalEvent, CheckError> {
+    if protocol == Protocol::Native && std::str::from_utf8(bytes).is_err() {
+        return Err(CheckError {
+            kind: CheckErrorKind::InvalidEncoding,
+        });
+    }
     let value: Value =
         serde_json::from_slice(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes))?;
     if !value.is_object() {
@@ -142,7 +147,13 @@ pub(crate) fn decode_protocol(
         .unwrap_or(default_cwd)
         .to_owned();
     if cwd.is_empty() || !std::path::Path::new(&cwd).is_absolute() {
-        return Err(malformed());
+        return Err(if protocol == Protocol::Native {
+            CheckError {
+                kind: CheckErrorKind::RelativeCwd,
+            }
+        } else {
+            malformed()
+        });
     }
     let folded_name = folded_tool_name(name);
     // Go's native stdin protocol uses file_path for every runtime; Pi's

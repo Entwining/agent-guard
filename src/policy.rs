@@ -49,6 +49,18 @@ impl DenialRule {
 
 pub(crate) fn refusal_message(cause: &CoverageGap) -> &'static str {
     match cause {
+        CoverageGap::InputByteLimit => {
+            "This event exceeds the input byte limit. Split the call into smaller requests, then recheck each request."
+        }
+        CoverageGap::NestingLimit => {
+            "Shell nesting exceeds the supported depth of 64. Shorten the nesting or split the command, then recheck each command."
+        }
+        CoverageGap::AbsoluteCwdRequired => {
+            "The event requires an absolute cwd. Use an absolute cwd, then recheck the call."
+        }
+        CoverageGap::InvalidEncoding => {
+            "The event is not valid UTF-8. Encode the request as UTF-8, then recheck the call."
+        }
         CoverageGap::UnsupportedShellSyntax => {
             "The agent guard cannot inspect this shell syntax. Rewrite it as a Bash-compatible command with explicit paths, or run a narrower command that the guard can inspect."
         }
@@ -109,13 +121,39 @@ pub(crate) fn evaluate_native(
     event: Event<'_>,
     deadline: std::time::Instant,
 ) -> Result<Evaluation, CheckError> {
-    evaluate_with_catalog_loader(
+    if event.bytes.len() > MAX_INPUT_BYTES {
+        return Ok(native_refusal(CoverageGap::InputByteLimit));
+    }
+    match evaluate_with_catalog_loader(
         event,
         Arm::Brush,
         filesystem::FirmlinkTable::load,
         Some(deadline),
         adapters::Protocol::Native,
-    )
+    ) {
+        Err(CheckError {
+            kind: CheckErrorKind::ResourceLimit,
+        }) => Ok(native_refusal(CoverageGap::NestingLimit)),
+        Err(CheckError {
+            kind: CheckErrorKind::RelativeCwd,
+        }) => Ok(native_refusal(CoverageGap::AbsoluteCwdRequired)),
+        Err(CheckError {
+            kind: CheckErrorKind::InvalidEncoding,
+        }) => Ok(native_refusal(CoverageGap::InvalidEncoding)),
+        result => result,
+    }
+}
+
+fn native_refusal(cause: CoverageGap) -> Evaluation {
+    Evaluation {
+        outcome: Outcome::CoverageInsufficient {
+            cause: cause.clone(),
+            disposition: Disposition::RejectUnsupportedSyntax,
+            recovery: None,
+        },
+        coverage: Coverage::LimitedPreflight(vec![cause]),
+        effects: Vec::new(),
+    }
 }
 
 /// Typed host metadata for isolated evaluations; hook request input has no catalog field.

@@ -12,6 +12,8 @@ pub mod failures_block_from_consumer_wire;
 pub mod invalid_json_keeps_failure_without_echoing_input;
 #[path = "wire/jsonl_dev_contract_and_parser_boundary.rs"]
 pub mod jsonl_dev_contract_and_parser_boundary;
+#[path = "wire/native_limits_are_completed_refusals.rs"]
+pub mod native_limits_are_completed_refusals;
 #[path = "support/batch6.rs"]
 pub mod program_contract;
 #[path = "wire/shell.rs"]

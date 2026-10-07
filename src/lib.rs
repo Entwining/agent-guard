@@ -166,6 +166,10 @@ pub enum Coverage {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CoverageGap {
+    InputByteLimit,
+    NestingLimit,
+    AbsoluteCwdRequired,
+    InvalidEncoding,
     UnknownProgram { program: String },
     UnresolvedTarget,
     UnsupportedShellSyntax,
@@ -186,6 +190,8 @@ pub struct CheckError {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckErrorKind {
+    RelativeCwd,
+    InvalidEncoding,
     MalformedInput,
     InputFailure,
     GuardFault,
@@ -216,6 +222,8 @@ impl fmt::Display for CheckError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         // JSON error messages can contain submitted values; render only the failure category.
         let message = match self.kind {
+            CheckErrorKind::RelativeCwd => "event cwd is not absolute",
+            CheckErrorKind::InvalidEncoding => "event input is not UTF-8",
             CheckErrorKind::MalformedInput => "invalid event input",
             CheckErrorKind::InputFailure => "event input could not be read",
             CheckErrorKind::GuardFault => "checker failed",
