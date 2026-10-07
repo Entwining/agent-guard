@@ -50,6 +50,49 @@
         "command": "M=\"\"; for f in a b; do M=\"$M $f\"; done; sh -c \"cat $M\""
       },
       "expected": "N"
+    },
+    {
+      "id": "branch-echo-env",
+      "partition": "pipeline",
+      "input": {
+        "command": "X=a; test -f public || X=\"$X .env\"; echo $X | xargs cat"
+      },
+      "expected": "D",
+      "wire_reason": "extract protected environment-file contents"
+    },
+    {
+      "id": "branch-printf-public",
+      "partition": "pipeline",
+      "input": {
+        "command": "X=a; test -f public || X=\"$X b\"; printf '%s\\n' $X | xargs cat"
+      },
+      "expected": "N"
+    },
+    {
+      "id": "loop-echo-appdata",
+      "partition": "pipeline",
+      "input": {
+        "command": "M=\"\"; for f in a '$C/data.txt'; do test -f public || M=\"$M $f\"; done; echo $M | xargs cat"
+      },
+      "expected": "D",
+      "wire_reason": "App Data"
+    },
+    {
+      "id": "loop-printf-key",
+      "partition": "pipeline",
+      "input": {
+        "command": "M=\"\"; for f in a '$H/.ssh/id_rsa'; do test -f public && M=\"$M $f\"; done; printf '%s\\n' $M | xargs cat"
+      },
+      "expected": "D",
+      "wire_reason": "extract protected private-key contents"
+    },
+    {
+      "id": "loop-echo-public",
+      "partition": "pipeline",
+      "input": {
+        "command": "M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; echo $M | xargs cat"
+      },
+      "expected": "N"
     }
   ]
 }

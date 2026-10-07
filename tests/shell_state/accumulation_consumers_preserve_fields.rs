@@ -7,3 +7,11 @@ fn unconditional_appends_preserve_complete_values() {
         include_str!("../fixtures/rust-batch17c-fields.json"),
     );
 }
+
+#[test]
+fn producer_candidates_reach_xargs_operands() {
+    contract::partition(
+        "pipeline",
+        include_str!("../fixtures/rust-batch17c-fields.json"),
+    );
+}
