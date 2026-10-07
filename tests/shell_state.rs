@@ -8,6 +8,8 @@ pub mod and_success_excludes_failed_cwd;
 pub mod benign_nested_loops_do_not_exhaust_inspection;
 #[path = "shell_state/bound_arithmetic_sinks_observe_subscript_code.rs"]
 pub mod bound_arithmetic_sinks_observe_subscript_code;
+#[path = "shell_state/conditional_literal_accumulation_preserves_targets.rs"]
+pub mod conditional_literal_accumulation_preserves_targets;
 #[path = "support/differential.rs"]
 pub mod differential;
 #[path = "shell_state/eval_runtime_output_is_unresolved_code.rs"]

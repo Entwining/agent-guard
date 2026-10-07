@@ -89,6 +89,9 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         effects.targets.push(target);
     }
     if command.function {
+        if command.argv.iter().any(|word| word.field_count_unknown) {
+            effects.gaps.push(CoverageGap::UnsupportedShellSyntax);
+        }
         return effects;
     }
     if command.program.is_none() {
@@ -243,7 +246,11 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.variable = !(program != "echo" && args.first().is_some_and(|arg| arg == "-v"))
                 && command.variables().any(|name| secret_name(name));
         }
-        "true" | "false" | ":" | "unset" | "local" | "break" | "continue" | "return" | "shift" => {}
+        "true" | "false" | ":" | "unset" | "local" | "break" | "continue" | "return" | "shift" => {
+            effects.independent_arguments = matches!(program, "true" | "false" | ":" | "local")
+                && args.iter().any(|arg| arg.cardinality_unknown)
+                && args.iter().all(|arg| !arg.starts_with('-'));
+        }
         "tr" => {}
         "mktemp" => {
             effects.gaps.push(CoverageGap::UnknownProgram {
@@ -321,6 +328,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.dump = command.shell && !command.argv[index].contains('/') && args.is_empty()
         }
         "typeset" | "declare" if command.shell && !command.argv[index].contains('/') => {
+            effects.independent_arguments = args.iter().any(|arg| arg.cardinality_unknown)
+                && args.iter().all(|arg| arg.contains('='));
             effects.dump = args.is_empty()
                 || args.len() == 1 && args[0].starts_with('-') && args[0].contains(['p', 'x']);
             effects.variable = args
@@ -329,12 +338,16 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
         "cat" | "head" | "tail" | "less" | "more" | "bat" | "sort" | "uniq" | "cut" | "nl"
         | "base64" | "xxd" | "od" | "strings" => {
+            effects.independent_arguments = args.iter().any(|arg| arg.cardinality_unknown)
+                && args.iter().all(|arg| !arg.starts_with('-'));
             generic_walk = Some(Walk::None);
             if command.unresolved() {
                 effects.gaps.push(CoverageGap::UnresolvedTarget);
             }
         }
         "ls" => {
+            effects.independent_arguments = args.iter().any(|arg| arg.cardinality_unknown)
+                && args.iter().all(|arg| !arg.starts_with('-'));
             let mut recursive = false;
             let mut options = true;
             let mut paths = Vec::new();
@@ -510,6 +523,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.variable = args.iter().any(|s| secret_name(s));
         }
         "export" if command.shell && !command.argv[index].contains('/') => {
+            effects.independent_arguments = args.iter().any(|arg| arg.cardinality_unknown)
+                && args.iter().all(|arg| arg.contains('='));
             effects.dump =
                 args.is_empty() || args.iter().any(|s| s.starts_with('-') && s.contains('p'))
         }
@@ -553,6 +568,17 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
     }
     effects.hidden_content |= hidden_items_read;
+    // A repetition projects each literal, not every possible argument sequence.
+    // Positional roles and executable text cannot use those projections as a
+    // complete command. Independent operand owners above can check their union.
+    if !effects.independent_arguments && args.iter().any(|word| word.cardinality_unknown)
+        || command
+            .environment
+            .iter()
+            .any(|(_, word)| word.cardinality_unknown)
+    {
+        effects.gaps.push(CoverageGap::UnsupportedShellSyntax);
+    }
     effects.dump |= effects.inline.iter().any(|code| printenv_signature(code));
     let display = READERS
         .split_whitespace()

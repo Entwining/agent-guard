@@ -10,6 +10,54 @@ use std::collections::{BTreeMap, BTreeSet};
 #[cfg(test)]
 mod loop_cost {
     #[test]
+    fn conditional_literal_accumulation_work_grows_polynomially() {
+        for bound in [false, true] {
+            let count = |width| {
+                let items = (0..width)
+                    .map(|n| format!("public{n}"))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let header = if bound {
+                    format!("REQ='{items}'; for f in $REQ")
+                } else {
+                    format!("for f in {items}")
+                };
+                let source = format!(
+                    "M=prefix; {header}; do test -f public || M=\"$M $f\"; done; echo \"[$M]\""
+                );
+                let output = crate::shell::observe(
+                    &source,
+                    crate::shell::Arm::Brush,
+                    "/synthetic/home",
+                    "/synthetic/project",
+                    true,
+                )
+                .unwrap();
+                assert!(
+                    !output.gaps.contains(&crate::CoverageGap::InspectionBudget),
+                    "bound={bound} width={width}: {:?}",
+                    output.gaps
+                );
+                (
+                    output.statement_visits,
+                    output.candidate_pairs,
+                    output.script.commands.len(),
+                )
+            };
+            let counts = [4, 8, 16].map(count);
+            println!("conditional accumulation bound={bound}: {counts:?}");
+            for (small, large) in counts.iter().zip(counts.iter().skip(1)) {
+                assert!(
+                    small.0 > 0
+                        && large.0 <= small.0 * 5
+                        && large.1 <= small.1 * 5
+                        && large.2 <= small.2 * 5,
+                    "bound={bound}: {counts:?}"
+                );
+            }
+        }
+    }
+    #[test]
     fn unknown_fragment_repetition_converges_before_branching() {
         let count = |width| {
             let items = (0..width)
@@ -111,6 +159,7 @@ mod loop_cost {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum BindingValue {
     Known(String),
+    RepeatedFields(LiteralRepetition),
     // The lexical representative preserves pre-M2 target inference; it is
     // never evidence of the runtime value or its arithmetic contents.
     RuntimeUnknown(Option<String>),
@@ -121,6 +170,32 @@ pub(super) enum BindingValue {
     Undetermined,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct LiteralRepetition {
+    pub prefix: String,
+    pub alternatives: Vec<String>,
+    pub suffix: String,
+    pub may_be_empty: bool,
+}
+
+impl LiteralRepetition {
+    pub fn projections(&self) -> Vec<String> {
+        let mut values = Vec::new();
+        if self.may_be_empty {
+            values.push(format!("{}{}", self.prefix, self.suffix));
+        }
+        for alternative in &self.alternatives {
+            values.push(format!("{}{alternative}{}", self.prefix, self.suffix));
+            if !self.suffix.is_empty() {
+                // Only the final field receives a copied suffix; earlier fields
+                // still reach the consumer with their original identities.
+                values.push(format!("{}{alternative}", self.prefix));
+            }
+        }
+        values
+    }
+}
+
 impl BindingValue {
     fn lexical(&self) -> Option<&String> {
         match self {
@@ -129,13 +204,14 @@ impl BindingValue {
             | Self::RuntimeDerived(value)
             | Self::ShellMatches(value)
             | Self::ShellDerived(value) => Some(value),
-            Self::RuntimeUnknown(None) | Self::Undetermined => None,
+            Self::RepeatedFields(_) | Self::RuntimeUnknown(None) | Self::Undetermined => None,
         }
     }
     pub fn known(&self) -> Option<&String> {
         match self {
             Self::Known(value) => Some(value),
-            Self::RuntimeUnknown(_)
+            Self::RepeatedFields(_)
+            | Self::RuntimeUnknown(_)
             | Self::RuntimeDerived(_)
             | Self::ShellMatches(_)
             | Self::ShellDerived(_)
@@ -162,6 +238,7 @@ pub(super) struct Scope {
     returns: Vec<BindingState>,
     loops: Vec<Vec<BindingState>>,
     summarizing_loop: bool,
+    bounded_loop: bool,
     piped: bool,
     pipeline_input: Option<Vec<String>>,
     relative_glob_moves: usize,
@@ -192,6 +269,7 @@ impl Scope {
             returns: Vec::new(),
             loops: Vec::new(),
             summarizing_loop: false,
+            bounded_loop: false,
             piped: false,
             pipeline_input: None,
             relative_glob_moves: 0,
@@ -202,6 +280,7 @@ impl Scope {
         child.returns.clear();
         child.loops.clear();
         child.summarizing_loop = false;
+        child.bounded_loop = false;
         child.pipeline_input = None;
         child.isolated = true;
         child.directory.failures = None;
@@ -261,6 +340,16 @@ impl Scope {
             })
             .collect::<BTreeMap<_, _>>()
     }
+    fn repeated_word(&self, word: &crate::record::Word) -> bool {
+        word.vars.iter().any(|name| {
+            self.bindings.get(name).is_some_and(|binding| {
+                binding
+                    .values
+                    .iter()
+                    .any(|value| matches!(value, BindingValue::RepeatedFields(_)))
+            })
+        })
+    }
     pub fn positional_words(&self) -> Option<Vec<crate::record::Word>> {
         let count = self.bindings.get("#")?;
         if count.values.len() != 1 {
@@ -303,6 +392,36 @@ impl Scope {
         Some(words)
     }
     fn expanded_binding(&self, word: &crate::record::Word, text: &str) -> BindingValue {
+        let raw = if text != word.text {
+            assignment(&word.raw).map_or(word.raw.as_str(), |(_, value)| value)
+        } else {
+            &word.raw
+        };
+        for name in &word.vars {
+            if let Some(binding) = self.bindings.get(name) {
+                for value in &binding.values {
+                    if let BindingValue::RepeatedFields(repeated) = value
+                        && let Some((prefix, suffix, _)) =
+                            super::words::parameter_affixes(raw, name)
+                        && word.binding_candidates.get(name).is_some_and(|value| {
+                            repeated.projections().contains(value)
+                                && text == format!("{prefix}{value}{suffix}")
+                        })
+                    {
+                        let mut repeated = repeated.clone();
+                        repeated.prefix = format!("{prefix}{}", repeated.prefix);
+                        repeated.suffix.push_str(&suffix);
+                        return BindingValue::RepeatedFields(repeated);
+                    }
+                }
+            }
+        }
+        if word.cardinality_unknown
+            && super::words::parameter_affixes(raw, word.vars.first().map_or("", String::as_str))
+                .is_none()
+        {
+            return BindingValue::RuntimeDerived(text.into());
+        }
         if word.shell_matches {
             return if word.globs || word.expands {
                 BindingValue::ShellDerived(text.into())
@@ -494,6 +613,27 @@ fn join_values<'a>(values: impl Iterator<Item = Option<&'a Binding>>) -> (Option
             |b| b.values.clone(),
         );
         for value in values {
+            if let BindingValue::RepeatedFields(repetition) = &value
+                && let Some(BindingValue::RepeatedFields(existing)) = joined.iter_mut().find(|v| {
+                    matches!(
+                        v,
+                        BindingValue::RepeatedFields(other)
+                            if other.prefix == repetition.prefix && other.suffix == repetition.suffix
+                    )
+                })
+            {
+                existing.may_be_empty |= repetition.may_be_empty;
+                for alternative in &repetition.alternatives {
+                    if !existing.alternatives.contains(alternative) {
+                        if existing.alternatives.len() == 512 {
+                            bounded = true;
+                        } else {
+                            existing.alternatives.push(alternative.clone());
+                        }
+                    }
+                }
+                continue;
+            }
             if !joined.contains(&value) {
                 if joined.len() == 512 {
                     bounded = true;
@@ -503,6 +643,25 @@ fn join_values<'a>(values: impl Iterator<Item = Option<&'a Binding>>) -> (Option
             }
         }
     }
+    let mut empty = Vec::new();
+    for value in &joined {
+        if let BindingValue::Known(text) = value
+            && joined.iter().any(|other| {
+                matches!(other, BindingValue::RepeatedFields(repetition)
+                if text == &format!("{}{}", repetition.prefix, repetition.suffix))
+            })
+        {
+            empty.push(text.clone());
+        }
+    }
+    for value in &mut joined {
+        if let BindingValue::RepeatedFields(repetition) = value
+            && empty.contains(&format!("{}{}", repetition.prefix, repetition.suffix))
+        {
+            repetition.may_be_empty = true;
+        }
+    }
+    joined.retain(|value| !matches!(value, BindingValue::Known(text) if empty.contains(text)));
     (
         present.then_some(Binding {
             values: joined,
@@ -672,6 +831,119 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             .directory
             .merge(candidates.into_iter(), self.frontend.host.home);
     }
+    fn literal_accumulation(
+        &mut self,
+        name: &str,
+        raw: &RawWord,
+        scope: &mut Scope,
+        depth: usize,
+    ) -> Result<Option<Vec<BindingValue>>, CheckError> {
+        if !scope.bounded_loop
+            || name.ends_with('+')
+            || scope
+                .bindings
+                .get(name)
+                .is_some_and(|binding| binding.arithmetic)
+        {
+            return Ok(None);
+        }
+        let Some(tail) = super::words::without_leading_parameter(&raw.raw, name) else {
+            return Ok(None);
+        };
+        let variables = scope.contexts();
+        let cwd = scope.directory.current.render();
+        let preview = super::words::expand(
+            &tail,
+            &raw.syntax,
+            &super::words::ExpansionContext {
+                variables: &variables,
+                runtime_variables: &BTreeSet::new(),
+                host: self.frontend.host,
+                cwd: &cwd,
+                tilde_assigned: true,
+            },
+        )?;
+        if preview.word.expands
+            || preview.word.globs
+            || preview.unsupported
+            || !preview.nested.is_empty()
+            || !preview.arithmetic.is_empty()
+            || preview.word.vars.iter().any(|variable| {
+                variable == name
+                    || scope.bindings.get(variable).is_some_and(|binding| {
+                        binding.values.iter().any(|value| value.known().is_none())
+                    })
+            })
+        {
+            return Ok(None);
+        }
+        let prior = scope.bindings.get(name).map_or_else(
+            || vec![BindingValue::Known(String::new())],
+            |binding| binding.values.clone(),
+        );
+        let mut repeated = Vec::new();
+        for value in prior {
+            let value = match value {
+                BindingValue::Known(prefix)
+                    if matches!(
+                        super::arithmetic::armed(&prefix),
+                        super::arithmetic::Arming::Inert
+                    ) =>
+                {
+                    LiteralRepetition {
+                        prefix,
+                        alternatives: Vec::new(),
+                        suffix: String::new(),
+                        may_be_empty: false,
+                    }
+                }
+                BindingValue::RepeatedFields(mut value) if value.suffix.is_empty() => {
+                    value.may_be_empty = false;
+                    value
+                }
+                _ => return Ok(None),
+            };
+            repeated.push(value);
+        }
+        let tails = super::expand_scoped(
+            &RawWord {
+                raw: tail,
+                syntax: raw.syntax.clone(),
+                expansions: Vec::new(),
+            },
+            scope,
+            self,
+            depth,
+            false,
+        )?;
+        for tail in tails {
+            let tail = tail.word.text;
+            // Field boundaries keep every literal's resource identity independent
+            // of repetition count. Contiguous bytes keep the sequential owner.
+            if !tail.starts_with([' ', '\t', '\n'])
+                || !matches!(
+                    super::arithmetic::armed(&tail),
+                    super::arithmetic::Arming::Inert
+                )
+            {
+                return Ok(None);
+            }
+            for repetition in &mut repeated {
+                if !repetition.alternatives.contains(&tail) {
+                    if repetition.alternatives.len() == 512 {
+                        return Ok(None);
+                    }
+                    repetition.alternatives.push(tail.clone());
+                }
+            }
+        }
+        Ok(Some(
+            repeated
+                .into_iter()
+                .map(BindingValue::RepeatedFields)
+                .collect(),
+        ))
+    }
     fn statement(
         &mut self,
         statement: &Statement,
@@ -705,15 +977,21 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 .is_some_and(|binding| binding.arithmetic);
             // Copying stores the armed value; only an arithmetic attribute
             // consumes it here. A later assignment replaces the stored value.
-            let values =
-                super::expand_scoped(raw, &mut assignment_scope, self, depth, observe_bindings)?;
+            let accumulated = self.literal_accumulation(name, raw, &mut assignment_scope, depth)?;
+            let values = if accumulated.is_some() {
+                Vec::new()
+            } else {
+                super::expand_scoped(raw, &mut assignment_scope, self, depth, observe_bindings)?
+            };
             for value in &values {
                 self.armed_references(&value.word.text, &mut assignment_scope, depth)?;
             }
-            let mut binding = values
-                .iter()
-                .map(|v| assignment_scope.expanded_binding(&v.word, &v.word.text))
-                .collect::<Vec<_>>();
+            let mut binding = accumulated.unwrap_or_else(|| {
+                values
+                    .iter()
+                    .map(|v| assignment_scope.expanded_binding(&v.word, &v.word.text))
+                    .collect::<Vec<_>>()
+            });
             let (name, append) = name
                 .strip_suffix('+')
                 .map_or((name.as_str(), false), |name| (name, true));
@@ -894,10 +1172,16 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let mut targets = Vec::new();
         for redirect in redirects {
             for expanded in self.expand(&redirect.target, scope, depth)? {
-                targets.push(crate::record::Redirect::from_word(
-                    expanded.word,
-                    redirect.direction,
-                ));
+                let words = if scope.repeated_word(&expanded.word) {
+                    expanded.split
+                } else {
+                    vec![expanded.word]
+                };
+                targets.extend(
+                    words
+                        .into_iter()
+                        .map(|word| crate::record::Redirect::from_word(word, redirect.direction)),
+                );
             }
         }
         let entry = scope.clone();
@@ -992,10 +1276,12 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                                 && values.len() == 2
                                 && !values[1].expands
                             {
-                                scope.assign(
-                                    name.text.clone(),
-                                    vec![BindingValue::Known(values[1].text.clone())],
-                                );
+                                let binding = if values[1].cardinality_unknown {
+                                    scope.expanded_binding(&values[1], &values[1].text)
+                                } else {
+                                    BindingValue::Known(values[1].text.clone())
+                                };
+                                scope.assign(name.text.clone(), vec![binding]);
                             } else {
                                 let joined = values
                                     .iter()
@@ -1046,10 +1332,16 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         }
                     }
                     "eval" => {
-                        if argv[index + 1..].iter().any(|word| word.expands) {
+                        if argv[index + 1..]
+                            .iter()
+                            .any(|word| word.expands || word.cardinality_unknown)
+                        {
                             self.output.gap(
                                 if argv[index + 1..].iter().any(|word| {
-                                    word.expands && !word.runtime_unknown && !word.vars.is_empty()
+                                    word.cardinality_unknown
+                                        || word.expands
+                                            && !word.runtime_unknown
+                                            && !word.vars.is_empty()
                                 }) || !scope.frames.is_empty()
                                     || !prior.is_empty()
                                 {
@@ -1283,10 +1575,14 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         {
                             scope.pipeline_input = Some(vec![expanded.word.text.clone()]);
                         }
-                        targets.push(crate::record::Redirect::from_word(
-                            expanded.word,
-                            redirect.direction,
-                        ));
+                        let words = if scope.repeated_word(&expanded.word) {
+                            expanded.split
+                        } else {
+                            vec![expanded.word]
+                        };
+                        targets.extend(words.into_iter().map(|word| {
+                            crate::record::Redirect::from_word(word, redirect.direction)
+                        }));
                     }
                 }
                 self.emit(
@@ -1520,7 +1816,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             && expanded.arithmetic.is_empty();
                         literal_values.push(expanded.word.text.clone());
                         width = width.max(expanded.split.len().max(1));
-                        if expanded.word.expands || expanded.word.globs {
+                        if expanded.word.expands
+                            || expanded.word.globs
+                            || expanded.word.cardinality_unknown
+                        {
                             count = None;
                         }
                         values.extend(expanded.split.into_iter().map(|w| {
@@ -1546,6 +1845,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     count = count.map(|n| n + width);
                     self.word_use(word, scope, depth, nested)?;
                 }
+                inner.bounded_loop = variable.is_some() && finite && count.is_some();
                 if !*empty
                     && count.is_some()
                     && !values.is_empty()
@@ -1576,6 +1876,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         }
                     }
                     inner.summarizing_loop = scope.summarizing_loop;
+                    inner.bounded_loop = scope.bounded_loop;
                     if literal {
                         if let Some(last) = literal_values.last() {
                             inner.assign(variable.clone(), vec![BindingValue::Known(last.clone())]);
@@ -2372,10 +2673,13 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
         for (index, word) in argv.iter().enumerate() {
             let name = (index + 1).to_string();
+            let binding = scope.expanded_binding(word, &word.text);
             scope.local(&name);
             scope.assign(
                 name,
-                vec![if word.shell_matches && word.expands {
+                vec![if matches!(binding, BindingValue::RepeatedFields(_)) {
+                    binding
+                } else if word.shell_matches && word.expands {
                     BindingValue::ShellDerived(word.text.clone())
                 } else if word.shell_matches {
                     BindingValue::ShellMatches(word.text.clone())
@@ -2435,7 +2739,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 });
                 if binding.exported || prefix {
                     for value in &binding.values {
-                        if let Some(text) = value.lexical() {
+                        let texts = match value {
+                            BindingValue::RepeatedFields(repetition) => repetition.projections(),
+                            _ => value.lexical().into_iter().cloned().collect(),
+                        };
+                        for text in texts {
                             let mut word = crate::record::Word::literal(text.clone());
                             // Assignment expansion has already consumed any unquoted tilde.
                             word.raw = format!("'{text}'");
@@ -2447,6 +2755,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                                 value,
                                 BindingValue::ShellMatches(_) | BindingValue::ShellDerived(_)
                             );
+                            word.cardinality_unknown =
+                                matches!(value, BindingValue::RepeatedFields(_));
                             command.environment.push((name.clone(), word));
                         }
                     }
@@ -2484,7 +2794,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 binding.values.iter().any(|value| {
                     matches!(
                         value,
-                        BindingValue::RuntimeUnknown(_)
+                        BindingValue::RepeatedFields(_)
+                            | BindingValue::RuntimeUnknown(_)
                             | BindingValue::RuntimeDerived(_)
                             | BindingValue::ShellDerived(_)
                     )
@@ -2630,7 +2941,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 for value in &binding.values {
                     match value {
                         BindingValue::Known(value) => targets.push(value.clone()),
-                        BindingValue::Undetermined => {
+                        BindingValue::RepeatedFields(_) | BindingValue::Undetermined => {
                             self.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
                         BindingValue::RuntimeUnknown(_)
@@ -2662,7 +2973,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 for value in &binding.values {
                     match value {
                         BindingValue::Known(value) => readings.push(value.clone()),
-                        BindingValue::Undetermined => {
+                        BindingValue::RepeatedFields(_) | BindingValue::Undetermined => {
                             self.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
                         BindingValue::RuntimeUnknown(_)
@@ -2694,7 +3005,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             targets.push(path);
                         }
                     }
-                } else if value == &BindingValue::Undetermined {
+                } else if matches!(
+                    value,
+                    BindingValue::RepeatedFields(_) | BindingValue::Undetermined
+                ) {
                     self.output.gap(CoverageGap::UnsupportedShellSyntax);
                 }
             }

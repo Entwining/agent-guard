@@ -458,6 +458,18 @@ fn expand_scoped(
                         evaluator.output.gap(CoverageGap::InspectionBudget);
                         break;
                     }
+                    if let statements::BindingValue::RepeatedFields(repetition) = value {
+                        for projection in repetition.projections() {
+                            if next.len() == 512 {
+                                evaluator.output.gap(CoverageGap::InspectionBudget);
+                                break;
+                            }
+                            let mut context = context.clone();
+                            context.insert(name.clone(), projection);
+                            next.push(context);
+                        }
+                        continue;
+                    }
                     let mut context = context.clone();
                     if let statements::BindingValue::Known(value)
                     | statements::BindingValue::RuntimeUnknown(Some(value))
@@ -542,6 +554,36 @@ fn expand_scoped(
             expanded.word.binding_candidates = candidates.clone();
             for word in &mut expanded.split {
                 word.binding_candidates = candidates.clone();
+            }
+            let repeated = expanded
+                .word
+                .vars
+                .iter()
+                .filter(|name| {
+                    scope.bindings.get(*name).is_some_and(|binding| {
+                        binding.values.iter().any(|value| {
+                            matches!(value, statements::BindingValue::RepeatedFields(_))
+                        })
+                    })
+                })
+                .collect::<Vec<_>>();
+            if !repeated.is_empty() {
+                if repeated
+                    .iter()
+                    .any(|name| words::parameter_affixes(&raw.raw, name).is_none())
+                {
+                    evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+                }
+                // The literal fields are known; their repetition count is not.
+                // Consumers whose roles depend on position need the unknown count.
+                expanded.word.cardinality_unknown = true;
+                expanded.word.field_count_unknown = repeated.iter().any(|name| {
+                    words::parameter_affixes(&raw.raw, name).is_none_or(|(_, _, split)| split)
+                });
+                for word in &mut expanded.split {
+                    word.cardinality_unknown = true;
+                    word.field_count_unknown = expanded.word.field_count_unknown;
+                }
             }
             if expanded.word.vars.iter().any(|name| {
                 scope.bindings.get(name).is_some_and(|binding| {

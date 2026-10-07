@@ -69,6 +69,86 @@ pub(super) fn first_literal(raw: &str) -> Option<String> {
     }
 }
 
+pub(super) fn without_leading_parameter(raw: &str, name: &str) -> Option<String> {
+    let pieces = word::parse(raw, &ParserOptions::default()).ok()?;
+    let first = pieces.first()?;
+    let first = match &first.piece {
+        WordPiece::DoubleQuotedSequence(inner) => inner.first()?,
+        _ => first,
+    };
+    if !matches!(&first.piece, WordPiece::ParameterExpansion(ParameterExpr::Parameter {
+        parameter: Parameter::Named(found), indirect: false,
+    }) if found == name)
+    {
+        return None;
+    }
+    Some(format!(
+        "{}{}",
+        &raw[..first.start_index],
+        &raw[first.end_index..]
+    ))
+}
+
+pub(super) fn parameter_affixes(raw: &str, name: &str) -> Option<(String, String, bool)> {
+    fn literal_parts(
+        pieces: &[WordPieceWithSource],
+        name: &str,
+        quoted: bool,
+        found: &mut bool,
+        split: &mut bool,
+        prefix: &mut String,
+        suffix: &mut String,
+    ) -> Option<()> {
+        for piece in pieces {
+            let text = match &piece.piece {
+                WordPiece::DoubleQuotedSequence(inner) => {
+                    literal_parts(inner, name, true, found, split, prefix, suffix)?;
+                    continue;
+                }
+                WordPiece::ParameterExpansion(expr)
+                    if matches!(
+                        expr,
+                        ParameterExpr::Parameter {
+                            indirect: false,
+                            ..
+                        }
+                    ) && parameter_name(expr).as_deref() == Some(name)
+                        && !*found =>
+                {
+                    *found = true;
+                    *split = !quoted;
+                    continue;
+                }
+                WordPiece::Text(text) => text.replace("\\\n", ""),
+                WordPiece::SingleQuotedText(text) => text.clone(),
+                WordPiece::EscapeSequence(text) if text == "\\\n" => String::new(),
+                WordPiece::EscapeSequence(text) => text.strip_prefix('\\').unwrap_or(text).into(),
+                _ => return None,
+            };
+            if *found {
+                suffix.push_str(&text);
+            } else {
+                prefix.push_str(&text);
+            }
+        }
+        Some(())
+    }
+    let pieces = word::parse(raw, &ParserOptions::default()).ok()?;
+    let mut found = false;
+    let mut split = false;
+    let (mut prefix, mut suffix) = (String::new(), String::new());
+    literal_parts(
+        &pieces,
+        name,
+        false,
+        &mut found,
+        &mut split,
+        &mut prefix,
+        &mut suffix,
+    )?;
+    found.then_some((prefix, suffix, split))
+}
+
 pub(super) fn single_literal(raw: &str) -> Option<String> {
     let pieces = word::parse(raw, &ParserOptions::default()).ok()?;
     pieces
