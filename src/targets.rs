@@ -325,8 +325,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             );
         }
         "set" => {
-            effects.independent_arguments = args.first().is_some_and(|word| word == "--")
-                && args[1..].iter().all(|word| !word.starts_with('-'));
+            effects.independent_arguments = args.first().is_some_and(|word| word == "--");
             effects.dump = command.shell && !command.argv[index].contains('/') && args.is_empty()
         }
         "typeset" | "declare" if command.shell && !command.argv[index].contains('/') => {
@@ -340,16 +339,20 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
         "cat" | "head" | "tail" | "less" | "more" | "bat" | "sort" | "uniq" | "cut" | "nl"
         | "base64" | "xxd" | "od" | "strings" => {
-            effects.independent_arguments = args.iter().any(|arg| arg.cardinality_unknown)
-                && args.iter().all(|arg| !arg.starts_with('-'));
+            effects.independent_arguments = independent_operands(args, args)
+                && args.iter().all(|arg| {
+                    !arg.cardinality_unknown || arg.role != Role::Option(OptionRole::Name)
+                });
             generic_walk = Some(Walk::None);
             if command.unresolved() {
                 effects.gaps.push(CoverageGap::UnresolvedTarget);
             }
         }
         "ls" => {
-            effects.independent_arguments = args.iter().any(|arg| arg.cardinality_unknown)
-                && args.iter().all(|arg| !arg.starts_with('-'));
+            effects.independent_arguments = independent_operands(args, args)
+                && args.iter().all(|arg| {
+                    !arg.cardinality_unknown || arg.role != Role::Option(OptionRole::Name)
+                });
             let mut recursive = false;
             let mut options = true;
             let mut paths = Vec::new();
@@ -1495,9 +1498,9 @@ fn independent_operands(args: &[Word], operands: &[Word]) -> bool {
                 .iter()
                 .filter(|word| word.cardinality_unknown)
                 .count()
-        && operands
-            .iter()
-            .all(|word| !word.cardinality_unknown || !word.starts_with('-'))
+        && operands.iter().all(|word| {
+            !word.cardinality_unknown || !word.starts_with('-') || word.role == Role::Path
+        })
 }
 
 fn space(c: char) -> bool {

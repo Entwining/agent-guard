@@ -1,5 +1,15 @@
 {
   "rows": [
+    {"id":"fixed-reader-options","partition":"fixed_roles","input":{"command":"M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; eval \"cat -n $M\""},"expected":"N"},
+    {"id":"fixed-list-options","partition":"fixed_roles","input":{"command":"M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; eval \"ls -l $M\""},"expected":"N"},
+    {"id":"fixed-option-terminator","partition":"fixed_roles","input":{"command":"M=\"\"; for f in -n public; do test -f public || M=\"$M $f\"; done; eval \"cat -- $M\""},"expected":"N"},
+    {"id":"variable-option-value","partition":"fixed_roles","input":{"command":"M=\"\"; for f in public notes; do test -f public || M=\"$M $f\"; done; eval \"cat --exclude $M\""},"expected":"UR"},
+    {"id":"invalid-slice-observes-nested-code","partition":"sequences","input":{"command":"set -- a b; cat \"${@:$(cat .env)}\""},"expected":"D","wire_reason":"extract protected environment-file contents"},
+    {"id":"positional-snapshot-is-independent","partition":"sequences","input":{"command":"X=public; set -- $X; X=.env; cat \"$@\" \"$X\""},"expected":"D","wire_reason":"extract protected environment-file contents"},
+    {"id":"protected-positional-snapshot","partition":"sequences","input":{"command":"X=.env; set -- $X; X=public; cat \"$@\" \"$X\""},"expected":"D","wire_reason":"extract protected environment-file contents"},
+    {"id":"known-variadic-sequences","partition":"sequences","input":{"command":"say() { printf '%s\\n' \"$@\"; }; if test -f public; then set -- a; else set -- a b; fi; say \"$@\""},"expected":"UC"},
+    {"id":"protected-variadic-sequence","partition":"sequences","input":{"command":"readit() { cat \"$@\"; }; if test -f public; then set -- a; else set -- a .env; fi; readit \"$@\""},"expected":"D","wire_reason":"extract protected environment-file contents"},
+    {"id":"shift-each-sequence","partition":"sequences","input":{"command":"readit() { shift; cat \"$@\"; }; if test -f public; then set -- a b; else set -- a .env; fi; readit \"$@\""},"expected":"D","wire_reason":"extract protected environment-file contents"},
     {"id":"newline-is-executable-syntax","partition":"complete","input":{"command":"M=\"\"; for f in 'public\ncat .env' notes; do test -f public || M=\"$M $f\"; done; eval \"echo $M\""},"expected":"UR"},
     {"id":"joined-positional-lengths","partition":"positionals","input":{"command":"if test -f public; then set -- a; else set -- a .env; fi; cat \"$@\""},"expected":"D","wire_reason":"extract protected environment-file contents"},
     {"id":"loop-sh-public","partition":"complete","input":{"command":"M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; sh -c \"cat $M\""},"expected":"N"},

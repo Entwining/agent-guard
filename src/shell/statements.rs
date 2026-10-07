@@ -179,6 +179,7 @@ pub(super) enum BindingValue {
     Known(String),
     // Keep the uncommon repetition payload off the recursive evaluator stack.
     RepeatedFields(Box<LiteralRepetition>),
+    Arguments(Vec<crate::record::Word>),
     // The lexical representative preserves pre-M2 target inference; it is
     // never evidence of the runtime value or its arithmetic contents.
     RuntimeUnknown(Option<String>),
@@ -223,13 +224,17 @@ impl BindingValue {
             | Self::RuntimeDerived(value)
             | Self::ShellMatches(value)
             | Self::ShellDerived(value) => Some(value),
-            Self::RepeatedFields(_) | Self::RuntimeUnknown(None) | Self::Undetermined => None,
+            Self::RepeatedFields(_)
+            | Self::Arguments(_)
+            | Self::RuntimeUnknown(None)
+            | Self::Undetermined => None,
         }
     }
     pub fn known(&self) -> Option<&String> {
         match self {
             Self::Known(value) => Some(value),
             Self::RepeatedFields(_)
+            | Self::Arguments(_)
             | Self::RuntimeUnknown(_)
             | Self::RuntimeDerived(_)
             | Self::ShellMatches(_)
@@ -372,7 +377,7 @@ impl Scope {
             })
         })
     }
-    fn repetition_source(&self, word: &crate::record::Word) -> Option<(String, String)> {
+    fn repetition_source(&self, word: &crate::record::Word) -> Option<Box<(String, String)>> {
         if !word.cardinality_unknown || word.expands || word.vars.len() != 1 {
             return None;
         }
@@ -400,65 +405,35 @@ impl Scope {
         }
         // Re-expand a whole operand at its command owner. Safe literal fields
         // cannot introduce shell syntax; that owner still rejects varying roles.
-        Some((name.clone(), format!("{prefix}${{{name}}}{suffix}")))
+        Some(Box::new((
+            name.clone(),
+            format!("{prefix}${{{name}}}{suffix}"),
+        )))
     }
-    pub fn positional_words(&self) -> Option<Vec<crate::record::Word>> {
-        let count = self.bindings.get("#")?;
-        let first = count.values.first()?;
-        if first.known().is_none() && self.defining {
+    pub fn positional_sequences(&self) -> Option<Vec<Vec<crate::record::Word>>> {
+        if self.defining
+            && self
+                .bindings
+                .get("#")
+                .is_some_and(|binding| binding.values.iter().any(|value| value.known().is_none()))
+        {
             let mut word = crate::record::Word::literal("${@}".into());
             word.expands = true;
             word.runtime_unknown = true;
             word.vars.push("@".into());
-            return Some(vec![word]);
+            return Some(vec![vec![word]]);
         }
-        let uncertain = count.values.len() != 1 || first.known().is_none();
-        let count = count
+        let sequences = self
+            .bindings
+            .get("@")?
             .values
             .iter()
-            .filter_map(BindingValue::lexical)
-            .filter_map(|value| value.parse::<usize>().ok())
-            .max()?;
-        let mut words = Vec::new();
-        for index in 1..=count {
-            let name = index.to_string();
-            let binding = self.bindings.get(&name)?;
-            for value in &binding.values {
-                if matches!(value, BindingValue::RuntimeUnknown(Some(text)) if text.is_empty())
-                    && binding.values.iter().any(|value| value.known().is_some())
-                {
-                    continue;
-                }
-                let projections = match value {
-                    BindingValue::RepeatedFields(repetition) => repetition.projections(),
-                    _ => vec![
-                        value
-                            .lexical()
-                            .cloned()
-                            .unwrap_or_else(|| format!("${{{name}}}")),
-                    ],
-                };
-                for projection in projections {
-                    let mut word = crate::record::Word::literal(projection);
-                    word.vars.push(name.clone());
-                    word.cardinality_unknown =
-                        uncertain || matches!(value, BindingValue::RepeatedFields(_));
-                    word.field_count_unknown = uncertain;
-                    word.expands = value.known().is_none()
-                        && !matches!(value, BindingValue::RepeatedFields(_));
-                    word.runtime_unknown = matches!(
-                        value,
-                        BindingValue::RuntimeUnknown(_) | BindingValue::RuntimeDerived(_)
-                    );
-                    word.shell_matches = matches!(
-                        value,
-                        BindingValue::ShellMatches(_) | BindingValue::ShellDerived(_)
-                    );
-                    words.push(word);
-                }
-            }
-        }
-        Some(words)
+            .filter_map(|value| match value {
+                BindingValue::Arguments(arguments) => Some(arguments.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        (!sequences.is_empty()).then_some(sequences)
     }
     fn expanded_binding(&self, word: &crate::record::Word, text: &str) -> BindingValue {
         let raw = if text != word.text {
@@ -1317,32 +1292,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     "set" if argv.get(index + 1).is_some_and(|word| word == "--") => {
                         self.positionals(&argv[index + 2..], scope);
                     }
-                    "shift" => {
-                        if scope.defining
-                            && scope.bindings.get("#").is_some_and(|binding| {
-                                binding.values.iter().any(|value| value.known().is_none())
-                            })
-                        {
-                            continue;
-                        }
-                        let amount = if argv.len() == index + 1 {
-                            Some(1)
-                        } else {
-                            argv.get(index + 1)
-                                .filter(|word| !word.expands)
-                                .and_then(|word| word.parse::<usize>().ok())
-                        };
-                        if let (Some(amount), Some(arguments)) = (amount, scope.positional_words())
-                        {
-                            if amount <= arguments.len() {
-                                self.positionals(&arguments[amount..], scope);
-                            }
-                        } else if scope.bindings.contains_key("#") {
-                            self.output.gap(CoverageGap::UnsupportedShellSyntax);
-                        } else {
-                            self.output.gap(CoverageGap::UnresolvedTarget);
-                        }
-                    }
+                    "shift" => self.shift(&argv[index + 1..], scope),
                     "printf" if argv.get(index + 1).is_some_and(|word| word == "-v") => {
                         if let Some(name) =
                             argv.get(index + 2).filter(|word| identifier(&word.text))
@@ -1411,7 +1361,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         let source = if argv.len() == index + 2 {
                             scope
                                 .repetition_source(&argv[index + 1])
-                                .map(|(_, source)| source)
+                                .map(|source| Box::new(source.1))
                         } else {
                             None
                         };
@@ -1445,6 +1395,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                                     .map(|word| word.text.as_str())
                                     .collect::<Vec<_>>()
                                     .join(" ")
+                                    .into()
                             });
                             self.source(&code, scope, depth + 1)?;
                             // Binding-changing eval and function/prefix interactions need a fuller model.
@@ -1476,11 +1427,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 .and_then(|at| {
                     scope
                         .repetition_source(&argv[at + 1])
-                        .map(|source| (at + 1, source))
+                        .map(|source| Box::new((at + 1, source)))
                 });
-            if let Some((at, _)) = &shell_source {
-                argv[*at].cardinality_unknown = false;
-                argv[*at].field_count_unknown = false;
+            if let Some(source) = &shell_source {
+                argv[source.0].cardinality_unknown = false;
+                argv[source.0].field_count_unknown = false;
             }
             let command = Command {
                 environment: Vec::new(),
@@ -1539,7 +1490,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     }
                 }
                 let functions = self.functions.clone();
-                let code = if let Some((_, (name, source))) = &shell_source {
+                let code = if let Some(source) = &shell_source {
+                    let (name, source) = source.1.as_ref();
                     if let Some(binding) = scope.bindings.get(name) {
                         child.bindings.insert(name.clone(), binding.clone());
                     }
@@ -1802,6 +1754,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 // Definitions have unknown argv, not an invocation with no arguments.
                 self.positionals(&[], &mut inner);
                 inner.assign("#".into(), vec![BindingValue::RuntimeUnknown(None)]);
+                inner.bindings.remove("@");
                 let inserted = self.running.insert(name.clone());
                 let functions = self.functions.clone();
                 let result = self.run(body, &mut inner, depth + 1, source_id, nested);
@@ -2775,7 +2728,61 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             }
         }
     }
+    fn shift(&mut self, args: &[crate::record::Word], scope: &mut Scope) {
+        if scope.defining
+            && scope
+                .bindings
+                .get("#")
+                .is_some_and(|binding| binding.values.iter().any(|value| value.known().is_none()))
+        {
+            return;
+        }
+        let amount = if args.is_empty() {
+            Some(1)
+        } else {
+            args.first()
+                .filter(|word| !word.expands)
+                .and_then(|word| word.parse::<usize>().ok())
+        };
+        if let (Some(amount), Some(sequences)) = (amount, scope.positional_sequences()) {
+            let before = scope.clone();
+            let mut exits = Vec::new();
+            for arguments in sequences {
+                let mut branch = before.clone();
+                if amount <= arguments.len() {
+                    self.positionals(&arguments[amount..], &mut branch);
+                }
+                exits.push(branch);
+            }
+            self.merge_bindings(scope, &exits);
+        } else if scope.bindings.contains_key("#") {
+            self.output.gap(CoverageGap::UnsupportedShellSyntax);
+        } else {
+            self.output.gap(CoverageGap::UnresolvedTarget);
+        }
+    }
     fn positionals(&mut self, argv: &[crate::record::Word], scope: &mut Scope) {
+        let bindings = argv
+            .iter()
+            .map(|word| scope.expanded_binding(word, &word.text))
+            .collect::<Vec<_>>();
+        let mut arguments = argv.to_vec();
+        for (index, (word, binding)) in arguments.iter_mut().zip(&bindings).enumerate() {
+            let name = (index + 1).to_string();
+            word.raw = format!("${{{name}}}");
+            word.vars = vec![name.clone()];
+            word.binding_candidates = BTreeMap::from([(name, word.text.clone())]);
+            word.runtime_unknown |= matches!(
+                binding,
+                BindingValue::RuntimeUnknown(_) | BindingValue::RuntimeDerived(_)
+            );
+            word.shell_matches |= matches!(
+                binding,
+                BindingValue::ShellMatches(_) | BindingValue::ShellDerived(_)
+            );
+        }
+        scope.local("@");
+        scope.assign("@".into(), vec![BindingValue::Arguments(arguments)]);
         scope.local("#");
         scope.assign(
             "#".into(),
@@ -2795,9 +2802,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             scope.local(&name);
             scope.bindings.remove(&name);
         }
-        for (index, word) in argv.iter().enumerate() {
+        for (index, (word, binding)) in argv.iter().zip(bindings).enumerate() {
             let name = (index + 1).to_string();
-            let binding = scope.expanded_binding(word, &word.text);
             scope.local(&name);
             scope.assign(
                 name,
@@ -3065,7 +3071,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 for value in &binding.values {
                     match value {
                         BindingValue::Known(value) => targets.push(value.clone()),
-                        BindingValue::RepeatedFields(_) | BindingValue::Undetermined => {
+                        BindingValue::RepeatedFields(_)
+                        | BindingValue::Arguments(_)
+                        | BindingValue::Undetermined => {
                             self.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
                         BindingValue::RuntimeUnknown(_)
@@ -3097,7 +3105,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 for value in &binding.values {
                     match value {
                         BindingValue::Known(value) => readings.push(value.clone()),
-                        BindingValue::RepeatedFields(_) | BindingValue::Undetermined => {
+                        BindingValue::RepeatedFields(_)
+                        | BindingValue::Arguments(_)
+                        | BindingValue::Undetermined => {
                             self.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
                         BindingValue::RuntimeUnknown(_)

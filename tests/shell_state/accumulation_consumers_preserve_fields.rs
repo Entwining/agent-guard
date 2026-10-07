@@ -1,6 +1,14 @@
 use crate::program_contract as contract;
 
 #[test]
+fn known_positional_sequences_keep_variadic_functions() {
+    contract::partition(
+        "sequences",
+        include_str!("../fixtures/rust-batch17c-fields.json"),
+    );
+}
+
+#[test]
 fn unconditional_appends_preserve_complete_values() {
     contract::partition(
         "exact",

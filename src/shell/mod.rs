@@ -341,26 +341,33 @@ fn expand_positional_argv(
     evaluator: &mut statements::Evaluator<'_, '_>,
 ) -> Option<Vec<Expanded>> {
     let list = words::positional_list(&raw.raw)?;
-    let mut arguments = scope.positional_words()?;
-    if arguments.iter().any(|word| word.field_count_unknown) {
+    let sequences = scope.positional_sequences()?;
+    if sequences.len() > 1 {
         evaluator.output.gap(CoverageGap::UnresolvedTarget);
-        if list.offset != "1" || list.length.is_some() {
-            evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
-        }
     }
-    let integer = |text: &str| {
-        text.trim().parse::<isize>().ok().or_else(|| {
-            scope
-                .contexts()
-                .get(text.trim())
-                .and_then(|value| value.parse().ok())
-        })
-    };
-    let offset = integer(&list.offset);
-    let length = list.length.as_deref().map(integer);
-    if offset.is_none() || length.is_some_and(|value| value.is_none_or(|n| n < 0)) {
-        evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
-    } else if let Some(offset) = offset {
+    let mut results = Vec::new();
+    for mut arguments in sequences {
+        if arguments.iter().any(|word| word.field_count_unknown) {
+            evaluator.output.gap(CoverageGap::UnresolvedTarget);
+            if list.offset != "1" || list.length.is_some() {
+                evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+            }
+        }
+        let integer = |text: &str| {
+            text.trim().parse::<isize>().ok().or_else(|| {
+                scope
+                    .contexts()
+                    .get(text.trim())
+                    .and_then(|value| value.parse().ok())
+            })
+        };
+        let offset = integer(&list.offset);
+        let length = list.length.as_deref().map(integer);
+        if offset.is_none() || length.is_some_and(|value| value.is_none_or(|n| n < 0)) {
+            evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+            return None;
+        }
+        let offset = offset?;
         let start = if offset < 0 {
             arguments.len().saturating_sub(offset.unsigned_abs())
         } else {
@@ -396,7 +403,7 @@ fn expand_positional_argv(
             .first()
             .cloned()
             .unwrap_or_else(|| Word::literal(String::new()));
-        return Some(vec![Expanded {
+        results.push(Expanded {
             word,
             split: arguments,
             positional: true,
@@ -407,9 +414,9 @@ fn expand_positional_argv(
             parameters: Vec::new(),
             unsupported: false,
             lexical_ranges: Vec::new(),
-        }]);
+        });
     }
-    None
+    Some(results)
 }
 
 fn expand_scoped(
