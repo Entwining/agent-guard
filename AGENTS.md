@@ -19,6 +19,7 @@ The production implementation uses Rust; Go owns development tools and runtime/l
 
 - For each new or changed rule or mechanism, temporarily remove or break it, observe a relevant test fail, restore it, and report both the failing test and the recovered result. A test that cannot detect the change needs a stronger assertion or removal; explain any mechanism that cannot be ablated safely.
 - Every concurrent construct needs a measured latency, throughput or behavior benefit on its actual workload; prefer a synchronous alternative when it is equally fast. Race correctness and timely child reaping are separate obligations from performance.
+- Fixtures contain only synthetic, machine-independent inputs and behavioral expectations; derive HOME-dependent paths from the test's own temporary root. Tests assert product behavior and account for each consumed row, rather than checking fixture provenance, self-consistency or fixed corpus totals; exact values belong only to a documented behavior partition or resource boundary.
 
 ## Documentation and release
 
