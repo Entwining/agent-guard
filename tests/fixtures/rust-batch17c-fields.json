@@ -1,38 +1,10 @@
 {
   "rows": [
-    {
-      "id": "newline-is-executable-syntax",
-      "partition": "complete",
-      "input": {
-        "command": "M=\"\"; for f in 'public\ncat .env' notes; do test -f public || M=\"$M $f\"; done; eval \"echo $M\""
-      },
-      "expected": "UR"
-    },
-    {
-      "id": "joined-positional-lengths",
-      "partition": "positionals",
-      "input": {
-        "command": "if test -f public; then set -- a; else set -- a .env; fi; cat \"$@\""
-      },
-      "expected": "D",
-      "wire_reason": "extract protected environment-file contents"
-    },
-    {
-      "id": "loop-sh-public",
-      "partition": "complete",
-      "input": {
-        "command": "M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; sh -c \"cat $M\""
-      },
-      "expected": "N"
-    },
-    {
-      "id": "loop-eval-syntax-not-data",
-      "partition": "complete",
-      "input": {
-        "command": "M=\"\"; for f in 'public; echo harmless' notes; do test -f public || M=\"$M $f\"; done; eval \"cat $M\""
-      },
-      "expected": "UR"
-    },
+    {"id":"newline-is-executable-syntax","partition":"complete","input":{"command":"M=\"\"; for f in 'public\ncat .env' notes; do test -f public || M=\"$M $f\"; done; eval \"echo $M\""},"expected":"UR"},
+    {"id":"joined-positional-lengths","partition":"positionals","input":{"command":"if test -f public; then set -- a; else set -- a .env; fi; cat \"$@\""},"expected":"D","wire_reason":"extract protected environment-file contents"},
+    {"id":"loop-sh-public","partition":"complete","input":{"command":"M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; sh -c \"cat $M\""},"expected":"N"},
+    {"id":"loop-eval-syntax-not-data","partition":"complete","input":{"command":"M=\"\"; for f in 'public; echo harmless' notes; do test -f public || M=\"$M $f\"; done; eval \"cat $M\""},"expected":"UR"},
+    {"id":"ifs-alternatives","partition":"ifs","input":{"command":"if test -f public; then IFS=:; else IFS=,; fi; X='a,.env'; cat $X"},"expected":"D","wire_reason":"extract protected environment-file contents"},
     {
       "id": "exact-echo-key",
       "partition": "exact",
@@ -201,6 +173,92 @@
       },
       "expected": "D",
       "wire_reason": "App Data"
+    },
+    {
+      "id": "ifs-comma-env",
+      "partition": "ifs",
+      "input": {
+        "command": "IFS=,; X='a,.env'; cat $X"
+      },
+      "expected": "D",
+      "wire_reason": "extract protected environment-file contents"
+    },
+    {
+      "id": "ifs-leading-key",
+      "partition": "ifs",
+      "input": {
+        "command": "X=',$H/.ssh/id_rsa'; IFS=,; cat $X"
+      },
+      "expected": "D",
+      "wire_reason": "extract protected private-key contents"
+    },
+    {
+      "id": "ifs-appdata",
+      "partition": "ifs",
+      "input": {
+        "command": "IFS=:; X='public:$C/data.txt'; cat $X"
+      },
+      "expected": "D",
+      "wire_reason": "App Data"
+    },
+    {
+      "id": "ifs-public",
+      "partition": "ifs",
+      "input": {
+        "command": "IFS=,; X='a,b'; cat $X"
+      },
+      "expected": "N"
+    },
+    {
+      "id": "ifs-empty-pattern",
+      "partition": "ifs",
+      "input": {
+        "command": "IFS=,; X=',.env'; grep $X"
+      },
+      "expected": "D",
+      "wire_reason": "extract protected environment-file contents"
+    },
+    {
+      "id": "ifs-mixed-delimiters",
+      "partition": "ifs",
+      "input": {
+        "command": "IFS=', '; X='  ,  .env  , '; grep $X"
+      },
+      "expected": "D",
+      "wire_reason": "extract protected environment-file contents"
+    },
+    {
+      "id": "ifs-empty",
+      "partition": "ifs",
+      "input": {
+        "command": "IFS=''; X='a,.env'; cat $X"
+      },
+      "expected": "N"
+    },
+    {
+      "id": "ifs-quoted",
+      "partition": "ifs",
+      "input": {
+        "command": "IFS=,; X='a,.env'; cat \"$X\""
+      },
+      "expected": "N"
+    },
+    {
+      "id": "ifs-unset",
+      "partition": "ifs",
+      "input": {
+        "command": "IFS=,; unset IFS; X='a .env'; cat $X"
+      },
+      "expected": "D",
+      "wire_reason": "extract protected environment-file contents"
+    },
+    {
+      "id": "ifs-unknown",
+      "partition": "ifs",
+      "input": {
+        "command": "IFS=$UNKNOWN; X='public,notes'; cat $X"
+      },
+      "expected": "UC"
     }
   ]
 }

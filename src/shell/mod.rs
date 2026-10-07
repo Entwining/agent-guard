@@ -440,12 +440,16 @@ fn expand_scoped(
         },
     )?;
     let mut contexts = vec![first];
-    for name in seed
+    let mut names = seed
         .word
         .vars
         .iter()
-        .collect::<std::collections::BTreeSet<_>>()
-    {
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>();
+    if !names.is_empty() && scope.bindings.contains_key("IFS") {
+        names.insert("IFS".into());
+    }
+    for name in &names {
         if name.parse::<usize>().is_ok()
             && scope.bindings.get("#").is_some_and(|binding| {
                 binding
@@ -456,7 +460,7 @@ fn expand_scoped(
         {
             evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
         }
-        if observe_bindings {
+        if observe_bindings && seed.word.vars.contains(name) {
             evaluator.armed_reference(name, scope, depth)?;
         }
         if let Some(binding) = scope.bindings.get(name) {
@@ -538,7 +542,7 @@ fn expand_scoped(
         } else {
             vec![true]
         } {
-            let runtime_variables = seed
+            let mut runtime_variables = seed
                 .word
                 .vars
                 .iter()
@@ -551,7 +555,14 @@ fn expand_scoped(
                     })
                 })
                 .cloned()
-                .collect();
+                .collect::<std::collections::BTreeSet<_>>();
+            if scope
+                .bindings
+                .get("IFS")
+                .is_some_and(|binding| binding.values.iter().any(|value| value.known().is_none()))
+            {
+                runtime_variables.insert("IFS".into());
+            }
             let mut expanded = words::expand(
                 &raw.raw,
                 &raw.syntax,

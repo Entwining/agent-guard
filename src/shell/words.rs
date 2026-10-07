@@ -274,54 +274,99 @@ pub(super) fn expand(
         out.arithmetic.push(raw.to_owned());
     }
     out.word.value = out.word.text.clone();
-    let mut offset = 0;
+    if splitting && context.runtime_variables.contains("IFS") {
+        out.word.expands = true;
+        out.word.runtime_unknown = true;
+    }
     out.split = if splitting {
-        out.word
-            .text
-            .split(|ch: char| {
-                let position = offset;
-                offset += ch.len_utf8();
-                ch.is_whitespace()
-                    && !out
-                        .lexical_ranges
-                        .iter()
-                        .any(|range| range.contains(&position))
-            })
-            .filter(|text| !text.is_empty())
-            .map(|text| {
-                let mut word = out.word.clone();
-                word.text = text.to_owned();
-                word.value = word.text.clone();
-                // Splitting yields slices of this buffer, so their offsets
-                // preserve the cwd-origin ranges without a second text search.
-                let start = text.as_ptr() as usize - out.word.text.as_ptr() as usize;
-                let end = start + text.len();
-                word.cwd_ranges = out
-                    .word
-                    .cwd_ranges
-                    .iter()
-                    .filter_map(|range| {
-                        if range.start >= start && range.end <= end {
-                            Some(range.start - start..range.end - start)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                if out.word.cwd_ranges.iter().any(|range| {
-                    range.start < end
-                        && range.end > start
-                        && !(range.start >= start && range.end <= end)
-                }) {
-                    out.unsupported = true;
-                }
-                word
-            })
-            .collect()
+        fields(
+            &out.word.text,
+            &out.lexical_ranges,
+            context.variables.get("IFS").map(String::as_str),
+        )
+        .into_iter()
+        .map(|text| {
+            let mut word = out.word.clone();
+            word.text = text.to_owned();
+            word.value = word.text.clone();
+            // Splitting yields slices of this buffer, so their offsets
+            // preserve the cwd-origin ranges without a second text search.
+            let start = text.as_ptr() as usize - out.word.text.as_ptr() as usize;
+            let end = start + text.len();
+            word.cwd_ranges = out
+                .word
+                .cwd_ranges
+                .iter()
+                .filter_map(|range| {
+                    if range.start >= start && range.end <= end {
+                        Some(range.start - start..range.end - start)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if out.word.cwd_ranges.iter().any(|range| {
+                range.start < end
+                    && range.end > start
+                    && !(range.start >= start && range.end <= end)
+            }) {
+                out.unsupported = true;
+            }
+            word
+        })
+        .collect()
     } else {
         vec![out.word.clone()]
     };
     Ok(out)
+}
+
+fn fields<'a>(
+    text: &'a str,
+    lexical: &[std::ops::Range<usize>],
+    ifs: Option<&str>,
+) -> Vec<&'a str> {
+    let delimiter = |at: usize, ch: char| {
+        ifs.map_or_else(|| ch.is_whitespace(), |ifs| ifs.contains(ch))
+            && !lexical.iter().any(|range| range.contains(&at))
+    };
+    let whitespace = |ch: char| {
+        if ifs.is_some() {
+            matches!(ch, ' ' | '\t' | '\n')
+        } else {
+            ch.is_whitespace()
+        }
+    };
+    let mut characters = text.char_indices().peekable();
+    let skip_whitespace = |characters: &mut std::iter::Peekable<std::str::CharIndices<'a>>| {
+        while characters
+            .peek()
+            .is_some_and(|&(at, ch)| delimiter(at, ch) && whitespace(ch))
+        {
+            characters.next();
+        }
+    };
+    let mut output = Vec::new();
+    skip_whitespace(&mut characters);
+    while let Some(&(start, _)) = characters.peek() {
+        while characters
+            .peek()
+            .is_some_and(|&(at, ch)| !delimiter(at, ch))
+        {
+            characters.next();
+        }
+        let end = characters.peek().map_or(text.len(), |&(at, _)| at);
+        output.push(&text[start..end]);
+        skip_whitespace(&mut characters);
+        if characters
+            .peek()
+            .is_some_and(|&(at, ch)| delimiter(at, ch) && !whitespace(ch))
+        {
+            characters.next();
+        }
+        skip_whitespace(&mut characters);
+    }
+    output
 }
 
 fn brace_text(raw: &str) -> Result<(String, bool), CheckError> {

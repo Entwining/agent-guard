@@ -39,3 +39,8 @@ fn fixed_pattern_and_archive_roles_ignore_operand_count() {
         include_str!("../fixtures/rust-batch17c-fields.json"),
     );
 }
+
+#[test]
+fn literal_ifs_controls_unquoted_field_splitting() {
+    contract::partition("ifs", include_str!("../fixtures/rust-batch17c-fields.json"));
+}
