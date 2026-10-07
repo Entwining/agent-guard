@@ -119,6 +119,8 @@ pub struct Observation {
     candidate_pairs: usize,
     #[cfg(test)]
     pub(crate) source_entries: usize,
+    #[cfg(test)]
+    pub(crate) cwd_candidates: usize,
 }
 
 #[derive(Debug, Clone)]

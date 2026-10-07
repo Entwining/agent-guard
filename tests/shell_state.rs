@@ -18,6 +18,8 @@ pub mod function_argv_preserves_fields_and_scope;
 pub mod indexed_parameter_expansion_evaluates_binding;
 #[path = "shell_state/literal_for_lists_execute_each_value_exactly.rs"]
 pub mod literal_for_lists_execute_each_value_exactly;
+#[path = "shell_state/loop_cwd_widening_preserves_protected_candidates.rs"]
+pub mod loop_cwd_widening_preserves_protected_candidates;
 #[path = "shell_state/matrix_candidates_keep_all_shell_read_operands.rs"]
 pub mod matrix_candidates_keep_all_shell_read_operands;
 #[path = "shell_state/nested_functions_follow_dynamic_local_scope.rs"]

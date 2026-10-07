@@ -1,0 +1,7 @@
+{"rows":[
+{"id":"loop-cd-repeat","partition":"cwd","input":{"command":"for x in 1 2; do cd $x; done; for x in 1 2; do cd $x; done; for x in 1 2; do cd $x; done"},"expected":"UC"},
+{"id":"loop-cd-runtime-header","partition":"cwd","input":{"command":"for x in $(printf public); do cd \"$x\"; done"},"expected":"UC"},
+{"id":"loop-cd-nested","partition":"cwd","input":{"command":"for r in a b c d; do for b in x y z; do cd $r/$b && ls; done; done"},"expected":"UC"},
+{"id":"loop-cd-protected-after","partition":"cwd","input":{"command":"for x in public $H/Library/Containers; do cd $x; done; cat public"},"expected":"D"},
+{"id":"loop-cd-private-after","partition":"cwd","input":{"command":"for x in public $H/.ssh; do cd $x; done; cat public"},"expected":"D"}
+]}

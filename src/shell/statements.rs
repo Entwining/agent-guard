@@ -7,6 +7,73 @@ use crate::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+#[cfg(test)]
+mod loop_cost {
+    #[test]
+    fn rejected_loop_stops_at_the_record_budget() {
+        for width in [2, 4] {
+            let items = (0..width)
+                .map(|n| format!("public{n}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let source = format!(
+                "hit=\"\"; for p in {items}; do for c in $(printf public); do [ \"$(printf public)\" = public ] && hit=\"$hit ${{c:0:7}}:$p\"; done; done; echo \"$hit\""
+            );
+            let observation = crate::shell::observe(
+                &source,
+                crate::shell::Arm::Brush,
+                "/synthetic/home",
+                "/synthetic/project",
+                true,
+            )
+            .unwrap();
+            assert!(
+                observation
+                    .gaps
+                    .contains(&crate::CoverageGap::InspectionBudget)
+            );
+            assert!(
+                observation.source_entries <= 200,
+                "width={width}, recursive sources={}",
+                observation.source_entries
+            );
+        }
+    }
+    #[test]
+    fn loop_directory_work_grows_polynomially() {
+        let cost = |width| {
+            let items = (0..width)
+                .map(|n| format!("public{n}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let source =
+                format!("for r in a b c d; do for b in {items}; do cd $r/$b && ls; done; done");
+            let observation = crate::shell::observe(
+                &source,
+                crate::shell::Arm::Brush,
+                "/synthetic/home",
+                "/synthetic/project",
+                true,
+            )
+            .unwrap();
+            println!(
+                "width={width}, cwd={}, gaps={:?}",
+                observation.cwd_candidates, observation.gaps
+            );
+            assert!(
+                !observation
+                    .gaps
+                    .contains(&crate::CoverageGap::InspectionBudget)
+            );
+            observation.cwd_candidates
+        };
+        let small = cost(5);
+        let large = cost(10);
+        println!("cwd candidates {small} -> {large}");
+        assert!(small > 0 && large <= small * 4);
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum BindingValue {
     Known(String),
@@ -506,6 +573,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         for branch in branches {
             candidates.push(branch.directory.current.clone());
             candidates.extend(branch.directory.alternatives.clone());
+            scope.directory.relative_growth = scope
+                .directory
+                .relative_growth
+                .max(branch.directory.relative_growth);
             scope.directory.gap = scope.directory.gap.take().or(branch.directory.gap.clone());
         }
         scope
@@ -523,6 +594,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         // Keep compound temporaries off the recursively entered command frame.
         #[cfg(test)]
         cwd::count_failure_paths(scope.directory.failures.as_ref().map_or(0, Vec::len));
+        #[cfg(test)]
+        {
+            self.output.cwd_candidates += scope.directory.alternatives.len() + 1;
+        }
         let Statement::Command {
             assignments,
             argv,
@@ -1404,7 +1479,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         {
                             break;
                         }
-                        if self.inspected >= 512 || completed >= 512 {
+                        if self.inspected >= 512
+                            || completed >= 512
+                            || self.output.script.commands.len() > 512
+                        {
                             self.output.gap(CoverageGap::InspectionBudget);
                             break;
                         }
@@ -1428,6 +1506,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 {
                     inner.loops.push(Vec::new());
                     for value in literal_values {
+                        if inner.directory.relative_growth > before.directory.relative_growth
+                            && inner.directory.current != before.directory.current
+                        {
+                            inner.directory.widen_loop(&before.directory);
+                        }
                         inner.assign(variable.clone(), vec![BindingValue::Known(value)]);
                         self.run(body, &mut inner, depth + 1, source_id, nested)?;
                     }
@@ -1474,7 +1557,23 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
                 let mut branches = vec![before, inner.clone()];
                 let mut completed = 1;
+                let mut cwd_widened = false;
                 while !carried_glob_cwd && iterations.is_none_or(|n| completed < n) {
+                    if inner.directory.relative_growth > branches[0].directory.relative_growth
+                        && (inner.directory.current != branches[0].directory.current
+                            || iterations.is_none()
+                                && inner.directory.alternatives
+                                    != branches[0].directory.alternatives)
+                    {
+                        if iterations.is_none() {
+                            if !cwd_widened {
+                                inner.directory.widen_unknown_loop(&branches[0].directory);
+                                cwd_widened = true;
+                            }
+                        } else {
+                            inner.directory.widen_loop(&branches[0].directory);
+                        }
+                    }
                     let prior = inner.clone();
                     self.run(body, &mut inner, depth + 1, source_id, nested)?;
                     completed += 1;
@@ -1485,7 +1584,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     {
                         break;
                     }
-                    if self.inspected >= 512 || completed >= 512 {
+                    if self.inspected >= 512
+                        || completed >= 512
+                        || self.output.script.commands.len() > 512
+                    {
                         self.output.gap(CoverageGap::InspectionBudget);
                         break;
                     }
@@ -2340,7 +2442,20 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 .push((self.output.script.commands.len(), scope.defining));
         }
         self.output.script.commands.push(command.clone());
-        for cwd in &scope.directory.alternatives {
+        let effects = crate::targets::infer(&command, &command.cwd, self.frontend.host);
+        let cwd_dependent = command.argv.iter().any(|word| word.pwd)
+            || !effects.code.is_empty()
+            || !effects.inline.is_empty()
+            || effects
+                .targets
+                .iter()
+                .any(|target| target.effect != crate::record::Effect::Name || target.glob);
+        for cwd in scope
+            .directory
+            .alternatives
+            .iter()
+            .filter(|_| cwd_dependent)
+        {
             let cwd = cwd.render();
             let mut copy = command.clone();
             copy.cwd = cwd.clone();
@@ -2348,6 +2463,13 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 if word.pwd {
                     word.reproject_cwd(&cwd);
                 }
+            }
+            if !command.nested
+                && command.pipeline.is_none()
+                && !scope.piped
+                && self.output.script.commands.contains(&copy)
+            {
+                continue;
             }
             if copy.program.is_some() && !copy.function {
                 self.unresolved_calls
@@ -2493,6 +2615,16 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 .map(|path| BindingValue::Known(path.render()))
                 .collect(),
         );
+        if program == "cd"
+            && targets.iter().any(|target| {
+                !target.starts_with('/')
+                    && target
+                        .split('/')
+                        .any(|part| !["", ".", ".."].contains(&part))
+            })
+        {
+            scope.directory.relative_growth += 1;
+        }
         scope
             .directory
             .move_to(&targets, physical, disputed, self.frontend.host.home);

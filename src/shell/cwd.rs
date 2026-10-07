@@ -3,6 +3,7 @@ use crate::CoverageGap;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum CwdPath {
+    LoopUnknown(String),
     Logical(String),
     Physical { prefix: String, tail: String },
 }
@@ -18,6 +19,7 @@ impl CwdPath {
     }
     pub fn render(&self) -> String {
         match self {
+            Self::LoopUnknown(base) => format!("{base}/${{__loop_cwd__}}"),
             Self::Logical(path) => path.clone(),
             Self::Physical { prefix, tail } => {
                 if tail.is_empty() {
@@ -40,6 +42,7 @@ impl CwdPath {
             };
         }
         match self {
+            Self::LoopUnknown(base) => Self::LoopUnknown(base.clone()),
             Self::Logical(path) => {
                 let raw = format!("{path}/{target}");
                 if physical {
@@ -102,6 +105,7 @@ fn clean(path: &str) -> String {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Directory {
+    pub relative_growth: usize,
     pub current: CwdPath,
     pub alternatives: Vec<CwdPath>,
     pub failures: Option<Vec<CwdPath>>,
@@ -109,8 +113,37 @@ pub(super) struct Directory {
 }
 
 impl Directory {
+    pub fn widen_unknown_loop(&mut self, initial: &Directory) {
+        self.widen_loop(initial);
+        let unknown = self
+            .alternatives
+            .iter()
+            .find(|path| matches!(path, CwdPath::LoopUnknown(_)))
+            .cloned();
+        if let Some(unknown) = unknown {
+            let prior = std::mem::replace(&mut self.current, unknown);
+            self.alternatives.retain(|path| path != &self.current);
+            extend_unique(&mut self.alternatives, [prior]);
+        }
+    }
+    pub fn widen_loop(&mut self, initial: &Directory) {
+        let mut origins = self.alternatives.clone();
+        origins.push(self.current.clone());
+        origins.push(initial.current.clone());
+        origins.push(CwdPath::LoopUnknown(match &initial.current {
+            CwdPath::LoopUnknown(base) => base.clone(),
+            path => path.render(),
+        }));
+        self.alternatives.clear();
+        extend_unique(
+            &mut self.alternatives,
+            origins.into_iter().filter(|path| path != &self.current),
+        );
+        self.gap = self.gap.take().or(Some(CoverageGap::UnresolvedTarget));
+    }
     pub fn new(path: &str) -> Self {
         Self {
+            relative_growth: 0,
             current: CwdPath::initial(path),
             alternatives: Vec::new(),
             failures: None,
@@ -153,8 +186,15 @@ impl Directory {
             candidates.extend(stayed);
         }
         candidates.extend(nexts.into_iter().skip(1));
-        for cwd in &self.alternatives {
-            candidates.extend(move_from(cwd));
+        if !matches!(self.current, CwdPath::LoopUnknown(_))
+            && !self
+                .alternatives
+                .iter()
+                .any(|path| matches!(path, CwdPath::LoopUnknown(_)))
+        {
+            for cwd in &self.alternatives {
+                candidates.extend(move_from(cwd));
+            }
         }
         let (alternatives, gap) = bounded(&next, candidates, home);
         self.alternatives = alternatives;
@@ -187,7 +227,12 @@ pub(super) fn bounded(
             result.push(path);
         }
     }
-    if result.len() > 16 {
+    if result.len() > 16
+        && !matches!(current, CwdPath::LoopUnknown(_))
+        && !result
+            .iter()
+            .any(|path| matches!(path, CwdPath::LoopUnknown(_)))
+    {
         (
             vec![
                 CwdPath::Logical(home.into()),
