@@ -179,6 +179,14 @@ Follow the printed prerequisite, attribution, deployment, and test steps before 
 
 Use the Rust toolchain pinned in `rust-toolchain.toml` (1.98.1) and the Go version pinned in `go.mod`. The production runner uses Rust; development tools and runtime harnesses use Go. Cargo's exact parser pins preserve policy semantics, and `Cargo.lock` binds dependency resolution.
 
+Install cargo-deny 0.20.2 before running the checks:
+
+```sh
+cargo install --locked --version 0.20.2 cargo-deny
+```
+
+Keep Cargo's executable directory on `PATH` so `cargo deny --version` reports `cargo-deny 0.20.2`. `cargo deny --locked check` fetches the RustSec advisory database and requires network access; advisory, license, ban and source checks remain enabled. CI installs the same version from the official arm64 macOS release archive and verifies its pinned SHA-256 before extraction.
+
 Keep build outputs, module and build caches, and evidence outside every checkout:
 
 ```sh
