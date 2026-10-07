@@ -9,6 +9,58 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 mod tests;
 
+pub(super) struct PositionalList {
+    pub offset: String,
+    pub length: Option<String>,
+    pub concatenate: bool,
+    pub quoted: bool,
+}
+
+pub(super) fn positional_list(raw: &str) -> Option<PositionalList> {
+    let pieces = word::parse(raw, &ParserOptions::default()).ok()?;
+    let [piece] = pieces.as_slice() else {
+        return None;
+    };
+    let (piece, quoted) = match &piece.piece {
+        WordPiece::DoubleQuotedSequence(inner) => {
+            let [piece] = inner.as_slice() else {
+                return None;
+            };
+            (&piece.piece, true)
+        }
+        piece => (piece, false),
+    };
+    let WordPiece::ParameterExpansion(expr) = piece else {
+        return None;
+    };
+    let Parameter::Special(word::SpecialParameter::AllPositionalParameters { concatenate }) =
+        parameter(expr)?
+    else {
+        return None;
+    };
+    let (offset, length) = match expr {
+        ParameterExpr::Parameter {
+            indirect: false, ..
+        } => ("1".into(), None),
+        ParameterExpr::Substring {
+            indirect: false,
+            offset,
+            length,
+            ..
+        } => (
+            offset.value.clone(),
+            length.as_ref().map(|value| value.value.clone()),
+        ),
+        _ => return None,
+    };
+    Some(PositionalList {
+        offset,
+        length,
+        concatenate: *concatenate,
+        quoted,
+    })
+}
+
 pub(super) fn first_literal(raw: &str) -> Option<String> {
     let pieces = word::parse(raw, &ParserOptions::default()).ok()?;
     match &pieces.first()?.piece {
@@ -46,6 +98,7 @@ pub(super) fn expand(
     if matches!(syntax, super::WordSyntax::Literal) {
         let word = Word::literal(raw.to_owned());
         return Ok(Expanded {
+            positional: false,
             split: vec![word.clone()],
             word,
             nested: Vec::new(),
@@ -66,6 +119,7 @@ pub(super) fn expand(
         brace_text(raw)?
     };
     let mut out = Expanded {
+        positional: false,
         word: Word::literal(String::new()),
         split: Vec::new(),
         nested: Vec::new(),
@@ -308,6 +362,7 @@ fn fragment(
     expansion: &ExpansionContext<'_>,
 ) -> Result<Expanded, CheckError> {
     let mut out = Expanded {
+        positional: false,
         word: Word::literal(String::new()),
         split: Vec::new(),
         nested: Vec::new(),
@@ -481,6 +536,11 @@ fn fill(
                         parameter: Parameter::Positional(index),
                         indirect: false,
                     } => Some(index.to_string()),
+                    ParameterExpr::Parameter {
+                        parameter:
+                            Parameter::Special(word::SpecialParameter::PositionalParameterCount),
+                        indirect: false,
+                    } => Some("#".into()),
                     ParameterExpr::Parameter {
                         parameter: Parameter::NamedWithIndex { name, index },
                         indirect: false,

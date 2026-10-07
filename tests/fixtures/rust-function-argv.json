@@ -1,0 +1,21 @@
+{"rows":[
+{"id":"fn-at","partition":"argv","input":{"command":"f() { cat \"$@\"; }; f .env"},"expected":"D"},
+{"id":"fn-star","partition":"argv","input":{"command":"f() { cat $*; }; f public .env"},"expected":"D"},
+{"id":"fn-braced-at","partition":"argv","input":{"command":"f() { cat \"${@}\"; }; f .env"},"expected":"D"},
+{"id":"fn-slice","partition":"argv","input":{"command":"f() { cat \"${@:2}\"; }; f public .env"},"expected":"D"},
+{"id":"fn-space-public","partition":"argv","input":{"command":"f() { cat \"$@\"; }; f 'public name'"},"expected":"UC"},
+{"id":"fn-empty","partition":"argv","input":{"command":"f() { cat \"$@\"; }; f"},"expected":"UC"},
+{"id":"fn-runtime-field","partition":"argv","input":{"command":"f() { cat \"$@\"; }; f $p .env"},"expected":"D"},
+{"id":"fn-runtime-private-prefix","partition":"argv","input":{"command":"p=$H/.ssh/id_$name; f() { cat \"$@\"; }; f \"$p\""},"expected":"D"},
+{"id":"fn-env-definition","partition":"definition","input":{"command":"f() { env \"$@\"; }; f true"},"expected":"UC"},
+{"id":"fn-env-empty-call","partition":"definition","input":{"command":"f() { env \"$@\"; }; f"},"expected":"D"},
+{"id":"fn-restore","partition":"argv","input":{"command":"set -- .env; f() { cat \"$@\"; }; f public; cat \"$@\""},"expected":"D"},
+{"id":"fn-shift","partition":"shift","input":{"command":"f() { shift; cat \"$1\"; }; f public .env"},"expected":"D"},
+{"id":"fn-shift-two","partition":"shift","input":{"command":"f() { shift 2; cat \"$@\"; }; f a b .env"},"expected":"D"},
+{"id":"fn-shift-unknown","partition":"shift","input":{"command":"f() { shift $n; cat \"$1\"; }; f public .env"},"expected":"UR"},
+{"id":"fn-for","partition":"for","input":{"command":"f() { for x; do cat \"$x\"; done; }; f .env"},"expected":"D"},
+{"id":"fn-for-explicit","partition":"for","input":{"command":"f() { for x in \"$@\"; do cat \"$x\"; done; }; f .env"},"expected":"D"},
+{"id":"fn-helper","partition":"command","input":{"command":"t() { shift; \"$@\"; }; t x ls"},"expected":"UC"},
+{"id":"fn-helper-read","partition":"command","input":{"command":"t() { \"$@\"; }; t cat .env"},"expected":"D"},
+{"id":"fn-helper-recursive","partition":"command","input":{"command":"t() { \"$@\"; }; t ls -R $H/Library/Containers"},"expected":"D"}
+]}

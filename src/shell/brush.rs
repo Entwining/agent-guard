@@ -285,12 +285,19 @@ fn walk_compound(
                             .get(index + 2)
                             .is_some_and(|b| super::lexer::shell_blank(*b) || *b == b';')
                 });
-            let header = group
+            let mut header: Vec<Word> = group
                 .values
                 .iter()
                 .flatten()
                 .map(|v| word(source, v))
                 .collect::<Result<_, _>>()?;
+            if !explicit_in && group.values.is_none() {
+                header.push(Word {
+                    raw: "\"$@\"".into(),
+                    syntax: super::WordSyntax::Shell,
+                    expansions: Vec::new(),
+                });
+            }
             let mut body = Vec::new();
             walk_list(source, &group.body.list, &mut body)?;
             output.push(Statement::Loop {

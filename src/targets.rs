@@ -191,7 +191,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.variable = !(program != "echo" && args.first().is_some_and(|arg| arg == "-v"))
                 && command.variables().any(|name| secret_name(name));
         }
-        "true" | "false" | ":" | "unset" | "local" | "break" | "continue" | "return" => {}
+        "true" | "false" | ":" | "unset" | "local" | "break" | "continue" | "return" | "shift" => {}
         "tr" => {}
         "mktemp" => {
             effects.gaps.push(CoverageGap::UnknownProgram {

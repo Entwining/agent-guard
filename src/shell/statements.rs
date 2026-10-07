@@ -160,6 +160,47 @@ impl Scope {
             })
             .collect::<BTreeMap<_, _>>()
     }
+    pub fn positional_words(&self) -> Option<Vec<crate::record::Word>> {
+        let count = self.bindings.get("#")?;
+        if count.values.len() != 1 {
+            return None;
+        }
+        if count.values[0].known().is_none() && self.defining {
+            let mut word = crate::record::Word::literal("${@}".into());
+            word.expands = true;
+            word.runtime_unknown = true;
+            word.vars.push("@".into());
+            return Some(vec![word]);
+        }
+        let count = count.values[0].known()?.parse::<usize>().ok()?;
+        let mut words = Vec::new();
+        for index in 1..=count {
+            let name = index.to_string();
+            let binding = self.bindings.get(&name)?;
+            if binding.values.len() != 1 {
+                return None;
+            }
+            let value = &binding.values[0];
+            let mut word = crate::record::Word::literal(
+                value
+                    .lexical()
+                    .cloned()
+                    .unwrap_or_else(|| format!("${{{name}}}")),
+            );
+            word.vars.push(name);
+            word.expands = value.known().is_none();
+            word.runtime_unknown = matches!(
+                value,
+                BindingValue::RuntimeUnknown(_) | BindingValue::RuntimeDerived(_)
+            );
+            word.shell_matches = matches!(
+                value,
+                BindingValue::ShellMatches(_) | BindingValue::ShellDerived(_)
+            );
+            words.push(word);
+        }
+        Some(words)
+    }
     fn expanded_binding(&self, word: &crate::record::Word, text: &str) -> BindingValue {
         if word.shell_matches {
             return if word.globs || word.expands {
@@ -597,7 +638,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             } else {
                 for expanded in self.expand(raw, scope, depth)? {
                     choices.push(expanded.split);
-                    choices.push(vec![expanded.word]);
+                    if !expanded.positional {
+                        choices.push(vec![expanded.word]);
+                    }
                 }
             }
             choices.dedup();
@@ -737,7 +780,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     && (resolved.shell
                         || argv[*i] == "eval" && resolved.wrappers.iter().any(|w| w == "command"))
             }) {
-                if argv[index].expands && !self.functions.is_empty() {
+                if argv[index].expands && !self.functions.is_empty() && !scope.defining {
                     self.output.gap(CoverageGap::UnsupportedShellSyntax);
                 }
                 if argv[index] == "let" {
@@ -750,6 +793,32 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     "unset" => self.unset(&argv[index + 1..], scope),
                     "set" if argv.get(index + 1).is_some_and(|word| word == "--") => {
                         self.positionals(&argv[index + 2..], scope);
+                    }
+                    "shift" => {
+                        if scope.defining
+                            && scope.bindings.get("#").is_some_and(|binding| {
+                                binding.values.iter().any(|value| value.known().is_none())
+                            })
+                        {
+                            continue;
+                        }
+                        let amount = if argv.len() == index + 1 {
+                            Some(1)
+                        } else {
+                            argv.get(index + 1)
+                                .filter(|word| !word.expands)
+                                .and_then(|word| word.parse::<usize>().ok())
+                        };
+                        if let (Some(amount), Some(arguments)) = (amount, scope.positional_words())
+                        {
+                            if amount <= arguments.len() {
+                                self.positionals(&arguments[amount..], scope);
+                            }
+                        } else if scope.bindings.contains_key("#") {
+                            self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                        } else {
+                            self.output.gap(CoverageGap::UnresolvedTarget);
+                        }
                     }
                     "printf" if argv.get(index + 1).is_some_and(|word| word == "-v") => {
                         if let Some(name) =
@@ -1090,6 +1159,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 inner.isolated = scope.isolated;
                 inner.defining = true;
                 inner.enter_function();
+                // Definitions have unknown argv, not an invocation with no arguments.
+                self.positionals(&[], &mut inner);
+                inner.assign("#".into(), vec![BindingValue::RuntimeUnknown(None)]);
                 let inserted = self.running.insert(name.clone());
                 let functions = self.functions.clone();
                 let result = self.run(body, &mut inner, depth + 1, source_id, nested);
@@ -2015,6 +2087,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
     }
     fn positionals(&mut self, argv: &[crate::record::Word], scope: &mut Scope) {
+        scope.local("#");
+        scope.assign(
+            "#".into(),
+            vec![BindingValue::Known(argv.len().to_string())],
+        );
         let prior = scope
             .bindings
             .keys()

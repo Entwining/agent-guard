@@ -12,6 +12,8 @@ pub mod bound_arithmetic_sinks_observe_subscript_code;
 pub mod differential;
 #[path = "shell_state/eval_runtime_output_is_unresolved_code.rs"]
 pub mod eval_runtime_output_is_unresolved_code;
+#[path = "shell_state/function_argv_preserves_fields_and_scope.rs"]
+pub mod function_argv_preserves_fields_and_scope;
 #[path = "shell_state/indexed_parameter_expansion_evaluates_binding.rs"]
 pub mod indexed_parameter_expansion_evaluates_binding;
 #[path = "shell_state/literal_for_lists_execute_each_value_exactly.rs"]

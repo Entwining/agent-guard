@@ -283,6 +283,75 @@ impl statements::Evaluator<'_, '_> {
     }
 }
 
+fn expand_positional_argv(
+    raw: &RawWord,
+    scope: &statements::Scope,
+    evaluator: &mut statements::Evaluator<'_, '_>,
+) -> Option<Vec<Expanded>> {
+    let list = words::positional_list(&raw.raw)?;
+    let mut arguments = scope.positional_words()?;
+    let integer = |text: &str| {
+        text.trim().parse::<isize>().ok().or_else(|| {
+            scope
+                .contexts()
+                .get(text.trim())
+                .and_then(|value| value.parse().ok())
+        })
+    };
+    let offset = integer(&list.offset);
+    let length = list.length.as_deref().map(integer);
+    if offset.is_none() || length.is_some_and(|value| value.is_none_or(|n| n < 0)) {
+        evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+    } else if let Some(offset) = offset {
+        let start = if offset < 0 {
+            arguments.len().saturating_sub(offset.unsigned_abs())
+        } else {
+            (offset as usize).saturating_sub(1)
+        };
+        arguments = arguments
+            .into_iter()
+            .skip(start)
+            .take(length.flatten().map_or(usize::MAX, |n| n as usize))
+            .collect();
+        if list.concatenate && list.quoted {
+            let text = arguments
+                .iter()
+                .map(Word::as_str)
+                .collect::<Vec<_>>()
+                .join(" ");
+            let mut joined = Word::literal(text);
+            for argument in &arguments {
+                joined.expands |= argument.expands;
+                joined.runtime_unknown |= argument.runtime_unknown;
+                joined.shell_matches |= argument.shell_matches;
+                for name in &argument.vars {
+                    if !joined.vars.contains(name) {
+                        joined.vars.push(name.clone());
+                    }
+                }
+            }
+            arguments = vec![joined];
+        }
+        let word = arguments
+            .first()
+            .cloned()
+            .unwrap_or_else(|| Word::literal(String::new()));
+        return Some(vec![Expanded {
+            word,
+            split: arguments,
+            positional: true,
+            nested: Vec::new(),
+            arithmetic: Vec::new(),
+            references: Vec::new(),
+            tilde: false,
+            parameters: Vec::new(),
+            unsupported: false,
+            lexical_ranges: Vec::new(),
+        }]);
+    }
+    None
+}
+
 fn expand_scoped(
     raw: &RawWord,
     scope: &mut statements::Scope,
@@ -290,6 +359,9 @@ fn expand_scoped(
     depth: usize,
     observe_bindings: bool,
 ) -> Result<Vec<Expanded>, CheckError> {
+    if let Some(arguments) = expand_positional_argv(raw, scope, evaluator) {
+        return Ok(arguments);
+    }
     let host = evaluator.frontend.host;
     let first = scope.contexts();
     let cwd = scope.directory.current.render();
@@ -474,6 +546,7 @@ fn expand_scoped(
 }
 
 struct Expanded {
+    positional: bool,
     split: Vec<Word>,
     word: Word,
     nested: Vec<String>,
@@ -488,6 +561,25 @@ struct Expanded {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn quoted_star_preserves_unknown_argument_metadata() {
+        let observation = observe(
+            "f() { cat \"$*\"; }; f $value public",
+            Arm::Brush,
+            "/synthetic/home",
+            "/synthetic/project",
+            true,
+        )
+        .unwrap();
+        assert!(observation.script.commands.iter().any(|command| {
+            command.argv.first().is_some_and(|word| word == "cat")
+                && command.argv.get(1).is_some_and(|word| {
+                    word.ends_with("public")
+                        && word.runtime_unknown
+                        && word.vars.contains(&"1".into())
+                })
+        }));
+    }
     #[test]
     fn complete_alternative_argv() {
         for &arm in ACCEPTANCE_ARMS {
