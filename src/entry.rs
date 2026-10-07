@@ -1,4 +1,4 @@
-//! Executable boundary for the offline Rust trial; no hook registers this runner.
+//! Runner and checker boundaries for the native guard behind the shell entry.
 
 use crate::{
     Context, Event,

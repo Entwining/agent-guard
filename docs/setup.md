@@ -5,7 +5,7 @@
 ## Prerequisites
 
 - Apple Silicon macOS with a local Claude Code, Codex, or Pi session.
-- Homebrew for installation. Go is a build dependency managed by the formula.
+- Homebrew for installation. The source package builds with Rust; Go is required only for development tools and acceptance harnesses.
 - Permission to edit the configuration for the runtime you choose. Codex's managed configuration uses the system `/etc/codex/requirements.toml` and may require an administrator.
 
 The Homebrew executable is `/opt/homebrew/bin/agent-guard`. The examples below use that path; replace it if your Homebrew prefix differs.
@@ -14,6 +14,8 @@ The Homebrew executable is `/opt/homebrew/bin/agent-guard`. The examples below u
 
 Install from tagged GitHub source through the LoopHubs tap:
 
+> **AI agents:** Read this guide before installation or registration. Use existing authorization for the exact action and target; otherwise obtain it before installing or changing runtime configuration.
+
 ```sh
 brew tap loophubs/tap
 brew install loophubs/tap/agent-guard
@@ -21,6 +23,8 @@ brew install loophubs/tap/agent-guard
 ```
 
 For an existing Homebrew installation, use `brew update` followed by `brew upgrade loophubs/tap/agent-guard`.
+
+The Rust source cutover does not update an installed hook. A Rust release requires a tagged version and a tap formula that builds with Rust instead of Go. Until those publication steps are accepted, existing installations retain their released binary. The hook path and registration formats below are unchanged.
 
 ## Register Claude Code
 
@@ -117,6 +121,10 @@ brew uninstall loophubs/tap/agent-guard
 
 The guard denies a call when its own check fails or times out because it cannot establish that the call is safe. Exit code `0` means the guard found no objection; it does not override the runtime's own permission rules.
 
+The serialized event is limited to 262,144 bytes, and shell substitutions/groups to 64 simultaneous nested delimiters. Excess input or nesting, a relative working directory, and invalid UTF-8 produce completed refusals: native checker status `2`, native runner status `3`, and hook status `2`. The reason asks the caller to shorten or split the request, supply an absolute working directory, or encode UTF-8. Malformed events, filesystem probe faults and other operational errors remain failed checks; the hook blocks them too. The checker deadline is 2.5 seconds, the runner deadline 2.8 seconds, and the shell entry deadline 3 seconds, below the example consumer timeout of 5 seconds. Cancellation must complete and reap children.
+
+The byte cap was measured on release builds using public literal arguments, data-heavy Git pathspec substitutions and repeated statements from 64 KiB through 8 MiB. The substitution shape took 0.318 seconds at 256 KiB, 0.631 at 512 KiB and 1.286 at 1 MiB. 256 KiB was the largest measured warm size below 0.5 seconds; its serialized envelope was 262,286 bytes, so the cap is 262,144. The first cold literal launch took 0.988 seconds. These finite measurements describe those shapes on that host, not a universal latency guarantee. Depth bounds simultaneous nesting, not statement count or list position.
+
 The guard is a bounded preflight check. It decides from the targets it infers under modelled command semantics. The limits below fall into three families; operating system read restrictions must cover the reads they leave out.
 
 **Observation coverage** is which calls reach the guard. A disabled, skipped, or unregistered hook cannot inspect a call, and a runtime that treats a hook launch failure or its own hook timeout as non-blocking lets the call proceed unchecked; custom tools and processes outside the registered runtime are outside this coverage. `Glob` is not covered by the matchers or guard input handlers. Codex's example checks Bash calls, while the Pi adapter checks the five named tools and blocks the call itself when the guard fails, is missing or times out.
@@ -125,11 +133,28 @@ The guard is a bounded preflight check. It decides from the targets it infers un
 
 - The guard treats a program it does not know as reading every path it is handed, so `aws s3 cp .env s3://bucket/x`, `open .env`, and `python3 script.py .env` are denied. Pass a credential file through the program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`, which the guard allows for the clients its program table models. A file the client uses itself, such as `ssh -i` or `docker run --env-file`, is allowed by design; the guard does not control what the client does with its contents.
 - A read whose target the program picks while it runs cannot be decided before execution: an interpreter opening a file itself, `git diff`, `git log -p`, or `git show` without a path operand, and a walk that reaches credential files it does not treat as hidden (such as `*.pem` under `rg`, `fd -x`, `tar`, or `cp -r`). An interpreter that chooses to print process environment values, such as Python code that prints `os.environ`, is also outside the static dump-command list.
-- Command text the guard does not follow is also not covered: process substitution as input (`xargs cat < <(echo …)`), names another command prints into `xargs` (`ls *.pem | xargs cat`), wrappers the guard does not list such as `xcrun`, a value glued to a short option of a program the guard does not know (`tool -f.env`), a path built by command substitution or held in a variable (including a `for` loop variable), and shell state such as `cd -`, `~-`, `readonly`, `set -P`, zsh's `CHASE_LINKS`, or `env -C` with a redirection.
-- The table models only some file options of curl, wget, docker, ssh, scp, sftp, and git, and treats the value of any other option as a name it does not judge: docker's build context and its `--build-context`, `--cache-from`, `--cache-to`, `--output`, `--ssh`, `--metadata-file`, and `--security-opt` values, the words `docker compose run` and `compose exec` pass to the container command, the other file settings of `ssh -o`, and `git clone --reference`, `--template`, and `--separate-git-dir` or `git worktree add`. A `-` that a client reads as standard input (`curl -K -`, `curl -T -`, `wget -i -`) is judged as a path when the working directory is sensitive.
+- Literal bindings, function arguments, bounded loops and recognized pipeline/process-substitution producers are modelled, but arbitrary runtime output and embedded program languages are not. Generic option handling does not give every client-specific command string an execution model.
 - A command that prints a secret it is allowed to read, such as `gcloud auth print-access-token`, has no path to check, so the guard lists the subcommands it knows and cannot list them all.
 
-**State and resource identity** is which file a path names when the command runs, compared with when the guard checked it. For a shell operand or file redirect with an unresolved expansion, the guard may call `readlink` on the fixed path prefix; it judges the uncertain suffix lexically without passing that suffix to `readlink` or `stat`. Unresolved working directories and iterator roots are outside this probe guarantee. A file moved or linked by an earlier command and then read, child links that `rg -L` follows, and a wildcard the shell expands to a link (`da*/x` where `data-link` leads elsewhere) are not resolved.
+**State and resource identity** is which file a path names when the command runs, compared with when the guard checked it. App Data traversal checks lexical protection before each probe and uses readlink alone. SSH identity comparisons additionally use stat/inode metadata after lexical checks; private-key spellings are decided without stat. For an unresolved shell operand or redirect, the fixed prefix may be resolved while the uncertain suffix is judged lexically. An earlier command that moves or links a file does not update the preflight model. Child links encountered by a recursive program and names produced by wildcard expansion are not exhaustively enumerated.
+
+The following retained boundaries were checked as event data with a synthetic HOME and public fixture files. The examples describe limits; they are not instructions to access real protected material. Historical Go comparison records remain fixture provenance in Git history.
+
+| Boundary | Reproducer and observed scope |
+| --- | --- |
+| Dynamic item sources | `cat $(echo .env)`; `for f in $(printf '%s\n' .env); do cat "$f"; done`; `env $(echo cat .env)`; `bash -c "$(echo cat .env)"` remain uncovered dynamic-output forms. |
+| Alias and sourced stdin | `alias c='cat .env'; c`; `source /dev/stdin <<< 'cat .env'` remain uncovered. |
+| Filesystem mutations before reads | `ln -s .env public-link; cat public-link` does not update the preflight identity model. |
+| Shell option changes | `shopt -s dotglob; cat *` remains uncovered; `setopt globdots; cat *` is refused as unsupported executor syntax. |
+| Embedded program languages | `sed 'r .env' public`; `sed 'e cat .env' public`; `awk 'BEGIN { getline < ".env" }'`; `awk 'BEGIN { system("cat .env") }'`; `vim -c 'read .env'`; `tmux new 'cat .env'`; `watch 'cat .env'` remain uncovered. |
+| Client-defined command strings | `GIT_SSH_COMMAND='cat .env' git fetch`; `git -c core.pager='cat .env' log`; `git -c alias.x='!cat .env' x`; `ssh -o ProxyCommand='cat .env' host` remain uncovered execution contexts. |
+| OS service reads | `defaults export com.example.app -` has no inferred protected read target. |
+| Dynamic eval | `eval "val=\$$v"` is an unsupported dynamic rewrite; runtime-unknown command output is a separate unresolved-code state. |
+| Executor divergence | `a=(public)#` retains Bash/Zsh divergence refusal. |
+| Inline mentions | `python3 -c "print('~/.ssh/id_rsa')"` is refused although the spelling is data. |
+| Redacted workdir | Codex `shell_command`/`shell` with `workdir: "__REDACTED__"` receives the explained relative-cwd refusal. |
+| Grep on HOME | `Grep` with path `~` retains a rule/reason difference from the frozen Go baseline. |
+| Fresh temporary trees | `d=$(mktemp -d); cp public "$d/file"` retains baseline parity and runtime uncertainty. |
 
 The hook installs no operating system read policy. In a local 2x2 comparison recorded by the [read-enforcement experiment](../experiments/README.md), every run wrapped by `sandbox-exec` exited 71; a control in the sandboxed Codex environment failed with `sandbox_apply: Operation not permitted` before `/usr/bin/true` started. These are execution environment failures, not enforced read denials or proof that Seatbelt is unavailable on macOS 27. Nesting is the likely explanation, not a verified kernel denial record. [Claude Code](https://code.claude.com/docs/en/sandboxing) and [Codex's Seatbelt implementation](https://github.com/openai/codex/blob/main/codex-rs/sandboxing/src/seatbelt.rs) still use Seatbelt. The guard alone denied the direct operand and inline literal forms but allowed paths chosen inside an external script or runtime configuration; those reads remain outside a command text preflight check.
 
@@ -149,19 +174,20 @@ Follow the printed prerequisite, attribution, deployment, and test steps before 
 
 ## Development checks
 
-Use the Go version and parser source pinned in `go.mod`. The parser pin preserves the supported shell syntax. Development tools, tests and runtime harnesses use Go.
+Use the Rust toolchain pinned in `rust-toolchain.toml` (1.98.1) and the Go version pinned in `go.mod`. The production runner uses Rust; development tools and runtime harnesses use Go. Cargo's exact parser pins preserve policy semantics, and `Cargo.lock` binds dependency resolution.
 
 Keep build outputs, module and build caches, and evidence outside every checkout:
 
 ```sh
 out=/absolute/path/outside/checkouts/agent-guard-evidence
 export GOMODCACHE="$out/modcache" GOCACHE="$out/buildcache"
+export CARGO_TARGET_DIR="$out/cargo-target"
 make check
 make build OUT="$out/package"
 go run ./cmd/agent-guard-verify "$out/package/bin/agent-guard"
 ```
 
-`make check` runs `native/check`: goimports formatting and import grouping, go vet, Staticcheck, and Go race tests across the implementation, tools and harnesses. Both development tools are pinned in `go.mod` and run with `go tool`. goimports runs in `-format-only` mode, which applies gofmt formatting without adding or removing imports; `native/check` prints the fix command for any file it lists. Set `GO` to an absolute executable path when it is absent from `PATH`. Plain `go test ./...` includes all 3,795 fixture cases and checks exact public exit codes, denial text and Claude advice; it requires no exporter or environment opt-in.
+`make check` runs `make rust-check` (rustfmt, Clippy across all targets, locked Rust tests and cargo-deny) and `scripts/check-go` (goimports formatting, go vet, Staticcheck and Go race tests for development tools and harnesses). Go tools are pinned in `go.mod` and run with `go tool`. goimports uses `-format-only`, preserving imports, and `scripts/check-go` prints the fix command for listed files. Set `GO` or `CARGO` to an absolute executable path when absent from `PATH`. Rust tests check frozen contract fixtures for exact verdicts, public exit codes, denial text and advice; they do not build a live Go comparator.
 
 The installed verifier requires the assembled `bin/agent-guard`, adjacent `agent-guard-native` and `VERSION`; it resolves the executable paths, records both hashes and checks that both executables report the package version. Require all 33 protocol cases to pass. It does not prove hook loading or all descendant cleanup.
 
