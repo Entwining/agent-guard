@@ -113,57 +113,6 @@ mod process_arguments {
     }
 }
 
-mod wrapper_environment_tests {
-    #[test]
-    fn env_adapter_keeps_assignment_operands() {
-        let data: serde_json::Value =
-            serde_json::from_str(include_str!("../../tests/fixtures/rust-review-shell.json"))
-                .unwrap();
-        let row = data["rows"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|row| row["id"] == "env-git-adapter")
-            .unwrap();
-        let command = crate::record::Command {
-            environment: Vec::new(),
-            function: false,
-            argv: row["argv"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|value| crate::record::Word::literal(value.as_str().unwrap().into()))
-                .collect(),
-            redirects: Vec::new(),
-            cwd: "/synthetic/project".into(),
-            program: Some(0),
-            wrappers: Vec::new(),
-            shell: false,
-            flags: Vec::new(),
-            items: None,
-            stdin: crate::record::Stdin::None,
-            pipeline: None,
-            nested: false,
-        };
-        let effects = super::infer(
-            &command,
-            &command.cwd,
-            crate::record::HostFacts {
-                home: "/synthetic/home",
-                user: Some("synthetic"),
-            },
-        );
-        assert!(
-            effects.targets.iter().any(|target| target
-                .path
-                .ends_with(row["target"].as_str().unwrap())
-                && target.effect == crate::record::Effect::Read),
-            "{:?}",
-            effects.targets
-        );
-    }
-}
-
 mod record_tests {
     use super::*;
     #[test]

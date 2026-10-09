@@ -162,13 +162,6 @@
       "expected": "D"
     },
     {
-      "id": "b3b-gitdir-env",
-      "partition": "gitdir",
-      "source": "GIT_DIR=$H/Library/Containers/com.example.syn/Data git status",
-      "cwd": "$H/project",
-      "expected": "D"
-    },
-    {
       "id": "b3b-ctrl-gitdir",
       "partition": "gitdir",
       "source": "git --git-dir=/tmp/x status",

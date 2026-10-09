@@ -73,7 +73,7 @@ pub(super) fn infer(
         "rm" | "mv" | "ln" => effects
             .targets
             .extend(resource_changes::infer(program, args, cwd, host)),
-        "git" => readers::git(args, cwd, host, effects, command),
+        "git" => infer_git(args, cwd, host, effects),
         "cp" | "install" | "rsync" | "tee" | "ssh-add" | "dotenvx" | "ssh" | "scp" | "sftp"
         | "ssh-keygen" | "dd" | "kubectl" | "npm" | "curl" | "wget" | "docker" => effects
             .targets

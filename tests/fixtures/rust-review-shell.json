@@ -58,7 +58,6 @@
 {"id":"env-clear","partition":"env_wrapper","input":{"command":"export F=.env; env -i sh -c 'cat \"$F\"'"},"expected":"UC"},
 {"id":"env-change-directory","partition":"env_wrapper","input":{"command":"env -C \"$HOME/Library/Containers/x/Data\" sh -c 'cat f'"},"expected":"D","reason":"app-data"},
 {"id":"env-nested-order","partition":"env_wrapper","input":{"command":"env F=public.txt env F=.env sh -c 'cat \"$F\"'"},"expected":"D","reason":"credential or environment file"},
-{"id":"env-git-adapter","partition":"env_wrapper","input":{"command":"env GIT_DIR=.env git log"},"argv":["env","GIT_DIR=.env","git","log"],"target":".env","expected":"D","reason":"credential or environment file"},
 {"id":"home-rebind-cd","partition":"home_cd","input":{"command":"HOME=\"$HOME/Library/Containers/x/Data\"; cd; cat f"},"expected":"D","reason":"app-data"},
 {"id":"home-branch-cd","partition":"home_cd","input":{"command":"if test public; then HOME=public; else HOME=\"$HOME/Library/Containers/x/Data\"; fi; cd; cat f"},"expected":"D","reason":"app-data"},
 {"id":"home-public-cd","partition":"home_cd","input":{"command":"HOME=\"$P/public\"; cd -L --; cat f"},"expected":"N"},

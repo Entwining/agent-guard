@@ -52,8 +52,6 @@ pub mod process_names_and_perl_argv_preserve_roles;
 pub mod program_contract;
 #[path = "targets/quoted_pattern_regions_keep_local_expansion.rs"]
 pub mod quoted_pattern_regions_keep_local_expansion;
-#[path = "targets/recognised_wrappers_preserve_effective_git_environment.rs"]
-pub mod recognised_wrappers_preserve_effective_git_environment;
 #[path = "targets/shell.rs"]
 pub mod shell;
 pub(crate) mod support;
@@ -61,3 +59,5 @@ pub(crate) mod support;
 pub mod tar_short_values_keep_their_read_or_write_roles;
 #[path = "targets/tracked_cwd_entry_follows_go_named_target_rule.rs"]
 pub mod tracked_cwd_entry_follows_go_named_target_rule;
+#[path = "targets/wrapper_assignment_operands_are_unknown_programs.rs"]
+pub mod wrapper_assignment_operands_are_unknown_programs;

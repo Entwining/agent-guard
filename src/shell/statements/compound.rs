@@ -179,7 +179,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 nested,
             },
             scope,
-            &[],
         );
         let output = self.run(body, scope, depth + 1, source_id, nested)?;
         scope.restore_inputs(prior_stdin, prior, prior_inputs);

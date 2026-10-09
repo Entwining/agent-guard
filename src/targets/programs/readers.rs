@@ -65,40 +65,6 @@ pub(super) fn filter(program: &str, args: &[Word]) -> Vec<usize> {
     claimed
 }
 
-pub(super) fn git(
-    args: &[Word],
-    cwd: &str,
-    host: HostFacts<'_>,
-    effects: &mut Effects,
-    command: &CommandRecord,
-) {
-    // Environment-supplied locations keep the corresponding option
-    // roles, even when no location flag appears in argv.
-    for (name, value) in &command.environment {
-        let effect = match name.as_str() {
-            "GIT_DIR" => Effect::Read,
-            "GIT_WORK_TREE" => Effect::Enter,
-            _ => continue,
-        };
-        if !value.text.is_empty() {
-            let mut target = Target::from_word(
-                value,
-                cwd,
-                host,
-                effect,
-                if args.iter().any(|arg| arg == "config") {
-                    Walk::None
-                } else {
-                    Walk::Visible
-                },
-            );
-            target.via = Via::Option;
-            effects.targets.push(target);
-        }
-    }
-    infer_git(args, cwd, host, effects);
-}
-
 pub(super) fn unknown(program: &str, args: &[Word], effects: &mut Effects) {
     effects.gaps.push(CoverageGap::UnknownProgram {
         program: program.to_owned(),

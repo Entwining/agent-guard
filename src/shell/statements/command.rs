@@ -155,7 +155,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             nested,
         };
         let emitted = self.output.script.commands.len();
-        let command = self.emit(command, scope, &resolved.environment);
+        let command = self.emit(command, scope);
         let emitted_end = self.output.script.commands.len();
         if let Some(output) = self.command_shell_source(
             &command,

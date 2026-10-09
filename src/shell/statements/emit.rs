@@ -27,18 +27,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     nested,
                 },
                 scope,
-                &[],
             );
         }
         Ok(())
     }
-    pub(super) fn emit(
-        &mut self,
-        mut command: Command,
-        scope: &Scope,
-        environment: &[shell::argv::EnvironmentChange],
-    ) -> Command {
-        self.command_environment(&mut command, scope, environment);
+    pub(super) fn emit(&mut self, mut command: Command, scope: &Scope) -> Command {
         self.command_coverage(&command, scope);
         let data = command
             .redirects
@@ -108,76 +101,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             self.output.gap(CoverageGap::InspectionBudget);
         }
         command
-    }
-
-    fn command_environment(
-        &self,
-        command: &mut Command,
-        scope: &Scope,
-        environment: &[shell::argv::EnvironmentChange],
-    ) {
-        if let Some(index) = command.program {
-            for (name, binding) in scope
-                .bindings
-                .iter()
-                .filter(|(name, _)| matches!(name.as_str(), "GIT_DIR" | "GIT_WORK_TREE"))
-            {
-                let prefix = command.argv[..index].iter().any(|word| {
-                    matches!(word.role, Role::Assign | Role::Precommand)
-                        && assignment(&word.text).is_some_and(|(key, _)| key == name)
-                });
-                if binding.exported || prefix {
-                    for value in binding.values.iter() {
-                        let texts = match value {
-                            BindingValue::RepeatedFields(repetition) => repetition.projections(),
-                            _ => value.lexical().into_iter().cloned().collect(),
-                        };
-                        for text in texts {
-                            let mut word = crate::record::Word::literal(text.clone());
-                            // Assignment expansion has already consumed any unquoted tilde.
-                            word.raw = format!("'{text}'");
-                            word.expands = matches!(
-                                value,
-                                BindingValue::RuntimeDerived(_) | BindingValue::ShellDerived(_)
-                            );
-                            word.shell_matches = matches!(
-                                value,
-                                BindingValue::ShellMatches(_) | BindingValue::ShellDerived(_)
-                            );
-                            word.cardinality_unknown =
-                                matches!(value, BindingValue::RepeatedFields(_));
-                            command.environment.push((name.clone(), word));
-                        }
-                    }
-                }
-            }
-        }
-        // Apply the wrapper's environment before the Git role owner sees it;
-        // a child shell inherits the same effective overrides.
-        for change in environment {
-            match change {
-                shell::argv::EnvironmentChange::Clear => command.environment.clear(),
-                shell::argv::EnvironmentChange::Unset(name) => {
-                    command.environment.retain(|(key, _)| key != name)
-                }
-                shell::argv::EnvironmentChange::Set(name, value)
-                    if matches!(name.as_str(), "GIT_DIR" | "GIT_WORK_TREE") =>
-                {
-                    command.environment.retain(|(key, _)| key != name);
-                    let mut value = value.clone();
-                    if shell::lexer::initial_quote(&value.raw) == shell::lexer::Quote::Unquoted {
-                        value.text = crate::filesystem::expand_home(
-                            &value.text,
-                            self.frontend.host.home,
-                            self.frontend.host.user,
-                        );
-                        value.value = value.text.clone();
-                    }
-                    command.environment.push((name.clone(), value));
-                }
-                _ => {}
-            }
-        }
     }
 
     fn command_coverage(&mut self, command: &Command, scope: &Scope) {

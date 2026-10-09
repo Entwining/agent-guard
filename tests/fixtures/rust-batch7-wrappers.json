@@ -1,18 +1,5 @@
 {"rows":[
- {"id":"nice-prefix","partition":"wrapper","expected":"D","input":{"command":"GIT_DIR='$C' nice -n 5 git log"}},
- {"id":"exec-prefix","partition":"wrapper","expected":"D","input":{"command":"GIT_DIR='$C' exec git log"}},
- {"id":"timeout-env","partition":"wrapper","expected":"D","input":{"command":"timeout 5 env GIT_DIR='$C' git log"}},
- {"id":"sudo-argument","partition":"sudo","expected":"D","input":{"command":"sudo GIT_DIR='$C' git log"}},
- {"id":"doas-argument","partition":"sudo","expected":"D","input":{"command":"doas GIT_DIR='$C' git log"}},
- {"id":"exported-work-tree","partition":"wrapper","expected":"D","input":{"command":"export GIT_WORK_TREE='$C'; nohup nice -n 5 git status"}},
- {"id":"nested-env-unset","partition":"control","expected":"N","input":{"command":"export GIT_DIR='$C'; timeout -k 2 5 env -u GIT_DIR git log"}},
  {"id":"nice-assignment-program","partition":"control","expected":"UC","input":{"command":"nice GIT_DIR='$C' git log"}},
  {"id":"exec-assignment-program","partition":"control","expected":"UC","input":{"command":"exec GIT_DIR='$C' git log"}},
- {"id":"timeout-assignment-program","partition":"control","expected":"UC","input":{"command":"timeout 5 GIT_DIR='$C' git log"}},
- {"id":"arch-prefix","partition":"wrapper","expected":"D","input":{"command":"GIT_DIR='$C' arch -arch arm64 git log"}},
- {"id":"stdbuf-prefix","partition":"wrapper","expected":"D","input":{"command":"GIT_DIR='$C' stdbuf -o L git log"}},
- {"id":"caffeinate-prefix","partition":"wrapper","expected":"D","input":{"command":"GIT_DIR='$C' caffeinate -t 5 git log"}},
- {"id":"time-prefix","partition":"wrapper","expected":"D","input":{"command":"GIT_DIR='$C' /usr/bin/time -f '%e' git log"}},
- {"id":"script-prefix","partition":"wrapper","expected":"D","input":{"command":"GIT_DIR='$C' script -t 1 out.txt git log"}},
- {"id":"exec-clear","partition":"control","expected":"N","input":{"command":"export GIT_DIR='$C'; exec -c git log"}}
+ {"id":"timeout-assignment-program","partition":"control","expected":"UC","input":{"command":"timeout 5 GIT_DIR='$C' git log"}}
 ]}

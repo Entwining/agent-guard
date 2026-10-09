@@ -54,10 +54,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             scope
                 .bindings
                 .iter()
-                .filter(|(name, binding)| {
-                    (binding.exported || prefixes.contains_key(*name))
-                        && !matches!(name.as_str(), "GIT_DIR" | "GIT_WORK_TREE")
-                })
+                .filter(|(name, binding)| binding.exported || prefixes.contains_key(*name))
                 .map(|(name, binding)| (name.clone(), binding.clone())),
         );
         for (name, value) in &command.environment {
