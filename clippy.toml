@@ -3,5 +3,6 @@ disallowed-methods = [
   { path = "std::fs::symlink_metadata", reason = "Link identity belongs to an explicit filesystem owner." },
   { path = "std::fs::read_link", reason = "Link reads follow lexical checks at the filesystem probe owner." },
   { path = "std::fs::canonicalize", reason = "Canonical filesystem identity belongs to an explicit probe owner." },
+  { path = "std::fs::read_dir", reason = "Listing a directory reads its names; under a protected root that listing is the protected read the guard prevents." },
   { path = "std::process::exit", reason = "Return ExitCode at an executable boundary; direct termination needs an explicit owner." },
 ]

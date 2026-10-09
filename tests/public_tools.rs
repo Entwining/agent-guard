@@ -65,6 +65,10 @@ fn verifier(root: &Path, entry: &Path) -> Command {
     command
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "The test lists its own temporary root to find leftover acceptance directories."
+)]
 fn assert_clean(root: &Path) {
     assert!(!fs::read_dir(root).unwrap().any(|entry| {
         entry

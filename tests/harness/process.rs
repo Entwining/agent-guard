@@ -290,7 +290,7 @@ pub fn copy_file(from: &Path, to: &Path) -> Result<()> {
 }
 #[expect(
     clippy::disallowed_methods,
-    reason = "The harness source-copy owner uses link metadata to reject unexpected source types."
+    reason = "The harness source-copy owner lists the package source tree and uses link metadata to reject unexpected source types."
 )]
 pub fn copy_tree(from: &Path, to: &Path) -> Result<()> {
     let info = fs::symlink_metadata(from)?;
@@ -309,7 +309,7 @@ pub fn copy_tree(from: &Path, to: &Path) -> Result<()> {
 }
 #[expect(
     clippy::disallowed_methods,
-    reason = "The source manifest owner distinguishes files and directories without following source links."
+    reason = "The source manifest owner lists the package source tree and distinguishes files and directories without following source links."
 )]
 fn bindings(root: &Path, path: &Path, output: &mut Vec<Binding>) -> Result<()> {
     let info = fs::symlink_metadata(path)?;

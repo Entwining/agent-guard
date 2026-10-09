@@ -33,6 +33,10 @@ fn main() -> ExitCode {
     }
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "The structure check lists this checkout's source directories, which hold no protected data."
+)]
 fn oversized_files(root: &Path) -> Result<Vec<(PathBuf, usize)>, String> {
     let mut pending = ["src", "tests", "cmd", "examples"]
         .map(PathBuf::from)
