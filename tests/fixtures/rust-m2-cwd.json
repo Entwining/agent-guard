@@ -74,30 +74,6 @@
       "gap": "UnsupportedShellSyntax"
     },
     {
-      "id": "cdpath-protected",
-      "partition": "cdpath-protected",
-      "source": "CDPATH=~/Library/Containers; cd named && cat z",
-      "cwd": "/h/project",
-      "program": "cat",
-      "cwds": [
-        "/h/project/named",
-        "/h/Library/Containers/named"
-      ],
-      "expected": "D"
-    },
-    {
-      "id": "cdpath-prefix-protected",
-      "partition": "cdpath-protected",
-      "source": "CDPATH=~/Library/Containers cd named && cat z",
-      "cwd": "/h/project",
-      "program": "cat",
-      "cwds": [
-        "/h/project/named",
-        "/h/Library/Containers/named"
-      ],
-      "expected": "D"
-    },
-    {
       "id": "pwd-protected",
       "partition": "pwd-protected",
       "source": "PWD=~/Library/Containers; ls \"$PWD\"",
@@ -156,81 +132,6 @@
         "/h/project"
       ],
       "expected": "D"
-    },
-    {
-      "id": "cdpath-persistent",
-      "partition": "cdpath-persistent",
-      "source": "CDPATH=/lookup:/other:; cd named && cat z",
-      "cwd": "/h/project",
-      "program": "cat",
-      "cwds": [
-        "/h/project/named",
-        "/lookup/named",
-        "/other/named"
-      ]
-    },
-    {
-      "id": "cdpath-declaration",
-      "partition": "cdpath-declaration",
-      "source": "export CDPATH=/lookup; cd named && cat z",
-      "cwd": "/h/project",
-      "program": "cat",
-      "cwds": [
-        "/h/project/named",
-        "/lookup/named"
-      ]
-    },
-    {
-      "id": "cdpath-local",
-      "partition": "cdpath-local",
-      "source": "CDPATH=/lookup cd named && cat z",
-      "cwd": "/h/project",
-      "program": "cat",
-      "cwds": [
-        "/h/project/named",
-        "/lookup/named"
-      ]
-    },
-    {
-      "id": "cdpath-dot",
-      "partition": "cdpath-controls",
-      "source": "CDPATH=/lookup; cd ./named && cat z",
-      "cwd": "/h/project",
-      "program": "cat",
-      "cwds": [
-        "/h/project/named"
-      ]
-    },
-    {
-      "id": "cdpath-absolute",
-      "partition": "cdpath-controls",
-      "source": "CDPATH=/lookup; cd /public && cat z",
-      "cwd": "/h/project",
-      "program": "cat",
-      "cwds": [
-        "/public"
-      ]
-    },
-    {
-      "id": "cdpath-home",
-      "partition": "cdpath-controls",
-      "source": "CDPATH=/lookup; cd -- && cat z",
-      "cwd": "/h/project",
-      "program": "cat",
-      "cwds": [
-        "/h"
-      ]
-    },
-    {
-      "id": "cdpath-unknown",
-      "partition": "cdpath-unknown",
-      "source": "CDPATH=$UNKNOWN; cd named && cat z",
-      "cwd": "/h/project",
-      "program": "cat",
-      "cwds": [
-        "/h/project/named"
-      ],
-      "absent_gap": "UnsupportedShellSyntax"
     },
     {
       "id": "and-success",
@@ -521,6 +422,19 @@
         "/public"
       ],
       "pwd": true
+    },
+    {
+      "id": "oldpwd-reset",
+      "partition": "oldpwd-reset",
+      "source": "OLDPWD=/other; cd /public && cat \"$OLDPWD\"",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/public"
+      ],
+      "words": [
+        "$OLDPWD"
+      ]
     },
     {
       "id": "pwd-alternatives",

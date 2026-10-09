@@ -56,26 +56,6 @@ fn finite_loop_retains_all_directory_candidates() {
 }
 
 #[test]
-fn tracked_movement_updates_oldpwd_binding() {
-    let data: serde_json::Value =
-        serde_json::from_str(include_str!("../../../../tests/fixtures/rust-m2-1.json")).unwrap();
-    let row = data["rows"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|r| r["id"] == "oldpwd-metadata-control")
-        .unwrap();
-    let mut scope = Scope::new("/h", "/h/project");
-    observation(row["source"].as_str().unwrap(), &mut scope);
-    assert!(
-        scope.bindings["OLDPWD"]
-            .values
-            .contains(&BindingValue::Known("/h/public".into()))
-    );
-    assert_eq!(scope.directory.current.render(), "/h/project");
-}
-
-#[test]
 fn relative_cd_cannot_refine_a_carried_glob_cwd() {
     let mut scope = Scope::new("/h", "/h/project");
     let result = observation("for d in public*/; do cd \"$d\"; done; cd ..", &mut scope);

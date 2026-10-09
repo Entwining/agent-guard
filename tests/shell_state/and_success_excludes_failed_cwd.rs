@@ -148,32 +148,12 @@ fn successful_cd_resets_pwd() {
     partition("pwd-reset");
 }
 #[test]
+fn successful_cd_forgets_oldpwd() {
+    partition("oldpwd-reset");
+}
+#[test]
 fn pwd_words_follow_directory_alternatives() {
     partition("pwd-projection");
-}
-#[test]
-fn cdpath_persistent_candidates_are_observed() {
-    partition("cdpath-persistent");
-}
-#[test]
-fn cdpath_declaration_candidates_are_observed() {
-    partition("cdpath-declaration");
-}
-#[test]
-fn cdpath_prefix_candidates_are_observed() {
-    partition("cdpath-local");
-}
-#[test]
-fn cdpath_does_not_override_dot_absolute_or_home() {
-    partition("cdpath-controls");
-}
-#[test]
-fn runtime_cdpath_has_no_scope_refusal() {
-    partition("cdpath-unknown");
-}
-#[test]
-fn cdpath_protected_candidates_are_observed() {
-    partition("cdpath-protected");
 }
 #[test]
 fn assigned_pwd_protection_uses_data_and_actual_directory() {

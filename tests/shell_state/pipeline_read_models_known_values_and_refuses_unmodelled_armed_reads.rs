@@ -163,14 +163,6 @@ fn finite_loop_directories_keep_protected_candidates() {
     partition("loop-cwd");
 }
 #[test]
-fn oldpwd_bindings_move_the_tracked_directory() {
-    partition("cwd-oldpwd");
-}
-#[test]
-fn two_operand_cd_retains_both_shell_readings() {
-    partition("cwd-two-operands");
-}
-#[test]
 fn visible_file_roots_list() {
     partition("files-visible");
 }
@@ -198,10 +190,6 @@ fn cwd_budget_survives_branch_join() {
 #[test]
 fn runtime_values_keep_unresolved_target_contract() {
     partition("runtime-target");
-}
-#[test]
-fn runtime_cdpath_keeps_the_baseline_class() {
-    partition("runtime-cdpath");
 }
 #[test]
 fn runtime_read_does_not_refuse_syntax() {
