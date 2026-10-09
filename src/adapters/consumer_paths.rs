@@ -2,34 +2,25 @@ use super::Consumer;
 use crate::filesystem;
 use serde_json::Value;
 
-/// Claude Code 2.1.295 `coerceInput` aliases, applied before it validates a
-/// call: Grep reads a non-empty `file_path` as `path` unless a different
-/// `path` is present, and Write reads a string `path` as `file_path` when
-/// `file_path` is absent. Read and Edit have no path alias.
-pub(super) fn claude_aliases(tool: &str, input: &mut Value) {
+/// Claude Code 2.1.295 `coerceInput` reads a non-empty Grep `file_path` as
+/// `path` unless a different `path` is present. Its Write alias from `path`
+/// to `file_path` is not followed, so such a Write fails as malformed input.
+pub(super) fn claude_grep_alias(input: &mut Value) {
     let Some(fields) = input.as_object_mut() else {
         return;
     };
-    let rename = match tool {
-        "grep" => fields
-            .get("file_path")
-            .and_then(Value::as_str)
-            .is_some_and(|path| {
-                !path.is_empty()
-                    && fields
-                        .get("path")
-                        .is_none_or(|current| current.as_str() == Some(path))
-            })
-            .then_some(("file_path", "path")),
-        "write" => (fields.get("path").is_some_and(Value::is_string)
-            && !fields.contains_key("file_path"))
-        .then_some(("path", "file_path")),
-        _ => None,
-    };
-    if let Some((alias, field)) = rename
-        && let Some(value) = fields.remove(alias)
+    if fields
+        .get("file_path")
+        .and_then(Value::as_str)
+        .is_some_and(|path| {
+            !path.is_empty()
+                && fields
+                    .get("path")
+                    .is_none_or(|current| current.as_str() == Some(path))
+        })
+        && let Some(value) = fields.remove("file_path")
     {
-        fields.insert(field.to_owned(), value);
+        fields.insert("path".to_owned(), value);
     }
 }
 
