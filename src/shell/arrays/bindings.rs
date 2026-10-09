@@ -31,56 +31,6 @@ pub(in crate::shell) fn update(scope: &mut Scope, name: &str, values: &mut Vec<B
     }
 }
 
-pub(in crate::shell) fn tied_cdpath(name: &str, values: &[BindingValue]) -> Vec<BindingValue> {
-    let mut result = Vec::new();
-    for value in values {
-        if name == "CDPATH" {
-            if let BindingValue::Known(value) = value {
-                let mut array = IndexedArray::new(true);
-                for entry in value.split(':') {
-                    array.push(vec![Word::literal(entry.into())]);
-                }
-                result.push(BindingValue::Array(Box::new(array)));
-            } else {
-                result.push(BindingValue::RuntimeUnknown(None));
-            }
-        } else if let BindingValue::Array(array) = value {
-            let state = array.zsh.as_deref().unwrap_or(array);
-            if !state.exact || !state.unknown.is_empty() || state.tail.is_some() {
-                result.push(BindingValue::RuntimeUnknown(None));
-            }
-            let mut candidates = vec![String::new()];
-            for (index, words) in state.elements.values().enumerate() {
-                let mut next = Vec::new();
-                for prefix in &candidates {
-                    for word in words {
-                        if word.expands || word.runtime_unknown || word.globs || word.shell_matches
-                        {
-                            if !result.contains(&BindingValue::RuntimeUnknown(None)) {
-                                result.push(BindingValue::RuntimeUnknown(None));
-                            }
-                            continue;
-                        }
-                        let joined =
-                            format!("{prefix}{}{}", if index == 0 { "" } else { ":" }, word.text);
-                        if !next.contains(&joined) {
-                            if next.len() == 512 {
-                                return vec![BindingValue::Undetermined];
-                            }
-                            next.push(joined);
-                        }
-                    }
-                }
-                candidates = next;
-            }
-            result.extend(candidates.into_iter().map(BindingValue::Known));
-        } else {
-            result.push(BindingValue::RuntimeUnknown(None));
-        }
-    }
-    result
-}
-
 pub(in crate::shell) fn store(scope: &mut Scope, name: &str, state: IndexedArray) {
     let prefix = format!("{name}[");
     std::rc::Rc::make_mut(&mut scope.bindings)

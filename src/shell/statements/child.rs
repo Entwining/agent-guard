@@ -72,7 +72,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     #[cfg(test)]
                     copies: EntryCopies::default(),
                     origins: None,
-                    bash_values: None,
                     values: Rc::default(),
                     exported: true,
                     arithmetic: false,
@@ -86,11 +85,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 shell::argv::EnvironmentChange::Clear => Rc::make_mut(&mut child.bindings).clear(),
                 shell::argv::EnvironmentChange::Unset(name) => {
                     Rc::make_mut(&mut child.bindings).remove(name);
-                    if child.zsh
-                        && let Some(alias) = cdpath_alias(name)
-                    {
-                        Rc::make_mut(&mut child.bindings).remove(alias);
-                    }
                 }
                 shell::argv::EnvironmentChange::Set(name, value) => {
                     child.assign(

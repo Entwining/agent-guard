@@ -338,15 +338,6 @@ fn indices(text: &str, scope: &Scope) -> Option<Vec<i64>> {
         .collect()
 }
 
-pub(super) fn bash_only(mut values: Vec<BindingValue>) -> Vec<BindingValue> {
-    for value in &mut values {
-        if let BindingValue::Array(array) = value {
-            array.zsh = None;
-        }
-    }
-    values
-}
-
 fn snapshot(mut word: Word) -> Word {
     word.vars.clear();
     word.binding_candidates.clear();
@@ -359,7 +350,7 @@ fn snapshot(mut word: Word) -> Word {
 mod bindings;
 mod evaluator;
 mod expansion;
-pub(super) use bindings::{store, tied_cdpath, update};
+pub(super) use bindings::{store, update};
 pub(super) use expansion::expand;
 #[cfg(test)]
 mod tests;

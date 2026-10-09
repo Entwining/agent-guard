@@ -51,7 +51,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             #[cfg(test)]
                             copies: EntryCopies::default(),
                             origins: None,
-                            bash_values: None,
                             values: Rc::new(vec![BindingValue::RuntimeUnknown(None)]),
                             exported: false,
                             arithmetic: false,
@@ -151,7 +150,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     #[cfg(test)]
                     copies: EntryCopies::default(),
                     origins: None,
-                    bash_values: None,
                     values: Rc::new(vec![BindingValue::RuntimeUnknown(None)]),
                     exported,
                     arithmetic: false,

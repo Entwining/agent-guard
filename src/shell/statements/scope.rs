@@ -39,7 +39,6 @@ impl Scope {
                     #[cfg(test)]
                     copies: EntryCopies::default(),
                     origins: None,
-                    bash_values: None,
                     values: Rc::new(vec![BindingValue::Known(home.into())]),
                     exported: false,
                     arithmetic: false,
@@ -88,7 +87,6 @@ impl Scope {
             && self.bindings.iter().all(|(name, binding)| {
                 other.bindings.get(name).is_some_and(|other| {
                     binding.values == other.values
-                        && binding.bash_values == other.bash_values
                         && binding.exported == other.exported
                         && binding.arithmetic == other.arithmetic
                 })

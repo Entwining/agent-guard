@@ -125,16 +125,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
         let prior = command_bindings
             .keys()
-            .flat_map(|name| {
-                std::iter::once(name.clone()).chain(
-                    scope
-                        .zsh
-                        .then(|| cdpath_alias(name))
-                        .flatten()
-                        .map(String::from),
-                )
-            })
-            .map(|name| (name.clone(), scope.bindings.get(&name).cloned()))
+            .map(|name| (name.clone(), scope.bindings.get(name).cloned()))
             .collect::<BTreeMap<_, _>>();
         let return_start = scope.returns.len();
         for (name, values) in command_bindings {

@@ -119,41 +119,7 @@ impl Scope {
     }
     pub(in crate::shell) fn assign(&mut self, name: String, mut values: Vec<BindingValue>) {
         shell::arrays::update(self, &name, &mut values);
-        let tied = self.zsh.then(|| cdpath_alias(&name)).flatten();
-        let mirror = tied.map(|alias| (alias, shell::arrays::tied_cdpath(&name, &values)));
-        if let Some((alias, mut mirrored)) = mirror {
-            let prior = self.bindings.get(alias).cloned();
-            if let Some(frame) = Rc::make_mut(&mut self.frames)
-                .iter_mut()
-                .rev()
-                .find(|frame| frame.contains_key(&name))
-            {
-                Rc::make_mut(frame)
-                    .entry(alias.into())
-                    .or_insert_with(|| prior.clone());
-            }
-            let bash = prior.map_or_else(
-                || vec![BindingValue::RuntimeUnknown(Some(String::new()))],
-                |binding| {
-                    binding.bash_values.map_or_else(
-                        || shell::arrays::bash_only(Rc::unwrap_or_clone(binding.values)),
-                        |values| values.as_ref().clone(),
-                    )
-                },
-            );
-            for value in &bash {
-                if !mirrored.contains(value) {
-                    mirrored.push(value.clone());
-                }
-            }
-            self.assign_binding(name, values);
-            self.assign_binding(alias.into(), mirrored);
-            if let Some(binding) = Rc::make_mut(&mut self.bindings).get_mut(alias) {
-                binding.bash_values = Some(std::rc::Rc::new(bash));
-            }
-        } else {
-            self.assign_binding(name, values);
-        }
+        self.assign_binding(name, values);
     }
     pub(in crate::shell) fn assign_binding(&mut self, name: String, values: Vec<BindingValue>) {
         if let Some((base, _)) = name.split_once('[')
@@ -202,7 +168,6 @@ impl Scope {
                 #[cfg(test)]
                 copies: EntryCopies::default(),
                 origins,
-                bash_values: None,
                 values: Rc::new(values),
                 exported,
                 arithmetic,

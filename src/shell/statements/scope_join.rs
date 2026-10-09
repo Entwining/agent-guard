@@ -153,7 +153,6 @@ pub(super) fn join_values<'a>(
             && values.iter().all(|binding| {
                 binding.is_some_and(|binding| {
                     Rc::ptr_eq(&first.values, &binding.values)
-                        && first.bash_values == binding.bash_values
                         && first.exported == binding.exported
                         && first.arithmetic == binding.arithmetic
                 })
@@ -162,36 +161,11 @@ pub(super) fn join_values<'a>(
         return (Some(first.clone()), false);
     }
     let mut joined = Vec::new();
-    let mut bash = Vec::new();
-    let tied = values
-        .iter()
-        .flatten()
-        .any(|binding| binding.bash_values.is_some());
     let mut present = false;
     let mut bounded = false;
     let mut exported = false;
     let mut arithmetic = false;
     for binding in values {
-        if tied {
-            for value in binding.map_or_else(
-                || vec![BindingValue::RuntimeUnknown(Some(String::new()))],
-                |binding| {
-                    binding
-                        .bash_values
-                        .as_deref()
-                        .unwrap_or(&binding.values)
-                        .clone()
-                },
-            ) {
-                if !bash.contains(&value) {
-                    if bash.len() == 512 {
-                        bounded = true;
-                    } else {
-                        bash.push(value);
-                    }
-                }
-            }
-        }
         present |= binding.is_some();
         exported |= binding.is_some_and(|binding| binding.exported);
         arithmetic |= binding.is_some_and(|binding| binding.arithmetic);
@@ -227,7 +201,6 @@ pub(super) fn join_values<'a>(
             #[cfg(test)]
             copies: EntryCopies::default(),
             origins: None,
-            bash_values: tied.then(|| std::rc::Rc::new(bash)),
             values: Rc::new(joined),
             exported,
             arithmetic,

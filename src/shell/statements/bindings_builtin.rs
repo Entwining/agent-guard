@@ -1,4 +1,3 @@
-use super::super as shell;
 use super::*;
 
 impl<'a, 'b> Evaluator<'a, 'b> {
@@ -87,20 +86,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     Rc::make_mut(&mut self.functions).remove(&word.text);
                 }
             } else {
-                if scope.zsh
-                    && let Some(alias) = cdpath_alias(&word.text)
-                    && let Some(binding) = Rc::make_mut(&mut scope.bindings).get_mut(alias)
-                {
-                    binding.values = Rc::new(shell::arrays::bash_only(
-                        binding
-                            .bash_values
-                            .as_deref()
-                            .cloned()
-                            .unwrap_or_else(|| binding.values.as_ref().clone()),
-                    ));
-                    Rc::make_mut(&mut binding.values)
-                        .push(BindingValue::RuntimeUnknown(Some(String::new())));
-                }
                 let prefix = format!("{}[", word.text);
                 Rc::make_mut(&mut scope.bindings)
                     .retain(|name, _| name != &word.text && !name.starts_with(&prefix));

@@ -132,8 +132,6 @@ impl Eq for EntryCopies {}
 pub(super) struct Binding {
     origins: Option<Rc<Origins>>,
     pub values: Rc<Vec<BindingValue>>,
-    // A tied Zsh update replaces its view without replacing Bash's independent value.
-    pub(super) bash_values: Option<std::rc::Rc<Vec<BindingValue>>>,
     exported: bool,
     arithmetic: bool,
     #[cfg(test)]
@@ -145,10 +143,6 @@ impl Binding {
         // Multi-value joins still deduplicate and normalize repetition/empty
         // candidates, even when every branch holds the same storage.
         self.values.len() <= 1
-            && self
-                .bash_values
-                .as_ref()
-                .is_none_or(|values| values.len() <= 1)
     }
 }
 
@@ -159,7 +153,6 @@ impl Clone for Binding {
         Self {
             values: self.values.clone(),
             origins: self.origins.clone(),
-            bash_values: self.bash_values.clone(),
             exported: self.exported,
             arithmetic: self.arithmetic,
             #[cfg(test)]
@@ -204,14 +197,6 @@ struct BindingState {
     named_dirs: std::rc::Rc<BTreeMap<String, Vec<BindingValue>>>,
     bindings: Rc<BTreeMap<String, Binding>>,
     frames: Rc<Vec<LocalFrame>>,
-}
-
-fn cdpath_alias(name: &str) -> Option<&'static str> {
-    match name {
-        "CDPATH" => Some("cdpath"),
-        "cdpath" => Some("CDPATH"),
-        _ => None,
-    }
 }
 
 fn restore_prefix(

@@ -148,11 +148,6 @@ fn bare_cd_uses_current_home_candidates() {
 }
 
 #[test]
-fn zsh_cdpath_ties_follow_updates_and_scope_restoration() {
-    partition("cdpath_tie");
-}
-
-#[test]
 fn zsh_parameter_modifiers_share_braced_and_unbraced_semantics() {
     partition("zsh_modifiers");
 }
