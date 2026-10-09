@@ -287,10 +287,6 @@ fn infer_completion(program: &str, args: &[Word], command: &CommandRecord, effec
             && effects.targets.iter().any(|target| {
                 target.effect != Effect::Name && !matches!(target.via, Via::Redirect | Via::Cwd)
             })
-        || command
-            .environment
-            .iter()
-            .any(|(_, word)| word.cardinality_unknown)
     {
         effects.gaps.push(CoverageGap::UnsupportedShellSyntax);
     }

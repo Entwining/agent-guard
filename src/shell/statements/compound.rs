@@ -165,7 +165,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         self.emit(
             Command {
                 function: false,
-                environment: Vec::new(),
                 argv: Vec::new(),
                 redirects: targets,
                 cwd: scope.directory.current.render(),

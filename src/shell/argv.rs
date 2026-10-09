@@ -28,17 +28,6 @@ impl EnvironmentChange {
         }
         Some(Self::Set(name.into(), value))
     }
-
-    pub(crate) fn apply(&self, environment: &mut Vec<(String, Word)>) {
-        match self {
-            Self::Clear => environment.clear(),
-            Self::Unset(name) => environment.retain(|(key, _)| key != name),
-            Self::Set(name, value) => {
-                environment.retain(|(key, _)| key != name);
-                environment.push((name.clone(), value.clone()));
-            }
-        }
-    }
 }
 
 fn text(argv: &[Word], index: usize) -> &str {

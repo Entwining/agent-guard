@@ -83,7 +83,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     wrappers: resolution.wrappers,
                     shell: resolution.shell,
                     function: false,
-                    environment: Vec::new(),
                     redirects: Vec::new(),
                     flags: Vec::new(),
                     items: None,
