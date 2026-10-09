@@ -247,7 +247,7 @@ impl<'a> Resolver<'a> {
         {
             return Ok(Identity::Protected(Protection::Credential));
         }
-        if target.effect == Effect::Name && !target.glob || target.via == Via::Tool && target.glob {
+        if target.effect == Effect::Name && !target.glob || target.via == Via::Filter {
             return Ok(Identity::Public(path));
         }
         let resolved_home = match self.home(probe)? {

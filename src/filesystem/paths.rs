@@ -17,18 +17,54 @@ pub fn normalize(path: &str, cwd: &str, home: &str) -> String {
 }
 
 pub(crate) fn absolute_input(path: &str, cwd: &str, home: &str) -> String {
-    let expanded = if let Some(tail) = path.strip_prefix("~/") {
+    let expanded = expand_tilde(path, home);
+    join_cwd(strip_path_aliases(strip_file_url(&expanded)), cwd)
+}
+
+/// A tool path as Node's `path.resolve` gives it to Claude Code and Pi: `~`
+/// expands, no URL scheme is stripped, so `file://../x` names `x` beside a
+/// `file:` entry of the working directory, and each `..` removes the name
+/// before it. The kernel then follows links only in the result, so
+/// `link/../x` opens the `x` beside `link`, not one beside its target. The
+/// working directory is the one the kernel holds, so a `..` that climbs out
+/// of a relative path stays for the kernel to resolve from it.
+pub(crate) fn resolve_tool_path(path: &str, cwd: &str, home: &str) -> String {
+    let path = expand_tilde(path, home);
+    let mut names: Vec<&str> = Vec::new();
+    for name in path.split('/') {
+        match name {
+            "" | "." => {}
+            ".." if names.last().is_some_and(|last| *last != "..") => {
+                names.pop();
+            }
+            name => names.push(name),
+        }
+    }
+    let names = names.join("/");
+    if path.starts_with('/') {
+        format!("/{names}")
+    } else if names.is_empty() {
+        cwd.to_owned()
+    } else {
+        format!("{cwd}/{names}")
+    }
+}
+
+fn expand_tilde(path: &str, home: &str) -> String {
+    if let Some(tail) = path.strip_prefix("~/") {
         format!("{home}/{tail}")
     } else if path == "~" {
         home.to_owned()
     } else {
         path.to_owned()
-    };
-    let expanded = strip_path_aliases(strip_file_url(&expanded));
-    if expanded.starts_with('/') {
-        expanded.to_owned()
+    }
+}
+
+fn join_cwd(path: &str, cwd: &str) -> String {
+    if path.starts_with('/') {
+        path.to_owned()
     } else {
-        format!("{cwd}/{expanded}")
+        format!("{cwd}/{path}")
     }
 }
 

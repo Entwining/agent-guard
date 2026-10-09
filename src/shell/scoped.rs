@@ -149,7 +149,35 @@ pub(super) fn expand_scoped(
 ) -> Result<Vec<Expanded>, CheckError> {
     // Drop the candidate-building frame before recursively observing source;
     // its temporaries otherwise accumulate across the supported nesting depth.
-    let (words, nested) = expand_candidates(raw, scope, evaluator, depth, observe_bindings)?;
+    let (mut words, nested) = expand_candidates(raw, scope, evaluator, depth, observe_bindings)?;
+    let fields = words.iter().map(|word| word.split.len()).sum::<usize>();
+    // Only repetition makes a value longer than the accepted input. A word may
+    // still repeat a short value into a longer path.
+    let oversized = scope.bindings.values().any(|binding| {
+        binding.values.iter().any(|value| {
+            value
+                .lexical()
+                .is_some_and(|text| text.len() > crate::limits::MAX_INPUT_BYTES)
+        })
+    });
+    // Stored expansions feed later ones, so either quantity can double per
+    // statement. The gap refuses the call; the remaining model only needs to
+    // stay small.
+    if fields > crate::limits::MAX_EXPANSION_FIELDS || oversized {
+        evaluator.output.gap(CoverageGap::InspectionBudget);
+        words.truncate(1);
+        for word in &mut words {
+            word.word = Word::literal(String::new());
+            word.split.clear();
+        }
+    }
+    #[cfg(test)]
+    {
+        evaluator.output.expansion_size += words
+            .iter()
+            .map(|word| word.split.len() + word.word.text.len())
+            .sum::<usize>();
+    }
     for code in nested {
         evaluator.isolated_source(&code, scope, depth + 1)?;
     }

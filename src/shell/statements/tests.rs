@@ -43,4 +43,5 @@ mod directory;
 mod expansion;
 mod flow;
 mod loop_cost;
+mod pipeline_cost;
 mod snapshot_cost;

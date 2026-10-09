@@ -553,7 +553,7 @@
       "nested": false,
       "gap": "InspectionBudget",
       "reason": "inspection budget",
-      "alternative": "Split loops or function calls",
+      "alternative": "Split loops, function calls or brace alternatives",
       "scope": "quoted data is checked by the armed binding classifier when referenced"
     },
     {

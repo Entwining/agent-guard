@@ -198,6 +198,8 @@ pub enum CheckErrorKind {
     GuardFault,
     ProbeFault,
     ResourceLimit,
+    /// Policy turns this into an inspection-budget refusal before rendering.
+    InspectionBudget,
     Deadline,
     Cancelled,
     BrokenEnrollment,
@@ -248,6 +250,7 @@ impl fmt::Display for CheckError {
             CheckErrorKind::GuardFault => "checker failed",
             CheckErrorKind::ProbeFault => "filesystem probe failed",
             CheckErrorKind::ResourceLimit => "checker resource limit exceeded",
+            CheckErrorKind::InspectionBudget => "checker inspection budget exceeded",
             CheckErrorKind::Deadline => "checker deadline exceeded",
             CheckErrorKind::Cancelled => "check cancelled",
             CheckErrorKind::BrokenEnrollment => "consumer enrollment is unavailable",

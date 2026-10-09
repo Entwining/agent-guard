@@ -77,7 +77,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             let before =
                 scope.returns.len() + scope.loops.iter().map(|states| states.len()).sum::<usize>();
             outputs.push(self.statement(statement, scope, depth, source_id, nested)?);
-            if !scope.channels.is_empty() {
+            if scope.captured {
                 let after = scope
                     .returns
                     .iter()

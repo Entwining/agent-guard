@@ -180,3 +180,24 @@ fn complete_alternative_argv() {
         );
     }
 }
+#[test]
+fn doubled_values_stop_growing_past_the_expansion_bounds() {
+    for (seed, step, steps) in [
+        ("a=x;", " a=$a$a;", [20, 22]),
+        ("set -- x;", r#" set -- "$@" "$@";"#, [16, 17]),
+        ("a=(x);", r#" a=("${a[@]}" "${a[@]}");"#, [16, 17]),
+    ] {
+        let sizes = steps.map(|steps| {
+            let source = format!("{seed}{} cat $a \"$@\"", step.repeat(steps));
+            let output = observe(&source, Arm::Brush, "/h", "/h/p", false).unwrap();
+            assert!(
+                output.gaps.contains(&CoverageGap::InspectionBudget),
+                "{seed}"
+            );
+            output.expansion_size
+        });
+        println!("{seed} expansion size: {sizes:?}");
+        // Past the bound each step adds only its literal words.
+        assert!(sizes[1] < sizes[0] + 64, "{seed}: {sizes:?}");
+    }
+}

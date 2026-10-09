@@ -28,7 +28,7 @@ impl FirmlinkTable {
                 .filter_map(|line| {
                     line.split('\t')
                         .nth(1)
-                        .map(|root| format!("/system/volumes/data/{}", root.to_lowercase()))
+                        .map(|root| format!("/system/volumes/data/{}", super::fold(root)))
                 })
                 .collect(),
         }
@@ -59,7 +59,7 @@ pub(super) fn follow(
             let rebased = table.roots.contains(&lower_prefix);
             if rebased {
                 prefix = unfirmlink(&prefix);
-                lower_prefix = prefix.to_lowercase();
+                lower_prefix = super::fold(&prefix);
             }
             for path in [&mut prefix, &mut lower_prefix] {
                 path.truncate(path.rfind('/').map_or(1, |at| at.max(1)));
@@ -83,7 +83,7 @@ pub(super) fn follow(
                 lower_prefix.push('/');
             }
             prefix.push_str(&part);
-            lower_prefix.push_str(&part.to_lowercase());
+            lower_prefix.push_str(&super::fold(&part));
             #[cfg(test)]
             {
                 lexical.classified_bytes += part.len();

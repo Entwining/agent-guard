@@ -23,7 +23,7 @@ impl Scope {
         }
     }
     pub(in crate::shell) fn capture(&mut self, channel: usize) {
-        Rc::make_mut(&mut self.channels).push(channel);
+        self.captured = true;
         Rc::make_mut(&mut self.output_fds).insert(1, Some(channel));
     }
     pub(in crate::shell) fn input(&self, fd: i32) -> Option<&Flow> {
@@ -113,7 +113,7 @@ impl Scope {
         origins
     }
     pub(super) fn set_origins(&mut self, name: &str, origins: Origins) {
-        if !self.channels.is_empty()
+        if self.captured
             && let Some(binding) = Rc::make_mut(&mut self.bindings).get_mut(name)
         {
             binding.origins = Some(Rc::new(origins));

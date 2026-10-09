@@ -9,8 +9,13 @@ use std::{
     time::Duration,
 };
 
+mod entry_group_fixture;
+
 fn main() -> io::Result<()> {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
+    if arguments.first().is_some_and(|arg| arg == "entry-group") {
+        std::process::exit(entry_group_fixture::run(&arguments[1..])?);
+    }
     if arguments.first().is_some_and(|arg| arg == "runner") {
         std::process::exit(agent_guard_rust::entry::run(&arguments[1..])?);
     }
@@ -18,6 +23,9 @@ fn main() -> io::Result<()> {
         .first()
         .is_some_and(|arg| arg == "--supervised-checker")
     {
+        if arguments.get(1).is_some_and(|arg| arg == "entry-group") {
+            std::process::exit(entry_group_fixture::run(&arguments[2..])?);
+        }
         return fault_checker(&arguments[1..]);
     }
     let mut args = arguments.into_iter();

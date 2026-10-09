@@ -1,5 +1,6 @@
 //! Lexical checks precede identity and public search file-kind probes.
 
+mod fold;
 mod glob;
 mod lexical;
 mod links;
@@ -15,7 +16,7 @@ mod resolver;
 mod ssh;
 
 pub(crate) use glob::{
-    component as parameter_pattern_matches, escape_literal as literal_glob_root, grep_pattern,
+    escape_literal as literal_glob_root, grep_pattern, parameter_pattern_matches, search_glob,
     shell_pattern,
 };
 pub use links::FirmlinkTable;
@@ -75,9 +76,10 @@ pub enum Identity {
     InheritedInput,
 }
 
+use fold::fold;
 pub(crate) use paths::{
-    absolute_input, absolute_pattern, descriptor_path, literal_shell_pattern, strip_file_url,
-    strip_path_aliases,
+    absolute_input, absolute_pattern, descriptor_path, literal_shell_pattern, resolve_tool_path,
+    strip_file_url, strip_path_aliases,
 };
 pub use paths::{expand_home, normalize};
 use paths::{unfirmlink, unfirmlink_path};

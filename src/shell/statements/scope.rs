@@ -71,7 +71,7 @@ impl Scope {
             piped: false,
             zsh: false,
             pipeline_input: None,
-            channels: Rc::default(),
+            captured: false,
             output_fds: Rc::new(BTreeMap::from([(1, None), (2, None)])),
             input_fds: Rc::default(),
             stdin_id: usize::MAX,

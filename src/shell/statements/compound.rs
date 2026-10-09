@@ -21,7 +21,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             .flat_map(|states| states.iter().skip(before))
             .cloned()
             .collect::<Vec<_>>();
-        if !scope.channels.is_empty() && states.iter().any(|state| !state.continue_loop) {
+        if scope.captured && states.iter().any(|state| !state.continue_loop) {
             let prefix = self.flow.outputs(&std::mem::take(outputs), false);
             let mut active = prefix.clone();
             for state in states.iter().filter(|state| !state.continue_loop) {
@@ -90,13 +90,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             Statement::Binary(Operator::And | Operator::Or, _, _) => {
                 outputs.push(self.logical_list(statement, scope, depth, source_id, nested)?);
             }
-            Statement::Binary(Operator::Pipe, left, right) => {
-                outputs.push(self.pipe_statement(
-                    left,
-                    right,
-                    scope,
-                    (depth, source_id, nested),
-                )?);
+            Statement::Pipeline(stages) => {
+                outputs.push(self.pipeline_statement(stages, scope, (depth, source_id, nested))?);
             }
             Statement::Conditional {
                 condition,
@@ -258,7 +253,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         // an isolated-shell refusal for an ordinary function frame.
         inner.isolated = scope.isolated;
         inner.defining = true;
-        inner.channels = Rc::default();
+        inner.captured = false;
         inner.output_fds = Rc::default();
         inner.enter_function();
         // Definitions have unknown argv, not an invocation with no arguments.
@@ -275,52 +270,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         result?;
 
         Ok(())
-    }
-
-    fn pipe_statement(
-        &mut self,
-        left: &Statement,
-        right: &Statement,
-        scope: &mut Scope,
-        context: (usize, usize, bool),
-    ) -> Result<Output, CheckError> {
-        let (depth, source_id, nested) = context;
-
-        let inherited_input = scope.pipeline_input.clone();
-        let before = scope.isolated();
-        let start = self.output.script.commands.len();
-        let channel = self.flow.channel();
-        let mut producer = before.isolated();
-        producer.pipeline_input = inherited_input.clone();
-        producer.capture(channel);
-        producer.piped = true;
-        let mut left_output = self.statement(left, &mut producer, depth, source_id, nested)?;
-        let middle = self.output.script.commands.len();
-        let mut rhs = before.isolated();
-        rhs.piped = true;
-        rhs.stdin_id = channel;
-        let input = left_output.remove(&channel).unwrap_or_default();
-        rhs.pipeline_input = Some(input.clone());
-        Rc::make_mut(&mut rhs.input_cursors).insert(channel, input);
-        let right_output = self.statement(right, &mut rhs, depth, source_id, nested)?;
-        let output = self.flow.outputs(&[left_output, right_output], false);
-        let (left, right) = self.output.script.commands[start..].split_at_mut(middle - start);
-        shell::pipeline::mark_walked_input(left, right);
-        let sources = shell::pipeline::xargs_replacements(left, right);
-
-        for input in sources {
-            self.source(
-                &input.source,
-                &mut Scope::new(self.frontend.host.home, &input.cwd),
-                depth + 1,
-            )?;
-        }
-        let lhs = scope.clone();
-        self.merge_bindings(scope, &[lhs, rhs.clone()]);
-        self.merge_directories(scope, &[rhs]);
-        scope.pipeline_input = inherited_input;
-
-        Ok(output)
     }
 
     fn conditional_statement(

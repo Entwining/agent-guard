@@ -9,6 +9,22 @@ pub(super) fn infer_search(
 ) {
     let (mut operands, globs, hidden, names, recursive) =
         search_arguments(program, args, cwd, host, effects);
+    // A negated glob only excludes, and globs match paths relative to the
+    // search root, which never contain `..`; neither selects a file.
+    let selecting: Vec<_> = globs
+        .iter()
+        .filter(|glob| !glob.starts_with('!') && !glob.split('/').any(|part| part == ".."))
+        .collect();
+    // ripgrep skips a hidden entry unless `--hidden` is given or a positive
+    // glob matches that entry, so hidden names are reachable only when some
+    // glob's last component can match a dot name.
+    let reaches_hidden = program == "grep"
+        || hidden
+        || selecting.iter().any(|glob| {
+            glob.rsplit('/')
+                .next()
+                .is_some_and(|last| last.starts_with(['.', '*', '?', '[', '{']))
+        });
     let implicit = operands.is_empty() && (program != "grep" || hidden);
     if implicit {
         operands.push(Word::literal(cwd.to_owned()));
@@ -37,30 +53,27 @@ pub(super) fn infer_search(
         target.search = implicit && !args.iter().any(|arg| arg == "--help" || arg == "-h");
         effects.targets.push(target);
         if !names {
-            for glob in &globs {
-                if !glob.starts_with('!') {
-                    let mut target = Target::new(
-                        crate::filesystem::absolute_input(
-                            &format!(
-                                "{}/{}",
-                                if root.globs || root.shell_matches {
-                                    root.text.clone()
-                                } else {
-                                    crate::filesystem::literal_glob_root(&root.text)
-                                },
-                                glob.rsplit('/').next().unwrap_or(glob)
-                            ),
-                            cwd,
-                            host.home,
+            for glob in &selecting {
+                let mut target = Target::new(
+                    crate::filesystem::absolute_input(
+                        &crate::filesystem::search_glob(
+                            &if root.globs || root.shell_matches {
+                                root.text.clone()
+                            } else {
+                                crate::filesystem::literal_glob_root(&root.text)
+                            },
+                            glob,
                         ),
-                        Effect::Read,
-                        Walk::None,
-                        Via::Operand,
-                    );
-                    target.glob = true;
-                    target.glob_hidden = program == "grep" || hidden;
-                    effects.targets.push(target);
-                }
+                        cwd,
+                        host.home,
+                    ),
+                    Effect::Read,
+                    Walk::None,
+                    Via::Filter,
+                );
+                target.glob = true;
+                target.glob_hidden = reaches_hidden;
+                effects.targets.push(target);
             }
         }
     }

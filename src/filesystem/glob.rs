@@ -85,40 +85,12 @@ fn tokens(pattern: &str) -> Vec<Token> {
                 result.push(Token::Literal(chars[index]));
             }
             '[' => {
-                let start = index;
-                index += 1;
-                if chars
-                    .get(index)
-                    .is_some_and(|c| ['!', '^', ']'].contains(c))
-                {
-                    index += 1;
-                }
-                while index < chars.len() {
-                    if chars[index] == '\\' && index + 1 < chars.len() {
-                        index += 2;
-                        continue;
-                    }
-                    if chars[index] == '[' && chars.get(index + 1) == Some(&':') {
-                        index += 2;
-                        while index + 1 < chars.len()
-                            && !(chars[index] == ':' && chars[index + 1] == ']')
-                        {
-                            index += 1;
-                        }
-                        index += 2;
-                        continue;
-                    }
-                    if chars[index] == ']' {
-                        break;
-                    }
-                    index += 1;
-                }
-                if index < chars.len() {
-                    result.push(Token::Class(chars[start + 1..index].iter().collect()));
-                } else {
-                    result.extend(chars[start..].iter().copied().map(Token::Literal));
+                let Some(end) = class_end(&chars, index) else {
+                    result.extend(chars[index..].iter().copied().map(Token::Literal));
                     break;
-                }
+                };
+                result.push(Token::Class(chars[index + 1..end].iter().collect()));
+                index = end;
             }
             ch => result.push(Token::Literal(ch)),
         }
@@ -127,16 +99,121 @@ fn tokens(pattern: &str) -> Vec<Token> {
     result
 }
 
-fn class_matches(body: &str, ch: char) -> bool {
+/// Returns the index of the `]` that closes the class opened at `start`.
+fn class_end(chars: &[char], start: usize) -> Option<usize> {
+    let mut index = start + 1;
+    if chars
+        .get(index)
+        .is_some_and(|c| ['!', '^', ']'].contains(c))
+    {
+        index += 1;
+    }
+    while index < chars.len() {
+        if chars[index] == '\\' && index + 1 < chars.len() {
+            index += 2;
+            continue;
+        }
+        if chars[index] == '['
+            && let Some(&delimiter) = chars.get(index + 1).filter(|c| [':', '=', '.'].contains(c))
+            && let Some(close) = (index + 2..chars.len().saturating_sub(1))
+                .find(|&at| chars[at] == delimiter && chars[at + 1] == ']')
+        {
+            index = close + 2;
+            continue;
+        }
+        if chars[index] == ']' {
+            return Some(index);
+        }
+        index += 1;
+    }
+    None
+}
+
+/// Lowercases a pattern outside its bracket classes. A class keeps its
+/// spelling because lowercasing `[A-_]` or `[!A-Za-z]` changes the characters
+/// it names; matching then tries both cases of the folded subject. Fold each
+/// brace alternative separately, since a bracket can close a class only after
+/// expansion removes the text between.
+pub(super) fn fold_pattern(pattern: &str) -> String {
+    let chars: Vec<char> = pattern.chars().collect();
+    let mut folded = String::with_capacity(pattern.len());
+    let mut run = String::new();
+    let mut index = 0;
+    while index < chars.len() {
+        match chars[index] {
+            '\\' if index + 1 < chars.len() => {
+                run.push('\\');
+                run.push(chars[index + 1]);
+                index += 2;
+            }
+            '[' => {
+                let Some(end) = class_end(&chars, index) else {
+                    run.extend(&chars[index..]);
+                    break;
+                };
+                folded.push_str(&super::fold(&run));
+                run.clear();
+                folded.extend(&chars[index..=end]);
+                index = end + 1;
+            }
+            ch => {
+                run.push(ch);
+                index += 1;
+            }
+        }
+    }
+    folded.push_str(&super::fold(&run));
+    folded
+}
+
+/// Protected names are compared after lowercasing, as the default APFS
+/// volume resolves them, so a filesystem class matches when either ASCII case
+/// does: `[[:upper:]]ontainers` reaches `Containers`. Shell string operations
+/// such as `${f#pattern}` compare case exactly.
+#[derive(Clone, Copy)]
+enum Case {
+    Exact,
+    Folded,
+}
+
+fn class_matches(body: &str, ch: char, case: Case) -> bool {
+    match case {
+        Case::Exact => class_matches_exact(body, ch),
+        Case::Folded => [ch.to_ascii_lowercase(), ch.to_ascii_uppercase()]
+            .into_iter()
+            .any(|ch| class_matches_exact(body, ch)),
+    }
+}
+
+fn class_matches_exact(body: &str, ch: char) -> bool {
     let negate = body.starts_with(['!', '^']);
     let body = if negate { &body[1..] } else { body };
     let mut hit = false;
     let mut rest = body;
     while !rest.is_empty() {
-        if let Some(tail) = rest.strip_prefix("[:")
-            && let Some(end) = tail.find(":]")
+        if let Some(tail) = rest.strip_prefix('[')
+            && let Some(delimiter) = tail.chars().next().filter(|c| [':', '=', '.'].contains(c))
+            && let Some(end) = tail[1..].find(match delimiter {
+                ':' => ":]",
+                '=' => "=]",
+                _ => ".]",
+            })
         {
-            hit |= match &tail[..end] {
+            let name = &tail[1..=end];
+            rest = &tail[end + 3..];
+            if delimiter != ':' {
+                // Bash equivalence classes and collating symbols name one
+                // character, or a collating element such as `[.period.]`.
+                // An element name matches every character so that negation
+                // cannot exclude the character it names.
+                let mut chars = name.chars();
+                match (chars.next(), chars.next()) {
+                    (Some(only), None) => hit |= only == ch,
+                    _ => return true,
+                }
+                continue;
+            }
+            hit |= match name {
                 "alnum" => ch.is_ascii_alphanumeric(),
                 "alpha" => ch.is_ascii_alphabetic(),
                 "ascii" => ch.is_ascii(),
@@ -153,7 +230,6 @@ fn class_matches(body: &str, ch: char) -> bool {
                 "xdigit" => ch.is_ascii_hexdigit(),
                 _ => false,
             };
-            rest = &tail[end + 2..];
             continue;
         }
         let Some((first, consumed)) = class_character(rest) else {
@@ -185,11 +261,11 @@ fn class_character(text: &str) -> Option<(char, usize)> {
     }
 }
 
-fn accepts(token: &Token, ch: char) -> bool {
+fn accepts(token: &Token, ch: char, case: Case) -> bool {
     match token {
         Token::Literal(value) => *value == ch,
         Token::Any | Token::Star => true,
-        Token::Class(body) => class_matches(body, ch),
+        Token::Class(body) => class_matches(body, ch, case),
     }
 }
 
@@ -269,11 +345,11 @@ fn intersects_counted(left: &str, right: &str, comparisons: &mut impl FnMut()) -
             let compatible = match (x, y) {
                 (Token::Literal(ch), other) | (other, Token::Literal(ch)) => {
                     comparisons();
-                    accepts(other, *ch)
+                    accepts(other, *ch, Case::Folded)
                 }
                 _ => (0..128).filter_map(char::from_u32).any(|ch| {
                     comparisons();
-                    accepts(x, ch) && accepts(y, ch)
+                    accepts(x, ch, Case::Folded) && accepts(y, ch, Case::Folded)
                 }),
             };
             if compatible {
@@ -287,11 +363,20 @@ fn intersects_counted(left: &str, right: &str, comparisons: &mut impl FnMut()) -
     false
 }
 
-pub(crate) fn component(pattern: &str, subject: &str) -> bool {
-    component_counted(pattern, subject, &mut || {})
+pub(super) fn component(pattern: &str, subject: &str) -> bool {
+    component_counted(pattern, subject, Case::Folded, &mut || {})
 }
 
-fn component_counted(pattern: &str, subject: &str, comparisons: &mut impl FnMut()) -> bool {
+pub(crate) fn parameter_pattern_matches(pattern: &str, subject: &str) -> bool {
+    component_counted(pattern, subject, Case::Exact, &mut || {})
+}
+
+fn component_counted(
+    pattern: &str,
+    subject: &str,
+    case: Case,
+    comparisons: &mut impl FnMut(),
+) -> bool {
     if !pattern.is_empty() && pattern.bytes().all(|byte| byte == b'*') {
         return true;
     }
@@ -317,7 +402,7 @@ fn component_counted(pattern: &str, subject: &str, comparisons: &mut impl FnMut(
             i += 1;
         } else if pattern.get(i).is_some_and(|token| {
             comparisons();
-            accepts(token, subject[j])
+            accepts(token, subject[j], case)
         }) {
             i += 1;
             j += 1;
@@ -359,9 +444,14 @@ pub(crate) fn escape_literal(subject: &str) -> String {
 }
 
 pub(crate) fn grep_pattern(root: &str, pattern: &str) -> String {
-    // Grep applies separator-free globs to basenames at every depth.
-    let recursive = if pattern.contains('/') { "" } else { "**/" };
-    format!("{}/{recursive}{pattern}", escape_literal(root))
+    search_glob(&escape_literal(root), pattern)
+}
+
+/// The Grep tool and ripgrep's `--glob` apply a separator-free glob to
+/// basenames at every depth and a glob with a separator to its whole path.
+pub(crate) fn search_glob(root_pattern: &str, glob: &str) -> String {
+    let recursive = if glob.contains('/') { "" } else { "**/" };
+    format!("{root_pattern}/{recursive}{glob}")
 }
 
 pub(crate) fn shell_pattern(text: &str, quoted: &[std::ops::Range<usize>]) -> String {

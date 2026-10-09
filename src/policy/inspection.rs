@@ -49,7 +49,7 @@ impl Inspection<'_> {
         // Broad traversal is independent of a narrower credential identity.
         // Decide a lexical root before probes, then check resolved aliases below.
         let broad_access = target.via != Via::Items
-            && !(target.via == Via::Tool && target.glob)
+            && target.via != Via::Filter
             && (target.walk != Walk::None || target.glob)
             && (target.effect != Effect::Name || target.glob);
         let lexical_broad = if broad_access {
@@ -419,7 +419,7 @@ fn target_rule(
     // Credential-content and SSH-scope refusals need distinct alternatives;
     // search scope must not be presented as an ordinary credential-file read.
     Ok(if kind == Protection::AppData {
-        if !filesystem::appdata_reason(&target.path, home, target.glob)
+        if !filesystem::appdata_reason(&target.path, home, target.glob)?
             && resolver.broad(&target.path, home, target.glob)?
         {
             DenialRule::Broad

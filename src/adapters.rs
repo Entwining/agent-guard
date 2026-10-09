@@ -4,6 +4,10 @@ use crate::{
 };
 use serde_json::{Value, json};
 
+mod consumer_paths;
+pub(crate) use consumer_paths::opened_path;
+use consumer_paths::{claude_aliases, consumer_path, grep_globs};
+
 pub fn effects_value(effects: &[EffectRecord]) -> Value {
     json!(effects.iter().map(|effect| match effect {
         EffectRecord::ProtectedTarget { protection, write, source } => json!({"kind":"ProtectedTarget","protection":format!("{protection:?}"),"write":write,"source":format!("{source:?}")}),
@@ -23,7 +27,7 @@ pub enum Operation {
     Shell(String),
     Read(String),
     Write(String),
-    Search { root: String, glob: String },
+    Search { root: String, globs: Vec<String> },
     Outside(String),
 }
 
@@ -101,7 +105,8 @@ pub(crate) fn decode_protocol(
     {
         return Err(malformed());
     }
-    let (name, input) = decode_envelope(consumer, &value, protocol, normalized, raw_codex_shell)?;
+    let (name, mut input) =
+        decode_envelope(consumer, &value, protocol, normalized, raw_codex_shell)?;
     let workdir = if consumer == Consumer::Codex
         && ["exec_command", "functions.exec_command"].contains(&name)
     {
@@ -127,12 +132,15 @@ pub(crate) fn decode_protocol(
         });
     }
     let folded_name = folded_tool_name(name);
+    if consumer == Consumer::Claude {
+        claude_aliases(&folded_name, &mut input);
+    }
     // Native stdin uses file_path for every runtime; Pi's tool-facing input
     // is a separate protocol with its own path field.
-    let pi_path = if protocol == Protocol::Native {
-        "file_path"
-    } else {
+    let path_key = if consumer == Consumer::Pi && protocol == Protocol::Tool {
         "path"
+    } else {
+        "file_path"
     };
     let operation = match (consumer, folded_name.as_str()) {
         (Consumer::Claude | Consumer::Codex | Consumer::Pi, "bash") => {
@@ -143,25 +151,27 @@ pub(crate) fn decode_protocol(
         {
             Operation::Shell(field(&input, "cmd")?)
         }
-        (Consumer::Claude | Consumer::Codex, "read") => {
-            Operation::Read(field(&input, "file_path")?)
+        (_, "read") => Operation::Read(consumer_path(consumer, field(&input, path_key)?)?),
+        (_, "write" | "edit") => {
+            Operation::Write(consumer_path(consumer, field(&input, path_key)?)?)
         }
-        (Consumer::Pi, "read") => Operation::Read(field(&input, pi_path)?),
-        (Consumer::Claude | Consumer::Codex, "write" | "edit") => {
-            Operation::Write(field(&input, "file_path")?)
+        (Consumer::Claude | Consumer::Codex | Consumer::Pi, "grep") if !input.is_object() => {
+            return Err(malformed());
         }
-        (Consumer::Pi, "write" | "edit") => Operation::Write(field(&input, pi_path)?),
         (Consumer::Claude | Consumer::Codex | Consumer::Pi, "grep") => Operation::Search {
             root: input
                 .get("path")
-                .map(|_| field(&input, "path"))
+                .map(|_| consumer_path(consumer, field(&input, "path")?))
                 .transpose()?
                 .unwrap_or_default(),
-            glob: input
-                .get("glob")
-                .map(|_| field(&input, "glob"))
-                .transpose()?
-                .unwrap_or_default(),
+            globs: grep_globs(
+                consumer,
+                input
+                    .get("glob")
+                    .map(|_| field(&input, "glob"))
+                    .transpose()?
+                    .unwrap_or_default(),
+            ),
         },
         _ => Operation::Outside(name.to_owned()),
     };

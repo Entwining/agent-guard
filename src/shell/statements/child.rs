@@ -46,7 +46,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         child.input_fds = scope.input_fds.clone();
         child.stdin_id = scope.stdin_id;
         child.input_cursors = scope.input_cursors.clone();
-        child.channels = scope.channels.clone();
+        child.captured = scope.captured;
         child.output_fds = scope.output_fds.clone();
         child.flow_guard = scope.flow_guard.clone();
         child.zsh = self.frontend.zsh;

@@ -47,7 +47,7 @@ pub(crate) fn refusal_message(cause: &CoverageGap) -> &'static str {
             "The guard cannot inspect an inode-addressed /.vol path. Name the file by its ordinary file path, then recheck the call."
         }
         CoverageGap::InspectionBudget => {
-            "This command exceeds the guard's inspection budget. Split loops or function calls into smaller commands with explicit public paths, then recheck each command."
+            "This command exceeds the guard's inspection budget. Split loops, function calls or brace alternatives into smaller commands with explicit public paths, then recheck each command."
         }
         CoverageGap::IdentityBound => {
             "The guard cannot resolve this path through bounded or cyclic aliases. Name the file by an ordinary absolute path without the cyclic or deep alias chain, then recheck the call."

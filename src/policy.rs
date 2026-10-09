@@ -166,7 +166,13 @@ fn evaluate_with_catalog_loader(
         broad_root_queries: 0,
         deadline,
     };
-    inspect_operation(&mut inspection, &decoded)?;
+    match inspect_operation(&mut inspection, &decoded) {
+        // Inspection stopped with an unchecked remainder; earlier findings stand.
+        Err(CheckError {
+            kind: CheckErrorKind::InspectionBudget,
+        }) => inspection.gaps.push(CoverageGap::InspectionBudget),
+        result => result?,
+    }
     crate::check_deadline(deadline)?;
     Ok(finish_inspection(inspection, &decoded.cwd))
 }
@@ -234,7 +240,12 @@ fn inspect_operation(
     match &decoded.operation {
         Operation::Read(path) | Operation::Write(path) => inspection.target(
             &Target::new(
-                filesystem::absolute_input(path, &decoded.cwd, &inspection.context.home),
+                adapters::opened_path(
+                    inspection.context.consumer,
+                    path,
+                    &decoded.cwd,
+                    &inspection.context.home,
+                ),
                 if matches!(decoded.operation, Operation::Write(_)) {
                     Effect::Write
                 } else {
@@ -246,18 +257,31 @@ fn inspect_operation(
             &decoded.cwd,
             EffectSource::Operand,
         )?,
-        Operation::Search { root, glob } => {
-            let root = if root.is_empty() { &decoded.cwd } else { root };
-            let root = filesystem::absolute_input(root, &decoded.cwd, &inspection.context.home);
+        Operation::Search { root, globs } => {
+            // Without a path Claude Code hands its working directory to
+            // ripgrep unresolved, so the kernel resolves its spelling.
+            let root = if root.is_empty() {
+                filesystem::absolute_input(&decoded.cwd, &decoded.cwd, &inspection.context.home)
+            } else {
+                adapters::opened_path(
+                    inspection.context.consumer,
+                    root,
+                    &decoded.cwd,
+                    &inspection.context.home,
+                )
+            };
             let mut target = Target::new(root.clone(), Effect::Read, Walk::Visible, Via::Tool);
             target.search = true;
             inspection.target(&target, &decoded.cwd, EffectSource::Operand)?;
-            if !glob.is_empty() && !glob.starts_with('!') {
+            for glob in globs {
+                if glob.is_empty() || glob.starts_with('!') {
+                    continue;
+                }
                 let mut target = Target::new(
                     filesystem::grep_pattern(&root, glob),
                     Effect::Read,
                     Walk::None,
-                    Via::Tool,
+                    Via::Filter,
                 );
                 target.glob = true;
                 inspection.target(&target, &decoded.cwd, EffectSource::Operand)?;

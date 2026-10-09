@@ -166,7 +166,7 @@ impl Scope {
                 .entry(name.clone())
                 .or_insert_with(|| self.bindings.get(&name).cloned());
         }
-        let origins = if self.channels.is_empty() {
+        let origins = if !self.captured {
             None
         } else {
             let guards = if self.flow_end {

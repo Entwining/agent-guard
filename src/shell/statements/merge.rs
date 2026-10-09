@@ -5,7 +5,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         if scope.join(branches) {
             self.output.gap(CoverageGap::InspectionBudget);
         }
-        if !scope.channels.is_empty() {
+        if scope.captured {
             for (name, binding) in Rc::make_mut(&mut scope.bindings) {
                 if let Some(first) = branches
                     .first()

@@ -1,0 +1,24 @@
+{
+  "rows": [
+    {"id":"rg-glob-recursive-private-keys","partition":"search-glob-path","input":{"command":"rg -l KEYBOX -g '**/private-keys-v1.d/**' ."},"expected":"D"},
+    {"id":"rg-glob-nested-env","partition":"search-glob-path","input":{"command":"rg -l KEY -g 'config/.env' ."},"expected":"D"},
+    {"id":"rg-glob-ssh-identities","partition":"search-glob-path","input":{"command":"rg -l KEY -g '**/.ssh/id_*' ."},"expected":"D"},
+    {"id":"rg-long-glob-equals-nested-env","partition":"search-glob-path","input":{"command":"rg -l KEY --glob=sub/**/.env ."},"expected":"D"},
+    {"id":"rg-iglob-nested-env","partition":"search-glob-path","input":{"command":"rg -l KEY --iglob 'deploy/.ENV' ."},"expected":"D"},
+    {"id":"rg-glob-basename-env","partition":"search-glob-path","input":{"command":"rg -l KEY -g '.env' ."},"expected":"D"},
+    {"id":"rg-glob-basename-source","partition":"search-glob-path","input":{"command":"rg -l KEY -g '*.ts' ."},"expected":"N"},
+    {"id":"rg-glob-nested-source","partition":"search-glob-path","input":{"command":"rg -l KEY -g 'src/**/*.ts' ."},"expected":"N"},
+    {"id":"rg-glob-below-array-glob-root-filters","partition":"search-glob-path","input":{"command":"cd ~/projects && d=(./*agent*); rg -l -F KEY -g '*.jsonl' -- \"${d[@]}\""},"expected":"N"},
+    {"id":"rg-glob-below-literal-root-filters","partition":"search-glob-path","input":{"command":"rg -l KEY -g '*.jsonl' -- logs"},"expected":"N"},
+    {"id":"rg-negative-nested-env","partition":"search-glob-path","input":{"command":"rg -l KEY -g '!config/.env' ."},"expected":"N"},
+    {"id":"rg-wildcard-glob-selects-hidden-dotfile","partition":"search-glob-hidden","input":{"command":"rg -l KEY -g '*.npmrc' ."},"expected":"D"},
+    {"id":"rg-path-glob-selects-hidden-dotfile","partition":"search-glob-hidden","input":{"command":"rg -l KEY -g 'config/*.npmrc' ."},"expected":"D"},
+    {"id":"rg-name-glob-skips-hidden-directory","partition":"search-glob-hidden","input":{"command":"rg -l KEY -g 'credentials' ."},"expected":"N"},
+    {"id":"rg-credential-like-source-name-stays-public","partition":"search-glob-hidden","input":{"command":"rg -n expiresAt lib/apps -g 'credentials.ts' -g 'route.ts'"},"expected":"N"},
+    {"id":"rg-glob-pair-enters-hidden-directory","partition":"search-glob-hidden","input":{"command":"rg -l KEY -g '.aws' -g 'credentials' ."},"expected":"D"},
+    {"id":"rg-leading-star-names-trailing-star-entry","partition":"search-glob-hidden","input":{"command":"rg -l KEY -g '*auth.json' ."},"expected":"D"},
+    {"id":"rg-extension-glob-stays-public","partition":"search-glob-hidden","input":{"command":"rg -l KEY -g '*.json' ."},"expected":"N"},
+    {"id":"rg-parent-glob-selects-nothing","partition":"search-glob-hidden","input":{"command":"rg -l KEY -g '../**' ."},"expected":"N"},
+    {"id":"rg-negated-any-name-glob-stays-visible","partition":"search-glob-hidden","input":{"command":"rg -l KEY -g '!*' ."},"expected":"N"}
+  ]
+}

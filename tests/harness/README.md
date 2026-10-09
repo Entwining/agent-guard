@@ -21,7 +21,7 @@ Run the no-guard control separately with the same package and clients:
 "$out/cargo-target/debug/agent-guard-runtime" --source "$PWD" --entry "$out/package/bin/agent-guard" --output "$out/runtime-without-guard" --runtimes claude,pi,codex --ablate
 ```
 
-Every control case must execute, including the synthetic protected canaries. Compare the recorded identities before comparing reports. The measured hook duration excludes runtime startup; cold runtime durations include startup variability. These reports observe the entry PID only. They do not establish cleanup of runner, checker, watchdog or other descendants.
+Every control case must execute, including the synthetic protected canaries. Compare the recorded identities before comparing reports. The measured hook duration excludes runtime startup; cold runtime durations include startup variability. These reports observe the entry PID only. They do not establish cleanup of runner, checker or other descendants.
 
 Before runtime acceptance, require 30 verified, matched calls per selected client in both runs, record client versions and executable hashes, and count `child setpgid` lines in recorded stdout/stderr. The count must be zero; a nonzero count requires investigation of the wrapper. A missing executable or failure before hooks does not establish a zero-warning result for that client. Keep host process-group or loopback refusals with the exact command and error, and rerun on an authorized host into fresh evidence directories; do not modify the harness to avoid the operation.
 
@@ -35,6 +35,8 @@ cargo build --locked --bin agent-guard-lifecycle --target-dir "$out/cargo-target
 ```
 
 Fifteen faults run three times each: pipe input, delayed startup, startup stall, large stdout/stderr denial reasons, slow or absent reasons, checker failure and panic, partial output before panic, hung descendants, stalled or failed supervisor, leftover child, and filesystem dependency failure. Instrumented children record their own PID and process group. The driver samples survivors before its cleanup, records full output, verifies the large-output producer independently, and requires the guard's total deadline and failure contract.
+
+The native runner makes itself the leader of its process group before it reads input or starts a child, and kills that group at the three-second total deadline. The shell entry kills the same group after the runner exits. The `deadline` control alters the runner's deadline in the copied source and `cleanup` removes the entry's post-exit group kill.
 
 The following negative controls must each exit unsuccessfully with three contract violations. Use a distinct output directory for every invocation:
 

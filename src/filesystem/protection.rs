@@ -10,7 +10,7 @@ pub fn lexical_literal(path: &str, home: &str) -> Option<Protection> {
 }
 
 pub fn appdata_fragment(path: &str) -> bool {
-    let path = path.to_lowercase();
+    let path = super::fold(path);
     [
         "containers",
         "group containers",
@@ -26,44 +26,56 @@ pub fn appdata_fragment(path: &str) -> bool {
 
 /// Public App Data wording needs a tree-specific match; broader protection
 /// may need the project-scope alternative. This selects prose, never permission.
-pub(crate) fn appdata_reason(path: &str, home: &str, patterned: bool) -> bool {
-    let library = format!("{home}/Library/").to_lowercase();
+pub(crate) fn appdata_reason(
+    path: &str,
+    home: &str,
+    patterned: bool,
+) -> Result<bool, crate::CheckError> {
+    let library = super::fold(&format!("{home}/Library/"));
     let trees = [
         "containers",
         "group containers",
         "mobile documents",
         "cloudstorage",
     ];
-    glob::alternatives(path, patterned).iter().any(|candidate| {
-        let candidate = candidate.to_lowercase();
-        if patterned {
-            let parts: Vec<_> = candidate.split('/').collect();
-            for tree in trees {
-                let root = format!("{library}{tree}");
-                let root_parts: Vec<_> = root.split('/').collect();
-                if parts.len() > root_parts.len()
-                    && root_parts.iter().enumerate().all(|(index, part)| {
-                        index == 0 || parts[index] == "**" || glob::component(parts[index], part)
-                    })
-                {
-                    return true;
+    Ok(glob::alternatives(path, patterned)?
+        .iter()
+        .any(|candidate| {
+            let candidate = if patterned {
+                glob::fold_pattern(candidate)
+            } else {
+                super::fold(candidate)
+            };
+            if patterned {
+                let parts: Vec<_> = candidate.split('/').collect();
+                for tree in trees {
+                    let root = format!("{library}{tree}");
+                    let root_parts: Vec<_> = root.split('/').collect();
+                    if parts.len() > root_parts.len()
+                        && root_parts.iter().enumerate().all(|(index, part)| {
+                            index == 0
+                                || parts[index] == "**"
+                                || glob::component(parts[index], part)
+                        })
+                    {
+                        return true;
+                    }
                 }
             }
-        }
-        let Some(rest) = candidate.strip_prefix(&library) else {
-            return false;
-        };
-        trees
-            .iter()
-            .any(|tree| rest == *tree || rest.starts_with(&format!("{tree}/")))
-            || patterned && {
-                let fixed = rest
-                    .find(['*', '?', '['])
-                    .map_or(rest, |at| &rest[..at])
-                    .trim_end_matches('/');
-                !fixed.is_empty() && trees.iter().any(|tree| tree.starts_with(fixed))
-            }
-    })
+            let Some(rest) = candidate.strip_prefix(&library) else {
+                return false;
+            };
+            trees
+                .iter()
+                .any(|tree| rest == *tree || rest.starts_with(&format!("{tree}/")))
+                || patterned && {
+                    let fixed = rest
+                        .find(['*', '?', '['])
+                        .map_or(rest, |at| &rest[..at])
+                        .trim_end_matches('/');
+                    !fixed.is_empty() && trees.iter().any(|tree| tree.starts_with(fixed))
+                }
+        }))
 }
 
 pub(super) fn lexical_pattern(path: &str, home: &str, patterned: bool) -> Option<Protection> {
@@ -115,12 +127,12 @@ pub(super) fn broad_prepared(
     matcher: &mut glob::Matcher,
     deadline: Option<std::time::Instant>,
 ) -> Result<bool, CheckError> {
-    let path = path.to_lowercase();
+    let lowered = super::fold(path);
     let home = &domain.home;
     let (prefix, rest) = if patterned {
-        glob::literal_prefix(&path)
+        glob::literal_prefix(&lowered)
     } else {
-        (path.clone(), "")
+        (lowered.clone(), "")
     };
     let literal = rest.is_empty()
         && (prefix == "/"
@@ -132,8 +144,9 @@ pub(super) fn broad_prepared(
     }
     // A recursive glob can reach protected descendants without matching one
     // of the finite witnesses, so check its literal root independently.
-    for pattern in glob::alternatives(&path, true) {
+    for pattern in glob::alternatives(path, true)? {
         crate::check_deadline(deadline)?;
+        let pattern = glob::fold_pattern(&pattern);
         let (prefix, _) = glob::literal_prefix(&pattern);
         let prefix = prefix.trim_end_matches('/');
         for candidate in &domain.broad_witnesses {
@@ -170,7 +183,7 @@ pub(super) fn lexical_candidate(
     if !patterned {
         return state.protection();
     }
-    let path = spelling.to_lowercase();
+    let path = glob::fold_pattern(spelling);
     let parts: Vec<_> = path.split('/').collect();
     if state.appdata
         || domain.roots.iter().any(|root| {
@@ -247,7 +260,11 @@ pub(super) fn lexical_candidate(
                 .any(|(pattern, protected)| matcher.identifies_component(pattern, protected))
                 && glob::visible_intersects(base, tail[tail.len() - 1], hidden)
         } else {
+            // A witness fills a trailing `*` with text, which `*auth.json`
+            // misses although it selects `auth.json` itself.
             matcher.visible_component(base, &listed.witnesses[0], hidden)
+                || matcher.identifies_component(base, tail[0])
+                    && glob::visible_intersects(base, tail[0], hidden)
         } {
             return Some(Protection::Credential);
         }
@@ -281,8 +298,8 @@ fn listed_directories() -> impl Iterator<Item = &'static str> {
 }
 
 pub(super) fn sensitive_root(path: &str, home: &str) -> bool {
-    let path = path.to_lowercase();
-    let home = home.to_lowercase();
+    let path = super::fold(path);
+    let home = super::fold(home);
     [".aws", ".gnupg"].contains(&path.rsplit('/').next().unwrap_or(""))
         || listed_directories().any(|dir| {
             path.ends_with(&format!("/{dir}"))

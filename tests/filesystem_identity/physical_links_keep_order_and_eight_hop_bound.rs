@@ -147,9 +147,13 @@ fn injected_host_catalog_reaches_all_consumer_boundaries() {
                 Arm::Brush,
                 filesystem::FirmlinkTable::from_text(row["catalog"].as_str().unwrap()),
             );
+            // Claude Code and Pi remove `..` from a tool path before any link
+            // or firmlink is followed, so they open `tool_opens` instead.
+            let lexical_tool = row["operation"] != "shell" && consumer != Consumer::Codex;
             assert_eq!(
                 support::class(&result),
-                if row["protected"].is_string() {
+                if row["protected"].is_string() && !(lexical_tool && row["tool_opens"].is_string())
+                {
                     "D"
                 } else {
                     "N"

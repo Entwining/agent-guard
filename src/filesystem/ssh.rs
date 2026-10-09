@@ -2,13 +2,13 @@ use super::{CheckError, CheckErrorKind, Metadata, Probe, lexical};
 use std::path::Path;
 
 pub(super) fn near(candidate: &str, root: &str, search: bool) -> bool {
-    let candidate = candidate.trim_end_matches('/').to_lowercase();
+    let candidate = super::fold(candidate.trim_end_matches('/'));
     let candidate = if candidate.is_empty() {
         "/"
     } else {
         &candidate
     };
-    let root = root.to_lowercase();
+    let root = super::fold(root);
     candidate == root
         || candidate.starts_with(&format!("{root}/"))
         || search && (candidate == "/" || root.starts_with(&format!("{candidate}/")))

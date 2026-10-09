@@ -158,7 +158,7 @@ pub fn inject_fault(
             )?
         }
         "failclosed" => entry = replace(&entry, "(*) fail 'guard failed'", "(*) exit 0")?,
-        "deadline" => entry = replace(&entry, "/bin/sleep 3;", "/bin/sleep 6;")?,
+        "deadline" => runner = replace(&runner, "from_secs(3)", "from_secs(6)")?,
         "cleanup" => {
             entry = replace(
                 &entry,

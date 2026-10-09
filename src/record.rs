@@ -314,6 +314,8 @@ pub enum Via {
     Cwd,
     Scan,
     Tool,
+    /// A search glob that filters files below an already checked root.
+    Filter,
     Items,
     Option,
     Code,

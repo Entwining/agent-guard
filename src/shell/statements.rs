@@ -189,7 +189,7 @@ pub(super) struct Scope {
     piped: bool,
     pub(super) zsh: bool,
     pub(super) pipeline_input: Option<Flow>,
-    channels: Rc<Vec<usize>>,
+    captured: bool,
     output_fds: Rc<BTreeMap<i32, Option<usize>>>,
     input_fds: Rc<BTreeMap<i32, usize>>,
     stdin_id: usize,
@@ -353,6 +353,7 @@ mod logical;
 mod loop_analysis;
 mod merge;
 mod output;
+mod pipeline;
 mod positionals;
 mod read;
 mod repetition;

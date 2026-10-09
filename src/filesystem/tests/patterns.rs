@@ -86,7 +86,7 @@ fn quoted_pattern_width_does_not_multiply_local_candidates() {
             );
             assert!(target.glob);
             let pattern = target.pattern_path();
-            let candidates = super::super::glob::alternatives(&pattern, true);
+            let candidates = super::super::glob::alternatives(&pattern, true).unwrap();
             assert_eq!(candidates.len(), 1, "width={width}, depth={depth}");
             let mut matcher = super::super::glob::Matcher::default();
             for candidate in candidates {

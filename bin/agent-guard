@@ -19,20 +19,16 @@ fi
 hook_cwd=$PWD
 cd "$pkg" || fail 'package directory unreadable'
 
-# Bash job control establishes the job's group before exec, even without a TTY.
-# A single background command has PID = PGID; ordinary descendants inherit it.
+# The runner makes itself the leader of group $pid before it starts any child and
+# kills that group at the three-second deadline. Bash job control would race its
+# own setpgid calls, and without it a shell watchdog could not be reaped as a group.
 # Explicit stdin prevents Bash 3.2 from nulling background input in this substitution.
 reason=$(
-    set -m
     "$runner" "$@" --cwd "$hook_cwd" <&0 2>&1 &
     pid=$!
-    { /bin/sleep 3; kill -KILL -- -"$pid"; } >/dev/null 2>&1 &
-    watchdog=$!
     wait "$pid" 2>/dev/null
     rc=$?
     kill -KILL -- -"$pid" 2>/dev/null
-    kill -KILL -- -"$watchdog" 2>/dev/null
-    wait "$watchdog" 2>/dev/null
     exit "$rc"
 ) 2>/dev/null
 rc=$?

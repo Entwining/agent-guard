@@ -33,7 +33,7 @@
   ],
   "paths": [
     {"id":"data-root","path":"/System/Volumes/Data","public":"/","catalog":"/Users\tUsers\n"},
-    {"id":"catalog-parent","path":"/System/Volumes/Data/Users/../public/item","links":{"/public":"/h/Library/Containers"},"catalog":"/Unused\tUsers\nignored\n","protected":"AppData"},
+    {"id":"catalog-parent","path":"/System/Volumes/Data/Users/../public/item","links":{"/public":"/h/Library/Containers"},"catalog":"/Unused\tUsers\nignored\n","protected":"AppData","tool_opens":"/System/Volumes/Data/public/item"},
     {"id":"catalog-carriage-return-byte","path":"/System/Volumes/Data/Users/../public/item","links":{"/public":"/h/Library/Containers"},"catalog":"/Users\tUsers\r\n","public":"/public/item"},
     {"id":"data-only-parent","path":"/System/Volumes/Data/only/../public/item","links":{"/public":"/h/Library/Containers"},"catalog":"/Users\tUsers\n","public":"/public/item"},
     {"id":"ordered-parent","path":"/a/link/../data","links":{"/a/link":"/h/Library/Containers/nested"},"protected":"AppData"},
@@ -49,7 +49,7 @@
     {"id":"expands-only-suffix","path":"/a/link/${suffix}/item","patterned":true,"expands":true,"links":{"/a/link":"/public"},"public":"/public/${suffix}/item","last_probe":"/public"},
     {"id":"backtick-suffix","path":"/a/link/`name`/item","patterned":true,"links":{"/a/link":"/public"},"public":"/public/`name`/item","last_probe":"/public"},
     {"id":"fixed-prefix-private-tail","path":"/a/link/private.${suffix}","patterned":true,"links":{"/a/link":"/h/.ssh"},"protected":"SshPrivate"},
-    {"id":"relative-data-rewrite","path":"/a/link/../h/Library/Containers","links":{"/a/link":"../../System/Volumes/Data/Users"},"catalog":"/Users\tUsers\n","protected":"AppData"},
+    {"id":"relative-data-rewrite","path":"/a/link/../h/Library/Containers","links":{"/a/link":"../../System/Volumes/Data/Users"},"catalog":"/Users\tUsers\n","protected":"AppData","tool_opens":"/a/h/Library/Containers"},
     {"id":"raw-data-link-rewrite","path":"/a/link/public/item","links":{"/a/link":"/System/Volumes/Data/only/../mapped","/System/Volumes/Data/mapped":"/public"},"catalog":"/Users\tUsers\n","public":"/public/public/item"},
     {"id":"structured-relative-raw-cwd","path":"item","cwd":"/a/link/..","links":{"/a/link":"/h/Library/Containers/nested"},"catalog":"","protected":"AppData"},
     {"id":"initial-event-raw-cwd","operation":"shell","source":"printf public","path":"/public","cwd":"/a/./link/../public","links":{"/a/link":"/h/Library/Containers/nested"},"catalog":"","protected":"AppData"},

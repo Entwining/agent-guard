@@ -1,0 +1,23 @@
+{
+  "rows": [
+    {"id":"upper-class-containers","partition":"case-folded-class","input":{"command":"cat ~/Library/[[:upper:]]ontainers/harness/x"},"expected":"D"},
+    {"id":"negated-lower-class-containers","partition":"case-folded-class","input":{"command":"cat ~/Library/[![:lower:]]ontainers/harness/x"},"expected":"D"},
+    {"id":"upper-range-containers","partition":"case-folded-class","input":{"command":"cat ~/Library/[A-Z]ontainers/harness/x"},"expected":"D"},
+    {"id":"upper-class-group-containers","partition":"case-folded-class","input":{"command":"cat ~/Library/[[:upper:]]roup\\ [[:upper:]]ontainers/x"},"expected":"D"},
+    {"id":"upper-class-mobile-documents","partition":"case-folded-class","input":{"command":"cat ~/Library/Mobile\\ [[:upper:]]ocuments/x"},"expected":"D"},
+    {"id":"upper-class-library","partition":"case-folded-class","input":{"command":"cat ~/[[:upper:]]ibrary/Containers/x"},"expected":"D"},
+    {"id":"upper-class-public-file","partition":"case-folded-class","input":{"command":"cat [[:upper:]]EADME.md"},"expected":"N"},
+    {"id":"cross-case-range-containers","partition":"case-folded-class","input":{"command":"cat ~/Library/[A-_]ontainers/harness/x"},"expected":"D"},
+    {"id":"negated-alpha-range-misses-containers","partition":"case-folded-class","input":{"command":"cat ~/Library/[!A-Za-z]ontainers/harness/x"},"expected":"N"},
+    {"id":"equivalence-class-env","partition":"collating-class","input":{"command":"cat .en[[=v=]]"},"expected":"D"},
+    {"id":"collating-symbol-ssh","partition":"collating-class","input":{"command":"cat ~/.ss[[.h.]]/id_rsa"},"expected":"D"},
+    {"id":"collating-element-env","partition":"collating-class","input":{"command":"cat [[.period.]]env"},"expected":"D"},
+    {"id":"negated-collating-element-ssh","partition":"collating-class","input":{"command":"cat ~/.ss[![.period.]]/id_rsa"},"expected":"D"},
+    {"id":"equivalence-class-containers","partition":"collating-class","input":{"command":"cat ~/Library/[[=C=]]ontainers/x/data"},"expected":"D"},
+    {"id":"equivalence-class-public-file","partition":"collating-class","input":{"command":"cat [[=R=]]EADME.md"},"expected":"N"},
+    {"id":"parameter-upper-class-misses-lowercase","partition":"case-exact-parameter","input":{"command":"f=.env; cat \"${f/[[:upper:]]/x}\""},"expected":"D"},
+    {"id":"parameter-upper-prefix-stays","partition":"case-exact-parameter","input":{"command":"f=x.env; cat \"${f#[[:upper:]]}\""},"expected":"N"},
+    {"id":"parameter-lower-prefix-stays","partition":"case-exact-parameter","input":{"command":"f=A.env; cat \"${f#[[:lower:]]}\""},"expected":"N"},
+    {"id":"parameter-upper-prefix-removed","partition":"case-exact-parameter","input":{"command":"f=E.env; cat \"${f#[[:upper:]]}\""},"expected":"D"}
+  ]
+}

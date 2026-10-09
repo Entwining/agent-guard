@@ -34,6 +34,13 @@ fn broad_patterns_compare_literal_roots_and_active_wildcards() {
 }
 
 #[test]
+fn broad_patterns_fold_after_brace_expansion() {
+    // Before expansion `[,}Library/**/x]` reads as one class; afterwards
+    // `Library` is a literal component of a recursive Library walk.
+    assert!(broad_root("/h/{[,}Library/**/x]", "/h", true));
+}
+
+#[test]
 fn item_credentials_exclude_appdata_from_the_credential_partition() {
     let table = FirmlinkTable::from_text("");
     let mut resolver = Resolver::new("/h", &table);
@@ -220,7 +227,7 @@ fn literal_name_and_tool_glob_skip_identity() {
     let mut probe = Mock::default();
     for (path, effect, via, glob) in [
         ("/public/link/*", Effect::Name, Via::Operand, false),
-        ("/public/link/*.txt", Effect::Read, Via::Tool, true),
+        ("/public/link/*.txt", Effect::Read, Via::Filter, true),
     ] {
         let mut target = Target::new(path.into(), effect, Walk::None, via);
         target.glob = glob;

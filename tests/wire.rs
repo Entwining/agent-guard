@@ -1,3 +1,5 @@
+#[path = "wire/consumer_path_spellings_reach_the_opened_file.rs"]
+pub mod consumer_path_spellings_reach_the_opened_file;
 #[path = "wire/detector_success_and_failure.rs"]
 pub mod detector_success_and_failure;
 #[path = "support/differential.rs"]
@@ -14,6 +16,8 @@ pub mod invalid_json_keeps_failure_without_echoing_input;
 pub mod jsonl_dev_contract_and_parser_boundary;
 #[path = "wire/native_limits_are_completed_refusals.rs"]
 pub mod native_limits_are_completed_refusals;
+#[path = "wire/non_object_tool_inputs_fail_the_check.rs"]
+pub mod non_object_tool_inputs_fail_the_check;
 #[path = "support/batch6.rs"]
 pub mod program_contract;
 #[path = "wire/shell.rs"]

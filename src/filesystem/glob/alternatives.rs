@@ -49,10 +49,21 @@ fn brace_members(source: &str) -> Option<(usize, usize, Vec<&str>)> {
     None
 }
 
-pub(in crate::filesystem) fn alternatives(pattern: &str, patterned: bool) -> Vec<String> {
+/// Expands brace and extglob alternatives. The worklist keeps intermediate
+/// spellings, so 1024 entries hold one 512-way product; past that the remaining
+/// spellings would go unchecked, so the expansion fails rather than truncating.
+pub(in crate::filesystem) fn alternatives(
+    pattern: &str,
+    patterned: bool,
+) -> Result<Vec<String>, crate::CheckError> {
     let mut result = vec![pattern.to_owned()];
     let mut index = 0;
-    while index < result.len() && result.len() < 512 {
+    while index < result.len() {
+        if result.len() > 1024 {
+            return Err(crate::CheckError {
+                kind: crate::CheckErrorKind::InspectionBudget,
+            });
+        }
         let source = result[index].clone();
         index += 1;
         if patterned && let Some((left, right, members)) = brace_members(&source) {
@@ -115,5 +126,5 @@ pub(in crate::filesystem) fn alternatives(pattern: &str, patterned: bool) -> Vec
             }
         }
     }
-    result
+    Ok(result)
 }

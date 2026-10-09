@@ -179,12 +179,11 @@ fn walk_pipeline(source: &Source<'_>, pipeline: &Pipeline) -> Result<Statement, 
             Statement::Group(records)
         });
     }
-    let mut commands = commands.into_iter();
-    let mut statement = commands.next().unwrap_or(Statement::Group(Vec::new()));
-    for command in commands {
-        statement = Statement::Binary(Operator::Pipe, Box::new(statement), Box::new(command));
-    }
-    Ok(statement)
+    Ok(match commands.len() {
+        0 => Statement::Group(Vec::new()),
+        1 => commands.remove(0),
+        _ => Statement::Pipeline(commands),
+    })
 }
 
 fn walk_command(

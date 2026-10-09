@@ -48,7 +48,7 @@
     },
     {
       "kind": "InspectionBudget",
-      "sentence": "This command exceeds the guard's inspection budget. Split loops or function calls into smaller commands with explicit public paths, then recheck each command."
+      "sentence": "This command exceeds the guard's inspection budget. Split loops, function calls or brace alternatives into smaller commands with explicit public paths, then recheck each command."
     },
     {
       "kind": "ExecutorDivergence",

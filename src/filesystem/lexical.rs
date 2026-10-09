@@ -72,7 +72,7 @@ pub(super) struct Root {
 
 impl Domain {
     pub fn new(home: &str) -> Self {
-        let home = home.to_lowercase();
+        let home = super::fold(home);
         let library = format!("{home}/library");
         let roots: Vec<_> = APP_DATA_TREES
             .iter()
@@ -177,7 +177,7 @@ impl Lexical {
             unreachable!("prepare inserts the exact HOME domain");
         };
         let mut result = None;
-        for candidate in glob::alternatives(path, patterned) {
+        for candidate in glob::alternatives(path, patterned)? {
             crate::check_deadline(self.deadline)?;
             let candidate_patterned = patterned || candidate != path;
             let mode = usize::from(candidate_patterned) * 2 + usize::from(hidden);
@@ -312,7 +312,7 @@ impl LiteralState {
     }
 
     fn advance(mut self, original: &str, library: &[String]) -> Self {
-        let part = original.to_lowercase();
+        let part = super::fold(original);
         self.appdata |= !self.library_mismatch
             && self.parts == library.len()
             && APP_DATA_TREES.contains(&part.as_str());

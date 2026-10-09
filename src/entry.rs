@@ -16,6 +16,7 @@ use std::{
 
 pub const CHECKER_TIMEOUT: Duration = Duration::from_millis(2500);
 pub const SUPERVISOR_TIMEOUT: Duration = Duration::from_millis(2800);
+pub const ENTRY_TIMEOUT: Duration = Duration::from_secs(3);
 
 const USAGE: &str = "usage: agent-guard --runtime claude|codex|pi < event.json\n";
 
@@ -144,6 +145,28 @@ pub fn run(args: &[String]) -> io::Result<i32> {
     supervise(&mut child)
 }
 
+pub fn lead_process_group() -> io::Result<()> {
+    // The shell entry kills -$pid once this runner exits. Leading the group before
+    // reading stdin or starting a child means a runner that began work always
+    // owns that group, and every descendant inherits it.
+    nix::unistd::setpgid(nix::unistd::Pid::from_raw(0), nix::unistd::Pid::from_raw(0))?;
+    std::thread::Builder::new().spawn(|| {
+        std::thread::sleep(ENTRY_TIMEOUT);
+        // The group includes this runner, so a delivered kill also ends this call.
+        if nix::sys::signal::killpg(nix::unistd::getpgrp(), nix::sys::signal::Signal::SIGKILL)
+            .is_err()
+        {
+            std::process::abort();
+        }
+    })?;
+    Ok(())
+}
+
+pub fn run_group(args: &[String]) -> io::Result<i32> {
+    lead_process_group()?;
+    run(args)
+}
+
 pub fn main(args: &[String]) -> i32 {
     match args.first().map(String::as_str) {
         Some("--version") => {
@@ -175,7 +198,7 @@ pub fn main(args: &[String]) -> i32 {
                 status
             }
         }
-        _ => match run(args) {
+        _ => match run_group(args) {
             Ok(status) => status,
             Err(error) => {
                 eprintln!("{error}");

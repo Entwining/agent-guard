@@ -14,6 +14,8 @@ pub mod bound_arithmetic_sinks_observe_subscript_code;
 pub mod conditional_literal_accumulation_preserves_targets;
 #[path = "support/differential.rs"]
 pub mod differential;
+#[path = "shell_state/doubled_values_refuse_past_the_expansion_bounds.rs"]
+pub mod doubled_values_refuse_past_the_expansion_bounds;
 #[path = "shell_state/eval_runtime_output_is_unresolved_code.rs"]
 pub mod eval_runtime_output_is_unresolved_code;
 #[path = "shell_state/executable_flow.rs"]

@@ -211,7 +211,10 @@ fn combined_named_directory_candidates_keep_a_completed_refusal() {
             assert!(wire.stderr.is_empty());
         } else {
             assert!(wire.stderr.contains("inspection budget"));
-            assert!(wire.stderr.contains("Split loops or function calls"));
+            assert!(
+                wire.stderr
+                    .contains("Split loops, function calls or brace alternatives")
+            );
             assert!(wire.stderr.contains("recheck"));
         }
     }
@@ -241,7 +244,10 @@ fn wide_loop_header_keeps_a_completed_bounded_result() {
         assert_eq!(wire.exit, 2);
         assert!(wire.stdout.is_empty());
         assert!(wire.stderr.contains("inspection budget"), "{}", wire.stderr);
-        assert!(wire.stderr.contains("Split loops or function calls"));
+        assert!(
+            wire.stderr
+                .contains("Split loops, function calls or brace alternatives")
+        );
         assert!(wire.stderr.contains("recheck"), "{}", wire.stderr);
     }
 }

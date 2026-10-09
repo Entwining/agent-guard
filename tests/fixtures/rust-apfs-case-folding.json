@@ -1,0 +1,15 @@
+{
+  "rows": [
+    {"id":"sharp-s-ssh-key","partition":"apfs-case-folding","input":{"command":"cat ~/.ßh/id_rsa"},"expected":"D"},
+    {"id":"capital-sharp-s-ssh-key","partition":"apfs-case-folding","input":{"command":"cat ~/.ẞH/id_rsa"},"expected":"D"},
+    {"id":"long-s-ssh-key","partition":"apfs-case-folding","input":{"command":"cat ~/.ſſh/id_rsa"},"expected":"D"},
+    {"id":"long-s-containers","partition":"apfs-case-folding","input":{"command":"cat ~/Library/Containerſ/x/data"},"expected":"D"},
+    {"id":"st-ligature-cloud-storage","partition":"apfs-case-folding","input":{"command":"cat ~/Library/Cloudﬆorage/x"},"expected":"D"},
+    {"id":"long-s-aws-credentials","partition":"apfs-case-folding","input":{"command":"cat ~/.aws/credentialſ"},"expected":"D"},
+    {"id":"fi-ligature-gh-hosts","partition":"apfs-case-folding","input":{"command":"cat ~/.conﬁg/gh/hosts.yml"},"expected":"D"},
+    {"id":"sharp-s-ssh-glob","partition":"apfs-case-folding","input":{"command":"cat ~/.ßh/id_*"},"expected":"D"},
+    {"id":"sharp-s-home-scan","partition":"apfs-case-folding","input":{"command":"ls -R ~/Library/Cloudﬆorage"},"expected":"D"},
+    {"id":"sharp-s-public-file","partition":"apfs-case-folding","input":{"command":"cat straße.txt"},"expected":"N"},
+    {"id":"fi-ligature-public-file","partition":"apfs-case-folding","input":{"command":"cat ~/Documents/proﬁle.txt"},"expected":"N"}
+  ]
+}

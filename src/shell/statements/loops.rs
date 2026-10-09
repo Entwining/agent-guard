@@ -19,7 +19,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         inner.bounded_loop =
             variable.is_some() && header_state.finite && header_state.count.is_some();
         inner.conditional_append = false;
-        let ordered_capture = !scope.channels.is_empty()
+        let ordered_capture = scope.captured
             && header_state
                 .ordered_values
                 .iter()
@@ -104,7 +104,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             }
         }
         if literal
-            && !scope.channels.is_empty()
+            && scope.captured
             && completed < literal_values.len()
             && let Some(output) = outputs.last().cloned()
         {

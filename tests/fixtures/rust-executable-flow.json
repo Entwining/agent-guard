@@ -534,7 +534,7 @@
       },
       "expected": "UR",
       "wire_reason": "inspection budget",
-      "wire_text": "Split loops or function calls"
+      "wire_text": "Split loops, function calls or brace alternatives"
     },
     {
       "id": "command-substitution-shares-input",

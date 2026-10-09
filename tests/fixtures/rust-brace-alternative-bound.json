@@ -1,0 +1,10 @@
+{
+  "rows": [
+    {"id":"brace-512-candidates-keeps-the-denial","partition":"brace-bound","input":{"command":"cat {a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}/{public,.env}"},"expected":"D"},
+    {"id":"brace-1024-candidates-refuses","partition":"brace-bound","input":{"command":"cat {a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}/{public,.env}"},"expected":"UR","wire_text":"brace alternatives"},
+    {"id":"brace-1024-public-candidates-refuse","partition":"brace-bound","input":{"command":"cat {a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}/{public,notes}"},"expected":"UR","wire_text":"brace alternatives"},
+    {"id":"brace-512-public-candidates-pass","partition":"brace-bound","input":{"command":"cat {a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}/{public,notes}"},"expected":"N"},
+    {"id":"grep-glob-1024-candidates-refuses","partition":"brace-bound","tool":"Grep","input":{"path":"$P","glob":"{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}/{public,.env}"},"expected":"UR","wire_text":"brace alternatives"},
+    {"id":"earlier-denial-stands-beside-the-bound","partition":"brace-bound","input":{"command":"cat .env; cat {a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}/{public,notes}"},"expected":"D"}
+  ]
+}

@@ -67,6 +67,7 @@ enum Statement {
     Async(Vec<Statement>),
     Definition(String, Vec<Statement>),
     Binary(Operator, Box<Statement>, Box<Statement>),
+    Pipeline(Vec<Statement>),
     Conditional {
         condition: Vec<Statement>,
         then: Vec<Statement>,
@@ -103,7 +104,6 @@ enum Statement {
 enum Operator {
     And,
     Or,
-    Pipe,
 }
 
 struct Parsed {
@@ -162,6 +162,8 @@ pub struct Observation {
     pub(crate) header_comparisons: usize,
     #[cfg(test)]
     pub(crate) word_candidates_max: usize,
+    #[cfg(test)]
+    pub(crate) expansion_size: usize,
 }
 
 #[derive(Debug, Clone)]

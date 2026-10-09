@@ -24,9 +24,12 @@ fn literal_subject_work_grows_with_width_and_pattern_depth() {
             let pattern = format!("{}public", "*x".repeat(depth));
             let subject = format!("{}{}public", "y".repeat(width), "x".repeat(depth));
             let mut comparisons = 0;
-            assert!(super::component_counted(&pattern, &subject, &mut || {
-                comparisons += 1
-            }));
+            assert!(super::component_counted(
+                &pattern,
+                &subject,
+                super::Case::Folded,
+                &mut || { comparisons += 1 }
+            ));
             assert!(
                 comparisons <= 2 * (width + depth + 6),
                 "width={width}, depth={depth}, comparisons={comparisons}"
@@ -40,9 +43,12 @@ fn literal_subject_matching_avoids_the_pattern_product() {
     for size in [64, 128, 256, 512] {
         let subject = format!("{}public", "x".repeat(size));
         let mut comparisons = 0;
-        assert!(super::component_counted("*public", &subject, &mut || {
-            comparisons += 1
-        }));
+        assert!(super::component_counted(
+            "*public",
+            &subject,
+            super::Case::Folded,
+            &mut || { comparisons += 1 }
+        ));
         assert!(
             comparisons <= subject.chars().count() + 7,
             "size={size}, comparisons={comparisons}"
@@ -110,12 +116,22 @@ fn universal_component_does_not_enumerate_subject_states() {
         let subject = "public路径[*]".repeat(size);
         let mut comparisons = 0;
         for pattern in ["*", "**", "***"] {
-            assert!(super::component_counted(pattern, &subject, &mut || {
-                comparisons += 1;
-            }));
+            assert!(super::component_counted(
+                pattern,
+                &subject,
+                super::Case::Folded,
+                &mut || {
+                    comparisons += 1;
+                }
+            ));
         }
         assert_eq!(comparisons, 0, "size={size}");
-        assert!(!super::component_counted("", &subject, &mut || {}));
+        assert!(!super::component_counted(
+            "",
+            &subject,
+            super::Case::Folded,
+            &mut || {}
+        ));
     }
 }
 #[test]
@@ -137,9 +153,14 @@ fn incompatible_literal_anchors_skip_subject_states() {
         let subject = format!("{}.json", "public".repeat(size));
         let mut comparisons = 0;
         for pattern in ["*.pem", "*.key", ".env*", "config[0-9]*"] {
-            assert!(!super::component_counted(pattern, &subject, &mut || {
-                comparisons += 1;
-            }));
+            assert!(!super::component_counted(
+                pattern,
+                &subject,
+                super::Case::Folded,
+                &mut || {
+                    comparisons += 1;
+                }
+            ));
         }
         assert!(comparisons <= 12, "size={size}, comparisons={comparisons}");
         let long_pattern = format!("public{}*.json", "data".repeat(size));
@@ -148,6 +169,7 @@ fn incompatible_literal_anchors_skip_subject_states() {
             assert!(!super::component_counted(
                 &long_pattern,
                 subject,
+                super::Case::Folded,
                 &mut || {
                     comparisons += 1;
                 }

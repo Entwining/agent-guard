@@ -1,0 +1,9 @@
+{
+  "rows": [
+    {"id":"grep-null-input","partition":"input-shape","tool":"Grep","input":null,"expected":"F"},
+    {"id":"grep-array-input","partition":"input-shape","tool":"Grep","input":["$C"],"expected":"F"},
+    {"id":"grep-string-input","partition":"input-shape","tool":"Grep","input":"$C","expected":"F"},
+    {"id":"grep-empty-object-searches-cwd","partition":"input-shape","tool":"Grep","input":{},"expected":"N"},
+    {"id":"read-null-input","partition":"input-shape","tool":"Read","input":null,"expected":"F"}
+  ]
+}
