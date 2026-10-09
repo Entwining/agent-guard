@@ -1,37 +1,11 @@
 use super::*;
 
 impl Scope {
-    pub(in crate::shell) fn named_contexts(
-        &self,
-        names: &BTreeSet<String>,
-    ) -> (Vec<BTreeMap<String, Option<String>>>, bool) {
-        let mut contexts = vec![BTreeMap::new()];
-        for name in names {
-            if let Some(values) = self.named_dirs.get(name) {
-                let mut next = Vec::new();
-                for context in &contexts {
-                    for value in values {
-                        let mut context = context.clone();
-                        context.insert(name.clone(), value.known().cloned());
-                        if !next.contains(&context) {
-                            if next.len() == 512 {
-                                return (next, true);
-                            }
-                            next.push(context);
-                        }
-                    }
-                }
-                contexts = next;
-            }
-        }
-        (contexts, false)
-    }
     pub(in crate::shell) fn in_function(&self) -> bool {
         !self.frames.is_empty()
     }
     pub fn new(home: &str, cwd: &str) -> Self {
         Self {
-            named_dirs: std::rc::Rc::new(BTreeMap::new()),
             directory: Directory::new(cwd),
             bindings: Rc::new(BTreeMap::from([(
                 "HOME".into(),
@@ -111,7 +85,6 @@ impl Scope {
         BindingState {
             continue_loop: false,
             flow_guard: self.flow_guard.clone(),
-            named_dirs: self.named_dirs.clone(),
             bindings: self.bindings.clone(),
             frames: self.frames.clone(),
         }
@@ -119,7 +92,6 @@ impl Scope {
     pub(super) fn with_state(&self, state: BindingState) -> Self {
         let mut scope = self.clone();
         scope.flow_guard = state.flow_guard;
-        scope.named_dirs = state.named_dirs;
         scope.bindings = state.bindings;
         scope.frames = state.frames;
         scope

@@ -148,7 +148,6 @@ fn observe_indices(
         &raw.raw,
         &raw.syntax,
         &words::ExpansionContext {
-            named_dirs: &BTreeMap::new(),
             zsh: false,
             assignments: &[],
             variables: contexts,

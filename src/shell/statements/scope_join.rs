@@ -2,7 +2,6 @@ use super::*;
 
 impl Scope {
     pub(super) fn join(&mut self, branches: &[Scope]) -> bool {
-        let named_bound = self.join_named_directories(branches);
         self.pipeline_input = if branches.iter().all(|branch| {
             branch.pipeline_input
                 == branches
@@ -16,7 +15,7 @@ impl Scope {
             None
         };
         self.flow_end = !branches.is_empty() && branches.iter().all(|branch| branch.flow_end);
-        let mut bounded = named_bound;
+        let mut bounded = false;
         if let Some(first) = branches.first().filter(|first| {
             first.bindings.values().all(Binding::join_is_identity)
                 && branches
@@ -67,46 +66,6 @@ impl Scope {
         }
         bounded
     }
-    fn join_named_directories(&mut self, branches: &[Scope]) -> bool {
-        let shared = branches.first().filter(|first| {
-            branches
-                .iter()
-                .all(|branch| std::rc::Rc::ptr_eq(&first.named_dirs, &branch.named_dirs))
-        });
-        let keys: BTreeSet<_> = branches
-            .iter()
-            .filter(|_| shared.is_none())
-            .flat_map(|scope| scope.named_dirs.keys())
-            .collect();
-        let mut named_dirs = BTreeMap::new();
-        let mut named_bound = false;
-        for name in keys {
-            let mut values = Vec::new();
-            for branch in branches {
-                let candidates = branch
-                    .named_dirs
-                    .get(name)
-                    .map(Vec::as_slice)
-                    .unwrap_or(&[BindingValue::RuntimeUnknown(None)]);
-                for value in candidates {
-                    if !values.contains(value) {
-                        if values.len() == 512 {
-                            named_bound = true;
-                        } else {
-                            values.push(value.clone());
-                        }
-                    }
-                }
-            }
-            named_dirs.insert(name.clone(), values);
-        }
-        self.named_dirs = shared.map_or_else(
-            || std::rc::Rc::new(named_dirs),
-            |scope| scope.named_dirs.clone(),
-        );
-        named_bound
-    }
-
     fn join_frames(&mut self, branches: &[Scope]) -> bool {
         let mut bounded = false;
         for index in 0..self.frames.len() {

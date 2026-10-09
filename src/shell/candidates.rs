@@ -25,10 +25,6 @@ pub(super) fn expand_candidates(
     let mut result = Vec::new();
     let mut updates = std::collections::BTreeMap::<String, Vec<(Option<String>, String)>>::new();
     let mut context = first;
-    let (named_contexts, named_bound) = scope.named_contexts(&seed.named_tildes);
-    if named_bound {
-        evaluator.output.gap(CoverageGap::InspectionBudget);
-    }
     'expansions: for delta in contexts {
         #[cfg(test)]
         {
@@ -45,7 +41,7 @@ pub(super) fn expand_candidates(
             for zsh in std::iter::once(false).chain(
                 (scope.zsh && (seed.modifiers || !seed.named_tildes.is_empty())).then_some(true),
             ) {
-                for named_dirs in &named_contexts {
+                {
                     for tilde_assigned in if seed.tilde && context.contains_key("PWD") {
                         vec![true, false]
                     } else {
@@ -67,7 +63,6 @@ pub(super) fn expand_candidates(
                             scope,
                             evaluator,
                             &words::ExpansionContext {
-                                named_dirs,
                                 zsh,
                                 assignments: &[],
                                 variables: &context,
@@ -145,7 +140,6 @@ fn seed_expansion(
         &raw.raw,
         &raw.syntax,
         &words::ExpansionContext {
-            named_dirs: &std::collections::BTreeMap::new(),
             zsh: false,
             assignments: &[],
             variables: first,

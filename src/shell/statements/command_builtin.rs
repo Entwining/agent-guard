@@ -140,7 +140,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
                 "eval" => executed_output = self.eval_builtin(argv, index, scope, prior, depth)?,
                 "read" => self.read(&argv[index + 1..], scope),
-                "hash" => self.named_directory_changes(&argv[index + 1..], scope),
                 "mapfile" | "readarray" => self.read_array_lines(&argv[index + 1..], scope),
                 _ => {}
             }

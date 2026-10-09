@@ -132,7 +132,6 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
         &pieces,
         &lexical,
         &ExpansionContext {
-            named_dirs: &BTreeMap::new(),
             zsh: false,
             assignments: &[],
             unknown_variables: &std::collections::BTreeSet::new(),
@@ -213,7 +212,6 @@ fn brush_accepted_word_lexer_refusal_is_unsupported() {
         raw,
         &crate::shell::WordSyntax::Shell,
         &ExpansionContext {
-            named_dirs: &BTreeMap::new(),
             zsh: false,
             assignments: &[],
             unknown_variables: &std::collections::BTreeSet::new(),
@@ -243,7 +241,6 @@ fn outer_early_closer_has_its_own_unsupported_region() {
         raw,
         &crate::shell::WordSyntax::Shell,
         &ExpansionContext {
-            named_dirs: &BTreeMap::new(),
             zsh: false,
             assignments: &[],
             unknown_variables: &std::collections::BTreeSet::new(),
@@ -299,7 +296,6 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
         &pieces,
         &lexical,
         &ExpansionContext {
-            named_dirs: &BTreeMap::new(),
             zsh: false,
             assignments: &[],
             unknown_variables: &std::collections::BTreeSet::new(),
@@ -354,7 +350,6 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
         &pieces,
         &lexical,
         &ExpansionContext {
-            named_dirs: &BTreeMap::new(),
             zsh: false,
             assignments: &[],
             unknown_variables: &std::collections::BTreeSet::new(),
@@ -408,7 +403,6 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
         &pieces,
         &lexical,
         &ExpansionContext {
-            named_dirs: &BTreeMap::new(),
             zsh: false,
             assignments: &[],
             unknown_variables: &std::collections::BTreeSet::new(),

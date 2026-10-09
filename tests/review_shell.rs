@@ -163,49 +163,6 @@ fn tilde_names_use_evaluator_bindings_and_protected_home_suffixes() {
 }
 
 #[test]
-fn combined_named_directory_candidates_keep_a_completed_refusal() {
-    let mut source = String::from("case public in ");
-    for n in 0..32 {
-        source.push_str(&format!("a{n}) D=/public/{n}; hash -d Q=/public/{n};; "));
-    }
-    source.push_str("esac; cat ~Q/$D");
-    let fixture = support::Fixture::new();
-    for consumer in ["claude", "codex", "pi"] {
-        let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
-        let bytes =
-            serde_json::to_vec(&json!({"tool_name":"bash","tool_input":{"command":source}}))
-                .unwrap();
-        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        let result = evaluate_with_arm(
-            Event {
-                bytes: &bytes,
-                context: &context,
-                probe: &mut probe,
-            },
-            shell::Arm::Brush,
-        );
-        assert_eq!(
-            support::class(&result),
-            if consumer == "pi" { "N" } else { "UR" },
-            "{result:?}"
-        );
-        let wire = adapters::render(context.consumer, &result);
-        assert_eq!(wire.exit, if consumer == "pi" { 0 } else { 2 });
-        assert!(wire.stdout.is_empty());
-        if consumer == "pi" {
-            assert!(wire.stderr.is_empty());
-        } else {
-            assert!(wire.stderr.contains("inspection budget"));
-            assert!(
-                wire.stderr
-                    .contains("Split loops, function calls or brace alternatives")
-            );
-            assert!(wire.stderr.contains("recheck"));
-        }
-    }
-}
-
-#[test]
 fn wide_loop_header_keeps_a_completed_bounded_result() {
     let fixture = support::Fixture::new();
     let items = (0..2000)

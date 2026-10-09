@@ -165,7 +165,6 @@ type LocalFrame = Rc<BTreeMap<String, Option<Binding>>>;
 
 #[derive(Clone)]
 pub(super) struct Scope {
-    pub(super) named_dirs: std::rc::Rc<BTreeMap<String, Vec<BindingValue>>>,
     pub directory: Directory,
     pub bindings: Rc<BTreeMap<String, Binding>>,
     frames: Rc<Vec<LocalFrame>>,
@@ -194,7 +193,6 @@ pub(super) struct Scope {
 struct BindingState {
     continue_loop: bool,
     flow_guard: Rc<Guard>,
-    named_dirs: std::rc::Rc<BTreeMap<String, Vec<BindingValue>>>,
     bindings: Rc<BTreeMap<String, Binding>>,
     frames: Rc<Vec<LocalFrame>>,
 }

@@ -1,17 +1,6 @@
 use super::*;
 mod runtime_defaults;
 #[test]
-fn variable_and_named_directory_candidates_share_one_word_budget() {
-    let mut source = String::from("case public in ");
-    for n in 0..32 {
-        source.push_str(&format!("a{n}) D=/public/{n}; hash -d Q=/public/{n};; "));
-    }
-    source.push_str("esac; cat ~Q/$D");
-    let output = observe(&source, Arm::Brush, "/h", "/h/p", true).unwrap();
-    assert!(output.gaps.contains(&CoverageGap::InspectionBudget));
-    assert_eq!(output.word_candidates_max, 512);
-}
-#[test]
 fn identical_sources_share_syntax_but_observe_each_context() {
     for width in [2, 4, 8, 16] {
         let mut output = Observation::default();

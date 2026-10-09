@@ -92,7 +92,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             outputs.push(self.run(body, &mut inner, depth + 1, source_id, nested)?);
             completed += 1;
             if !root
-                || inner.same_values_and_input(&prior) && inner.named_dirs == prior.named_dirs
+                || inner.same_values_and_input(&prior)
                 || count.is_some_and(|count| completed >= count)
             {
                 break;
@@ -278,7 +278,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             }
             completed += 1;
             branches.push(inner.clone());
-            if inner.same_values_and_input(&prior) && inner.named_dirs == prior.named_dirs {
+            if inner.same_values_and_input(&prior) {
                 break;
             }
             if self.inspected >= 512 || completed >= 512 || self.output.script.commands.len() > 512

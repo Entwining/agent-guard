@@ -167,7 +167,6 @@ pub(super) fn single_literal(raw: &str) -> Option<String> {
 
 #[derive(Clone, Copy)]
 pub(super) struct ExpansionContext<'a> {
-    pub named_dirs: &'a BTreeMap<String, Option<String>>,
     pub zsh: bool,
     pub assignments: &'a [(String, String)],
     pub variables: &'a BTreeMap<String, String>,

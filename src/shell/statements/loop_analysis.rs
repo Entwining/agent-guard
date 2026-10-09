@@ -43,7 +43,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             &word.raw,
             &word.syntax,
             &shell::words::ExpansionContext {
-                named_dirs: &BTreeMap::new(),
                 zsh: false,
                 assignments: &[],
                 variables: &variables,

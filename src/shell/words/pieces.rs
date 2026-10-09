@@ -94,15 +94,6 @@ fn tilde_piece(
     if let TildeExpr::UserHome(user) = tilde {
         out.named_tildes.insert(user.clone());
         if expansion.zsh {
-            if let Some(value) = expansion.named_dirs.get(user) {
-                if let Some(value) = value {
-                    push_tilde(out, value.trim_end_matches('/'));
-                } else {
-                    out.word.text.push_str(spelling);
-                    out.word.expands = true;
-                }
-                return true;
-            }
             out.word.vars.push(user.clone());
             if let Some(value) = expansion.get(user).filter(|value| value.starts_with('/'))
                 && !expansion.unknown_variables.contains(user)
