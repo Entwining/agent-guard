@@ -1,6 +1,6 @@
 # Synthetic hook evaluation
 
-The Rust development harness runs the Rust package on Apple Silicon macOS. Build an assembled package as described in [the setup guide](../../docs/setup.md#development-checks). All evidence directories must be new and outside Git checkouts. The harness uses temporary homes, synthetic files, and scripted model servers bound to loopback. It does not use live model credentials or change the user's runtime configuration.
+The Rust development harness runs the Rust package on Apple Silicon macOS. Build an assembled package as described in [the setup guide](../../docs/development.md#development-checks). All evidence directories must be new and outside Git checkouts. The harness uses temporary homes, synthetic files, and scripted model servers bound to loopback. It does not use live model credentials or change the user's runtime configuration.
 
 ## Runtime registration and attribution
 

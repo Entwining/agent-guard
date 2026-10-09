@@ -25,7 +25,7 @@ Tagging, pushing and publishing expose a version to consumers. An already author
 
 ## Establish the repository's release contract before proposing
 
-The repository owns how its version becomes a release. Read its instructions, [release documentation](../../../docs/setup.md#release), CI workflows, and any release script, then state what completion means here.
+The repository owns how its version becomes a release. Read its instructions, [release documentation](../../../docs/development.md#release), CI workflows, and any release script, then state what completion means here.
 
 - Do not assume a toolchain: the version may be bumped by hand, by a script, by a workflow on a tag or release event, or by a release automation tool.
 - Identify what starts the publish path, because it decides the agent's last action: when the pipeline reacts to a pushed tag or release, the agent stops at the push and the automation publishes; otherwise the agent runs the remaining steps.
