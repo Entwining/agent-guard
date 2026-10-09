@@ -1,17 +1,6 @@
 {"rows":[
- {"id":"echo-appdata","partition":"protected","expected":"D","wire_reason":"App Data","input":{"command":"echo $C | read D; cat \"$D/x\""}},
- {"id":"printf-appdata","partition":"protected","expected":"D","wire_reason":"App Data","input":{"command":"printf '%s\\n' $C | read D; cat \"$D/x\""}},
- {"id":"read-raw-appdata","partition":"protected","expected":"D","wire_reason":"App Data","input":{"command":"echo $C | read -r D; ls \"$D\""}},
- {"id":"read-delimiter-multiple","partition":"protected","expected":"D","wire_reason":"App Data","input":{"command":"printf '%s %s:tail' public $C | read -rs -d: -t1 -u0 A D; cat \"$D/x\""}},
- {"id":"read-count-appdata","partition":"protected","expected":"D","wire_reason":"App Data","input":{"command":"echo $C | read -n9999 D; cat \"$D/x\""}},
- {"id":"armed-producer","partition":"protected","expected":"D","input":{"command":"printf '%s\\n' 'arr[$(cat .env)]' | read -r X; printf '%s' X"}},
- {"id":"last-printf-stage","partition":"protected","expected":"D","wire_reason":"App Data","input":{"command":"echo public | printf '%s\\n' $C | read D; cat \"$D/x\""}},
- {"id":"public-echo","partition":"control","expected":"N","input":{"command":"echo /synthetic/public | read D; cat \"$D/x\""}},
  {"id":"unknown-unused","partition":"control","expected":"N","input":{"command":"ls | read D; cat README.md"}},
  {"id":"unknown-used","partition":"control","expected":"UC","input":{"command":"ls | read D; cat \"$D/x\""}},
- {"id":"unknown-intermediate","partition":"control","expected":"D","wire_reason":"App Data","wire_text":"Name a specific non-sensitive file","input":{"command":"echo $C | cat | read D; cat \"$D/x\""}},
- {"id":"explicit-public-input","partition":"control","expected":"N","input":{"command":"echo $C | read D <<< /synthetic/public; cat \"$D/x\""}},
  {"id":"bash-prior-state","partition":"control","expected":"D","wire_reason":"App Data","input":{"command":"D=$C; echo /synthetic/public | read D; cat \"$D/x\""}},
- {"id":"unmodelled-armed-read","partition":"control","expected":"UR","input":{"command":"echo 'arr[$(cat .env)]' | read -a X; printf public"}},
  {"id":"unknown-printf-format","partition":"control","expected":"UC","input":{"command":"printf '%q' public | read D; cat \"$D/x\""}}
 ]}

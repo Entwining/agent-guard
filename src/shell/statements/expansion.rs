@@ -21,7 +21,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let result = self.source(source, &mut child, depth);
         self.functions = functions;
         result?;
-        scope.inherit_input_progress(&child);
         Ok(())
     }
     pub fn arithmetic(

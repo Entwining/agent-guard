@@ -3,7 +3,7 @@ use super::{
     statements::{BindingValue, Evaluator, Scope},
     words,
 };
-use crate::{CheckError, CoverageGap, record::Word};
+use crate::{CheckError, record::Word};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

@@ -9,20 +9,8 @@
  {"id":"silent","partition":"options","expected":"N","input":{"command":"x='a[$(cat .env)]'; y=$x; read -s y <<< 1; a=(0); echo $((y))"}},
  {"id":"timeout","partition":"options","expected":"N","input":{"command":"x='a[$(cat .env)]'; y=$x; read -t 1 y <<< 1; a=(0); echo $((y))"}},
  {"id":"descriptor","partition":"options","expected":"N","input":{"command":"x='a[$(cat .env)]'; y=$x; read -u 0 y <<< 1; a=(0); echo $((y))"}},
- {"id":"prompt-rejected","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read -p prompt y <<< 1; a=(0); echo $((y))"}},
- {"id":"array-rejected","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read -a y <<< 1; a=(0); echo $((y))"}},
- {"id":"poll-keeps-bash-candidate","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read -t 0 y <<< 1; a=(0); echo $((y))"}},
- {"id":"nonstdin-keeps-unknown-candidate","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read -u 9 y 9<&- <<< 1; a=(0); echo $((y))"}},
- {"id":"default-reply-consumes-armed-value","partition":"kept","expected":"D","input":{"command":"read <<< 'a[$(cat .env)]'; a=(0); echo $((REPLY))"}},
- {"id":"ifs-keeps-unmodeled-candidate","partition":"fallback","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; IFS=,; read y <<< 1; a=(0); echo $((y))"}},
- {"id":"escape-keeps-unmodeled-candidate","partition":"fallback","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read y <<< '1\\2'; a=(0); echo $((y))"}},
  {"id":"missing-option-value","partition":"control","expected":"N","input":{"command":"read -d <<< public"}},
  {"id":"armed-tail","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; a=(0); read y z <<< \"1 $x\"; echo $((z))"}},
  {"id":"armed-whole","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; a=(0); read y <<< \"$x\"; echo $((y))"}},
- {"id":"benign-first-armed-tail","partition":"replace","expected":"N","input":{"command":"a=(0); read y z <<< '1 a[$(cat .env)]'; echo $((y))"}},
- {"id":"literal-armed-tail","partition":"kept","expected":"D","input":{"command":"a=(0); read y z <<< '1 a[$(cat .env)]'; echo $((z))"}},
- {"id":"field-record","partition":"record","expected":"N","values":["1","2 3"],"input":{"command":"read first second <<< ' 1  2 3 '; printf '%s' \"$first\" \"$second\""}},
- {"id":"missing-record","partition":"record","expected":"N","values":["1","",""],"input":{"command":"read first second third <<< 1; printf '%s' \"$first\" \"$second\" \"$third\""}},
- {"id":"delimiter-record","partition":"record","expected":"N","values":["first","second"],"input":{"command":"read -d , first second <<< 'first second,third'; printf '%s' \"$first\" \"$second\""}},
- {"id":"count-record","partition":"count-record","expected":"N","values":["a",""],"input":{"command":"read -n 1 value <<< abc; printf '%s' \"$value\""}}
+ {"id":"benign-first-armed-tail","partition":"replace","expected":"N","input":{"command":"a=(0); read y z <<< '1 a[$(cat .env)]'; echo $((y))"}}
 ]}

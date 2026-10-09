@@ -40,36 +40,6 @@ impl Scope {
             }
         })
     }
-    pub(in crate::shell) fn advance_input(&mut self, fd: i32, flow: Flow) {
-        let id = if fd == 0 {
-            self.stdin_id
-        } else {
-            match self.input_fds.get(&fd) {
-                Some(id) => *id,
-                None => return,
-            }
-        };
-        if id == self.stdin_id {
-            self.pipeline_input = Some(flow.clone());
-        }
-        Rc::make_mut(&mut self.input_cursors).insert(id, flow);
-    }
-    pub(super) fn inherit_input_progress(&mut self, child: &Self) {
-        let owners = self
-            .input_fds
-            .values()
-            .copied()
-            .chain([self.stdin_id])
-            .collect::<BTreeSet<_>>();
-        for owner in owners {
-            if let Some(input) = child.input_cursors.get(&owner) {
-                Rc::make_mut(&mut self.input_cursors).insert(owner, input.clone());
-                if owner == self.stdin_id {
-                    self.pipeline_input = Some(input.clone());
-                }
-            }
-        }
-    }
     pub(super) fn restore_inputs(
         &mut self,
         stdin: usize,

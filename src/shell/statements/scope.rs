@@ -29,18 +29,6 @@ impl Scope {
     pub(in crate::shell) fn in_function(&self) -> bool {
         !self.frames.is_empty()
     }
-    pub(in crate::shell) fn ifs_candidates(&self) -> Vec<Option<String>> {
-        self.bindings.get("IFS").map_or_else(
-            || vec![None],
-            |binding| {
-                binding
-                    .values
-                    .iter()
-                    .map(|value| value.known().cloned())
-                    .collect()
-            },
-        )
-    }
     pub fn new(home: &str, cwd: &str) -> Self {
         Self {
             #[cfg(test)]

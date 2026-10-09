@@ -108,7 +108,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             };
             prefixes.push(word);
         }
-        scope.inherit_input_progress(&assignment_scope);
         Ok(prefixes)
     }
 }

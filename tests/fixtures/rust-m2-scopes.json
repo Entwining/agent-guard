@@ -52,7 +52,6 @@
   {"id":"loop-one-changing-state","source":"D=/tmp; for n in 1; do D=$D/x; done; ls \"$D\"","expected":"N","scope":"a known single iteration has no unbounded second state","partition":"loop-join"},
   {"id":"loop-changing-bound","source":"D=/tmp; for n in 1 2 3; do D=$D/x; done; ls \"$D\"","expected":"N","scope":"all three finite iterations fit the inspection bound","partition":"loop-join"},
   {"id":"loop-unknown-glob","source":"D=/tmp; for n in public*; do D=$n; done; ls \"$D\"","expected":"UC","scope":"runtime glob binding propagates an unresolved target","partition":"loop-join"},
-  {"id":"pipeline-read-known","source":"D=/tmp; echo x | read D; ls \"$D\"","expected":"N","scope":"last pipeline read unions zsh's known producer value with bash's prior value","partition":"pipeline"},
   {"id":"use-loop-credential-data","source":"for n in .env; do :; done","expected":"N","scope":"Use is data rather than credential contents","partition":"use-control"},
   {"id":"use-test-credential-metadata","source":"[[ -f .env ]]","expected":"N","scope":"test Use does not extract contents","partition":"use-control"},
   {"id":"use-loop-credential-read","source":"for n in .env; do cat \"$n\"; done","expected":"D","reason":"environment-file contents","scope":"Read inside body still extracts protected contents","partition":"use-control"},

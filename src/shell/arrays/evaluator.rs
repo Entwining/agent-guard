@@ -68,139 +68,15 @@ impl Evaluator<'_, '_> {
         Ok(())
     }
 
-    pub(in crate::shell) fn read_array_fields(
-        &mut self,
-        name: &str,
-        input: Option<&[String]>,
-        unknown: bool,
-        scope: &mut Scope,
-    ) {
-        let mut state: Option<IndexedArray> = None;
-        let contexts = scope.ifs_candidates();
-        if scope
-            .bindings
-            .get("IFS")
-            .is_some_and(|binding| binding.values.iter().any(|value| value.known().is_none()))
-        {
-            self.output.gap(CoverageGap::UnsupportedShellSyntax);
-        }
-        for value in input.into_iter().flatten() {
-            for ifs in &contexts {
-                let mut candidate = IndexedArray::new(self.frontend.zsh);
-                for field in words::fields(value, &[], ifs.as_deref()) {
-                    candidate.push(vec![Word::literal(field.into())]);
-                }
-                if let Some(state) = &mut state {
-                    state.merge(&candidate);
-                } else {
-                    state = Some(candidate);
-                }
-            }
-        }
-        let mut state = state.unwrap_or_else(|| IndexedArray::unknown(self.frontend.zsh));
-        if unknown {
-            state.merge(&IndexedArray::unknown(self.frontend.zsh));
-        }
-        if let Some(prior) = array(scope, name) {
-            if self.frontend.zsh
-                || prior
-                    .binding_values()
-                    .iter()
-                    .filter_map(BindingValue::known)
-                    .any(|value| {
-                        !matches!(
-                            crate::shell::arithmetic::armed(value),
-                            crate::shell::arithmetic::Arming::Inert
-                        )
-                    })
-            {
-                state.merge(&prior);
-            }
-        } else if let Some(prior) = scope.bindings.get(name)
-            && (self.frontend.zsh
-                || prior
-                    .values
-                    .iter()
-                    .filter_map(BindingValue::known)
-                    .any(|value| {
-                        !matches!(
-                            crate::shell::arithmetic::armed(value),
-                            crate::shell::arithmetic::Arming::Inert
-                        )
-                    }))
-        {
-            state.merge(&IndexedArray::scalar(self.frontend.zsh, &prior.values));
-        }
-        store(scope, name, state);
+    pub(in crate::shell) fn read_unknown_array(&self, name: &str, scope: &mut Scope) {
+        store(scope, name, IndexedArray::unknown(self.frontend.zsh));
     }
 
-    pub(in crate::shell) fn read_array_lines(
-        &mut self,
-        args: &[Word],
-        scope: &mut Scope,
-    ) -> Result<(), crate::CheckError> {
-        let mut trim = false;
-        let mut name = "MAPFILE";
-        let mut modeled = true;
-        for word in args {
-            if word == "-t" {
-                trim = true;
-            } else if crate::shell::statements::identifier(&word.text) {
-                name = &word.text;
-            } else {
-                modeled = false;
-            }
-        }
-        let mut state: Option<IndexedArray> = None;
-        let mut unknown = true;
-        if modeled {
-            let candidates = scope
-                .pipeline_input
-                .as_ref()
-                .map(|input| self.flow.candidates(input))
-                .transpose()?;
-            unknown = candidates
-                .as_ref()
-                .is_none_or(|values| values.iter().any(|value| value.unknown));
-            for output in candidates
-                .as_ref()
-                .into_iter()
-                .flatten()
-                .filter(|value| value.known)
-                .map(|value| &value.text)
-            {
-                let mut candidate = IndexedArray::new(self.frontend.zsh);
-                for line in output.split_inclusive('\n') {
-                    candidate.push(vec![Word::literal(
-                        if trim {
-                            line.trim_end_matches('\n')
-                        } else {
-                            line
-                        }
-                        .into(),
-                    )]);
-                }
-                if let Some(state) = &mut state {
-                    state.merge(&candidate);
-                } else {
-                    state = Some(candidate);
-                }
-            }
-        }
-        if let Some(state) = state {
-            let mut state = state;
-            if unknown {
-                state.merge(&IndexedArray::unknown(self.frontend.zsh));
-            }
-            if let Some(prior) = array(scope, name).filter(|_| self.frontend.zsh) {
-                state.merge(&prior);
-            } else if let Some(prior) = scope.bindings.get(name).filter(|_| self.frontend.zsh) {
-                state.merge(&IndexedArray::scalar(self.frontend.zsh, &prior.values));
-            }
-            store(scope, name, state);
-        } else {
-            self.read_array_fields(name, None, true, scope);
-        }
-        Ok(())
+    pub(in crate::shell) fn read_array_lines(&self, args: &[Word], scope: &mut Scope) {
+        let name = args
+            .iter()
+            .rfind(|word| crate::shell::statements::identifier(&word.text))
+            .map_or("MAPFILE", |word| word.text.as_str());
+        self.read_unknown_array(name, scope);
     }
 }

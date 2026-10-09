@@ -211,9 +211,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         );
         self.functions = functions;
         let output = result?;
-        if !matches!(statement, Statement::Async(_)) {
-            scope.inherit_input_progress(&child);
-        }
 
         Ok(output)
     }

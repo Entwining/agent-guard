@@ -33,41 +33,6 @@ fn executable_flow_growth_tracks_branch_outputs() {
 }
 
 #[test]
-fn shared_pipeline_input_growth_tracks_read_branches() {
-    let counts = [4, 8, 16].map(|size| {
-        let bytes = "printf x; ".repeat(size);
-        let branches = (0..size)
-            .map(|index| format!("p{index}) read f; cat \"$f\";; "))
-            .collect::<String>();
-        let source = format!(
-            "{{ printf '/p/'; {bytes} printf 'public\n'; }} | case public in {branches} esac"
-        );
-        let output = observation(&source, &mut Scope::new("/h", "/p"));
-        assert!(output.gaps.is_empty(), "{:?}", output.gaps);
-        assert!(output.script.commands.iter().any(|command| {
-            command
-                .argv
-                .iter()
-                .any(|word| word.text == format!("/p/{}public", "x".repeat(size)))
-        }));
-        println!(
-            "size={size}, nodes={}, visits={}, pairs={}",
-            output.flow_nodes, output.flow_visits, output.flow_pairs
-        );
-        assert!(output.flow_nodes <= size * 8);
-        assert!(output.flow_visits <= size * 8);
-        assert!(output.flow_pairs <= size * 8);
-        (output.flow_nodes, output.flow_visits, output.flow_pairs)
-    });
-    for pair in counts.windows(2) {
-        assert!(
-            pair[1].0 <= pair[0].0 * 3 && pair[1].1 <= pair[0].1 * 3 && pair[1].2 <= pair[0].2 * 3,
-            "{counts:?}"
-        );
-    }
-}
-
-#[test]
 fn ordered_loop_output_growth_tracks_header_members() {
     let counts = [4, 8, 16].map(|size| {
         let members = (0..size)
@@ -148,22 +113,6 @@ fn sequential_stdout_choices_merge_equivalent_paths() {
             "{counts:?}"
         );
     }
-}
-
-#[test]
-fn read_without_names_keeps_the_whole_record() {
-    let output = observation(
-        "printf '%s\\n' '  public  ' | { read; cat \"$REPLY\"; }",
-        &mut Scope::new("/h", "/p"),
-    );
-    assert!(output.script.commands.iter().any(|command| {
-        command.program.is_some_and(|index| {
-            command.argv[index] == "cat"
-                && command.argv[index + 1..]
-                    .iter()
-                    .any(|word| word.text == "  public  ")
-        })
-    }));
 }
 
 #[test]

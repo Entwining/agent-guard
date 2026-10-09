@@ -8,10 +8,6 @@ fn process_streams_feed_list_file_items() {
     crate::program_contract::partition("list", ROWS);
 }
 #[test]
-fn process_streams_feed_read_bindings() {
-    crate::program_contract::partition("read", ROWS);
-}
-#[test]
 fn process_stream_data_does_not_read_named_paths() {
     crate::program_contract::partition("data", ROWS);
 }

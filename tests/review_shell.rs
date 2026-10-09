@@ -9,11 +9,6 @@ fn runtime_named_directories_keep_protected_suffixes_and_unknown_identity() {
 }
 
 #[test]
-fn pipeline_filters_preserve_producer_candidates_for_read() {
-    partition("pipeline_filters");
-}
-
-#[test]
 fn runtime_parameter_defaults_preserve_empty_and_present_candidates() {
     partition("runtime_defaults");
 }
@@ -140,11 +135,6 @@ fn parameter_case_operations_keep_pattern_selection() {
 #[test]
 fn parameter_unknown_values_keep_limited_preflight() {
     partition("parameter_unknown");
-}
-
-#[test]
-fn compound_pipeline_reads_preserve_input_and_consumption() {
-    partition("compound_read");
 }
 
 #[test]

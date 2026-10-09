@@ -68,7 +68,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 &pair[1].text
             };
             let output = self.shell_source(code, &mut child, environment, depth + 1)?;
-            scope.inherit_input_progress(&child);
             return Ok(Some(output));
         }
         Ok(None)

@@ -51,47 +51,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
             }
         }
-        let owners = scope
-            .input_fds
-            .values()
-            .copied()
-            .chain([scope.stdin_id])
-            .collect::<BTreeSet<_>>();
-        for owner in owners {
-            let values = branches
-                .iter()
-                .map(|branch| {
-                    branch.input_cursors.get(&owner).cloned().or_else(|| {
-                        (branch.stdin_id == owner)
-                            .then(|| branch.pipeline_input.clone())
-                            .flatten()
-                    })
-                })
-                .collect::<Vec<_>>();
-            if values.iter().all(Option::is_none) {
-                continue;
-            }
-            let flow = if values.iter().all(|value| value == &values[0]) {
-                values[0].clone().unwrap_or_default()
-            } else {
-                let parts = values
-                    .into_iter()
-                    .zip(branches)
-                    .map(|(value, branch)| {
-                        let value = value.unwrap_or_else(|| self.flow.unknown());
-                        let guard = self
-                            .flow
-                            .bytes(String::new(), branch.flow_guard.as_ref().clone());
-                        self.flow.sequence(vec![guard, value])
-                    })
-                    .collect();
-                self.flow.choice(parts)
-            };
-            Rc::make_mut(&mut scope.input_cursors).insert(owner, flow.clone());
-            if owner == scope.stdin_id {
-                scope.pipeline_input = Some(flow);
-            }
-        }
     }
 
     pub(super) fn merge_directories(&mut self, scope: &mut Scope, branches: &[Scope]) {

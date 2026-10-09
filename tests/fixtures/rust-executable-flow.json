@@ -55,37 +55,10 @@
       "wire_reason": "credential"
     },
     {
-      "id": "read-through-cat",
-      "partition": "executable-flow",
-      "input": {
-        "command": "printf '%s\\n' .env | cat | { read f; cat \"$f\"; }"
-      },
-      "expected": "D",
-      "wire_reason": "environment"
-    },
-    {
-      "id": "read-through-tee",
-      "partition": "executable-flow",
-      "input": {
-        "command": "printf '%s\\n' .env | tee public | { read f; cat \"$f\"; }"
-      },
-      "expected": "D",
-      "wire_reason": "environment"
-    },
-    {
       "id": "sequential-command-fragments",
       "partition": "executable-flow",
       "input": {
         "command": "{ printf 'cat '; printf '%s' '$H/.aws/credentials'; } | sh"
-      },
-      "expected": "D",
-      "wire_reason": "credential"
-    },
-    {
-      "id": "second-read-keeps-cursor",
-      "partition": "executable-flow",
-      "input": {
-        "command": "printf '%s\\n' public '$H/.aws/credentials' | cat | { read a; read b; cat \"$b\"; }"
       },
       "expected": "D",
       "wire_reason": "credential"
@@ -147,14 +120,6 @@
       "partition": "executable-flow",
       "input": {
         "command": "cat <(printf '%s' 'cat public') | sh"
-      },
-      "expected": "N"
-    },
-    {
-      "id": "public-read-through-cat",
-      "partition": "executable-flow",
-      "input": {
-        "command": "printf '%s\\n' public | cat | { read f; cat \"$f\"; }"
       },
       "expected": "N"
     },
@@ -311,15 +276,6 @@
       "wire_reason": "credential"
     },
     {
-      "id": "mixed-read-preserves-known",
-      "partition": "executable-flow",
-      "input": {
-        "command": "if true; then printf '%s\\n' '$H/.aws/credentials'; else unknown_program; fi | { read p; cat \"$p\"; }"
-      },
-      "expected": "D",
-      "wire_reason": "credential"
-    },
-    {
       "id": "case-alternatives-remain-separate",
       "partition": "executable-flow",
       "input": {
@@ -362,28 +318,10 @@
       "wire_reason": "credential"
     },
     {
-      "id": "shared-descriptor-read-cursor",
-      "partition": "executable-flow",
-      "input": {
-        "command": "printf '%s\\n' public '$H/.aws/credentials' | { read -u 3 a 3<&0; read b; cat \"$b\"; }"
-      },
-      "expected": "D",
-      "wire_reason": "credential"
-    },
-    {
       "id": "output-descriptor-move",
       "partition": "executable-flow",
       "input": {
         "command": "{ printf '%s' 'cat $H/.aws/credentials' 1>&3; } 3>&1- | sh"
-      },
-      "expected": "D",
-      "wire_reason": "credential"
-    },
-    {
-      "id": "default-read-reply",
-      "partition": "executable-flow",
-      "input": {
-        "command": "printf '%s\\n' '$H/.aws/credentials' | { read; cat \"$REPLY\"; }"
       },
       "expected": "D",
       "wire_reason": "credential"
@@ -458,14 +396,6 @@
       "wire_reason": "credential"
     },
     {
-      "id": "default-reply-keeps-whitespace",
-      "partition": "executable-flow",
-      "input": {
-        "command": "printf '%s\\n' '  public  ' | { read; cat \"$REPLY\"; }"
-      },
-      "expected": "N"
-    },
-    {
       "id": "loop-header-concatenates-code",
       "partition": "executable-flow",
       "input": {
@@ -490,24 +420,6 @@
         "command": "{ for x in a b; do printf 'echo '; done; printf '%s' 'cat $H/.aws/credentials'; } | sh | sh"
       },
       "expected": "N"
-    },
-    {
-      "id": "child-read-advances-shared-input",
-      "partition": "executable-flow",
-      "input": {
-        "command": "printf '%s\\n' public '$H/.aws/credentials' | { sh -c 'read a'; read b; cat \"$b\"; }"
-      },
-      "expected": "D",
-      "wire_reason": "credential"
-    },
-    {
-      "id": "subshell-read-advances-shared-input",
-      "partition": "executable-flow",
-      "input": {
-        "command": "printf '%s\\n' public '$H/.aws/credentials' | { (read a); read b; cat \"$b\"; }"
-      },
-      "expected": "D",
-      "wire_reason": "credential"
     },
     {
       "id": "declare-exports-child-function",
@@ -535,24 +447,6 @@
       "expected": "UR",
       "wire_reason": "inspection budget",
       "wire_text": "Split loops, function calls or brace alternatives"
-    },
-    {
-      "id": "command-substitution-shares-input",
-      "partition": "executable-flow",
-      "input": {
-        "command": "printf '%s\\n' public '$H/.aws/credentials' | { ignored=$(read a); read b; cat \"$b\"; }"
-      },
-      "expected": "D",
-      "wire_reason": "credential"
-    },
-    {
-      "id": "backtick-substitution-shares-input",
-      "partition": "executable-flow",
-      "input": {
-        "command": "printf '%s\\n' public '$H/.aws/credentials' | { ignored=`read a`; read b; cat \"$b\"; }"
-      },
-      "expected": "D",
-      "wire_reason": "credential"
     },
     {
       "id": "unknown-read-does-not-invent-empty-root",
