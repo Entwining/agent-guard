@@ -308,6 +308,13 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
             argv[index].text.remove(0);
         }
     }
+    if argv.iter().take(index.saturating_add(1)).any(|word| {
+        word.cardinality_unknown
+            && !(matches!(word.role, Role::Assign | Role::Precommand)
+                && super::statements::assignment(&word.text).is_some())
+    }) {
+        result.gap = Some(crate::CoverageGap::UnsupportedShellSyntax);
+    }
     result
 }
 

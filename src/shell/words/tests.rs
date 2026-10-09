@@ -110,6 +110,7 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
     pieces.last_mut().unwrap().end_index = raw.len() + 1;
     let lexical = Lexed::scan(raw).unwrap();
     let mut out = Expanded {
+        unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
         split: Vec::new(),
@@ -268,6 +269,7 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
     pieces[0].end_index -= 1;
     let lexical = Lexed::scan(raw).unwrap();
     let mut out = Expanded {
+        unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
         split: Vec::new(),
@@ -311,6 +313,7 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
     pieces.truncate(1);
     let lexical = Lexed::scan(raw).unwrap();
     let mut out = Expanded {
+        unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
         split: Vec::new(),
@@ -353,6 +356,7 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
     let pieces = word::parse(raw, &ParserOptions::default()).unwrap();
     let lexical = Lexed::scan(raw).unwrap();
     let mut out = Expanded {
+        unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
         split: Vec::new(),

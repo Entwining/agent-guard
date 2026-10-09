@@ -15,6 +15,9 @@ pub struct Word {
     pub globs: bool,
     pub shell_matches: bool,
     pub binding_candidates: std::collections::BTreeMap<String, String>,
+    // Quoting fixes argv width while the value's repetition count stays unknown.
+    pub cardinality_unknown: bool,
+    pub field_count_unknown: bool,
     pub vars: Vec<String>,
     pub role: Role,
     pub value: String,
@@ -40,6 +43,8 @@ impl Word {
             globs: false,
             shell_matches: false,
             binding_candidates: std::collections::BTreeMap::new(),
+            cardinality_unknown: false,
+            field_count_unknown: false,
             vars: Vec::new(),
             role: Role::Arg,
             pwd: false,
@@ -219,7 +224,7 @@ pub struct Script {
     pub uninspectable: Vec<Fragment>,
     pub parse_failed: bool,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Effect {
     Read,
     Write,
@@ -229,13 +234,13 @@ pub enum Effect {
     Enter,
     Use,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Walk {
     None,
     Visible,
     Hidden,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Via {
     Operand,
     Redirect,

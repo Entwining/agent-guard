@@ -476,25 +476,41 @@ fn item_record(
                     output.push(Statement::UnsupportedSyntax);
                 }
             }
-            if !argv.is_empty() {
+            let declaration = argv
+                .first()
+                .filter(|word| matches!(word.raw.as_str(), "declare" | "local" | "typeset"));
+            if !argv.is_empty()
+                && (declaration.is_none() || !matches!(assignment.value, AssignmentValue::Array(_)))
+            {
                 argv.push(value);
                 return Ok(());
             }
             if let AssignmentValue::Array(elements) = &assignment.value {
                 let mut values = Vec::new();
                 for (index, value) in elements {
-                    if let Some(index) = index {
+                    let index = if let Some(index) = index {
                         let mut index = word(source, index)?;
                         index.syntax = super::WordSyntax::Arithmetic;
-                        output.push(Statement::Expansion(index));
-                    }
-                    values.push(word(source, value)?);
+                        output.push(Statement::Expansion(index.clone()));
+                        Some(index)
+                    } else {
+                        None
+                    };
+                    values.push((index, word(source, value)?));
                 }
                 output.push(Statement::ArrayAssignment {
                     name: assignment.name.to_string(),
                     values,
                     append: assignment.append,
+                    declaration: declaration.is_some(),
                 });
+                if declaration.is_some() {
+                    argv.push(Word {
+                        raw: assignment.name.to_string(),
+                        syntax: super::WordSyntax::Literal,
+                        expansions: Vec::new(),
+                    });
+                }
                 return Ok(());
             }
             if let Some((name, raw)) = value.raw.split_once('=') {

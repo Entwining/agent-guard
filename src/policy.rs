@@ -222,6 +222,8 @@ fn evaluate_with_catalog_loader(
         effects: Vec::new(),
         #[cfg(test)]
         source_entries: 0,
+        #[cfg(test)]
+        broad_root_queries: 0,
         deadline,
     };
     match &decoded.operation {
@@ -384,6 +386,8 @@ struct Inspection<'a> {
     effects: Vec<EffectRecord>,
     #[cfg(test)]
     source_entries: usize,
+    #[cfg(test)]
+    broad_root_queries: usize,
     deadline: Option<std::time::Instant>,
 }
 
@@ -412,14 +416,24 @@ impl Inspection<'_> {
             && !(target.via == Via::Tool && target.glob)
             && (target.walk != Walk::None || target.glob)
             && (target.effect != Effect::Name || target.glob);
-        if broad_access
-            && filesystem::broad_root_checked(
-                &target.path,
-                &self.context.home,
-                target.glob,
-                self.deadline,
-            )?
-        {
+        let lexical_broad = if broad_access {
+            #[cfg(test)]
+            {
+                self.broad_root_queries += 1;
+            }
+            Some((
+                target.path.clone(),
+                filesystem::broad_root_checked(
+                    &target.path,
+                    &self.context.home,
+                    target.glob,
+                    self.deadline,
+                )?,
+            ))
+        } else {
+            None
+        };
+        if lexical_broad.as_ref().is_some_and(|(_, matched)| *matched) {
             self.effect(EffectRecord::BroadRoot);
         }
         // A literal relative ~/ prefix stays anchored at cwd, including with a
@@ -480,14 +494,26 @@ impl Inspection<'_> {
                     }
                     Identity::Protected(_) => self.context.home.clone(),
                 };
-                if broad_access
-                    && filesystem::broad_root_checked(
+                let resolved_broad = if let Some((lexical_path, matched)) = &lexical_broad
+                    && lexical_path == &path
+                    && resolved_home == self.context.home
+                {
+                    *matched
+                } else if broad_access {
+                    #[cfg(test)]
+                    {
+                        self.broad_root_queries += 1;
+                    }
+                    filesystem::broad_root_checked(
                         &path,
                         &resolved_home,
                         target.glob,
                         self.deadline,
                     )?
-                {
+                } else {
+                    false
+                };
+                if resolved_broad {
                     self.effect(EffectRecord::BroadRoot);
                     self.denial.get_or_insert_with(|| Reason {
                         effect: format!(
@@ -781,6 +807,43 @@ mod tests {
     }
 
     #[test]
+    fn unchanged_resource_domains_share_broad_root_checks() {
+        let context = Context {
+            consumer: Consumer::Claude,
+            home: "/h".into(),
+            cwd: "/project".into(),
+            user: None,
+            zsh_executor: true,
+            require_execution_owner: false,
+            shell_observation_entries: std::cell::Cell::new(0),
+        };
+        let table = filesystem::FirmlinkTable::from_text("");
+        for size in [8, 16, 32] {
+            let mut probe = NoProbe { calls: 0 };
+            let mut inspection = Inspection {
+                context: &context,
+                probe: &mut probe,
+                resolver: filesystem::Resolver::new(&context.home, &table),
+                arm: Arm::Brush,
+                gaps: Vec::new(),
+                denial: None,
+                appdata_reason: None,
+                advice: Vec::new(),
+                executable_qualifier: false,
+                effects: Vec::new(),
+                source_entries: 0,
+                broad_root_queries: 0,
+                deadline: None,
+            };
+            inspection
+                .shell(&"ssh host public*;".repeat(size), &context.cwd, 0)
+                .unwrap();
+            assert_eq!(inspection.broad_root_queries, size, "size={size}");
+            assert!(inspection.denial.is_none() && inspection.gaps.is_empty());
+        }
+    }
+
+    #[test]
     fn inspection_recursion_frontier_is_independent_of_delimiter_depth() {
         let context = Context {
             consumer: Consumer::Claude,
@@ -805,6 +868,7 @@ mod tests {
             executable_qualifier: false,
             effects: Vec::new(),
             source_entries: 0,
+            broad_root_queries: 0,
             deadline: None,
         };
         inspection.shell("true", &context.cwd, 64).unwrap();
@@ -848,6 +912,7 @@ mod tests {
                 executable_qualifier: false,
                 effects: Vec::new(),
                 source_entries: 0,
+                broad_root_queries: 0,
                 deadline: None,
             };
             inspection

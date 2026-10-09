@@ -1,5 +1,6 @@
 mod argv;
 mod arithmetic;
+mod arrays;
 mod brush;
 mod cwd;
 mod divergence;
@@ -81,8 +82,9 @@ enum Statement {
     Expansion(RawWord),
     ArrayAssignment {
         name: String,
-        values: Vec<RawWord>,
+        values: Vec<(Option<RawWord>, RawWord)>,
         append: bool,
+        declaration: bool,
     },
     Command {
         assignments: Vec<(String, RawWord)>,
@@ -108,6 +110,8 @@ pub use crate::record::{Command as CommandRecord, Redirect, Word};
 
 #[derive(Debug, Default)]
 pub struct Observation {
+    #[cfg(test)]
+    pub array_words: usize,
     pub script: crate::record::Script,
     pub gaps: Vec<CoverageGap>,
     pub parse_successes: usize,
@@ -123,6 +127,8 @@ pub struct Observation {
     pub(crate) cwd_candidates: usize,
     #[cfg(test)]
     pub(crate) failure_copies: usize,
+    #[cfg(test)]
+    pub(crate) statement_visits: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -230,6 +236,7 @@ impl statements::Evaluator<'_, '_> {
             self.output.source_entries += 1;
         }
         let Frontend { arm, zsh, .. } = self.frontend;
+        scope.zsh = zsh;
         // mvdan's lexer ignores NUL bytes, including inside words (lexer.go:78-81).
         let without_nul = source.contains('\0').then(|| source.replace('\0', ""));
         let source = without_nul.as_deref().unwrap_or(source);
@@ -320,6 +327,7 @@ fn expand_process_input(
         crate::record::StreamOutput::Known,
     )));
     Ok(vec![Expanded {
+        unknown_splitting: false,
         split: vec![word.clone()],
         word,
         positional: false,
@@ -339,20 +347,33 @@ fn expand_positional_argv(
     evaluator: &mut statements::Evaluator<'_, '_>,
 ) -> Option<Vec<Expanded>> {
     let list = words::positional_list(&raw.raw)?;
-    let mut arguments = scope.positional_words()?;
-    let integer = |text: &str| {
-        text.trim().parse::<isize>().ok().or_else(|| {
-            scope
-                .contexts()
-                .get(text.trim())
-                .and_then(|value| value.parse().ok())
-        })
-    };
-    let offset = integer(&list.offset);
-    let length = list.length.as_deref().map(integer);
-    if offset.is_none() || length.is_some_and(|value| value.is_none_or(|n| n < 0)) {
-        evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
-    } else if let Some(offset) = offset {
+    let sequences = scope.positional_sequences()?;
+    if sequences.len() > 1 {
+        evaluator.output.gap(CoverageGap::UnresolvedTarget);
+    }
+    let mut results = Vec::new();
+    for mut arguments in sequences {
+        if arguments.iter().any(|word| word.field_count_unknown) {
+            evaluator.output.gap(CoverageGap::UnresolvedTarget);
+            if list.offset != "1" || list.length.is_some() {
+                evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+            }
+        }
+        let integer = |text: &str| {
+            text.trim().parse::<isize>().ok().or_else(|| {
+                scope
+                    .contexts()
+                    .get(text.trim())
+                    .and_then(|value| value.parse().ok())
+            })
+        };
+        let offset = integer(&list.offset);
+        let length = list.length.as_deref().map(integer);
+        if offset.is_none() || length.is_some_and(|value| value.is_none_or(|n| n < 0)) {
+            evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+            return None;
+        }
+        let offset = offset?;
         let start = if offset < 0 {
             arguments.len().saturating_sub(offset.unsigned_abs())
         } else {
@@ -374,6 +395,8 @@ fn expand_positional_argv(
                 joined.expands |= argument.expands;
                 joined.runtime_unknown |= argument.runtime_unknown;
                 joined.shell_matches |= argument.shell_matches;
+                joined.cardinality_unknown |= argument.cardinality_unknown;
+                joined.expands |= argument.cardinality_unknown;
                 for name in &argument.vars {
                     if !joined.vars.contains(name) {
                         joined.vars.push(name.clone());
@@ -386,7 +409,8 @@ fn expand_positional_argv(
             .first()
             .cloned()
             .unwrap_or_else(|| Word::literal(String::new()));
-        return Some(vec![Expanded {
+        results.push(Expanded {
+            unknown_splitting: false,
             word,
             split: arguments,
             positional: true,
@@ -397,9 +421,9 @@ fn expand_positional_argv(
             parameters: Vec::new(),
             unsupported: false,
             lexical_ranges: Vec::new(),
-        }]);
+        });
     }
-    None
+    Some(results)
 }
 
 fn expand_scoped(
@@ -415,10 +439,13 @@ fn expand_scoped(
     if let Some(arguments) = expand_positional_argv(raw, scope, evaluator) {
         return Ok(arguments);
     }
+    if let Some(elements) = arrays::expand(raw, scope, evaluator, depth)? {
+        return Ok(elements);
+    }
     let host = evaluator.frontend.host;
     let first = scope.contexts();
     let cwd = scope.directory.current.render();
-    let seed = words::expand(
+    let seed = words::expand_boxed(
         &raw.raw,
         &raw.syntax,
         &words::ExpansionContext {
@@ -430,13 +457,27 @@ fn expand_scoped(
         },
     )?;
     let mut contexts = vec![first];
-    for name in seed
+    let mut names = seed
         .word
         .vars
         .iter()
-        .collect::<std::collections::BTreeSet<_>>()
-    {
-        if observe_bindings {
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>();
+    if !names.is_empty() && scope.bindings.contains_key("IFS") {
+        names.insert("IFS".into());
+    }
+    for name in &names {
+        if name.parse::<usize>().is_ok()
+            && scope.bindings.get("#").is_some_and(|binding| {
+                binding
+                    .values
+                    .iter()
+                    .any(|value| matches!(value, statements::BindingValue::RuntimeDerived(_)))
+            })
+        {
+            evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
+        }
+        if observe_bindings && seed.word.vars.contains(name) {
             evaluator.armed_reference(name, scope, depth)?;
         }
         if let Some(binding) = scope.bindings.get(name) {
@@ -455,6 +496,18 @@ fn expand_scoped(
                     if next.len() == 512 {
                         evaluator.output.gap(CoverageGap::InspectionBudget);
                         break;
+                    }
+                    if let statements::BindingValue::RepeatedFields(repetition) = value {
+                        for projection in repetition.projections() {
+                            if next.len() == 512 {
+                                evaluator.output.gap(CoverageGap::InspectionBudget);
+                                break;
+                            }
+                            let mut context = context.clone();
+                            context.insert(name.clone(), projection);
+                            next.push(context);
+                        }
+                        continue;
                     }
                     let mut context = context.clone();
                     if let statements::BindingValue::Known(value)
@@ -476,14 +529,21 @@ fn expand_scoped(
             contexts = next;
         }
     }
+    let mut nested = Vec::new();
     for expansion in &raw.expansions {
         match expansion {
-            RawExpansion::Code(code) => evaluator.isolated_source(code, scope, depth + 1)?,
+            RawExpansion::Code(code) => {
+                if !nested.contains(code) {
+                    nested.push(code.clone());
+                }
+            }
             RawExpansion::Variable(name) => {
                 if let Some(binding) = scope.bindings.get(name).cloned() {
                     for value in binding.values {
                         if let statements::BindingValue::Known(code) = value {
-                            evaluator.isolated_source(&code, scope, depth + 1)?;
+                            if !nested.contains(&code) {
+                                nested.push(code);
+                            }
                         } else if value == statements::BindingValue::Undetermined {
                             evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
@@ -499,7 +559,7 @@ fn expand_scoped(
         } else {
             vec![true]
         } {
-            let runtime_variables = seed
+            let mut runtime_variables = seed
                 .word
                 .vars
                 .iter()
@@ -512,7 +572,14 @@ fn expand_scoped(
                     })
                 })
                 .cloned()
-                .collect();
+                .collect::<std::collections::BTreeSet<_>>();
+            if scope
+                .bindings
+                .get("IFS")
+                .is_some_and(|binding| binding.values.iter().any(|value| value.known().is_none()))
+            {
+                runtime_variables.insert("IFS".into());
+            }
             let mut expanded = words::expand(
                 &raw.raw,
                 &raw.syntax,
@@ -533,6 +600,39 @@ fn expand_scoped(
             expanded.word.binding_candidates = candidates.clone();
             for word in &mut expanded.split {
                 word.binding_candidates = candidates.clone();
+            }
+            let repeated = expanded
+                .word
+                .vars
+                .iter()
+                .filter(|name| {
+                    scope.bindings.get(*name).is_some_and(|binding| {
+                        binding.values.iter().any(|value| {
+                            matches!(value, statements::BindingValue::RepeatedFields(_))
+                        })
+                    })
+                })
+                .collect::<Vec<_>>();
+            if !repeated.is_empty() {
+                if repeated
+                    .iter()
+                    .any(|name| words::parameter_affixes(&raw.raw, name).is_none())
+                {
+                    expanded.word.expands = true;
+                    for word in &mut expanded.split {
+                        word.expands = true;
+                    }
+                }
+                // The literal fields are known; their repetition count is not.
+                // Consumers whose roles depend on position need the unknown count.
+                expanded.word.cardinality_unknown = true;
+                expanded.word.field_count_unknown = repeated.iter().any(|name| {
+                    words::parameter_affixes(&raw.raw, name).is_none_or(|(_, _, split)| split)
+                });
+                for word in &mut expanded.split {
+                    word.cardinality_unknown = true;
+                    word.field_count_unknown = expanded.word.field_count_unknown;
+                }
             }
             if expanded.word.vars.iter().any(|name| {
                 scope.bindings.get(name).is_some_and(|binding| {
@@ -590,15 +690,21 @@ fn expand_scoped(
                 evaluator.armed_references(expression, scope, depth)?;
             }
             for code in &expanded.nested {
-                evaluator.isolated_source(code, scope, depth + 1)?;
+                if !nested.contains(code) {
+                    nested.push(code.clone());
+                }
             }
             result.push(expanded);
         }
+    }
+    for code in nested {
+        evaluator.isolated_source(&code, scope, depth + 1)?;
     }
     Ok(result)
 }
 
 struct Expanded {
+    unknown_splitting: bool,
     positional: bool,
     split: Vec<Word>,
     word: Word,

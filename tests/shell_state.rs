@@ -1,3 +1,5 @@
+#[path = "shell_state/accumulation_consumers_preserve_fields.rs"]
+pub mod accumulation_consumers_preserve_fields;
 #[path = "shell_state/and_chains_preserve_success_and_failure_directories.rs"]
 pub mod and_chains_preserve_success_and_failure_directories;
 #[path = "shell_state/and_success_continuation_defines_public_helpers.rs"]
@@ -8,12 +10,16 @@ pub mod and_success_excludes_failed_cwd;
 pub mod benign_nested_loops_do_not_exhaust_inspection;
 #[path = "shell_state/bound_arithmetic_sinks_observe_subscript_code.rs"]
 pub mod bound_arithmetic_sinks_observe_subscript_code;
+#[path = "shell_state/conditional_literal_accumulation_preserves_targets.rs"]
+pub mod conditional_literal_accumulation_preserves_targets;
 #[path = "support/differential.rs"]
 pub mod differential;
 #[path = "shell_state/eval_runtime_output_is_unresolved_code.rs"]
 pub mod eval_runtime_output_is_unresolved_code;
 #[path = "shell_state/function_argv_preserves_fields_and_scope.rs"]
 pub mod function_argv_preserves_fields_and_scope;
+#[path = "shell_state/indexed_arrays_preserve_elements.rs"]
+pub mod indexed_arrays_preserve_elements;
 #[path = "shell_state/indexed_parameter_expansion_evaluates_binding.rs"]
 pub mod indexed_parameter_expansion_evaluates_binding;
 #[path = "shell_state/literal_for_lists_execute_each_value_exactly.rs"]
@@ -24,6 +30,8 @@ pub mod loop_cwd_widening_preserves_protected_candidates;
 pub mod matrix_candidates_keep_all_shell_read_operands;
 #[path = "shell_state/nested_functions_follow_dynamic_local_scope.rs"]
 pub mod nested_functions_follow_dynamic_local_scope;
+#[path = "shell_state/ordinary_small_command_cost.rs"]
+pub mod ordinary_small_command_cost;
 #[path = "shell_state/persistent_binding_eligibility.rs"]
 pub mod persistent_binding_eligibility;
 #[path = "shell_state/pipeline_read_models_known_values_and_refuses_unmodelled_armed_reads.rs"]

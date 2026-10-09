@@ -316,7 +316,7 @@ pub(super) fn xargs_commands(command: &Command, items: &[String]) -> Vec<InputSo
 }
 
 pub(super) fn xargs_replacements(left: &[Command], right: &[Command]) -> Vec<InputSource> {
-    let Some((producer, index)) = producer(left) else {
+    let Some((first, first_index)) = producer(left) else {
         return Vec::new();
     };
     let Some(command) = right
@@ -325,23 +325,39 @@ pub(super) fn xargs_replacements(left: &[Command], right: &[Command]) -> Vec<Inp
     else {
         return Vec::new();
     };
-    let args = &producer.argv[index + 1..];
-    let items: Vec<String> = if name(producer) == Some("printf") {
-        let Some(output) = printf_output(args) else {
-            return Vec::new();
+    let mut sources = Vec::new();
+    for producer in left.iter().filter(|c| {
+        c.pipeline == first.pipeline
+            && matches!(name(c), Some("printf" | "echo"))
+            && c.program.is_some_and(|index| {
+                c.argv[..=index]
+                    .iter()
+                    .map(|word| &word.raw)
+                    .eq(first.argv[..=first_index].iter().map(|word| &word.raw))
+            })
+    }) {
+        let Some(index) = producer.program else {
+            continue;
         };
-        output
-            .split('\n')
-            .filter(|line| !line.is_empty())
-            .map(str::to_owned)
-            .collect()
-    } else {
-        args.iter()
-            .filter(|w| !w.starts_with('-'))
-            .map(|w| unescape(w, true))
-            .collect()
-    };
-    xargs_commands(command, &items)
+        let args = &producer.argv[index + 1..];
+        let items: Vec<String> = if name(producer) == Some("printf") {
+            let Some(output) = printf_output(args) else {
+                continue;
+            };
+            output
+                .split('\n')
+                .filter(|line| !line.is_empty())
+                .map(str::to_owned)
+                .collect()
+        } else {
+            args.iter()
+                .filter(|w| !w.starts_with('-'))
+                .map(|w| unescape(w, true))
+                .collect()
+        };
+        sources.extend(xargs_commands(command, &items));
+    }
+    sources
 }
 
 pub(super) fn xargs_here_input(command: &Command, body: &str) -> Vec<InputSource> {

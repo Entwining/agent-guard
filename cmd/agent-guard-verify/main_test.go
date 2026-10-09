@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"agentguard/tests/harness"
 )
 
 func testPackage(t *testing.T, root, fault string) string {
@@ -107,6 +109,7 @@ func assertProtocolCases(t *testing.T, output string) {
 	}
 }
 
+// This assembles the protocol fixture independently of make build, whose packaging CI checks.
 func TestInstalledPackage(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, ".git"), 0700); err != nil {
@@ -127,10 +130,19 @@ func TestInstalledPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	target := t.TempDir()
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	build := exec.CommandContext(ctx, cargo, "build", "--locked", "--release", "--bin", "agent-guard-native", "--target-dir", target)
+	target := os.Getenv("CARGO_TARGET_DIR")
+	if target == "" {
+		target = t.TempDir()
+	}
+	if !filepath.IsAbs(target) {
+		t.Fatal("CARGO_TARGET_DIR must be absolute")
+	}
+	target, err = harness.OutsidePath(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Compilation is setup; the Go test and CI job own its completion limit.
+	build := exec.CommandContext(t.Context(), cargo, "build", "--locked", "--release", "--bin", "agent-guard-native", "--target-dir", target)
 	build.Dir = source
 	build.Env = os.Environ()
 	build.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -138,6 +150,13 @@ func TestInstalledPackage(t *testing.T) {
 	build.WaitDelay = time.Second
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build native: %v: %s", err, output)
+	} else {
+		t.Logf("build native: %s", output)
+	}
+	if requested := os.Getenv("CARGO_TARGET_DIR"); requested != "" {
+		if _, err := os.Stat(filepath.Join(requested, "release/agent-guard-native")); err != nil {
+			t.Fatalf("caller target was not populated: %v", err)
+		}
 	}
 	native, err := os.ReadFile(filepath.Join(target, "release/agent-guard-native"))
 	if err != nil {
@@ -314,15 +333,14 @@ func TestInterruptCleanup(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) })
 			ready := filepath.Join(root, "fixture-pids")
-			until := time.Now().Add(2 * time.Second)
 			for {
 				if _, err := os.Stat(ready); err == nil {
 					break
 				}
-				if time.Now().After(until) {
+				if ctx.Err() != nil {
 					_ = cmd.Process.Kill()
 					_ = cmd.Wait()
-					t.Fatal("fixture did not start")
+					t.Fatalf("verification ended before fixture readiness: %v", ctx.Err())
 				}
 				time.Sleep(10 * time.Millisecond)
 			}

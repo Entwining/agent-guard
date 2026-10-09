@@ -1,0 +1,19 @@
+{"rows":[
+ {"id":"repeat-env-read","partition":"repetition","command":"A=(public); while test public; do A+=(.env); done; cat \"${A[@]}\"","expected":"D","reason":"credential or environment file"},
+ {"id":"repeat-env-index","partition":"repetition","command":"A=(public); while test public; do A+=(.env); done; cat \"${A[100]}\"","expected":"D","reason":"credential or environment file"},
+ {"id":"repeat-env-slice","partition":"repetition","command":"A=(public); while test public; do A+=(.env); done; cat \"${A[@]:100:1}\"","expected":"D","reason":"credential or environment file"},
+ {"id":"repeat-env-negative-index","partition":"repetition","command":"A=(public); while test public; do A+=(.env); done; cat \"${A[-100]}\"","expected":"D","reason":"credential or environment file"},
+ {"id":"repeat-key-list","partition":"repetition","command":"A=(public); while test public; do A+=(\"$H/.ssh/id_array_fixture\"); done; ls \"${A[@]}\"","expected":"D"},
+ {"id":"repeat-appdata-read","partition":"repetition","command":"A=(public); while test public; do A+=(\"$C\"); done; cat \"${A[@]}\"","expected":"D","reason":"macOS app-data"},
+ {"id":"repeat-public-read","partition":"repetition","command":"A=(prefix); while test public; do A+=(public); done; cat \"${A[@]}\"","expected":"N"},
+ {"id":"repeat-env-list","partition":"repetition","command":"A=(public); while test public; do A+=(.env); done; ls \"${A[@]}\"","expected":"N"},
+ {"id":"repeat-fixed-prefix","partition":"repetition","command":"A=(public); while test public; do A+=(.env); done; cat \"${A[0]}\"","expected":"N"},
+ {"id":"repeat-overwrite-index","partition":"repetition","command":"A=(public); while test public; do A+=(.env); done; A[100]=public; cat \"${A[100]}\"","expected":"N"},
+ {"id":"repeat-length","partition":"repetition","command":"A=(); while test public; do A+=(public); done; cat \"${#A[@]}\"","expected":"UC","unknown_count":true},
+ {"id":"repeat-joined-unknown","partition":"repetition","command":"A=(prefix); while test public; do A+=(public); done; cat \"${A[*]}\"","expected":"UR"},
+ {"id":"repeat-empty-slice","partition":"repetition","command":"A=(public); while test public; do A+=(.env); done; cat \"${A[@]:100:0}\"","expected":"N"},
+ {"id":"repeat-armed","partition":"repetition","command":"A=(public); while test public; do A+=('a[$(cat .env)]'); done; x=${A[100]}; echo public","expected":"D","reason":"credential or environment file"},
+ {"id":"repeat-armed-tail","partition":"repetition","command":"A=(public); while test public; do A+=('a[$(cat .env)]'); done; A[1]=public; A[2]=public; x=${A[100]}; echo public","expected":"D","reason":"credential or environment file"},
+ {"id":"fixed-index-not-repeat","partition":"repetition","command":"A=(public); while test public; do A[100]=.env; done; cat \"${A[99]}\"","expected":"N"},
+ {"id":"mixed-array-scalar-branch","partition":"repetition","command":"A=(public); while test public; do if test flag; then A=(public); else A=.env; fi; done; cat \"${A[@]}\"","expected":"D","reason":"credential or environment file"}
+]}

@@ -31,10 +31,15 @@ type ProcessResult struct {
 
 // A separate process group confines timeout cleanup to this synthetic invocation.
 // The observer runs before harness cleanup so cleanup cannot manufacture a pass.
+// A zero deadline leaves compilation setup bounded by the caller.
 func runProcess(argv []string, input []byte, cwd string, env []string, deadline time.Duration, observe func(ProcessResult) error) (result ProcessResult, failure error) {
 	started := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), deadline)
-	defer cancel()
+	ctx := context.Background()
+	if deadline != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, deadline)
+		defer cancel()
+	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir, cmd.Env = cwd, env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -182,8 +187,8 @@ func writeJSON(path string, value any) error {
 
 func quote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }
 
-// Resolve one component at a time, rejecting protected aliases before probing them.
-func outsidePath(path string) (string, error) {
+// OutsidePath resolves an output path outside checkouts, rejecting protected aliases before probing them.
+func OutsidePath(path string) (string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
@@ -243,7 +248,7 @@ func newOutput(path string) (string, error) {
 	if path == "" {
 		return "", errors.New("a new output directory is required")
 	}
-	output, err := outsidePath(path)
+	output, err := OutsidePath(path)
 	if err != nil {
 		return "", err
 	}

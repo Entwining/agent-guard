@@ -69,6 +69,86 @@ pub(super) fn first_literal(raw: &str) -> Option<String> {
     }
 }
 
+pub(super) fn without_leading_parameter(raw: &str, name: &str) -> Option<String> {
+    let pieces = word::parse(raw, &ParserOptions::default()).ok()?;
+    let first = pieces.first()?;
+    let first = match &first.piece {
+        WordPiece::DoubleQuotedSequence(inner) => inner.first()?,
+        _ => first,
+    };
+    if !matches!(&first.piece, WordPiece::ParameterExpansion(ParameterExpr::Parameter {
+        parameter: Parameter::Named(found), indirect: false,
+    }) if found == name)
+    {
+        return None;
+    }
+    Some(format!(
+        "{}{}",
+        &raw[..first.start_index],
+        &raw[first.end_index..]
+    ))
+}
+
+pub(super) fn parameter_affixes(raw: &str, name: &str) -> Option<(String, String, bool)> {
+    fn literal_parts(
+        pieces: &[WordPieceWithSource],
+        name: &str,
+        quoted: bool,
+        found: &mut bool,
+        split: &mut bool,
+        prefix: &mut String,
+        suffix: &mut String,
+    ) -> Option<()> {
+        for piece in pieces {
+            let text = match &piece.piece {
+                WordPiece::DoubleQuotedSequence(inner) => {
+                    literal_parts(inner, name, true, found, split, prefix, suffix)?;
+                    continue;
+                }
+                WordPiece::ParameterExpansion(expr)
+                    if matches!(
+                        expr,
+                        ParameterExpr::Parameter {
+                            indirect: false,
+                            ..
+                        }
+                    ) && parameter_name(expr).as_deref() == Some(name)
+                        && !*found =>
+                {
+                    *found = true;
+                    *split = !quoted;
+                    continue;
+                }
+                WordPiece::Text(text) => text.replace("\\\n", ""),
+                WordPiece::SingleQuotedText(text) => text.clone(),
+                WordPiece::EscapeSequence(text) if text == "\\\n" => String::new(),
+                WordPiece::EscapeSequence(text) => text.strip_prefix('\\').unwrap_or(text).into(),
+                _ => return None,
+            };
+            if *found {
+                suffix.push_str(&text);
+            } else {
+                prefix.push_str(&text);
+            }
+        }
+        Some(())
+    }
+    let pieces = word::parse(raw, &ParserOptions::default()).ok()?;
+    let mut found = false;
+    let mut split = false;
+    let (mut prefix, mut suffix) = (String::new(), String::new());
+    literal_parts(
+        &pieces,
+        name,
+        false,
+        &mut found,
+        &mut split,
+        &mut prefix,
+        &mut suffix,
+    )?;
+    found.then_some((prefix, suffix, split))
+}
+
 pub(super) fn single_literal(raw: &str) -> Option<String> {
     let pieces = word::parse(raw, &ParserOptions::default()).ok()?;
     pieces
@@ -90,6 +170,16 @@ pub(super) struct ExpansionContext<'a> {
     pub tilde_assigned: bool,
 }
 
+// The seed remains live while nested sources are observed. Return its payload
+// off the recursive frame so the supported nesting frontier fits the host stack.
+pub(super) fn expand_boxed(
+    raw: &str,
+    syntax: &super::WordSyntax,
+    context: &ExpansionContext<'_>,
+) -> Result<Box<Expanded>, CheckError> {
+    expand(raw, syntax, context).map(Box::new)
+}
+
 pub(super) fn expand(
     raw: &str,
     syntax: &super::WordSyntax,
@@ -98,6 +188,7 @@ pub(super) fn expand(
     if matches!(syntax, super::WordSyntax::Literal) {
         let word = Word::literal(raw.to_owned());
         return Ok(Expanded {
+            unknown_splitting: false,
             positional: false,
             split: vec![word.clone()],
             word,
@@ -119,6 +210,7 @@ pub(super) fn expand(
         brace_text(raw)?
     };
     let mut out = Expanded {
+        unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
         split: Vec::new(),
@@ -194,54 +286,99 @@ pub(super) fn expand(
         out.arithmetic.push(raw.to_owned());
     }
     out.word.value = out.word.text.clone();
-    let mut offset = 0;
+    if splitting && context.runtime_variables.contains("IFS") {
+        out.word.expands = true;
+        out.word.runtime_unknown = true;
+    }
     out.split = if splitting {
-        out.word
-            .text
-            .split(|ch: char| {
-                let position = offset;
-                offset += ch.len_utf8();
-                ch.is_whitespace()
-                    && !out
-                        .lexical_ranges
-                        .iter()
-                        .any(|range| range.contains(&position))
-            })
-            .filter(|text| !text.is_empty())
-            .map(|text| {
-                let mut word = out.word.clone();
-                word.text = text.to_owned();
-                word.value = word.text.clone();
-                // Splitting yields slices of this buffer, so their offsets
-                // preserve the cwd-origin ranges without a second text search.
-                let start = text.as_ptr() as usize - out.word.text.as_ptr() as usize;
-                let end = start + text.len();
-                word.cwd_ranges = out
-                    .word
-                    .cwd_ranges
-                    .iter()
-                    .filter_map(|range| {
-                        if range.start >= start && range.end <= end {
-                            Some(range.start - start..range.end - start)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                if out.word.cwd_ranges.iter().any(|range| {
-                    range.start < end
-                        && range.end > start
-                        && !(range.start >= start && range.end <= end)
-                }) {
-                    out.unsupported = true;
-                }
-                word
-            })
-            .collect()
+        fields(
+            &out.word.text,
+            &out.lexical_ranges,
+            context.variables.get("IFS").map(String::as_str),
+        )
+        .into_iter()
+        .map(|text| {
+            let mut word = out.word.clone();
+            word.text = text.to_owned();
+            word.value = word.text.clone();
+            // Splitting yields slices of this buffer, so their offsets
+            // preserve the cwd-origin ranges without a second text search.
+            let start = text.as_ptr() as usize - out.word.text.as_ptr() as usize;
+            let end = start + text.len();
+            word.cwd_ranges = out
+                .word
+                .cwd_ranges
+                .iter()
+                .filter_map(|range| {
+                    if range.start >= start && range.end <= end {
+                        Some(range.start - start..range.end - start)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if out.word.cwd_ranges.iter().any(|range| {
+                range.start < end
+                    && range.end > start
+                    && !(range.start >= start && range.end <= end)
+            }) {
+                out.unsupported = true;
+            }
+            word
+        })
+        .collect()
     } else {
         vec![out.word.clone()]
     };
     Ok(out)
+}
+
+pub(super) fn fields<'a>(
+    text: &'a str,
+    lexical: &[std::ops::Range<usize>],
+    ifs: Option<&str>,
+) -> Vec<&'a str> {
+    let delimiter = |at: usize, ch: char| {
+        ifs.map_or_else(|| ch.is_whitespace(), |ifs| ifs.contains(ch))
+            && !lexical.iter().any(|range| range.contains(&at))
+    };
+    let whitespace = |ch: char| {
+        if ifs.is_some() {
+            matches!(ch, ' ' | '\t' | '\n')
+        } else {
+            ch.is_whitespace()
+        }
+    };
+    let mut characters = text.char_indices().peekable();
+    let skip_whitespace = |characters: &mut std::iter::Peekable<std::str::CharIndices<'a>>| {
+        while characters
+            .peek()
+            .is_some_and(|&(at, ch)| delimiter(at, ch) && whitespace(ch))
+        {
+            characters.next();
+        }
+    };
+    let mut output = Vec::new();
+    skip_whitespace(&mut characters);
+    while let Some(&(start, _)) = characters.peek() {
+        while characters
+            .peek()
+            .is_some_and(|&(at, ch)| !delimiter(at, ch))
+        {
+            characters.next();
+        }
+        let end = characters.peek().map_or(text.len(), |&(at, _)| at);
+        output.push(&text[start..end]);
+        skip_whitespace(&mut characters);
+        if characters
+            .peek()
+            .is_some_and(|&(at, ch)| delimiter(at, ch) && !whitespace(ch))
+        {
+            characters.next();
+        }
+        skip_whitespace(&mut characters);
+    }
+    output
 }
 
 fn brace_text(raw: &str) -> Result<(String, bool), CheckError> {
@@ -362,6 +499,7 @@ fn fragment(
     expansion: &ExpansionContext<'_>,
 ) -> Result<Expanded, CheckError> {
     let mut out = Expanded {
+        unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
         split: Vec::new(),
@@ -615,6 +753,7 @@ fn fill(
                         .is_some_and(|name| expansion.runtime_variables.contains(name))
                     {
                         out.word.runtime_unknown = true;
+                        out.unknown_splitting |= !quoted;
                         // R41 keeps lexical target inference. These bytes describe
                         // unknown output, so their whitespace is not a field boundary.
                         out.lexical_ranges
@@ -627,6 +766,7 @@ fn fill(
                 } else {
                     out.word.text.push_str(spelling);
                     out.word.expands = true;
+                    out.unknown_splitting |= !quoted;
                 }
             }
             WordPiece::CommandSubstitution(_) | WordPiece::BackquotedCommandSubstitution(_) => {
@@ -656,9 +796,11 @@ fn fill(
                 } else {
                     out.word.text.push_str(&raw[piece.start_index..right + 1]);
                     out.word.expands = true;
+                    out.unknown_splitting |= !quoted;
                 }
             }
             WordPiece::ArithmeticExpression(expr) => {
+                out.unknown_splitting |= !quoted;
                 out.arithmetic.push(expr.value.clone());
                 let (open, close) = if spelling.starts_with("$[") {
                     (b'[', b']')
@@ -750,7 +892,7 @@ fn dirname_output(
     ))
 }
 
-fn parameter(expr: &ParameterExpr) -> Option<&Parameter> {
+pub(super) fn parameter(expr: &ParameterExpr) -> Option<&Parameter> {
     use ParameterExpr::*;
     let parameter = match expr {
         Parameter { parameter, .. }

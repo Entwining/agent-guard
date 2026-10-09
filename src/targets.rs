@@ -89,6 +89,9 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         effects.targets.push(target);
     }
     if command.function {
+        if command.argv.iter().any(|word| word.field_count_unknown) {
+            effects.gaps.push(CoverageGap::UnsupportedShellSyntax);
+        }
         return effects;
     }
     if command.program.is_none() {
@@ -243,7 +246,11 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.variable = !(program != "echo" && args.first().is_some_and(|arg| arg == "-v"))
                 && command.variables().any(|name| secret_name(name));
         }
-        "true" | "false" | ":" | "unset" | "local" | "break" | "continue" | "return" | "shift" => {}
+        "true" | "false" | ":" | "unset" | "local" | "break" | "continue" | "return" | "shift" => {
+            effects.independent_arguments = matches!(program, "true" | "false" | ":" | "local")
+                && args.iter().any(|arg| arg.cardinality_unknown)
+                && args.iter().all(|arg| !arg.starts_with('-'));
+        }
         "tr" => {}
         "mktemp" => {
             effects.gaps.push(CoverageGap::UnknownProgram {
@@ -318,9 +325,12 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             );
         }
         "set" => {
+            effects.independent_arguments = args.first().is_some_and(|word| word == "--");
             effects.dump = command.shell && !command.argv[index].contains('/') && args.is_empty()
         }
         "typeset" | "declare" if command.shell && !command.argv[index].contains('/') => {
+            effects.independent_arguments = args.iter().any(|arg| arg.cardinality_unknown)
+                && args.iter().all(|arg| arg.contains('='));
             effects.dump = args.is_empty()
                 || args.len() == 1 && args[0].starts_with('-') && args[0].contains(['p', 'x']);
             effects.variable = args
@@ -329,12 +339,20 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
         "cat" | "head" | "tail" | "less" | "more" | "bat" | "sort" | "uniq" | "cut" | "nl"
         | "base64" | "xxd" | "od" | "strings" => {
+            effects.independent_arguments = independent_operands(args, args)
+                && args.iter().all(|arg| {
+                    !arg.cardinality_unknown || arg.role != Role::Option(OptionRole::Name)
+                });
             generic_walk = Some(Walk::None);
             if command.unresolved() {
                 effects.gaps.push(CoverageGap::UnresolvedTarget);
             }
         }
         "ls" => {
+            effects.independent_arguments = independent_operands(args, args)
+                && args.iter().all(|arg| {
+                    !arg.cardinality_unknown || arg.role != Role::Option(OptionRole::Name)
+                });
             let mut recursive = false;
             let mut options = true;
             let mut paths = Vec::new();
@@ -510,6 +528,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.variable = args.iter().any(|s| secret_name(s));
         }
         "export" if command.shell && !command.argv[index].contains('/') => {
+            effects.independent_arguments = args.iter().any(|arg| arg.cardinality_unknown)
+                && args.iter().all(|arg| arg.contains('='));
             effects.dump =
                 args.is_empty() || args.iter().any(|s| s.starts_with('-') && s.contains('p'))
         }
@@ -517,6 +537,14 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.gaps.push(CoverageGap::UnknownProgram {
                 program: program.to_owned(),
             });
+            // The generic owner reads operands independently (Go
+            // native/targets/infer.go:187-209); unknown width cannot move an
+            // operand between roles unless it is an option value or spelling.
+            effects.independent_arguments = !modelled_program(program)
+                && independent_operands(args, args)
+                && args.iter().all(|word| {
+                    !word.cardinality_unknown || matches!(word.role, Role::Arg | Role::Path)
+                });
             generic_walk = Some(Walk::Visible);
         }
     }
@@ -553,6 +581,25 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
     }
     effects.hidden_content |= hidden_items_read;
+    // A repetition projects each literal, not every possible argument sequence.
+    // Positional roles and executable text cannot use those projections as a
+    // complete command. Independent operand owners above can check their union;
+    // transformations also need a complete resource spelling.
+    if !effects.independent_arguments && args.iter().any(|word| word.cardinality_unknown)
+        || args
+            .iter()
+            .any(|word| word.cardinality_unknown && word.expands)
+            && effects
+                .targets
+                .iter()
+                .any(|target| target.effect != Effect::Name)
+        || command
+            .environment
+            .iter()
+            .any(|(_, word)| word.cardinality_unknown)
+    {
+        effects.gaps.push(CoverageGap::UnsupportedShellSyntax);
+    }
     effects.dump |= effects.inline.iter().any(|code| printenv_signature(code));
     let display = READERS
         .split_whitespace()
@@ -1406,6 +1453,7 @@ fn infer_tar(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
             Walk::None,
         ));
     }
+    effects.independent_arguments = independent_operands(args, &operands);
     for path in operands {
         effects.targets.push(Target::from_word(
             &path.with_text(if path.starts_with('~') {
@@ -1448,6 +1496,19 @@ fn operand_value(word: &Word) -> Option<&str> {
         }
     }
     (!value.is_empty()).then_some(value)
+}
+
+fn independent_operands(args: &[Word], operands: &[Word]) -> bool {
+    let count = args.iter().filter(|word| word.cardinality_unknown).count();
+    count != 0
+        && count
+            == operands
+                .iter()
+                .filter(|word| word.cardinality_unknown)
+                .count()
+        && operands.iter().all(|word| {
+            !word.cardinality_unknown || !word.starts_with('-') || word.role == Role::Path
+        })
 }
 
 fn space(c: char) -> bool {
@@ -1606,6 +1667,7 @@ fn infer_search(
     if !explicit && !names && !operands.is_empty() {
         patterns.push(operands.remove(0).text);
     }
+    effects.independent_arguments = independent_operands(args, &operands);
     // native/rules/workflow.go:24-32 applies BRE advice only to pattern roles.
     effects.bre_advice = program == "rg"
         && !fixed
