@@ -208,6 +208,6 @@ use inference::infer_at;
 use interpreters::{interpreter_code, perl_exec_argv};
 use listing::infer_listing;
 use search::infer_search;
-use wrappers::{at, child, infer_wrapper, xargs_content_consumer};
+use wrappers::{at, child, infer_forwarded, xargs_content_consumer};
 
 mod programs;

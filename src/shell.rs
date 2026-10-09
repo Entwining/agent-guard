@@ -9,8 +9,6 @@ mod pipeline;
 mod statements;
 mod words;
 
-pub(crate) use argv::EnvironmentChange;
-
 use crate::{CheckError, CheckErrorKind, CoverageGap, limits::MAX_NESTING};
 use std::ops::Range;
 use std::rc::Rc;

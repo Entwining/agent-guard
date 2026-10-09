@@ -19,7 +19,7 @@ pub(super) fn interpreter(
         if forwarded[0].contains('/') {
             effects.targets.push(read(&forwarded[0], cwd, host, false));
         }
-        infer_wrapper("perl", forwarded, command, cwd, host, effects, depth);
+        infer_forwarded(forwarded, command, cwd, host, effects, depth);
     } else {
         effects.gaps.push(CoverageGap::InterpreterChosenRead);
         let (code, claimed) = interpreter_code(program, args);

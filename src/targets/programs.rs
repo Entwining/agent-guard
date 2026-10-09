@@ -58,7 +58,6 @@ pub(super) fn infer(
                 effects.gaps.push(CoverageGap::UnresolvedTarget);
             }
         }
-        "xargs" | "env" => infer_wrapper(program, args, command, cwd, host, effects, depth),
         "fd" | "tree" | "du" | "find" => {
             infer_listing(program, args, command, cwd, host, effects, depth)
         }
