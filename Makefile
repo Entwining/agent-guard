@@ -34,3 +34,8 @@ rust-check:
 	CARGO_BUILD_WARNINGS=deny $(CARGO) clippy --locked --all-targets
 	$(CARGO) test --locked
 	$(CARGO) deny --locked check
+# The Homebrew formula renders these notices into each bottle; cargo metadata needs every target's crates, which no build fetches.
+# cargo-about only logs a dropped notice, such as a clarification whose checksum no longer matches, so any warning or error fails.
+	$(CARGO) fetch --locked
+	$(CARGO) about generate --frozen --fail --output-file "$(CARGO_TARGET_DIR)/LICENSE-THIRD-PARTY.md" about.hbs 2> "$(CARGO_TARGET_DIR)/cargo-about.log" || { cat "$(CARGO_TARGET_DIR)/cargo-about.log" >&2; exit 1; }
+	@cat "$(CARGO_TARGET_DIR)/cargo-about.log" >&2; ! grep -Eq 'WARN|ERROR' "$(CARGO_TARGET_DIR)/cargo-about.log"

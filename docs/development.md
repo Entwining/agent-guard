@@ -6,13 +6,16 @@ This guide is for maintainers who change, check or release `agent-guard`. Instal
 
 Use the Rust toolchain pinned in `rust-toolchain.toml` (1.98.1) for the production runner, development tools and runtime harnesses. Cargo's exact parser pins preserve policy semantics, and `Cargo.lock` binds dependency resolution.
 
-Install cargo-deny 0.20.2 before running the checks:
+Install cargo-deny 0.20.2 and cargo-about 0.9.2 before running the checks:
 
 ```sh
 cargo install --locked --version 0.20.2 cargo-deny
+cargo install --locked --version 0.9.2 cargo-about
 ```
 
-Keep Cargo's executable directory on `PATH` so `cargo deny --version` reports `cargo-deny 0.20.2`. `cargo deny --locked check` fetches the RustSec advisory database and requires network access; advisory, license, ban and source checks remain enabled. CI installs the same version from the official arm64 macOS release archive and verifies its pinned SHA-256 before extraction.
+Keep Cargo's executable directory on `PATH` so `cargo deny --version` reports `cargo-deny 0.20.2` and `cargo about --version` reports `cargo-about 0.9.2`. `cargo deny --locked check` fetches the RustSec advisory database and requires network access; advisory, license, ban and source checks remain enabled. CI installs the same versions from the official arm64 macOS release archives and verifies their pinned SHA-256 before extraction.
+
+`about.toml` and `about.hbs` describe the license notices of the crates compiled into `agent-guard-native`, so that the tap's formula can render them into `LICENSE-THIRD-PARTY.md`, which Homebrew installs with each bottle. The accepted licenses cover `deny.toml`'s allow list and exceptions, and the clarifications add the ICU and Unicode notices that tree-sitter and regex-syntax omit from their license expressions. A dependency update that changes a clarified file makes cargo-about drop the clarification with only a warning, so the render fails on any cargo-about warning.
 
 ## Development checks
 
@@ -26,7 +29,7 @@ make build OUT="$out/package"
 cargo run --locked --bin agent-guard-verify -- "$out/package/bin/agent-guard"
 ```
 
-`make check` runs `make rust-check`: rustfmt, the source file length check, Clippy across all targets with warnings denied, locked Rust tests and cargo-deny. Set `CARGO` to an absolute executable path when absent from `PATH`. Rust tests check frozen contract fixtures for exact verdicts, public exit codes, denial text and advice.
+`make check` runs `make rust-check`: rustfmt, the source file length check, Clippy across all targets with warnings denied, locked Rust tests, cargo-deny and a cargo-about render of the license notices into `$CARGO_TARGET_DIR/LICENSE-THIRD-PARTY.md`, which fails on a license `about.toml` cannot place or on any cargo-about warning. The render first runs `cargo fetch --locked`, because `cargo metadata` needs the crates of every target, which no build downloads. Set `CARGO` to an absolute executable path when absent from `PATH`. Rust tests check frozen contract fixtures for exact verdicts, public exit codes, denial text and advice.
 
 The [installed verifier](../cmd/agent-guard-verify/main.rs) requires the assembled `bin/agent-guard`, adjacent `agent-guard-native` and `VERSION`; it resolves the executable paths, records both hashes and checks that both executables report the package version. Require all 33 protocol cases to pass. It does not prove hook loading or all descendant cleanup. To evaluate an installation, run it from a checkout of the release being evaluated and pass the absolute installed executable, for example `/opt/homebrew/bin/agent-guard`. The verifier is not part of the runtime package.
 
