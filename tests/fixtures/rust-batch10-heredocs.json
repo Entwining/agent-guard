@@ -1,0 +1,8 @@
+{"rows":[
+ {"id":"quote-body","partition":"control","expected":"N","input":{"command":"x=$(cat <<'EOF'\n\"\nEOF\n)"}},
+ {"id":"dollar-body","partition":"control","expected":"N","input":{"command":"x=\"$(cat <<'EOF'\n$(\nEOF\n)\""}},
+ {"id":"backtick-body","partition":"control","expected":"N","input":{"command":"x=\"$(cat <<'EOF'\n(``\nEOF\n)\""}},
+ {"id":"unicode-body","partition":"control","expected":"N","input":{"command":"x=$(cat <<'EOF'\n中文 \" $(cat .env)\nEOF\n)"}},
+ {"id":"active-body","partition":"protected","expected":"D","input":{"command":"x=$(cat <<EOF\n$(cat .env)\nEOF\n)"}},
+ {"id":"external-code","partition":"protected","expected":"D","input":{"command":"x=$(cat <<'EOF'\npublic\nEOF\ncat .env\n)"}}
+]}

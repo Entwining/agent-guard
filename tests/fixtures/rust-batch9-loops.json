@@ -1,0 +1,55 @@
+{
+  "rows": [
+    {"id":"protected-loop-candidate","partition":"control","expected":"D","wire_reason":"App Data","input":{"command":"for a in public $C/data; do for b in 1 2; do cat \"$a\"; done; done"}},
+    {"id":"directory-loop-candidate","partition":"control","expected":"D","wire_reason":"App Data","input":{"command":"for a in public $C; do for b in Data public; do cd \"$a\"; ls \"$b\"; done; done"}},
+    {"id":"unknown-loop-directory","partition":"control","expected":"UR","input":{"command":"for a in */; do for b in 1 2; do cd \"$a\"; ls; done; done"}},
+    {
+      "id": "literal-5",
+      "partition": "benign",
+      "expected": "N",
+      "input": {
+        "command": "for a in \"\" 1 2; do for b in \"\" 1 2; do for c in \"\" 1 2; do for d in \"\" 1 2; do for e in \"\" 1 2; do echo x; done; done; done; done; done;"
+      }
+    },
+    {
+      "id": "literal-6",
+      "partition": "benign",
+      "expected": "N",
+      "input": {
+        "command": "for a in \"\" 1 2; do for b in \"\" 1 2; do for c in \"\" 1 2; do for d in \"\" 1 2; do for e in \"\" 1 2; do for f in \"\" 1 2; do echo x; done; done; done; done; done; done;"
+      }
+    },
+    {
+      "id": "literal-8",
+      "partition": "benign",
+      "expected": "N",
+      "input": {
+        "command": "for a in \"\" 1 2; do for b in \"\" 1 2; do for c in \"\" 1 2; do for d in \"\" 1 2; do for e in \"\" 1 2; do for f in \"\" 1 2; do for g in \"\" 1 2; do for h in \"\" 1 2; do echo x; done; done; done; done; done; done; done; done;"
+      }
+    },
+    {
+      "id": "variable-4",
+      "partition": "benign",
+      "expected": "N",
+      "input": {
+        "command": "PV=1; F=2; for a in \"\" \"$PV\" \"$F\"; do for b in \"\" \"$PV\" \"$F\"; do for c in \"\" \"$PV\" \"$F\"; do for d in \"\" \"$PV\" \"$F\"; do echo x; done; done; done; done;"
+      }
+    },
+    {
+      "id": "variable-6",
+      "partition": "benign",
+      "expected": "N",
+      "input": {
+        "command": "PV=1; F=2; for a in \"\" \"$PV\" \"$F\"; do for b in \"\" \"$PV\" \"$F\"; do for c in \"\" \"$PV\" \"$F\"; do for d in \"\" \"$PV\" \"$F\"; do for e in \"\" \"$PV\" \"$F\"; do for f in \"\" \"$PV\" \"$F\"; do echo x; done; done; done; done; done; done;"
+      }
+    },
+    {
+      "id": "variable-8",
+      "partition": "benign",
+      "expected": "N",
+      "input": {
+        "command": "PV=1; F=2; for a in \"\" \"$PV\" \"$F\"; do for b in \"\" \"$PV\" \"$F\"; do for c in \"\" \"$PV\" \"$F\"; do for d in \"\" \"$PV\" \"$F\"; do for e in \"\" \"$PV\" \"$F\"; do for f in \"\" \"$PV\" \"$F\"; do for g in \"\" \"$PV\" \"$F\"; do for h in \"\" \"$PV\" \"$F\"; do echo x; done; done; done; done; done; done; done; done;"
+      }
+    }
+  ]
+}

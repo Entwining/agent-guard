@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -55,7 +56,8 @@ func TestProfileIdentityAndDenial(t *testing.T) {
 			if row.Identifier != identity.value || row.IdentifierType != identity.kind || row.CodeRequirement != requirement || row.Allowed == nil || *row.Allowed {
 				t.Fatalf("identity or denial changed: %s", body)
 			}
-			if profile.PayloadUUID == payload.PayloadUUID || len(profile.PayloadUUID) != 36 || payload.PayloadIdentifier != profile.PayloadIdentifier+".pppc" {
+			uuid := regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+			if !uuid.MatchString(profile.PayloadUUID) || !uuid.MatchString(payload.PayloadUUID) || profile.PayloadUUID == payload.PayloadUUID || payload.PayloadIdentifier != profile.PayloadIdentifier+".pppc" {
 				t.Fatalf("payload identities collide: %s", body)
 			}
 			info, err := os.Stat(output)
@@ -86,6 +88,7 @@ func TestInvalidProfilesWriteNothing(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("HOME", root)
 	t.Setenv("TMPDIR", root)
+	t.Chdir(root)
 	output := filepath.Join(root, "invalid.mobileconfig")
 	for _, args := range [][]string{
 		{"unknown", "com.example.canary", "anchor apple", output},
@@ -100,7 +103,7 @@ func TestInvalidProfilesWriteNothing(t *testing.T) {
 		if err := generate(args, &bytes.Buffer{}); err == nil {
 			t.Fatalf("invalid profile accepted: %q", args)
 		}
-		if _, err := os.Lstat(output); !os.IsNotExist(err) {
+		if _, err := os.Lstat(args[3]); !os.IsNotExist(err) {
 			t.Fatalf("invalid input wrote output: %v", err)
 		}
 	}

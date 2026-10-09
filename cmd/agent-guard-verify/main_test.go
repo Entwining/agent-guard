@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,6 +51,62 @@ func runVerification(t *testing.T, entry string) (int, string, string) {
 	return code, out.String(), errout.String()
 }
 
+func protocolCases() map[string]int {
+	want := map[string]int{}
+	for _, runtime := range []string{"claude", "codex", "pi"} {
+		for _, row := range acceptanceCases("/synthetic/home", "/synthetic/home/project") {
+			if runtime != "codex" || row.tool == "Bash" {
+				want[runtime+"\t"+row.name] = row.expected
+			}
+		}
+	}
+	return want
+}
+
+func assertProtocolCases(t *testing.T, output string) {
+	t.Helper()
+	want := protocolCases()
+	if len(want) == 0 {
+		t.Fatal("missing protocol case partition")
+	}
+	for _, runtime := range []string{"claude", "codex", "pi"} {
+		found := false
+		for key := range want {
+			if strings.HasPrefix(key, runtime+"\t") {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing protocol case partition for %s", runtime)
+		}
+	}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.HasPrefix(line, "PASS\t") && !strings.HasPrefix(line, "FAIL\t") {
+			continue
+		}
+		fields := strings.SplitN(line, "\t", 6)
+		if len(fields) != 6 {
+			t.Fatalf("malformed protocol row: %q", line)
+		}
+		key := fields[1] + "\t" + fields[2]
+		exit, exists := want[key]
+		if !exists || seen[key] || fields[0] != "PASS" || fields[3] != strconv.Itoa(exit) || fields[4] != strconv.Itoa(exit) {
+			t.Fatalf("missing, duplicate or mismatched protocol case: %q", line)
+		}
+		seen[key] = true
+	}
+	for key := range want {
+		if !seen[key] {
+			t.Fatalf("unevaluated protocol case: %s", key)
+		}
+	}
+	if !strings.Contains(output, fmt.Sprintf("Summary: %d pass, 0 fail; %d/%d completed", len(want), len(want), len(want))) {
+		t.Fatalf("wrong protocol summary: %s", output)
+	}
+}
+
 func TestInstalledPackage(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, ".git"), 0700); err != nil {
@@ -62,29 +119,39 @@ func TestInstalledPackage(t *testing.T) {
 	}
 	_, file, _, _ := runtime.Caller(0)
 	source := filepath.Clean(filepath.Join(filepath.Dir(file), "../.."))
-	goBinary := os.Getenv("GO")
-	if goBinary == "" {
-		var err error
-		goBinary, err = exec.LookPath("go")
-		if err != nil {
-			t.Fatal(err)
-		}
+	cargo := os.Getenv("CARGO")
+	if cargo == "" {
+		cargo = "cargo"
 	}
-	cacheCommand := exec.Command(goBinary, "env", "-json", "GOMODCACHE", "GOCACHE")
-	cacheCommand.Dir = source
-	cacheOutput, err := cacheCommand.Output()
+	cargo, err := exec.LookPath(cargo)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var caches struct{ GOMODCACHE, GOCACHE string }
-	if err := json.Unmarshal(cacheOutput, &caches); err != nil {
-		t.Fatal(err)
-	}
-	build := exec.Command(goBinary, "build", "-trimpath", "-ldflags", "-X main.version=0.0.0", "-o", filepath.Join(filepath.Dir(entry), "agent-guard-native"), "./cmd/agent-guard")
+	target := t.TempDir()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	build := exec.CommandContext(ctx, cargo, "build", "--locked", "--release", "--bin", "agent-guard-native", "--target-dir", target)
 	build.Dir = source
-	build.Env = []string{"HOME=" + root, "PATH=/usr/bin:/bin", "GOMODCACHE=" + caches.GOMODCACHE, "GOCACHE=" + caches.GOCACHE, "GOPROXY=off"}
+	build.Env = os.Environ()
+	build.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	build.Cancel = func() error { return syscall.Kill(-build.Process.Pid, syscall.SIGKILL) }
+	build.WaitDelay = time.Second
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build native: %v: %s", err, output)
+	}
+	native, err := os.ReadFile(filepath.Join(target, "release/agent-guard-native"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filepath.Dir(entry), "agent-guard-native"), native, 0700); err != nil {
+		t.Fatal(err)
+	}
+	version, err := os.ReadFile(filepath.Join(source, "VERSION"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "package/VERSION"), version, 0600); err != nil {
+		t.Fatal(err)
 	}
 	shell, err := os.ReadFile(filepath.Join(source, "bin/agent-guard"))
 	if err != nil {
@@ -94,18 +161,10 @@ func TestInstalledPackage(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, out, errout := runVerification(t, entry)
-	if code != 0 || errout != "" || !strings.Contains(out, "Summary: 33 pass, 0 fail; 33/33 completed") || strings.Count(out, "PASS\t") != 33 {
+	if code != 0 || errout != "" {
 		t.Fatalf("acceptance: %d\n%s\n%s", code, out, errout)
 	}
-	for _, runtime := range []string{"claude", "codex", "pi"} {
-		want := 13
-		if runtime == "codex" {
-			want = 7
-		}
-		if strings.Count(out, "PASS\t"+runtime+"\t") != want {
-			t.Fatalf("missing %s partitions", runtime)
-		}
-	}
+	assertProtocolCases(t, out)
 	assertTemporaryClean(t, root)
 }
 
@@ -145,8 +204,17 @@ func TestInstalledIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	pkg, err := installed([]string{alias})
-	if err != nil || pkg.entry != canonical || pkg.entryHash == [32]byte{} || pkg.nativeHash == [32]byte{} {
+	if err != nil || pkg.entry != canonical {
 		t.Fatalf("alias identity: %+v, %v", pkg, err)
+	}
+	for _, binding := range []struct {
+		path string
+		hash [32]byte
+	}{{pkg.entry, pkg.entryHash}, {pkg.native, pkg.nativeHash}} {
+		body, err := os.ReadFile(binding.path)
+		if err != nil || binding.hash != sha256.Sum256(body) {
+			t.Fatalf("wrong executable hash: %s: %v", binding.path, err)
+		}
 	}
 	for _, path := range []string{"relative", filepath.Join(root, "missing"), filepath.Join(root, "package/bin/undeclared")} {
 		if filepath.Base(path) == "undeclared" {
@@ -208,9 +276,10 @@ func TestRegisteredEvents(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("TMPDIR", root)
 	code, out, errout := runVerification(t, testPackage(t, root, "event-shape"))
-	if code != 0 || !strings.Contains(out, "33/33 completed") {
+	if code != 0 || errout != "" {
 		t.Fatalf("registered event shape: %d, %s, %s", code, out, errout)
 	}
+	assertProtocolCases(t, out)
 }
 
 func TestDeadlineCleanup(t *testing.T) {
@@ -219,7 +288,7 @@ func TestDeadlineCleanup(t *testing.T) {
 	entry := testPackage(t, root, "hang")
 	started := time.Now()
 	code, out, _ := runVerification(t, entry)
-	if code != 1 || !strings.Contains(out, "deadline exceeded") || !strings.Contains(out, "1/33 completed") || time.Since(started) > 6*time.Second {
+	if code != 1 || !strings.Contains(out, "deadline exceeded") || !strings.Contains(out, fmt.Sprintf("1/%d completed", len(protocolCases()))) || time.Since(started) > 6*time.Second {
 		t.Fatalf("deadline contract: %d, %s", code, out)
 	}
 	assertFixtureDead(t, root)
@@ -289,7 +358,11 @@ func assertFixtureDead(t *testing.T, root string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range strings.Fields(string(data)) {
+	pids := strings.Fields(string(data))
+	if len(pids) == 0 {
+		t.Fatal("missing fixture child PID partition")
+	}
+	for _, value := range pids {
 		pid, err := strconv.Atoi(value)
 		if err != nil {
 			t.Fatal(err)

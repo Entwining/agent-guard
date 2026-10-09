@@ -1,0 +1,9 @@
+{"rows":[
+ {"id":"and-definition","partition":"control","expected":"N","input":{"command":"cd $P && f(){ echo public; }; f"}},
+ {"id":"and-sequence-definition","partition":"control","expected":"N","input":{"command":"cd $P && f(){ cat README.md; }; f"}},
+ {"id":"dynamic-directory-definition","partition":"control","expected":"N","input":{"command":"cd \"$where\" && f(){ echo public; }; f"}},
+ {"id":"and-protected-body","partition":"protected","expected":"D","input":{"command":"true && f(){ cat .env; }; f"}},
+ {"id":"if-definition","partition":"protected","expected":"UR","input":{"command":"if true; then true && f(){ echo public; }; fi; f"}},
+ {"id":"or-definition","partition":"protected","expected":"UR","input":{"command":"false || f(){ echo public; }; f"}}
+ ,{"id":"unreachable-definition","partition":"protected","expected":"UR","input":{"command":"false && f(){ echo public; }; f"}}
+]}

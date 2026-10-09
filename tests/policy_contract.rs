@@ -1,0 +1,17 @@
+#[path = "policy_contract/codefile_home_prefixes_reach_appdata_owner.rs"]
+pub mod codefile_home_prefixes_reach_appdata_owner;
+#[path = "policy_contract/credential_globs_and_roots_follow_the_lexical_owner.rs"]
+pub mod credential_globs_and_roots_follow_the_lexical_owner;
+#[path = "policy_contract/detector_success_and_failure.rs"]
+pub mod detector_success_and_failure;
+#[path = "support/differential.rs"]
+pub mod differential;
+#[path = "policy_contract/literal_for_lists_execute_each_value_exactly.rs"]
+pub mod literal_for_lists_execute_each_value_exactly;
+#[path = "policy_contract/nested_parameter_flags_refuse_without_checker_faults.rs"]
+pub mod nested_parameter_flags_refuse_without_checker_faults;
+#[path = "support/batch6.rs"]
+pub mod program_contract;
+pub(crate) mod support;
+#[path = "policy_contract/supported_dev_rows_keep_their_requirement_contract.rs"]
+pub mod supported_dev_rows_keep_their_requirement_contract;

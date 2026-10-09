@@ -20,6 +20,13 @@
       "automerge": true
     },
     {
+      "description": "Parser output is policy semantics, and main has no required checks; review parser upgrades separately.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["brush-parser", "tree-sitter", "tree-sitter-bash"],
+      "groupName": null,
+      "automerge": false
+    },
+    {
       "description": "Keep the Go version used by CI current.",
       "matchManagers": ["gomod"],
       "matchDepNames": ["go"],

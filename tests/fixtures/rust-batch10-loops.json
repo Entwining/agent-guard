@@ -1,0 +1,7 @@
+{"rows":[
+ {"id":"read-aggregate","partition":"control","expected":"UC","input":{"command":"s=\"\"; while read x; do s=\"$s $x\"; done < README.md; echo \"$s\""}},
+ {"id":"read-aggregate-use","partition":"control","expected":"UC","input":{"command":"s=\"\"; while read x; do s=\"$s $x\"; done < README.md; cat \"$s\""}},
+ {"id":"protected-read-source","partition":"protected","expected":"D","input":{"command":"s=\"\"; while read x; do s=\"$s $x\"; done < .env; echo \"$s\""}},
+ {"id":"protected-candidate","partition":"protected","expected":"D","input":{"command":"s=$C; while read x; do s=\"$s/$x\"; cat \"$s\"; done < README.md"}},
+ {"id":"protected-body","partition":"protected","expected":"D","input":{"command":"s=\"\"; while read x; do s=\"$s $x\"; cat .env; done < README.md"}}
+]}

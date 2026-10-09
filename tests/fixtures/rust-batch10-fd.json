@@ -1,0 +1,8 @@
+{"rows":[
+ {"id":"age-option","partition":"control","expected":"N","input":{"command":"fd -e jsonl --changed-within 2d -x rg public {}"}},
+ {"id":"child-option","partition":"control","expected":"N","input":{"command":"fd -e jsonl -x rg --no-filename public {}"}},
+ {"id":"age-value","partition":"control","expected":"N","input":{"command":"fd public --changed-within $H"}},
+ {"id":"exclude-option","partition":"control","expected":"N","input":{"command":"fd '\\.tsx?$' --exclude public --exec rg public {}"}},
+ {"id":"hidden-content","partition":"protected","expected":"D","input":{"command":"fd -H -x cat {}"}},
+ {"id":"protected-root","partition":"protected","expected":"D","input":{"command":"fd public $C"}}
+]}

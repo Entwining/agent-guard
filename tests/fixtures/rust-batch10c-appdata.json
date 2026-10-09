@@ -1,0 +1,7 @@
+{"rows":[
+ {"id":"runtime-realpath","partition":"unknown","expected":"D","wire_reason":"App Data","input":{"command":"X=$(realpath \"$1\"); cat $X/Library/Containers/com.x/Data/f"}},
+ {"id":"runtime-copy","partition":"unknown","expected":"D","input":{"command":"X=$(realpath syn/home); Y=$X; ls \"$Y/Library/Containers/x\""}},
+ {"id":"runtime-redirect","partition":"unknown","expected":"D","input":{"command":"X=$(realpath syn/home); cat <\"$X/Library/Containers/x\""}},
+ {"id":"computed-dirname","partition":"control","expected":"N","input":{"command":"D=$(dirname /a/b); cat $D/Library/Containers/x"}},
+ {"id":"ordinary-unknown","partition":"control","expected":"N","input":{"command":"X=$(realpath \"$1\"); cat $X/f"}}
+]}

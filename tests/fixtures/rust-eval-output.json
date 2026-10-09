@@ -1,0 +1,6 @@
+{"rows":[
+{"id":"eval-runtime","partition":"output","input":{"command":"eval \"$(/opt/homebrew/bin/brew shellenv)\""},"expected":"UC"},
+{"id":"eval-protected","partition":"output","input":{"command":"eval \"$(cat .env)\""},"expected":"D"},
+{"id":"eval-captured","partition":"output","input":{"command":"out=$(cat README); eval \"$out\""},"expected":"UC"},
+{"id":"eval-dynamic","partition":"output","input":{"command":"eval \"val=\\$$v\""},"expected":"UR"}
+]}

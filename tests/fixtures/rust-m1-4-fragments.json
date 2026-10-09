@@ -1,0 +1,149 @@
+[
+  {
+    "id": "F1-default",
+    "owner": "parameter_fragment",
+    "source": "echo ${v:-${(f)v}}",
+    "word": "${v:-${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-alternative",
+    "owner": "parameter_fragment",
+    "source": "echo ${v:+${(f)v}}",
+    "word": "${v:+${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-assignment",
+    "owner": "parameter_fragment",
+    "source": "echo ${v:=${(f)v}}",
+    "word": "${v:=${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-error",
+    "owner": "parameter_fragment",
+    "source": "echo ${v:?${(f)v}}",
+    "word": "${v:?${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-prefix",
+    "owner": "parameter_fragment",
+    "source": "echo ${v#${(f)v}}",
+    "word": "${v#${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-suffix",
+    "owner": "parameter_fragment",
+    "source": "echo ${v%${(f)v}}",
+    "word": "${v%${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-replace-first",
+    "owner": "parameter_fragment",
+    "source": "echo ${v/${(f)v}/x}",
+    "word": "${v/${(f)v}/x}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-replace-all",
+    "owner": "parameter_fragment",
+    "source": "echo ${v//${(f)v}/x}",
+    "word": "${v//${(f)v}/x}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-replace-prefix",
+    "owner": "parameter_fragment",
+    "source": "echo ${v/#${(f)v}/x}",
+    "word": "${v/#${(f)v}/x}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-replace-suffix",
+    "owner": "parameter_fragment",
+    "source": "echo ${v/%${(f)v}/x}",
+    "word": "${v/%${(f)v}/x}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-substring-length",
+    "owner": "parameter_fragment",
+    "source": "echo ${v:0:${(f)v}}",
+    "word": "${v:0:${(f)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-affixes",
+    "owner": "parameter_fragment",
+    "source": "echo ${v:-a${(f)v}b}",
+    "word": "${v:-a${(f)v}b}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-eval-flag",
+    "owner": "parameter_fragment",
+    "source": "echo ${v:-${(e)v}}",
+    "word": "${v:-${(e)v}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-flag-only",
+    "owner": "parameter_fragment",
+    "source": "echo ${v:-${(f)}}",
+    "word": "${v:-${(f)}}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-control-direct",
+    "owner": "parameter_fragment_control",
+    "source": "echo ${(f)v}",
+    "word": "${(f)v}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-control-command",
+    "owner": "parameter_fragment_control",
+    "source": "echo $(echo ${(f)v})",
+    "word": "$(echo ${(f)v})",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-control-ordinary",
+    "owner": "parameter_fragment_control",
+    "source": "echo ${v:-${w}}",
+    "word": "${v:-${w}}",
+    "expected": "N"
+  },
+  {
+    "id": "F1-control-nested-default",
+    "owner": "parameter_fragment_control",
+    "source": "echo ${v:-${w:-x}}",
+    "word": "${v:-${w:-x}}",
+    "expected": "N"
+  },
+  {
+    "id": "F1-control-inert",
+    "owner": "parameter_fragment_control",
+    "source": "echo '${v:-${(f)v}}'",
+    "word": "'${v:-${(f)v}}'",
+    "expected": "N"
+  },
+  {
+    "id": "F1-control-quoted-inner",
+    "owner": "parameter_fragment_control",
+    "source": "echo ${v:-\"${(f)v}\"}",
+    "word": "${v:-\"${(f)v}\"}",
+    "expected": "UR"
+  },
+  {
+    "id": "F1-control-double-outer",
+    "owner": "parameter_fragment_control",
+    "source": "echo \"${v:-${(f)v}}\"",
+    "word": "\"${v:-${(f)v}}\"",
+    "expected": "UR"
+  }
+]

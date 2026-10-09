@@ -1,0 +1,120 @@
+use std::{
+    fs::{self, OpenOptions},
+    io::{Read, Write},
+    os::unix::fs::FileTypeExt,
+    process::{self, Command},
+    time::{Duration, Instant},
+};
+
+const FAULT: &str = FAULT_LITERAL;
+
+fn home() -> std::path::PathBuf {
+    std::env::var_os("HOME").unwrap().into()
+}
+
+pub fn log_process(role: &str, pid: u32) {
+    let output = Command::new("/bin/ps")
+        .args(["-o", "pgid=", "-p", &pid.to_string()])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let pgid: u32 = String::from_utf8(output.stdout)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(home().join("processes.jsonl"))
+        .unwrap();
+    writeln!(
+        file,
+        "{}",
+        serde_json::json!({"role": role, "pid": pid, "pgid": pgid})
+    )
+    .unwrap();
+}
+
+pub fn wait_ready(name: &str) {
+    let deadline = Instant::now() + Duration::from_secs(1);
+    while !home().join(name).exists() {
+        assert!(Instant::now() < deadline, "synthetic child failed to start");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+pub fn descendant() -> i32 {
+    log_process("child", process::id());
+    let mut child = Command::new("/bin/sleep").arg("20").spawn().unwrap();
+    log_process("grandchild", child.id());
+    fs::write(home().join("descendant-ready"), []).unwrap();
+    child.wait().unwrap();
+    0
+}
+
+pub fn check(input: &mut dyn Read, output: &mut dyn Write, error: &mut dyn Write) -> Option<i32> {
+    log_process("checker", process::id());
+    if FAULT == "dependency-failure" {
+        return None;
+    }
+    Some(match FAULT {
+        "pipe" => {
+            let pipe = fs::metadata("/dev/stdin").unwrap().file_type().is_fifo();
+            let mut bytes = Vec::new();
+            input.read_to_end(&mut bytes).unwrap();
+            let event: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            writeln!(
+                output,
+                "{}",
+                serde_json::json!({"event": event, "pipe": pipe})
+            )
+            .unwrap();
+            0
+        }
+        "large-reason" | "large-stderr" => {
+            let bytes = format!("{}\n", "x".repeat(131072));
+            if FAULT == "large-stderr" {
+                error.write_all(bytes.as_bytes())
+            } else {
+                output.write_all(bytes.as_bytes())
+            }
+            .unwrap();
+            fs::write(home().join("producer-bytes"), bytes.len().to_string()).unwrap();
+            2
+        }
+        "slow-reason" => {
+            std::thread::sleep(Duration::from_millis(3200));
+            writeln!(output, "DENIED: synthetic canary reason").unwrap();
+            0
+        }
+        "no-reason" => 2,
+        "checker-failure" => 7,
+        "partial-panic" => {
+            writeln!(output, "PARTIAL_RESULT_CANARY").unwrap();
+            panic!("synthetic checker panic");
+        }
+        "panic" => panic!("synthetic checker panic"),
+        "hang" | "runner-stall" | "early-failure" => {
+            let mut child = Command::new(std::env::current_exe().unwrap())
+                .arg("--test-descendant")
+                .spawn()
+                .unwrap();
+            wait_ready("descendant-ready");
+            fs::write(home().join("checker-ready"), []).unwrap();
+            std::thread::sleep(Duration::from_secs(20));
+            child.wait().unwrap();
+            0
+        }
+        "leftover" => {
+            let child = Command::new("/bin/sleep").arg("20").spawn().unwrap();
+            log_process("leftover", child.id());
+            0
+        }
+        "late-start" | "startup-stall" => {
+            fs::write(home().join("checker-ready"), []).unwrap();
+            0
+        }
+        _ => panic!("unknown test fault"),
+    })
+}

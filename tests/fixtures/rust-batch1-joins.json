@@ -1,0 +1,306 @@
+{
+  "rows": [
+    {
+      "id": "a4-read-pipe",
+      "partition": "pipeline-read",
+      "source": "echo 'a[$(cat .env)]' | read x; a=(0); echo $((x))",
+      "expected": "D",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "v1-pipe-read-math",
+      "partition": "pipeline-read",
+      "source": "echo 'a[$(cat .env)]' | read x; echo $((x))",
+      "expected": "D",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "v5-pipe-read-target",
+      "partition": "pipeline-read",
+      "source": "echo 'a[$(cat .env)]' | read x; ls \"$x\"",
+      "expected": "D",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "v16-read-array-math",
+      "partition": "pipeline-read",
+      "source": "echo 'a[$(cat .env)]' | read -a arr; echo $((arr))",
+      "expected": "UR",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "w2-benign-armed-target",
+      "partition": "pipeline-read",
+      "source": "echo 'a[$(echo hi)]' | read x; ls \"$x\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "w3-plain-target",
+      "partition": "pipeline-read",
+      "source": "echo 'plain' | read x; ls \"$x\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "w4-printf-armed-target",
+      "partition": "pipeline-read",
+      "source": "printf '%s\\n' 'a[$(cat .env)]' | read x; ls \"$x\"",
+      "expected": "D",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "w6-benign-armed-math",
+      "partition": "pipeline-read",
+      "source": "echo 'a[$(echo hi)]' | read x; echo $((x))",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "w7-bracket-target",
+      "partition": "pipeline-read",
+      "source": "echo 'a[1]' | read x; ls \"$x\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "w8-armed-r-target",
+      "partition": "pipeline-read",
+      "source": "echo 'a[$(cat .env)]' | read -r x; ls \"$x\"",
+      "expected": "D",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "w11-protectedpath-target",
+      "partition": "pipeline-read",
+      "source": "echo $E/other-home/Library/Containers/com.example.syn/Data | read x; ls \"$x\"",
+      "expected": "N",
+      "cwd": "/h/project",
+      "expand_markers": true
+    },
+    {
+      "id": "t5-read-pipe-target",
+      "partition": "pipeline-read",
+      "source": "echo plain | read x; ls \"$x\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "t6-read-pipe-math",
+      "partition": "pipeline-read",
+      "source": "echo plain | read x; echo $((x))",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "t16-read-pipe-cd",
+      "partition": "pipeline-read",
+      "source": "echo plain | read x; cd \"$x\"; ls notes.txt",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "u4-noKnown-pipe-cat",
+      "partition": "pipeline-read",
+      "source": "echo P | read D; cat \"$D/notes.txt\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "u12-pipe-read-appdata",
+      "partition": "pipeline-read",
+      "source": "echo \"$HOME/Library/Containers/com.example.syn/Data\" | read D; cat \"$D/notes.txt\"",
+      "expected": "D",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "u13-known-other-var",
+      "partition": "pipeline-read",
+      "source": "E=/tmp; echo P | read D; cat \"$D/notes.txt\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c1-if-noelse",
+      "partition": "batch1-join",
+      "source": "if false; then D=/tmp; fi; cat \"$D/notes.txt\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c3-if-true",
+      "partition": "batch1-join",
+      "source": "if true; then D=public; fi; cat \"$D/x\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c5-loop",
+      "partition": "batch1-join",
+      "source": "for i in 1; do D=/tmp; done; cat \"$D/notes.txt\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c6-case",
+      "partition": "batch1-join",
+      "source": "case x in x) D=/tmp;; esac; cat \"$D/notes.txt\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c7-and",
+      "partition": "batch1-join",
+      "source": "true && D=/tmp; cat \"$D/notes.txt\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c8-or",
+      "partition": "batch1-join",
+      "source": "false || D=/tmp; cat \"$D/notes.txt\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c11-if-nested",
+      "partition": "batch1-join",
+      "source": "if true; then if false; then D=/tmp; fi; fi; cat \"$D/notes.txt\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c12-while",
+      "partition": "batch1-join",
+      "source": "i=0; while [ $i -lt 1 ]; do D=/tmp; i=1; done; cat \"$D/notes.txt\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c15-ctrl-if-printf",
+      "partition": "batch1-join",
+      "source": "if false; then D=/tmp; fi; printf \"%s\" \"$D\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c16-ctrl-if-cd",
+      "partition": "batch1-join",
+      "source": "if false; then D=/tmp; fi; cd \"$D\"; cat notes.txt",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c18-pipe-read-then-echo",
+      "partition": "pipeline-read",
+      "source": "echo P | read D; echo \"$D\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "r8-read-array",
+      "partition": "batch1-join",
+      "source": "read -a arr <<< 'a[$(cat .env)]'; a=(0); echo $((arr))",
+      "expected": "UR",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c-cond-call",
+      "partition": "batch1-join",
+      "source": "true && f(){ x='a[$(cat .env)]'; }; a=(0); echo $((x))",
+      "expected": "UR",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "g41-local-unset",
+      "partition": "batch1-join",
+      "source": "f(){ local u; s=$(echo x); E=\"$u$s\"; cat \"$E\"; }; f",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "b-and-assign",
+      "partition": "batch1-join",
+      "source": "true && X=/var && ls \"$X\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "b-and-cd-dash",
+      "partition": "batch1-join",
+      "source": "cd /tmp && cd /var && cd - && ls",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "b-and-cd-dash2",
+      "partition": "batch1-join",
+      "source": "cd /tmp && cd -",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "j-if-unset",
+      "partition": "batch1-join",
+      "source": "if test -f x; then X=/var; fi; ls \"$X\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "j-if-preset-ctrl",
+      "partition": "batch1-join",
+      "source": "X=/usr; if test -f x; then X=/var; fi; ls \"$X\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "j-for-last",
+      "partition": "batch1-join",
+      "source": "for f in a b; do last=$f; done; echo \"$last\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "j-and-assign-echo",
+      "partition": "batch1-join",
+      "source": "test -d build && OUT=build; echo \"$OUT\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "j-case",
+      "partition": "batch1-join",
+      "source": "case \"$1\" in a) M=/tmp;; esac; ls \"$M\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "j-while-read",
+      "partition": "batch1-join",
+      "source": "while read line; do last=$line; done < notes.txt; echo \"$last\"",
+      "expected": "UC",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "j-unset-direct",
+      "partition": "batch1-join",
+      "source": "ls \"$UNSET_VAR\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "j-env-echo",
+      "partition": "batch1-join",
+      "source": "echo \"$HOME_DIR\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "j-or-assign",
+      "partition": "batch1-join",
+      "source": "test -n \"$X\" || X=/tmp; ls \"$X\"",
+      "expected": "N",
+      "cwd": "/h/project"
+    }
+  ]
+}

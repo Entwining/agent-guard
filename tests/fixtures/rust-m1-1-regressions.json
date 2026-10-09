@@ -1,0 +1,23 @@
+[
+  {"owner":"git","source":"git log -p -- '.e*'","expected":"D"},
+  {"owner":"git","source":"git show HEAD -- '*.env'","expected":"D"},
+  {"owner":"git","source":"git diff --no-index '.e*' x","expected":"D"},
+  {"owner":"git","source":"git show 'HEAD:.e*'","expected":"D"},
+  {"owner":"git","source":"git commit -F 'HEAD:.e*'","expected":"D"},
+  {"owner":"git","source":"git grep foo -- '.e*'","expected":"N"},
+  {"owner":"git","source":"git log -p -- .e*","expected":"D"},
+  {"owner":"brace","source":"cat ~/.e{n..9}v","expected":"D"},
+  {"owner":"brace","source":"cat ~/.e{+1..+1}nv","expected":"N"},
+  {"owner":"brace","source":"cat $H/Library/{{Containers},CloudStorage}/x","expected":"D"},
+  {"owner":"brace","source":"cat $H/.{env,{env}}","expected":"D"},
+  {"owner":"brace","source":"ls ~/Library/{\"Containers\",Public}","expected":"D"},
+  {"owner":"file_url","source":"cat file://$H/Library/Containers/App/data","expected":"D"},
+  {"owner":"file_url","source":"cat FiLe://$H/.env","expected":"D"},
+  {"owner":"paren","source":"cat '$H/Library/(Containers)/x'","expected":"N"},
+  {"owner":"paren","source":"cat '$H/Library/+(Containers|CloudStorage)/x'","expected":"N"},
+  {"owner":"paren","source":"cat \"$H/Library/+(Containers|CloudStorage)/x\"","expected":"N"},
+  {"owner":"paren","source":"cat $H/Library/+(Containers|CloudStorage)/x","expected":"D"},
+  {"owner":"redirect","source":"echo hi > $SECRET","expected":"N"},
+  {"owner":"redirect","source":"echo ok > \"$API_TOKEN_FILE\"","expected":"N"},
+  {"owner":"redirect","source":"cat < $SECRET","expected":"UC"}
+]

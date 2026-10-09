@@ -1,0 +1,611 @@
+{
+  "rows": [
+    {
+      "id": "conditional-under-collector",
+      "partition": "conditional-collector",
+      "source": "cd -P link/.. && eval 'if :; then cd /nope; cat z; fi'",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/link/../.",
+        "/nope"
+      ]
+    },
+    {
+      "id": "loop-under-collector",
+      "partition": "loop-collector",
+      "source": "cd -P link/.. && eval 'for i in 1; do cd /nope; cat z; done'",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/link/../.",
+        "/nope"
+      ]
+    },
+    {
+      "id": "tilde-actual-protected",
+      "partition": "pwd-tilde-protected",
+      "source": "PWD=/tmp; ls ~+/Containers",
+      "cwd": "/h/Library",
+      "program": "ls",
+      "cwds": [
+        "/h/Library"
+      ],
+      "words": [
+        "/tmp/Containers",
+        "/h/Library/Containers"
+      ],
+      "expected": "D"
+    },
+    {
+      "id": "pwd-variable-alternatives",
+      "partition": "pwd-variable-projection",
+      "source": "cd /public; cat \"$PWD\"",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/public",
+        "/h/project"
+      ],
+      "paired": true
+    },
+    {
+      "id": "pwd-tilde-alternatives",
+      "partition": "pwd-tilde-projection",
+      "source": "cd /public; cat ~+",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/public",
+        "/h/project"
+      ],
+      "paired": true
+    },
+    {
+      "id": "cwd-split-refusal",
+      "partition": "cwd-split",
+      "source": "cd '/public folder' && cat $PWD",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/public folder",
+        "/h/project"
+      ],
+      "gap": "UnsupportedShellSyntax"
+    },
+    {
+      "id": "cdpath-protected",
+      "partition": "cdpath-protected",
+      "source": "CDPATH=~/Library/Containers; cd named && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/named",
+        "/h/Library/Containers/named"
+      ],
+      "expected": "D"
+    },
+    {
+      "id": "cdpath-prefix-protected",
+      "partition": "cdpath-protected",
+      "source": "CDPATH=~/Library/Containers cd named && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/named",
+        "/h/Library/Containers/named"
+      ],
+      "expected": "D"
+    },
+    {
+      "id": "pwd-protected",
+      "partition": "pwd-protected",
+      "source": "PWD=~/Library/Containers; ls \"$PWD\"",
+      "cwd": "/h/project",
+      "program": "ls",
+      "cwds": [
+        "/h/project"
+      ],
+      "words": [
+        "/h/Library/Containers"
+      ],
+      "pwd": false,
+      "expected": "D"
+    },
+    {
+      "id": "pwd-false-denial-control",
+      "partition": "pwd-control",
+      "source": "PWD=/tmp; ls \"$PWD/Containers\"",
+      "cwd": "/h/Library",
+      "program": "ls",
+      "cwds": [
+        "/h/Library"
+      ],
+      "words": [
+        "/tmp/Containers"
+      ],
+      "pwd": false,
+      "expected": "N"
+    },
+    {
+      "id": "pwd-relative-protected",
+      "partition": "pwd-protected",
+      "source": "PWD=/tmp; ls Containers",
+      "cwd": "/h/Library",
+      "program": "ls",
+      "cwds": [
+        "/h/Library"
+      ],
+      "words": [
+        "Containers"
+      ],
+      "pwd": false,
+      "expected": "D"
+    },
+    {
+      "id": "tilde-protected",
+      "partition": "pwd-tilde-protected",
+      "source": "PWD=~/Library/Containers; ls ~+",
+      "cwd": "/h/project",
+      "program": "ls",
+      "cwds": [
+        "/h/project"
+      ],
+      "words": [
+        "/h/Library/Containers",
+        "/h/project"
+      ],
+      "expected": "D"
+    },
+    {
+      "id": "cdpath-persistent",
+      "partition": "cdpath-persistent",
+      "source": "CDPATH=/lookup:/other:; cd named && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/named",
+        "/lookup/named",
+        "/other/named"
+      ]
+    },
+    {
+      "id": "cdpath-declaration",
+      "partition": "cdpath-declaration",
+      "source": "export CDPATH=/lookup; cd named && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/named",
+        "/lookup/named"
+      ]
+    },
+    {
+      "id": "cdpath-local",
+      "partition": "cdpath-local",
+      "source": "CDPATH=/lookup cd named && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/named",
+        "/lookup/named"
+      ]
+    },
+    {
+      "id": "cdpath-dot",
+      "partition": "cdpath-controls",
+      "source": "CDPATH=/lookup; cd ./named && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/named"
+      ]
+    },
+    {
+      "id": "cdpath-absolute",
+      "partition": "cdpath-controls",
+      "source": "CDPATH=/lookup; cd /public && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/public"
+      ]
+    },
+    {
+      "id": "cdpath-home",
+      "partition": "cdpath-controls",
+      "source": "CDPATH=/lookup; cd -- && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h"
+      ]
+    },
+    {
+      "id": "cdpath-unknown",
+      "partition": "cdpath-unknown",
+      "source": "CDPATH=$UNKNOWN; cd named && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/named"
+      ],
+      "absent_gap": "UnsupportedShellSyntax"
+    },
+    {
+      "id": "and-success",
+      "partition": "success",
+      "source": "cd ~/project && du -sh",
+      "cwd": "/h",
+      "program": "du",
+      "cwds": [
+        "/h/project"
+      ]
+    },
+    {
+      "id": "and-nested-success",
+      "partition": "success",
+      "source": "cd ~/project && npm test && du -sh",
+      "cwd": "/h",
+      "program": "du",
+      "cwds": [
+        "/h/project"
+      ]
+    },
+    {
+      "id": "pushd-success",
+      "partition": "pushd",
+      "source": "pushd ~/project && du -sh",
+      "cwd": "/h",
+      "program": "du",
+      "cwds": [
+        "/h/project"
+      ]
+    },
+    {
+      "id": "no-operand-0",
+      "partition": "no-operand",
+      "source": "cd && du -sh",
+      "cwd": "/h/project",
+      "program": "du",
+      "cwds": [
+        "/h",
+        "/h/project"
+      ]
+    },
+    {
+      "id": "no-operand-1",
+      "partition": "no-operand",
+      "source": "cd -- && du -sh",
+      "cwd": "/h/project",
+      "program": "du",
+      "cwds": [
+        "/h"
+      ]
+    },
+    {
+      "id": "no-operand-2",
+      "partition": "no-operand",
+      "source": "cd -P && du -sh",
+      "cwd": "/h/project",
+      "program": "du",
+      "cwds": [
+        "/h/."
+      ]
+    },
+    {
+      "id": "no-operand-3",
+      "partition": "no-operand",
+      "source": "cd -L && du -sh",
+      "cwd": "/h/project",
+      "program": "du",
+      "cwds": [
+        "/h"
+      ]
+    },
+    {
+      "id": "no-operand-4",
+      "partition": "no-operand",
+      "source": "cd -q && du -sh",
+      "cwd": "/h/project",
+      "program": "du",
+      "cwds": [
+        "/h"
+      ]
+    },
+    {
+      "id": "no-operand-5",
+      "partition": "no-operand",
+      "source": "cd -s && du -sh",
+      "cwd": "/h/project",
+      "program": "du",
+      "cwds": [
+        "/h"
+      ]
+    },
+    {
+      "id": "invalid-empty-cd",
+      "partition": "no-operand",
+      "source": "cd -e && du -sh",
+      "cwd": "/h/project",
+      "program": "du",
+      "cwds": [
+        "/h/project"
+      ]
+    },
+    {
+      "id": "post-failure",
+      "partition": "failure",
+      "source": "cd -P link/.. && cd /nope; cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/link/../.",
+        "/h/project",
+        "/nope"
+      ]
+    },
+    {
+      "id": "compound-failure",
+      "partition": "compound-failure",
+      "source": "cd -P link/.. && { cd /nope; cat z; }",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/link/../.",
+        "/nope"
+      ]
+    },
+    {
+      "id": "function-failure",
+      "partition": "function-failure",
+      "source": "f() { cd /nope; cat z; }; cd -P link/.. && f",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project",
+        "/nope",
+        "/h/project/link/../."
+      ]
+    },
+    {
+      "id": "substitution-failure",
+      "partition": "substitution-failure",
+      "source": "cd -P link/.. && echo $(cd /nope; cat z)",
+      "cwd": "/h/project",
+      "program": "cat",
+      "nested": true,
+      "cwds": [
+        "/nope",
+        "/h/project/link/../."
+      ]
+    },
+    {
+      "id": "physical",
+      "partition": "physical",
+      "source": "cd -P link/.. && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/link/../."
+      ]
+    },
+    {
+      "id": "physical-LP",
+      "partition": "physical",
+      "source": "cd -L -P link/.. && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/link/../."
+      ]
+    },
+    {
+      "id": "logical-control",
+      "partition": "physical",
+      "source": "cd -L link/.. && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project"
+      ]
+    },
+    {
+      "id": "disputed-PL",
+      "partition": "disputed",
+      "source": "cd -P -L link/.. && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/link/../.",
+        "/h/project"
+      ]
+    },
+    {
+      "id": "disputed-glued",
+      "partition": "disputed",
+      "source": "cd -PL link/.. && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/link/../.",
+        "/h/project"
+      ]
+    },
+    {
+      "id": "physical-logical-tail",
+      "partition": "logical-tail",
+      "source": "cd -P cache-link/.. && cd ../Containers && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project/cache-link/../.././Containers"
+      ]
+    },
+    {
+      "id": "clear-physical",
+      "partition": "logical-tail",
+      "source": "cd -P cache-link/.. && cd /public && cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/public"
+      ]
+    },
+    {
+      "id": "pwd-data",
+      "partition": "pwd-data",
+      "source": "PWD=/other; cat $PWD",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project"
+      ],
+      "words": [
+        "/other"
+      ],
+      "pwd": false
+    },
+    {
+      "id": "pwd-command",
+      "partition": "pwd-command",
+      "source": "PWD=/other; cat \"$(pwd)\"",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project"
+      ],
+      "words": [
+        "/h/project"
+      ],
+      "pwd": true
+    },
+    {
+      "id": "pwd-backquote",
+      "partition": "pwd-command",
+      "source": "PWD=/other; cat \"`pwd -P`\"",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project"
+      ],
+      "words": [
+        "/h/project"
+      ],
+      "pwd": true
+    },
+    {
+      "id": "tilde-union",
+      "partition": "tilde",
+      "source": "PWD=/other; cat ~+",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project"
+      ],
+      "words": [
+        "/h/project",
+        "/other"
+      ]
+    },
+    {
+      "id": "pwd-reset",
+      "partition": "pwd-reset",
+      "source": "PWD=/other; cd /public && cat \"$PWD\"",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/public"
+      ],
+      "words": [
+        "/public"
+      ],
+      "pwd": true
+    },
+    {
+      "id": "pwd-alternatives",
+      "partition": "pwd-projection",
+      "source": "cd /public; cat \"$(pwd)\" >\"$(pwd)/out\"",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project",
+        "/public"
+      ],
+      "paired": true,
+      "redirect": "/public/out"
+    },
+    {
+      "id": "pwd-mixed-data",
+      "partition": "pwd-projection",
+      "source": "cd /public; PWD=/h/project; cat \"$PWD/$(pwd)\"",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project",
+        "/public"
+      ],
+      "paired_data": "/h/project/"
+    },
+    {
+      "id": "alternative-failure-collectors",
+      "partition": "alternative-collectors",
+      "source": "if :; then S='cd /a && cd /b'; else S='cd /c && cd /d'; fi; cd /start && eval \"$S\"; cat z",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project",
+        "/start",
+        "/a",
+        "/b",
+        "/c",
+        "/d"
+      ]
+    },
+    {
+      "id": "assignment-cwd-range",
+      "partition": "assignment-projection",
+      "source": "cd /public; D=$(pwd) printf public",
+      "cwd": "/h/project",
+      "program": "printf",
+      "nested": false,
+      "cwds": [
+        "/h/project",
+        "/public"
+      ],
+      "words": [
+        "public"
+      ]
+    },
+    {
+      "id": "declaration-cwd-range",
+      "partition": "declaration-projection",
+      "source": "cd /public; export D=$(pwd)",
+      "cwd": "/h/project",
+      "program": "export",
+      "cwds": [
+        "/h/project",
+        "/public"
+      ],
+      "paired_data": "D="
+    },
+    {
+      "id": "split-cwd-range-offset",
+      "partition": "split-range-projection",
+      "source": "cd /public; D='prefix '; cat $D$PWD",
+      "cwd": "/h/project",
+      "program": "cat",
+      "cwds": [
+        "/h/project",
+        "/public"
+      ],
+      "words": [
+        "prefix",
+        "/public",
+        "/h/project",
+        "prefix /public",
+        "prefix /h/project"
+      ]
+    }
+  ]
+}

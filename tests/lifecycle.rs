@@ -1,0 +1,11 @@
+#[path = "support/differential.rs"]
+pub mod differential;
+#[path = "lifecycle/nesting_frontier_completes_on_default_test_stack.rs"]
+pub mod nesting_frontier_completes_on_default_test_stack;
+#[path = "support/batch6.rs"]
+pub mod program_contract;
+#[path = "lifecycle/stalled_check_reports_the_checker_deadline_and_reaps.rs"]
+pub mod stalled_check_reports_the_checker_deadline_and_reaps;
+#[path = "lifecycle/supervisor_deadline_kills_and_reaps_the_recorded_child.rs"]
+pub mod supervisor_deadline_kills_and_reaps_the_recorded_child;
+pub(crate) mod support;

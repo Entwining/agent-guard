@@ -1,0 +1,213 @@
+{
+  "home": "/h",
+  "cwd": "/h/project",
+  "rows": [
+    {"id":"local-array-new-element","partition":"armed-array-local","source":"arr=(public); f(){ local arr=0; arr[1]='a[$(cat .env)]'; }; f; echo $((arr))","expected":"N"},
+    {"id":"local-array-shadow","partition":"armed-array-scope","source":"arr=('a[$(cat .env)]'); a=(0); f(){ local arr=0; echo $((arr)); }; f","expected":"N"},
+    {"id":"local-array-restoration","partition":"armed-array-scope","source":"arr=('a[$(cat .env)]'); a=(0); f(){ local arr=0; echo $((arr)); }; f; echo $((arr))","expected":"D","reason":"environment"},
+    {"id":"positional-target-value","partition":"armed-positional-value","source":"set -- ~/Library/Containers/com.example.syn/Data; cat \"$1/notes.txt\"","expected":"D","reason":"App Data"},
+    {"id":"indexed-target-value","partition":"armed-indexed-value","source":"arr=(~/Library/Containers/com.example.syn/Data); cat \"${arr[0]}/notes.txt\"","expected":"D","reason":"App Data"},
+    {"id":"armed-read-unmodeled","partition":"armed-read-delimiter","source":"read -d ';' x <<< 'a[$(cat .env)]'; a=(0); echo $((x))","expected":"D","reason":"environment"},
+    {"id":"unarmed-read-unmodeled","partition":"armed-read-delimiter","source":"read -d ';' x <<< public; echo x","expected":"N"},
+    {"id":"armed-array-sibling-preserved","partition":"armed-indexed","source":"arr[0]='a[$(cat .env)]'; arr[1]=public; a=(0); echo $((arr))","expected":"D","reason":"environment"},
+    {"id":"unarmed-positional-value","partition":"armed-positional","source":"set -- public; printf '%s' \"$1\"","expected":"N"},
+    {"id":"unarmed-array-value","partition":"armed-array","source":"arr=(public); printf '%s' \"${arr[0]}\"","expected":"N"},
+    {"id":"armed-printf-unmodeled","partition":"armed-printf-fallback","source":"printf -v x '%s%s' 'a[' '$(cat .env)]'; a=(0); echo $((x))","expected":"UR","gap":"UnsupportedShellSyntax"},
+    {"id":"unarmed-printf-unmodeled","partition":"armed-printf-fallback","source":"printf -v x '%s%s' pub lic; echo x","expected":"N"},
+    {"id":"armed-append-budget","partition":"armed-append-budget","source":"A=public; B=public; AS='a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21'; BS='b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 b16 b17 b18 b19 b20 b21 b22 b23'; for A in $AS; do :; done; for B in $BS; do :; done; A+=$B","expected":"UR","gap":"InspectionBudget"},
+    {
+      "id": "armed-declare-dollar",
+      "partition": "armed-expansion",
+      "source": "y='a[$(cat .env)]'; a=(0); declare -i n; n=$y",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-declare-quoted",
+      "partition": "armed-expansion",
+      "source": "y='a[$(cat .env)]'; a=(0); declare -i n; n=\"$y\"",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-typeset-init",
+      "partition": "armed-expansion",
+      "source": "y='a[$(cat .env)]'; a=(0); typeset -i n=$y",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-printf-dollar",
+      "partition": "armed-expansion",
+      "source": "x='a[$(cat .env)]'; a=(0); printf '%d' \"$x\"",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-print-dollar",
+      "partition": "armed-expansion",
+      "source": "x='a[$(cat .env)]'; a=(0); print -f '%d' $x",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-return-dollar",
+      "partition": "armed-expansion",
+      "source": "x='a[$(cat .env)]'; a=(0); f(){ return $x; }; f",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-exit-dollar",
+      "partition": "armed-expansion",
+      "source": "x='a[$(cat .env)]'; a=(0); exit $x",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-subshell-exit",
+      "partition": "armed-expansion",
+      "source": "x='a[$(cat .env)]'; a=(0); (exit $x)",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-braced-expansion",
+      "partition": "armed-expansion",
+      "source": "x='a[$(cat .env)]'; a=(0); printf '%d' \"${x}\"",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-function-expanded",
+      "partition": "armed-expansion",
+      "source": "y='a[$(cat .env)]'; a=(0); f(){ return $(( $1 )); }; f \"$y\"",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-function-literal",
+      "partition": "armed-function",
+      "source": "f(){ a=(0); echo $(($1)); }; f 'a[$(cat .env)]'",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-set-positional",
+      "partition": "armed-positional",
+      "source": "set -- 'a[$(cat .env)]'; a=(0); echo $(($1))",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-printf-v-literal",
+      "partition": "armed-printf",
+      "source": "printf -v x '%s' 'a[$(cat .env)]'; a=(0); echo $((x))",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-printf-v-expanded",
+      "partition": "armed-expansion",
+      "source": "y='a[$(cat .env)]'; printf -v x '%s' \"$y\"; a=(0); echo $((x))",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-append-full",
+      "partition": "armed-append",
+      "source": "x=''; x+='a[$(cat .env)]'; a=(0); echo $((x))",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-append-parts",
+      "partition": "armed-append",
+      "source": "x=a[; x+='$(cat .env)]'; a=(0); echo $((x))",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-indexed-value",
+      "partition": "armed-indexed",
+      "source": "arr[0]='a[$(cat .env)]'; a=(0); echo $((arr))",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-array-value",
+      "partition": "armed-array",
+      "source": "arr=('a[$(cat .env)]'); a=(0); echo $(( ${arr[0]} ))",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-herestring",
+      "partition": "armed-read",
+      "source": "read x <<< 'a[$(cat .env)]'; a=(0); echo $((x))",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "armed-heredoc",
+      "partition": "armed-read",
+      "source": "read x <<'TAG'\na[$(cat .env)]\nTAG\na=(0); echo $((x))",
+      "expected": "D",
+      "reason": "environment"
+    },
+    {
+      "id": "unarmed-dollar-control",
+      "partition": "armed-expansion",
+      "source": "x=0; printf '%d' \"$x\"",
+      "expected": "N"
+    },
+    {
+      "id": "unarmed-function-control",
+      "partition": "armed-function",
+      "source": "f(){ printf '%s' \"$1\"; }; f public",
+      "expected": "N"
+    },
+    {
+      "id": "unarmed-positional-control",
+      "partition": "armed-positional",
+      "source": "set -- 0; echo $(($1))",
+      "expected": "N"
+    },
+    {
+      "id": "unarmed-printf-control",
+      "partition": "armed-printf",
+      "source": "printf -v x '%s' 0; echo $((x))",
+      "expected": "N"
+    },
+    {
+      "id": "unarmed-append-control",
+      "partition": "armed-append",
+      "source": "x=pub; x+=lic; printf '%s' \"$x\"",
+      "expected": "N"
+    },
+    {
+      "id": "unarmed-indexed-control",
+      "partition": "armed-indexed",
+      "source": "arr[0]=0; echo $((arr))",
+      "expected": "N"
+    },
+    {
+      "id": "unarmed-array-control",
+      "partition": "armed-array",
+      "source": "arr=(0); echo $(( ${arr[0]} ))",
+      "expected": "N"
+    },
+    {
+      "id": "unarmed-read-control",
+      "partition": "armed-read",
+      "source": "read x <<< 0; echo $((x))",
+      "expected": "N"
+    },
+    {
+      "id": "armed-unreferenced-control",
+      "partition": "armed-append",
+      "source": "x=a[; x+='$(cat .env)]'; echo public",
+      "expected": "N"
+    }
+  ]
+}

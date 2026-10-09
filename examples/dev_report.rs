@@ -1,0 +1,19 @@
+#[path = "support/fixture_paths.rs"]
+mod fixture_paths;
+#[path = "../tests/support/harness.rs"]
+mod support;
+use agent_guard_rust::shell::Arm;
+
+fn main() {
+    let arm = match std::env::args().nth(1).as_deref() {
+        Some("brush") => Arm::Brush,
+        Some("structured") => Arm::StructuredOnly,
+        _ => panic!("expected brush|structured"),
+    };
+    for row in support::rows()
+        .iter()
+        .filter(|r| support::is_evaluator_row(r))
+    {
+        println!("{}", support::run(row, arm));
+    }
+}

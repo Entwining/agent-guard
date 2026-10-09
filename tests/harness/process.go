@@ -143,7 +143,7 @@ func copyTree(from, to string) error {
 
 func SourceBindings(root string) ([]Binding, error) {
 	var bindings []Binding
-	for _, name := range []string{"go.mod", "go.sum", "bin/agent-guard", "native", "cmd", "tests/harness"} {
+	for _, name := range []string{"Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "VERSION", "Makefile", "go.mod", "go.sum", "bin/agent-guard", "src", "examples", "cmd", "tests/harness"} {
 		err := filepath.WalkDir(filepath.Join(root, name), func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err

@@ -1,0 +1,6 @@
+{"rows":[
+ {"id":"missing-public-search-file","partition":"control","expected":"N","input":{"command":"rg public $H/.ssh/config.work"}},
+ {"id":"missing-public-read-file","partition":"control","expected":"N","input":{"command":"cat $H/.ssh/example.pub"}},
+ {"id":"missing-public-use-file","partition":"control","expected":"N","input":{"command":"ssh-keygen -l -f $H/.ssh/example.pub"}},
+ {"id":"private-spelling","partition":"control","expected":"D","input":{"command":"rg public $H/.ssh/id_example"}}
+]}

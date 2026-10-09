@@ -1,0 +1,7 @@
+{"rows":[
+{"id":"grep-equals-pattern-file","partition":"grep","input":{"command":"grep -rf=$H/Library/Containers/com.example.syn/Data/list src/a.txt"},"expected":"D"},
+{"id":"install-credential-destination","partition":"install","input":{"command":"install public .env"},"expected":"N"},
+{"id":"install-key-destination","partition":"install","input":{"command":"install -m 600 x $H/.ssh/id_rsa"},"expected":"D"},
+{"id":"install-option-directory","partition":"install","input":{"command":"install -t $H/Library/Containers public"},"expected":"D"},
+{"id":"install-read","partition":"install","input":{"command":"install .env public"},"expected":"D"}
+]}

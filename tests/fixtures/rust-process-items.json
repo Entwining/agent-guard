@@ -1,0 +1,15 @@
+{"rows":[
+{"id":"process-xargs","partition":"xargs","input":{"command":"xargs cat < <(echo $H/.ssh/id_rsa)"},"expected":"D"},
+{"id":"process-xargs-marker","partition":"xargs","input":{"command":"xargs -I{} cat {} < <(echo $H/.aws/credentials)"},"expected":"D"},
+{"id":"process-xargs-appdata","partition":"xargs","input":{"command":"xargs cat < <(echo $H/Library/Containers/com.x/Data/f)"},"expected":"D"},
+{"id":"process-xargs-file","partition":"xargs","input":{"command":"xargs -a <(echo .env) cat"},"expected":"D"},
+{"id":"process-tar","partition":"list","input":{"command":"tar -cf o.tar -T <(echo $H/.ssh/id_rsa)"},"expected":"D"},
+{"id":"process-tar-long","partition":"list","input":{"command":"tar -cf o.tar --files-from=<(echo .env)"},"expected":"D"},
+{"id":"process-sort-nul","partition":"list","input":{"command":"sort --files0-from=<(printf '%s\\0' .env)"},"expected":"D"},
+{"id":"process-read","partition":"read","input":{"command":"read -r f < <(echo .env); cat \"$f\""},"expected":"D"},
+{"id":"process-while","partition":"read","input":{"command":"while read -r f; do cat \"$f\"; done < <(echo .env)"},"expected":"D"},
+{"id":"process-cat-data","partition":"data","input":{"command":"cat <(echo $H/.ssh/id_rsa)"},"expected":"N"},
+{"id":"process-cat-stdin-data","partition":"data","input":{"command":"cat < <(echo $H/.ssh/id_rsa)"},"expected":"N"},
+{"id":"process-cp-data","partition":"data","input":{"command":"cp <(echo $H/.ssh/id_rsa) public"},"expected":"N"},
+{"id":"process-xargs-public","partition":"data","input":{"command":"xargs cat < <(echo public)"},"expected":"N"}
+]}

@@ -18,11 +18,25 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
-      - name: Check Go implementation and contract fixtures
-        run: make check
-      - name: Build and verify the installed Go package
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Install cargo-deny 0.20.2
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/cargo-deny-0.20.2-aarch64-apple-darwin.tar.gz"
+          curl --fail --location --silent --show-error --output "$archive" \
+            https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-aarch64-apple-darwin.tar.gz
+          printf '%s  %s\n' fe67d82a10d8597a3549364cb733a3f9cc1bfff9031b7ae46384a9f2a72090c3 "$archive" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/cargo-deny"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/cargo-deny" --strip-components=1
+          echo "$RUNNER_TEMP/cargo-deny" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/cargo-deny/cargo-deny" --version
+      - name: Check the implementation and development tools
+        # cargo-deny fetches the RustSec advisory database; this check requires network access.
+        run: make check CARGO_TARGET_DIR="$RUNNER_TEMP/cargo-target"
+      - name: Build and verify the Rust package
         run: |
           test "$(uname -m)" = arm64
-          make build OUT="$RUNNER_TEMP/package"
+          make build OUT="$RUNNER_TEMP/package" CARGO_TARGET_DIR="$RUNNER_TEMP/cargo-target"
           test "$("$RUNNER_TEMP/package/bin/agent-guard" --version)" = "agent-guard $(cat VERSION)"
           go run ./cmd/agent-guard-verify "$RUNNER_TEMP/package/bin/agent-guard"

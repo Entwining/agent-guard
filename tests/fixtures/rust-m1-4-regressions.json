@@ -1,0 +1,470 @@
+[
+  {
+    "id": "r1-space-eval",
+    "source": "v='$(cat ~/.ssh/id_rsa)'; printf %s file\\ #1; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "r1-paren-eval",
+    "source": "v='$(cat ~/.ssh/id_rsa)'; printf %s file\\)#1; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "r1-space-qual",
+    "source": "printf %s file\\ #1; printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "r1-space-flag",
+    "source": "printf %s file\\ #1; printf %s \"${(f)v}\"",
+    "expected": "UR",
+    "owner": "comments"
+  },
+  {
+    "id": "r1-newline-qual",
+    "source": "printf %s file\\\n#1; printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "ctrl-eval",
+    "source": "v='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "ctrl-real-comment",
+    "source": "printf ok # ${(f)v}",
+    "expected": "N",
+    "owner": "comments"
+  },
+  {
+    "id": "A102-herestring-eval",
+    "source": "cat <<< \"public\"\nv='$(cat .env)'; echo \"${(e)v}\"",
+    "expected": "D",
+    "owner": "herestring"
+  },
+  {
+    "id": "A039-herestring-flag",
+    "source": "cat <<< \"public\"\necho \"${(f)v}\"",
+    "expected": "UR",
+    "owner": "herestring"
+  },
+  {
+    "id": "A040-herestring-sq-flag",
+    "source": "cat <<< 'public'\necho \"${(f)v}\"",
+    "expected": "UR",
+    "owner": "herestring"
+  },
+  {
+    "id": "A044-herestring-bare-flag",
+    "source": "cat <<< public\necho \"${(f)v}\"",
+    "expected": "UR",
+    "owner": "herestring"
+  },
+  {
+    "id": "A043-herestring-direct",
+    "source": "cat <<< \"public\"\ncat .env",
+    "expected": "D",
+    "owner": "herestring"
+  },
+  {
+    "id": "A056-subscript-assign",
+    "source": "a[$(cat .env)]=public",
+    "expected": "D",
+    "owner": "assignment"
+  },
+  {
+    "id": "A083-param-sq-cmdsub",
+    "source": "echo ${v:-'$('}",
+    "expected": "N",
+    "owner": "literal_fragment"
+  },
+  {
+    "id": "A107-arith-sq",
+    "source": "echo $(( '$(' ))",
+    "expected": "N",
+    "owner": "literal_fragment"
+  },
+  {
+    "id": "A019-arith-nested-flag",
+    "source": "echo $(( ${v:-${(f)w}} + 1 ))",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s1-idx-caret",
+    "source": "echo ${v[${^v}]}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s2-idx-tilde",
+    "source": "echo ${v[${~v}]}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s3-idx-atZ",
+    "source": "echo ${v[${v@Z}]}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s4-arith-caret",
+    "source": "echo $((${^v}))",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s5-arith-tilde",
+    "source": "echo $((${~v}))",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s6-arith-atZ",
+    "source": "echo $((${v@Z}))",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s7-legacy-caret",
+    "source": "echo $[${^v}]",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s8-legacy-tilde",
+    "source": "echo $[${~v}]",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "s9-legacy-atZ",
+    "source": "echo $[${v@Z}]",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "c1-top-caret",
+    "source": "echo ${^v}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "c2-top-tilde",
+    "source": "echo ${~v}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "c3-top-atZ",
+    "source": "echo ${v@Z}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "c4-arith-flag",
+    "source": "echo $((${(f)v}))",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "c5-idx-flag",
+    "source": "echo ${v[${(f)v}]}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "i1-tilde-glob-read",
+    "source": "v='.env*'; cat ${~v}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "i2-arith-tilde-read",
+    "source": "v='.env*'; echo $((${~v})); cat ${~v}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "i3-arith-sub-tilde",
+    "source": "v='a[$(cat .env)]'; echo $((${~v}))",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "i4-arith-sub-plain",
+    "source": "v='a[$(cat .env)]'; echo $((v))",
+    "expected": "D",
+    "owner": "coverage"
+  },
+  {
+    "id": "i5-arith-sub-param",
+    "source": "v='a[$(cat .env)]'; echo $((${v}))",
+    "expected": "D",
+    "owner": "coverage"
+  },
+  {
+    "id": "g1-plain-unquoted",
+    "source": "v='.env*'; cat $v",
+    "expected": "D",
+    "owner": "coverage"
+  },
+  {
+    "id": "g2-plain-quoted",
+    "source": "v='.env*'; cat \"$v\"",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "g3-tilde-quoted",
+    "source": "v='.env*'; cat \"${~v}\"",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "g4-split",
+    "source": "v='x .env'; cat ${=v}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "g5-split-quoted",
+    "source": "v='x .env'; cat \"${=v}\"",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "g6-caret-array",
+    "source": "w=(.env); cat ${^w}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "g7-tilde-literal",
+    "source": "cat ${~v:-.env*}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "g8-plain-literal",
+    "source": "cat ${v:-.env*}",
+    "expected": "UC",
+    "owner": "coverage"
+  },
+  {
+    "id": "l1-default-quoted-split",
+    "source": "echo ${v:-\"${=v}\"}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "l2-alt-quoted-tilde",
+    "source": "echo ${v:+\"${~v}\"}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "l3-trim-quoted-nested",
+    "source": "echo ${v#\"${${v}}\"}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "l4-default-nested",
+    "source": "echo ${v:-${${v}}}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "l5-top-quoted-nested",
+    "source": "echo \"${${v}}\"",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "l6-read-quoted-split",
+    "source": "v='x .env'; cat ${w:-\"${=v}\"}",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "d1-cmdsub-qual",
+    "source": "echo $(echo hi)#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-cmdsub-eval",
+    "source": "echo $(echo hi)#v='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"",
+    "expected": "UR",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-arith-qual",
+    "source": "echo $((1))#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-procsub-qual",
+    "source": "cat <(echo hi)#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-extglob-qual",
+    "source": "echo @(a)#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-dblparen-qual",
+    "source": "(( 1 ))#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-ctrl-space",
+    "source": "echo $(echo hi) printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d1-ctrl-subshell",
+    "source": "(echo hi)#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "N",
+    "owner": "comments"
+  },
+  {
+    "id": "d2-hs-ab",
+    "source": "cat <<< \"a b\"\nv='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "herestring"
+  },
+  {
+    "id": "d2-hs-redir",
+    "source": "cat <<< \"a\" >/dev/null\nv='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "herestring"
+  },
+  {
+    "id": "d2-hs-escsp",
+    "source": "cat <<< a\\ b\nv='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "herestring"
+  },
+  {
+    "id": "d2-hs-dash",
+    "source": "cat <<<- \"a\"\nv='$(cat ~/.ssh/id_rsa)'; printf %s \"${(e)v}\"",
+    "expected": "D",
+    "owner": "herestring"
+  },
+  {
+    "id": "d3-case-noparen",
+    "source": "echo $(case x in a) printf %s \"${(f)v}\";; esac)",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "d5-array-assign",
+    "source": "a=(x)#printf %s *(e:'cat ~/.ssh/id_rsa':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "d5-array-assign-plain",
+    "source": "a=(x y); echo ${a[1]}",
+    "expected": "N",
+    "owner": "array_assignment"
+  },
+  {
+    "id": "brace-escaped-dollar",
+    "source": "cat \\${.env,x}",
+    "expected": "N",
+    "owner": "brace"
+  },
+  {
+    "id": "assignment-data",
+    "source": "a[1]='$(cat .env)'",
+    "expected": "N",
+    "owner": "assignment"
+  },
+  {
+    "id": "coverage-sibling",
+    "source": "cat ${v@Z} .env",
+    "expected": "D",
+    "owner": "coverage"
+  },
+  {
+    "id": "coverage-nested-effect",
+    "source": "echo ${v:-${(f)v}$(cat .env)}",
+    "expected": "D",
+    "owner": "coverage"
+  },
+  {
+    "id": "coverage-eval-queue",
+    "source": "v='$(cat .env)'; echo ${w:-${(e)v}}",
+    "expected": "D",
+    "owner": "coverage"
+  },
+  {
+    "id": "coverage-qualifier-queue",
+    "source": "echo ${w:-${(f)v}} *(e:'cat .env':)",
+    "expected": "D",
+    "owner": "coverage"
+  },
+  {
+    "id": "control-70",
+    "source": "echo $",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "control-71",
+    "source": "echo \"$\"",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "control-72",
+    "source": "echo \\${x}",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "control-73",
+    "source": "echo '${~v}'",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "control-74",
+    "source": "echo ${v:-${w:-x}}",
+    "expected": "N",
+    "owner": "coverage"
+  },
+  {
+    "id": "control-75",
+    "source": "cat =(echo public)",
+    "expected": "UR",
+    "owner": "coverage"
+  },
+  {
+    "id": "qualifier-nested-quotes",
+    "source": "printf %s *(e:'cat \".env\"':)",
+    "expected": "D",
+    "owner": "comments"
+  },
+  {
+    "id": "herestring-data-control",
+    "source": "cat <<< '$(cat .env)'\necho public",
+    "expected": "N",
+    "owner": "herestring"
+  }
+]

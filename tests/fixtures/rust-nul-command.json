@@ -1,0 +1,5 @@
+{"rows":[
+{"id":"nul-tail","partition":"nul","input":{"command":"cat .env\u0000"},"expected":"D"},
+{"id":"nul-program","partition":"nul","input":{"command":"c\u0000at .env"},"expected":"D"},
+{"id":"nul-public","partition":"nul","input":{"command":"cat public\u0000"},"expected":"N"}
+]}
