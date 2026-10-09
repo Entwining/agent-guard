@@ -167,6 +167,10 @@ pub fn run_group(args: &[String]) -> io::Result<i32> {
     run(args)
 }
 
+#[expect(
+    clippy::print_stderr,
+    reason = "The executable boundary reports usage and runner faults, which the shell entry blocks as guard failures."
+)]
 pub fn main(args: &[String]) -> i32 {
     match args.first().map(String::as_str) {
         Some("--version") => {

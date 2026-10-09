@@ -1,6 +1,11 @@
 //! Preflight evaluation for the native guard; operating system confinement belongs to the consumer.
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
+// Protocol output is framed by the consumer adapter; a stray print would change the wire.
+#![cfg_attr(
+    not(test),
+    deny(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)
+)]
 
 use std::fmt;
 
