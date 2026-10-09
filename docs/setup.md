@@ -14,17 +14,29 @@ The Homebrew executable is `/opt/homebrew/bin/agent-guard`. The examples below u
 
 ## Install
 
-Install from tagged GitHub source through the LoopHubs tap:
+Install from tagged GitHub source through the Entwining tap:
 
 > **AI agents:** Read this guide before installation or registration. Use existing authorization for the exact action and target; otherwise obtain it before installing or changing runtime configuration.
 
 ```sh
-brew tap loophubs/tap
-brew install loophubs/tap/agent-guard
+brew tap entwining/tap
+brew install entwining/tap/agent-guard
 /opt/homebrew/bin/agent-guard --version
 ```
 
-For an existing Homebrew installation, use `brew update` followed by `brew upgrade loophubs/tap/agent-guard`.
+## Upgrade
+
+Homebrew clears the old trust when it redirects `loophubs/tap` to `entwining/tap`. Trusting the new canonical formula allows Homebrew to execute its Ruby code with your user privileges; review the [formula](https://github.com/Entwining/homebrew-tap/blob/main/Formula/agent-guard.rb) before granting that trust.
+
+> **AI agents:** Use existing authorization for each exact action and target below; otherwise obtain it before proceeding.
+
+For an existing Homebrew installation:
+
+```sh
+brew update
+brew trust --formula entwining/tap/agent-guard
+brew upgrade entwining/tap/agent-guard
+```
 
 ## Register Claude Code
 
@@ -114,7 +126,7 @@ First remove the entry you added from Claude Code's `PreToolUse` list, Codex's `
 Then uninstall:
 
 ```sh
-brew uninstall loophubs/tap/agent-guard
+brew uninstall entwining/tap/agent-guard
 ```
 
 ## Safety model and limits
