@@ -135,7 +135,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             self.command_builtin(&mut argv, &resolved, scope, &prior, depth)?;
         let shell_source = self.observed_shell_source(&mut argv, scope, program);
         let command = Command {
-            environment: Vec::new(),
             function: resolved.wrappers.is_empty()
                 && program.is_some_and(|i| self.functions.contains_key(&argv[i].text)),
             argv,

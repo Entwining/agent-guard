@@ -3,7 +3,6 @@ use super::*;
 pub(super) fn child(command: &CommandRecord, argv: &[Word], cwd: &str) -> CommandRecord {
     CommandRecord {
         function: false,
-        environment: command.environment.clone(),
         argv: argv.to_vec(),
         redirects: Vec::new(),
         pipeline: command.pipeline,

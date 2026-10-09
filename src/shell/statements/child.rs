@@ -57,26 +57,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 .filter(|(name, binding)| binding.exported || prefixes.contains_key(*name))
                 .map(|(name, binding)| (name.clone(), binding.clone())),
         );
-        for (name, value) in &command.environment {
-            let value = if value.expands {
-                BindingValue::RuntimeDerived(value.text.clone())
-            } else {
-                BindingValue::Known(value.text.clone())
-            };
-            let binding = Rc::make_mut(&mut child.bindings)
-                .entry(name.clone())
-                .or_insert_with(|| Binding {
-                    #[cfg(test)]
-                    copies: EntryCopies::default(),
-                    origins: None,
-                    values: Rc::default(),
-                    exported: true,
-                    arithmetic: false,
-                });
-            if !binding.values.contains(&value) {
-                Rc::make_mut(&mut binding.values).push(value);
-            }
-        }
         for change in environment {
             match change {
                 shell::argv::EnvironmentChange::Clear => Rc::make_mut(&mut child.bindings).clear(),

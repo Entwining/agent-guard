@@ -13,7 +13,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             self.emit(
                 Command {
                     function: false,
-                    environment: Vec::new(),
                     argv: vec![expanded.word],
                     redirects: Vec::new(),
                     cwd: scope.directory.current.render(),
