@@ -132,7 +132,9 @@ fn lifecycle_fixture(fault: &str) -> Result<u8, Box<dyn std::error::Error>> {
     if let Some(pipe) = &delayed_pipe {
         pids.push_str(&format!(" {}", pipe.id()));
     }
-    fs::write(root.join("fixture-pids"), pids)?;
+    // Tests poll for this file and read it at once, so publish it complete.
+    fs::write(root.join("fixture-pids.partial"), pids)?;
+    fs::rename(root.join("fixture-pids.partial"), root.join("fixture-pids"))?;
     fs::write(
         root.join("fixture-started"),
         std::time::SystemTime::now()

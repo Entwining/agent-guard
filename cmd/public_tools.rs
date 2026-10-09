@@ -238,7 +238,11 @@ fn drain_after_stop(
 
 fn kill_child_group(pid: Pid) -> io::Result<()> {
     match killpg(pid, Signal::SIGKILL) {
-        Ok(()) | Err(nix::errno::Errno::ESRCH) => Ok(()),
+        // Darwin answers EPERM, not ESRCH, while the group's only members are
+        // exited children the waiter has not reaped yet. Every member runs under
+        // this tool's uid, so EPERM has no other cause unless a member gains
+        // another identity, such as through a setuid program.
+        Ok(()) | Err(nix::errno::Errno::ESRCH | nix::errno::Errno::EPERM) => Ok(()),
         Err(error) => Err(io::Error::from(error)),
     }
 }
