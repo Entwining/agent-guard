@@ -23,6 +23,10 @@ impl Witness {
 }
 
 // These are closed fixture operations. Submitted shell/interpreter code is never executed.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "The witness lists the synthetic project directory that stands in for the search result."
+)]
 pub(super) fn closed_operation(
     fixture: &Fixture,
     row: &Value,
@@ -193,6 +197,10 @@ fn closed_shell_operation(
     )
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "The witness lists the synthetic project directory that stands in for the listing result."
+)]
 fn closed_shell_reads(
     fixture: &Fixture,
     input: &Value,
