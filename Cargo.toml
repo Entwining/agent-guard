@@ -38,6 +38,10 @@ path = "cmd/agent-guard-runtime/main.rs"
 name = "agent-guard-harness-client"
 path = "tests/harness/testdata/client.rs"
 
+[[bin]]
+name = "agent-guard-structure"
+path = "cmd/agent-guard-structure/main.rs"
+
 [[example]]
 name = "evaluate"
 test = false
@@ -60,6 +64,7 @@ allow_attributes = "deny"
 expect_used = "deny"
 redundant_clone = "deny"
 needless_pass_by_value = "deny"
+too_many_lines = "deny"
 
 [lints.rust]
 unsafe_code = "forbid"

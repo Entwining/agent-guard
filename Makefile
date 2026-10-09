@@ -30,6 +30,7 @@ check: rust-check
 rust-check:
 	$(call validate_external_directory,$(CARGO_TARGET_DIR),CARGO_TARGET_DIR)
 	$(CARGO) fmt -- --check
+	$(CARGO) run --locked --bin agent-guard-structure -- "$(CURDIR)"
 	CARGO_BUILD_WARNINGS=deny $(CARGO) clippy --locked --all-targets
 	$(CARGO) test --locked
 	$(CARGO) deny --locked check
