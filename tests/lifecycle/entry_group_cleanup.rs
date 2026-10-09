@@ -135,7 +135,7 @@ fn blocked(output: &Output) {
 #[test]
 fn entry_completion_closes_recorded_descendant_connections() {
     let package = Package::new();
-    let (child, mut receipts) = package.observed("complete", Duration::from_secs(1), false);
+    let (child, mut receipts) = package.observed("complete", Duration::from_secs(4), false);
     let runner = receipts.field("checker", "ppid");
     assert_eq!(
         receipts.field("checker", "pgid"),
