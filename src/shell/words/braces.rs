@@ -89,14 +89,18 @@ fn brace_sequence(body: &str) -> Option<String> {
             };
             return Some(format!("{{{reach},{{{body}}}}}"));
         }
-        return Some("*".into());
+        // Unsigned elements are digit strings; a wider reach turns a numeric
+        // loop at HOME into a broad root.
+        return Some("[0-9]*".into());
     }
     if parts[..2]
         .iter()
         .all(|part| part.len() == 1 && part.as_bytes()[0].is_ascii_alphanumeric())
     {
-        // Zsh accepts mixed letter/digit endpoints; Bash may leave them literal.
-        return Some("*".into());
+        // Each element is one character between alphanumeric endpoints, so it
+        // is never `/` or `.`. Zsh accepts mixed letter/digit endpoints; Bash
+        // may leave them literal, which names no protected path.
+        return Some("?".into());
     }
     None
 }

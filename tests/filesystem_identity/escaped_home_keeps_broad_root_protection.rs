@@ -19,6 +19,11 @@ fn quoted_credential_directories_keep_protection_with_wildcard_children() {
 }
 
 #[test]
+fn brace_sequences_reach_only_their_elements() {
+    check_rows(|row| row["id"].as_str().unwrap().starts_with("sequence-"));
+}
+
+#[test]
 fn quoted_literals_do_not_create_recursive_home_scans() {
     check_rows(|row| row["expected"] == "N");
 }

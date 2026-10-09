@@ -11,6 +11,9 @@
     {"id":"brace-appdata-literal","cwd":"$P","input":{"command":"cat \"$HOME\"/Library/{Containers,public}/App/x"},"expected":"D","broad":false,"protection":"AppData"},
     {"id":"quoted-credential-directory-glob","cwd":"$P","input":{"command":"cat \"$HOME\"/.gnupg*/\"private-keys-v1.d\"/*"},"expected":"D","broad":false,"protection":"Credential"},
     {"id":"quoted-project-glob","cwd":"$P","input":{"command":"cat \"$HOME\"/project/**/*.md"},"expected":"N","broad":false,"protection":null},
+    {"id":"sequence-numeric-loop-at-home","cwd":"$H","input":{"command":"for i in {1..60}; do echo \"$i\"; done"},"expected":"N","broad":false,"protection":null},
+    {"id":"sequence-numeric-read-at-home","cwd":"$H","input":{"command":"cat {1..3}"},"expected":"N","broad":false,"protection":null},
+    {"id":"sequence-letter-read-at-home","cwd":"$H","input":{"command":"cat {a..c}"},"expected":"N","broad":false,"protection":null},
     {"id":"quoted-literal-star-before-wildcard","cwd":"$P","input":{"command":"cat \"$HOME\"/\"*\"*/*.md"},"expected":"N","broad":false,"protection":null}
   ]
 }

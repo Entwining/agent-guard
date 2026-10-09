@@ -54,7 +54,7 @@ fn brace_sequence_and_quoting() {
     let words = argv(
         r#"cat ~/.e{n..n}v "$HOME/Library/{Containers,CloudStorage}" "$HOME/Library/*" '$HOME/.env'"#,
     );
-    assert_eq!(words[1].text, "/synthetic/home/.e*v");
+    assert_eq!(words[1].text, "/synthetic/home/.e?v");
     assert!(words[1].globs);
     assert_eq!(
         words[2].text,
