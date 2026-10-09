@@ -105,7 +105,7 @@ printf '%s\n' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | /opt/homebr
 
 The event is checked, not executed. Require exit code `0` and no output for this event. This smoke check does not show that a runtime loaded its hook. Inspect the runtime's hook listing and confirm registration separately.
 
-Developers can run the full [installed acceptance tool](../cmd/agent-guard-verify/main.rs) with `cargo run --bin agent-guard-verify --` from a checkout of the release being evaluated, passing the absolute installed executable, for example `/opt/homebrew/bin/agent-guard`. The tool is not part of the runtime package.
+Developers can run the full [installed acceptance tool](../cmd/agent-guard-verify/main.rs) with `cargo run --locked --bin agent-guard-verify --` from a checkout of the release being evaluated, passing the absolute installed executable, for example `/opt/homebrew/bin/agent-guard`. The tool is not part of the runtime package.
 
 ## Remove
 
@@ -207,10 +207,10 @@ out=/absolute/path/outside/checkouts/agent-guard-evidence
 export CARGO_TARGET_DIR="$out/cargo-target"
 make check
 make build OUT="$out/package"
-cargo run --bin agent-guard-verify -- "$out/package/bin/agent-guard"
+cargo run --locked --bin agent-guard-verify -- "$out/package/bin/agent-guard"
 ```
 
-`make check` runs `make rust-check`: rustfmt, Clippy across all targets, locked Rust tests and cargo-deny. Set `CARGO` to an absolute executable path when absent from `PATH`. Rust tests check frozen contract fixtures for exact verdicts, public exit codes, denial text and advice.
+`make check` runs `make rust-check`: rustfmt, the source file length check, Clippy across all targets with warnings denied, locked Rust tests and cargo-deny. Set `CARGO` to an absolute executable path when absent from `PATH`. Rust tests check frozen contract fixtures for exact verdicts, public exit codes, denial text and advice.
 
 The installed verifier requires the assembled `bin/agent-guard`, adjacent `agent-guard-native` and `VERSION`; it resolves the executable paths, records both hashes and checks that both executables report the package version. Require all 33 protocol cases to pass. It does not prove hook loading or all descendant cleanup.
 
