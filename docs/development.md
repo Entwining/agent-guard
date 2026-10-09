@@ -19,11 +19,11 @@ Keep Cargo's executable directory on `PATH` so `cargo deny --version` reports `c
 
 ## Development checks
 
-Keep build outputs and evidence outside every checkout:
+Keep build outputs and evidence outside every checkout. Reuse one Cargo target directory across runs, because each new one holds a full set of builds; it stays outside checkouts because integration tests place their scratch evidence under it:
 
 ```sh
+export CARGO_TARGET_DIR=/absolute/path/outside/checkouts/agent-guard-target
 out=/absolute/path/outside/checkouts/agent-guard-evidence
-export CARGO_TARGET_DIR="$out/cargo-target"
 make check
 make build OUT="$out/package"
 cargo run --locked --bin agent-guard-verify -- "$out/package/bin/agent-guard"
