@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 mod consumer_paths;
 pub(crate) use consumer_paths::opened_path;
-use consumer_paths::{claude_aliases, consumer_path, grep_globs};
+use consumer_paths::{claude_grep_alias, consumer_path, grep_globs};
 
 pub fn effects_value(effects: &[EffectRecord]) -> Value {
     json!(effects.iter().map(|effect| match effect {
@@ -132,8 +132,8 @@ pub(crate) fn decode_protocol(
         });
     }
     let folded_name = folded_tool_name(name);
-    if consumer == Consumer::Claude {
-        claude_aliases(&folded_name, &mut input);
+    if consumer == Consumer::Claude && folded_name == "grep" {
+        claude_grep_alias(&mut input);
     }
     // Native stdin uses file_path for every runtime; Pi's tool-facing input
     // is a separate protocol with its own path field.
