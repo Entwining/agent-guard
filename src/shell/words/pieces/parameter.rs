@@ -12,7 +12,7 @@ pub(super) fn parameter_piece(
     let context = lexical.context(piece.start_index);
     let quoted = !context.unquoted() || context.heredoc.is_some();
     let spelling = &raw[piece.start_index..piece.end_index];
-    if let Some(end) = modifier_piece(raw, expr, piece, lexical, expansion, out, splitting)? {
+    if let Some(end) = modifier_piece(raw, expr, piece, lexical, expansion, out) {
         return Ok((Some(end), false));
     }
     if let Some(Parameter::NamedWithIndex { index, .. }) = parameter(expr) {
@@ -92,8 +92,7 @@ fn modifier_piece(
     lexical: &crate::shell::lexer::Lexed<'_>,
     expansion: &ExpansionContext<'_>,
     out: &mut Expanded,
-    splitting: &mut bool,
-) -> Result<Option<usize>, CheckError> {
+) -> Option<usize> {
     let context = lexical.context(piece.start_index);
     let quoted = !context.unquoted() || context.heredoc.is_some();
     let start = out.word.text.len();
@@ -102,41 +101,12 @@ fn modifier_piece(
     if expansion.zsh
         && let Some(modifier) = modifier
     {
-        out.word.vars.push(modifier.name.clone());
-        let value = out
-            .assignments
-            .iter()
-            .rev()
-            .find(|(name, _)| name == &modifier.name)
-            .map(|(_, value)| value.as_str())
-            .or_else(|| expansion.get(&modifier.name).map(String::as_str))
-            .or_else(|| (modifier.name == "PWD").then_some(expansion.cwd));
-        if !expansion.unknown_variables.contains(&modifier.name)
-            && let Some(value) = value
-        {
-            if let Some(value) = modifier.apply(value.into(), expansion)? {
-                let value = match value {
-                    modifiers::Applied::Known(value) => value,
-                    modifiers::Applied::RuntimeUnknown(value) => {
-                        out.word.expands = true;
-                        out.word.runtime_unknown = true;
-                        out.unknown_splitting |= !quoted;
-                        value
-                    }
-                };
-                out.word.globs |= !quoted && value.contains(['*', '?', '[']);
-                out.word.text.push_str(&value);
-                *splitting |= !quoted;
-            } else {
-                out.unsupported = true;
-            }
-        } else {
-            out.word
-                .text
-                .push_str(&raw[piece.start_index..modifier.end]);
-            out.word.expands = true;
-            out.unknown_splitting |= !quoted;
-        }
+        out.word.vars.push(modifier.name);
+        out.word
+            .text
+            .push_str(&raw[piece.start_index..modifier.end]);
+        out.word.expands = true;
+        out.unknown_splitting |= !quoted;
         if let Some(region) = out
             .parameters
             .iter_mut()
@@ -148,9 +118,9 @@ fn modifier_piece(
             out.word.quoted_ranges.push(start..out.word.text.len());
             out.lexical_ranges.push(start..out.word.text.len());
         }
-        return Ok(Some(modifier.end));
+        return Some(modifier.end);
     }
-    Ok(None)
+    None
 }
 
 fn expand_parameter_fragments<'a>(

@@ -41,11 +41,7 @@ pub(super) fn expand_candidates(
                 context.remove(&name);
             }
         }
-        let (cwd_readings, pwd_from_cwd) = cwd_readings(&seed, scope, &context, &cwd);
-        for cwd in cwd_readings {
-            if pwd_from_cwd {
-                context.insert("PWD".into(), cwd.clone());
-            }
+        {
             for zsh in std::iter::once(false).chain(
                 (scope.zsh && (seed.modifiers || !seed.named_tildes.is_empty())).then_some(true),
             ) {
@@ -99,9 +95,6 @@ pub(super) fn expand_candidates(
                     }
                 }
             }
-        }
-        if pwd_from_cwd {
-            context.remove("PWD");
         }
     }
     apply_updates(scope, updates);
@@ -166,28 +159,6 @@ fn seed_expansion(
         },
     )?;
     Ok(seed)
-}
-
-fn cwd_readings(
-    seed: &Expanded,
-    scope: &statements::Scope,
-    context: &std::collections::BTreeMap<String, String>,
-    cwd: &str,
-) -> (Vec<String>, bool) {
-    let pwd_from_cwd = seed.modifiers
-        && seed.word.vars.iter().any(|name| name == "PWD")
-        && !context.contains_key("PWD");
-    let cwd_readings = std::iter::once(cwd.to_owned())
-        .chain(
-            scope
-                .directory
-                .alternatives
-                .iter()
-                .filter(|_| pwd_from_cwd)
-                .map(|path| path.render()),
-        )
-        .collect::<Vec<_>>();
-    (cwd_readings, pwd_from_cwd)
 }
 
 fn runtime_variables(

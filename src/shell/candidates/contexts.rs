@@ -44,7 +44,7 @@ fn project_binding(
             for value in binding.values.iter() {
                 // Preserve target inference from present lexical candidates;
                 // absence at a join is runtime data, not a scope refusal.
-                if !(seed.unset_parameters.contains(name) || seed.modifiers && name == "PWD")
+                if !seed.unset_parameters.contains(name)
                     && matches!(value, statements::BindingValue::RuntimeUnknown(Some(value)) if value.is_empty())
                     && binding.values.iter().any(|value| {
                         !matches!(value, statements::BindingValue::RuntimeUnknown(Some(value)) if value.is_empty())
@@ -67,7 +67,7 @@ fn project_binding(
                     continue;
                 }
                 let mut context = context.clone();
-                if (seed.unset_parameters.contains(name) || seed.modifiers && name == "PWD")
+                if seed.unset_parameters.contains(name)
                     && matches!(value, statements::BindingValue::RuntimeUnknown(Some(value)) if value.is_empty())
                 {
                     context.insert(name.clone(), None);

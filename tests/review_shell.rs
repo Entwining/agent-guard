@@ -345,11 +345,7 @@ fn assert_parameter_fields(
     context: &agent_guard_rust::Context,
     consumer: &str,
 ) {
-    if let Some(word) = row["word_zsh"]
-        .as_str()
-        .filter(|_| consumer != "pi")
-        .or_else(|| row["word"].as_str())
-    {
+    if let Some(word) = row["word"].as_str() {
         let observed = shell::observe_with_user(
             input["command"].as_str().unwrap(),
             shell::Arm::Brush,
