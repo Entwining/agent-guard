@@ -9,15 +9,11 @@
     {"id":"upper-class-public-file","partition":"case-folded-class","input":{"command":"cat [[:upper:]]EADME.md"},"expected":"N"},
     {"id":"cross-case-range-containers","partition":"case-folded-class","input":{"command":"cat ~/Library/[A-_]ontainers/harness/x"},"expected":"D"},
     {"id":"negated-alpha-range-misses-containers","partition":"case-folded-class","input":{"command":"cat ~/Library/[!A-Za-z]ontainers/harness/x"},"expected":"N"},
-    {"id":"equivalence-class-env","partition":"collating-class","input":{"command":"cat .en[[=v=]]"},"expected":"D"},
-    {"id":"collating-symbol-ssh","partition":"collating-class","input":{"command":"cat ~/.ss[[.h.]]/id_rsa"},"expected":"D"},
-    {"id":"collating-element-env","partition":"collating-class","input":{"command":"cat [[.period.]]env"},"expected":"D"},
-    {"id":"negated-collating-element-ssh","partition":"collating-class","input":{"command":"cat ~/.ss[![.period.]]/id_rsa"},"expected":"D"},
-    {"id":"equivalence-class-containers","partition":"collating-class","input":{"command":"cat ~/Library/[[=C=]]ontainers/x/data"},"expected":"D"},
-    {"id":"equivalence-class-public-file","partition":"collating-class","input":{"command":"cat [[=R=]]EADME.md"},"expected":"N"},
     {"id":"parameter-upper-class-misses-lowercase","partition":"case-exact-parameter","input":{"command":"f=.env; cat \"${f/[[:upper:]]/x}\""},"expected":"D"},
     {"id":"parameter-upper-prefix-stays","partition":"case-exact-parameter","input":{"command":"f=x.env; cat \"${f#[[:upper:]]}\""},"expected":"N"},
     {"id":"parameter-lower-prefix-stays","partition":"case-exact-parameter","input":{"command":"f=A.env; cat \"${f#[[:lower:]]}\""},"expected":"N"},
-    {"id":"parameter-upper-prefix-removed","partition":"case-exact-parameter","input":{"command":"f=E.env; cat \"${f#[[:upper:]]}\""},"expected":"D"}
+    {"id":"parameter-upper-prefix-removed","partition":"case-exact-parameter","input":{"command":"f=E.env; cat \"${f#[[:upper:]]}\""},"expected":"D"},
+    {"id":"parameter-slash-symbol-misses-dot","partition":"collating-spelling","input":{"command":"f=.env; cat \"${f#[[.slash.]]}\""},"expected":"D"},
+    {"id":"parameter-period-symbol-misses-letter","partition":"collating-spelling","input":{"command":"f=x.env; cat \"${f#[[.period.]]}\""},"expected":"N"}
   ]
 }

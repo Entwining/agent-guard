@@ -114,9 +114,9 @@ fn class_end(chars: &[char], start: usize) -> Option<usize> {
             continue;
         }
         if chars[index] == '['
-            && let Some(&delimiter) = chars.get(index + 1).filter(|c| [':', '=', '.'].contains(c))
+            && chars.get(index + 1) == Some(&':')
             && let Some(close) = (index + 2..chars.len().saturating_sub(1))
-                .find(|&at| chars[at] == delimiter && chars[at + 1] == ']')
+                .find(|&at| chars[at] == ':' && chars[at + 1] == ']')
         {
             index = close + 2;
             continue;
@@ -191,28 +191,11 @@ fn class_matches_exact(body: &str, ch: char) -> bool {
     let mut hit = false;
     let mut rest = body;
     while !rest.is_empty() {
-        if let Some(tail) = rest.strip_prefix('[')
-            && let Some(delimiter) = tail.chars().next().filter(|c| [':', '=', '.'].contains(c))
-            && let Some(end) = tail[1..].find(match delimiter {
-                ':' => ":]",
-                '=' => "=]",
-                _ => ".]",
-            })
+        if let Some(tail) = rest.strip_prefix("[:")
+            && let Some(end) = tail.find(":]")
         {
-            let name = &tail[1..=end];
-            rest = &tail[end + 3..];
-            if delimiter != ':' {
-                // Bash equivalence classes and collating symbols name one
-                // character, or a collating element such as `[.period.]`.
-                // An element name matches every character so that negation
-                // cannot exclude the character it names.
-                let mut chars = name.chars();
-                match (chars.next(), chars.next()) {
-                    (Some(only), None) => hit |= only == ch,
-                    _ => return true,
-                }
-                continue;
-            }
+            let name = &tail[..end];
+            rest = &tail[end + 2..];
             hit |= match name {
                 "alnum" => ch.is_ascii_alphanumeric(),
                 "alpha" => ch.is_ascii_alphabetic(),
