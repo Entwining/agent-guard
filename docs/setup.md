@@ -143,7 +143,7 @@ go run ./cmd/agent-guard-verify "$out/package/bin/agent-guard"
 
 `make check` runs `native/check`: goimports formatting and import grouping, go vet, Staticcheck, and Go race tests across the implementation, tools and harnesses. Both development tools are pinned in `go.mod` and run with `go tool`. goimports runs in `-format-only` mode, which applies gofmt formatting without adding or removing imports; fix listed files with `go tool goimports -format-only -local agentguard -w FILES`. Set `GO` to an absolute executable path when it is absent from `PATH`. Plain `go test ./...` includes all 3,795 fixture cases and checks exact public exit codes, denial text and Claude advice; it requires no exporter or environment opt-in.
 
-The installed verifier requires the assembled `bin/agent-guard`, adjacent `agent-guard-native` and `VERSION`; it rejects checkout entries and records both executable hashes. Require all 33 protocol cases to pass. It does not prove hook loading or all descendant cleanup.
+The installed verifier requires the assembled `bin/agent-guard`, adjacent `agent-guard-native` and `VERSION`; it resolves the executable paths, records both hashes and checks that both executables report the package version. Require all 33 protocol cases to pass. It does not prove hook loading or all descendant cleanup.
 
 The [synthetic runtime and lifecycle harnesses](../tests/harness/README.md) check the assembled entry and adjacent binary. Runtime verdicts, direct protocol checks and instrumented lifecycle checks are separate evidence. A runtime failure before hooks is not a guard denial. Check registration and runtime acceptance separately before replacing an installation.
 

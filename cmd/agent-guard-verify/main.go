@@ -76,9 +76,6 @@ func installed(args []string) (installation, error) {
 	if err := executable(pkg.entry); err != nil {
 		return pkg, err
 	}
-	if err := outsideCheckout(filepath.Dir(pkg.entry)); err != nil {
-		return pkg, fmt.Errorf("refusing a Git checkout executable: %w", err)
-	}
 	if filepath.Base(pkg.entry) != "agent-guard" || filepath.Base(filepath.Dir(pkg.entry)) != "bin" {
 		return pkg, errors.New("selected entry is not the installed bin/agent-guard executable")
 	}
@@ -119,19 +116,6 @@ func executable(path string) error {
 		return fmt.Errorf("not an executable file: %s", path)
 	}
 	return nil
-}
-
-func outsideCheckout(path string) error {
-	for directory := path; ; directory = filepath.Dir(directory) {
-		if _, err := os.Lstat(filepath.Join(directory, ".git")); err == nil {
-			return fmt.Errorf("%s contains .git", directory)
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		if directory == filepath.Dir(directory) {
-			return nil
-		}
-	}
 }
 
 type result struct {
