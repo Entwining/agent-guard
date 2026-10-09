@@ -1,5 +1,5 @@
-use super::{Consumer, malformed};
-use crate::{CheckError, filesystem};
+use super::Consumer;
+use crate::filesystem;
 use serde_json::Value;
 
 /// Claude Code 2.1.295 `coerceInput` aliases, applied before it validates a
@@ -35,11 +35,11 @@ pub(super) fn claude_aliases(tool: &str, input: &mut Value) {
 
 /// Rewrites a tool path the way the consumer resolves it before opening the
 /// file, so the guard checks the file the tool will actually read or write.
-pub(super) fn consumer_path(consumer: Consumer, raw: String) -> Result<String, CheckError> {
+pub(super) fn consumer_path(consumer: Consumer, raw: String) -> String {
     match consumer {
         // Claude Code trims the path with JavaScript `String.prototype.trim`.
-        Consumer::Claude => Ok(raw.trim_matches(js_whitespace).to_owned()),
-        Consumer::Codex => Ok(raw),
+        Consumer::Claude => raw.trim_matches(js_whitespace).to_owned(),
+        Consumer::Codex => raw,
         Consumer::Pi => pi_path(&raw),
     }
 }
@@ -71,11 +71,9 @@ fn js_whitespace(c: char) -> bool {
     (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}'
 }
 
-/// The absolute path the consumer opens for a path `consumer_path` decoded.
+/// The absolute path the consumer opens for a path `consumer_path` rewrote.
 pub(crate) fn opened_path(consumer: Consumer, path: &str, cwd: &str, home: &str) -> String {
     match consumer {
-        // Neither runtime treats a `file:` prefix as a URL at this point; Pi
-        // decoded its case-sensitive `file://` form in `pi_path`.
         Consumer::Claude | Consumer::Pi => filesystem::resolve_tool_path(path, cwd, home),
         // The documented Codex registration covers Bash only, so no Codex
         // tool path has an observed resolution to follow.
@@ -84,9 +82,8 @@ pub(crate) fn opened_path(consumer: Consumer, path: &str, cwd: &str, home: &str)
 }
 
 /// Pi 1.1.0 `normalizePath` with `normalizeUnicodeSpaces` and `stripAtPrefix`:
-/// Unicode spaces become ASCII spaces, one leading `@` is dropped, and a
-/// `file://` URL becomes its decoded path through Node's `fileURLToPath`.
-fn pi_path(raw: &str) -> Result<String, CheckError> {
+/// Unicode spaces become ASCII spaces and one leading `@` is dropped.
+fn pi_path(raw: &str) -> String {
     let spaced: String = raw
         .chars()
         .map(|c| match c {
@@ -94,59 +91,5 @@ fn pi_path(raw: &str) -> Result<String, CheckError> {
             other => other,
         })
         .collect();
-    let path = spaced.strip_prefix('@').unwrap_or(&spaced);
-    match path.strip_prefix("file://") {
-        Some(url) => file_url_path(url),
-        None => Ok(path.to_owned()),
-    }
-}
-
-/// WHATWG URL parsing strips trailing C0 controls and spaces, drops tabs and
-/// newlines, reads `\` as `/`, maps the `localhost` host to the empty host and
-/// ends the path at `?` or `#`; Node then rejects other hosts and encoded
-/// slashes and percent-decodes the rest. Pi's tool fails on a URL Node
-/// rejects, so a rejection fails the check.
-fn file_url_path(url: &str) -> Result<String, CheckError> {
-    let url: String = url
-        .trim_end_matches(|c: char| c <= ' ')
-        .chars()
-        .filter(|c| !matches!(c, '\t' | '\n' | '\r'))
-        .map(|c| if c == '\\' { '/' } else { c })
-        .collect();
-    let url = url.split(['?', '#']).next().unwrap_or_default();
-    let (host, path) = url.split_at(url.find('/').unwrap_or(url.len()));
-    if !host.is_empty() && !host.eq_ignore_ascii_case("localhost") {
-        return Err(malformed());
-    }
-    let path = if path.is_empty() { "/" } else { path };
-    let mut bytes = Vec::with_capacity(path.len());
-    let mut rest = path.as_bytes();
-    while let Some((&byte, tail)) = rest.split_first() {
-        if byte != b'%' {
-            bytes.push(byte);
-            rest = tail;
-            continue;
-        }
-        // decodeURIComponent throws on an incomplete escape.
-        let decoded = match tail {
-            [high, low, ..] if high.is_ascii_hexdigit() && low.is_ascii_hexdigit() => {
-                (hex_value(*high) << 4) | hex_value(*low)
-            }
-            _ => return Err(malformed()),
-        };
-        if decoded == b'/' {
-            return Err(malformed());
-        }
-        bytes.push(decoded);
-        rest = &tail[2..];
-    }
-    String::from_utf8(bytes).map_err(|_| malformed())
-}
-
-fn hex_value(digit: u8) -> u8 {
-    match digit {
-        b'0'..=b'9' => digit - b'0',
-        b'a'..=b'f' => digit - b'a' + 10,
-        _ => digit - b'A' + 10,
-    }
+    spaced.strip_prefix('@').unwrap_or(&spaced).to_owned()
 }

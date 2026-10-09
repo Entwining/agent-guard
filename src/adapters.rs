@@ -151,9 +151,9 @@ pub(crate) fn decode_protocol(
         {
             Operation::Shell(field(&input, "cmd")?)
         }
-        (_, "read") => Operation::Read(consumer_path(consumer, field(&input, path_key)?)?),
+        (_, "read") => Operation::Read(consumer_path(consumer, field(&input, path_key)?)),
         (_, "write" | "edit") => {
-            Operation::Write(consumer_path(consumer, field(&input, path_key)?)?)
+            Operation::Write(consumer_path(consumer, field(&input, path_key)?))
         }
         (Consumer::Claude | Consumer::Codex | Consumer::Pi, "grep") if !input.is_object() => {
             return Err(malformed());
@@ -161,7 +161,7 @@ pub(crate) fn decode_protocol(
         (Consumer::Claude | Consumer::Codex | Consumer::Pi, "grep") => Operation::Search {
             root: input
                 .get("path")
-                .map(|_| consumer_path(consumer, field(&input, "path")?))
+                .map(|_| field(&input, "path").map(|path| consumer_path(consumer, path)))
                 .transpose()?
                 .unwrap_or_default(),
             globs: grep_globs(

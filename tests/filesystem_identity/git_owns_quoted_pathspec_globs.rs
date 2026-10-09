@@ -5,24 +5,6 @@ use cases::*;
 #[test]
 fn file_urls_reach_protected_identity() {
     regressions("file_url");
-    let fixture = support::Fixture::new();
-    // Pi is the tool consumer that decodes a `file://` path.
-    let context = fixture.context(&json!({"consumer":"pi","cwd":"$P"}));
-    let bytes = serde_json::to_vec(&json!({"tool_name":"read","tool_input":{
-        "path":format!("file://{}/Library/Containers/App/data",fixture.home)
-    }}))
-    .unwrap();
-    let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-    let result = evaluate_with_arm(
-        Event {
-            bytes: &bytes,
-            context: &context,
-            probe: &mut probe,
-        },
-        Arm::Brush,
-    );
-    assert_eq!(support::class(&result), "D");
-    assert!(probe.calls.is_empty() && probe.stat_calls.is_empty());
 }
 
 #[test]
