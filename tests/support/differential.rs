@@ -1,4 +1,8 @@
 #![allow(dead_code)]
+#![expect(
+    clippy::disallowed_methods,
+    reason = "This fixture manages synthetic link identities and verifies their metadata without reading contents."
+)]
 use crate::support::{Fixture, RecordingProbe, class, coverage};
 use agent_guard_rust::{
     Context, Event,
@@ -43,8 +47,8 @@ fn fixture() -> Fixture {
     fixture
 }
 
-// D22 and D10 rule 4 own this table. The frozen Go observer selects effective
-// programs only; neither expected verdicts nor Rust parser output select scope.
+// Frozen legacy observations select effective programs, not expected verdicts
+// or the current parser's output, so scope classification stays independent.
 fn outside_slice(row: &Value, scope: &BTreeMap<String, Value>) -> Option<String> {
     if row["tool"] != "Bash" {
         return None;

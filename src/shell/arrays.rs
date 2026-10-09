@@ -21,7 +21,7 @@ pub(super) struct IndexedArray {
     // Normalized start index and resource candidates of an append repetition.
     pub tail: Option<(i64, Vec<Word>)>,
     pub exact: bool,
-    // D1 keeps two fixed executor readings; binding joins merge within each.
+    // Keep the two executor readings distinct; binding joins merge within each.
     pub zsh: Option<Box<IndexedArray>>,
 }
 
@@ -190,7 +190,7 @@ impl IndexedArray {
                 } else if word.expands {
                     BindingValue::RuntimeDerived(word.text.clone())
                 } else if word.globs || word.shell_matches {
-                    BindingValue::ShellMatches(word.text.clone())
+                    BindingValue::ShellMatches(super::statements::ShellValue::from_word(word))
                 } else {
                     BindingValue::Known(word.text.clone())
                 };
@@ -268,14 +268,18 @@ fn binding_words(values: &[BindingValue]) -> Vec<Word> {
             BindingValue::RepeatedFields(value) => value.projections(),
             BindingValue::Known(text)
             | BindingValue::RuntimeDerived(text)
-            | BindingValue::RuntimeUnknown(Some(text))
-            | BindingValue::ShellMatches(text)
-            | BindingValue::ShellDerived(text) => vec![text.clone()],
+            | BindingValue::RuntimeUnknown(Some(text)) => vec![text.clone()],
+            BindingValue::ShellMatches(value) | BindingValue::ShellDerived(value) => {
+                vec![value.text.clone()]
+            }
             BindingValue::Array(_) | BindingValue::Arguments(_) => continue,
             BindingValue::RuntimeUnknown(None) | BindingValue::Undetermined => vec![String::new()],
         };
         for text in texts {
             let mut word = Word::literal(text);
+            if let BindingValue::ShellMatches(value) | BindingValue::ShellDerived(value) = value {
+                word.quoted_ranges = value.quoted_ranges.clone();
+            }
             word.expands = matches!(
                 value,
                 BindingValue::RuntimeDerived(_)
@@ -371,7 +375,7 @@ pub(super) fn store(scope: &mut Scope, name: &str, state: IndexedArray) {
                 if word.runtime_unknown || word.expands {
                     BindingValue::RuntimeUnknown(Some(word.text.clone()))
                 } else if word.globs || word.shell_matches {
-                    BindingValue::ShellMatches(word.text.clone())
+                    BindingValue::ShellMatches(super::statements::ShellValue::from_word(word))
                 } else {
                     BindingValue::Known(word.text.clone())
                 }
@@ -707,6 +711,7 @@ pub(super) fn expand(
         &words::ExpansionContext {
             variables: &contexts,
             runtime_variables: &BTreeSet::new(),
+            pattern_variables: &scope.pattern_contexts(&contexts),
             host: evaluator.frontend.host,
             cwd: &scope.directory.current.render(),
             tilde_assigned: true,
@@ -893,6 +898,19 @@ pub(super) fn expand(
             for word in &mut sequence {
                 if !prefix.is_empty() || !suffix.is_empty() {
                     *word = snapshot(word.with_text(format!("{prefix}{}{suffix}", word.text)));
+                    for range in &observed.word.quoted_ranges {
+                        let right = range.end.min(prefix.len());
+                        if range.start < right {
+                            word.quoted_ranges.push(range.start..right);
+                        }
+                        let start = observed.word.text.len() - suffix.len();
+                        let left = range.start.max(start);
+                        if left < range.end {
+                            let offset = word.text.len() - suffix.len();
+                            word.quoted_ranges
+                                .push(offset + left - start..offset + range.end - start);
+                        }
+                    }
                 }
                 word.cardinality_unknown |= unknown_count;
                 word.field_count_unknown |= unknown_count;

@@ -14,6 +14,30 @@ path = "src/main.rs"
 name = "agent-guard-rust-fixture-worker"
 path = "tests/support/fixture_worker.rs"
 
+[[bin]]
+name = "agent-guard-verify"
+path = "cmd/agent-guard-verify/main.rs"
+
+[[bin]]
+name = "agent-guard-profile"
+path = "cmd/agent-guard-profile/main.rs"
+
+[[bin]]
+name = "agent-guard-public-tool-fixture"
+path = "tests/support/public_tool_fixture.rs"
+
+[[bin]]
+name = "agent-guard-lifecycle"
+path = "cmd/agent-guard-lifecycle/main.rs"
+
+[[bin]]
+name = "agent-guard-runtime"
+path = "cmd/agent-guard-runtime/main.rs"
+
+[[bin]]
+name = "agent-guard-harness-client"
+path = "tests/harness/testdata/client.rs"
+
 [[example]]
 name = "evaluate"
 test = false
@@ -21,5 +45,21 @@ test = false
 [dependencies]
 brush-parser = "=0.4.0"
 serde_json = "=1.0.151"
+serde = { version = "=1.0.229", features = ["derive"] }
 tree-sitter = "=0.27.0"
 tree-sitter-bash = "=0.25.1"
+sha2 = "=0.10.9"
+signal-hook = "=0.4.4"
+tempfile = "=3.27.0"
+nix = { version = "=0.31.3", default-features = false, features = ["fs", "signal", "process"] }
+rustix = { version = "=1.1.5", features = ["process", "fs"] }
+
+[lints.clippy]
+disallowed_methods = "deny"
+allow_attributes = "deny"
+expect_used = "deny"
+redundant_clone = "deny"
+needless_pass_by_value = "deny"
+
+[lints.rust]
+unsafe_code = "forbid"

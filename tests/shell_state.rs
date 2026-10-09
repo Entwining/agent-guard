@@ -58,6 +58,8 @@ pub mod repeated_loop_references_share_one_binding_candidate;
 pub mod shell_glob_loop_items_keep_protected_intersection_at_sinks;
 #[path = "shell_state/shell_list_length_is_not_syntactic_nesting.rs"]
 pub mod shell_list_length_is_not_syntactic_nesting;
+#[path = "shell_state/shell_observation_reuse.rs"]
+pub mod shell_observation_reuse;
 #[path = "shell_state/substitution_bindings_remain_single_unknown_words.rs"]
 pub mod substitution_bindings_remain_single_unknown_words;
 pub(crate) mod support;

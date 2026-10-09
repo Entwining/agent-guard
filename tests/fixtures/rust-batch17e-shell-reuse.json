@@ -1,0 +1,125 @@
+{
+  "rows": [
+    {
+      "id": "cached-substitution-public",
+      "partition": "reuse",
+      "input": {
+        "command": "for p in public next; do value=$(cat \"$p\"); done"
+      },
+      "expected": "N"
+    },
+    {
+      "id": "cached-substitution-protected",
+      "partition": "reuse",
+      "input": {
+        "command": "for p in public \"$H/.aws/credentials\"; do value=$(cat \"$p\"); done"
+      },
+      "expected": "D",
+      "wire_reason": "credential"
+    },
+    {
+      "id": "cached-substitution-redirect",
+      "partition": "reuse",
+      "input": {
+        "command": "for p in public \"$H/.aws/credentials\"; do value=$(printf public < \"$p\"); done"
+      },
+      "expected": "D",
+      "wire_reason": "credential"
+    },
+    {
+      "id": "cached-substitution-cwd",
+      "partition": "reuse",
+      "input": {
+        "command": "for dir in \"$P\" \"$H/Library/Containers\"; do (cd \"$dir\"; value=$(cat file)); done"
+      },
+      "expected": "D",
+      "wire_reason": "App Data"
+    },
+    {
+      "id": "unknown-invariant-public",
+      "partition": "reuse",
+      "input": {
+        "command": "for k in $(printf public); do cat public; done"
+      },
+      "expected": "N"
+    },
+    {
+      "id": "unknown-invariant-protected",
+      "partition": "reuse",
+      "input": {
+        "command": "for k in $(printf public); do cat \"$H/.aws/credentials\"; done"
+      },
+      "expected": "D",
+      "wire_reason": "credential"
+    },
+    {
+      "id": "unknown-invariant-operand",
+      "partition": "reuse",
+      "input": {
+        "command": "for k in $(printf public); do cat \"$k\"; done"
+      },
+      "expected": "UC"
+    },
+    {
+      "id": "function-pipeline-public",
+      "partition": "reuse",
+      "input": {
+        "command": "inspect() { cat \"$1\" | wc -l; }; for k in $(printf public); do value=$(inspect public); done"
+      },
+      "expected": "UC"
+    },
+    {
+      "id": "function-pipeline-protected",
+      "partition": "reuse",
+      "input": {
+        "command": "inspect() { cat \"$1\" | wc -l; }; for k in $(printf public); do value=$(inspect \"$H/.aws/credentials\"); done"
+      },
+      "expected": "D",
+      "wire_reason": "credential"
+    },
+    {
+      "id": "function-cwd-is-carried",
+      "partition": "reuse",
+      "input": {
+        "command": "inspect() { cd \"$H/Library/Containers\"; }; for k in public next; do inspect; ls; done"
+      },
+      "expected": "D",
+      "wire_reason": "App Data"
+    },
+    {
+      "id": "loop-break-binding",
+      "partition": "reuse",
+      "input": {
+        "command": "for k in public \"$H/.aws/credentials\"; do picked=$k; test public && break; done; cat \"$picked\""
+      },
+      "expected": "D",
+      "wire_reason": "credential"
+    },
+    {
+      "id": "loop-carried-binding",
+      "partition": "reuse",
+      "input": {
+        "command": "p=public; for k in one two; do p=\"$H/.aws/credentials\"; cat \"$p\"; done"
+      },
+      "expected": "D",
+      "wire_reason": "credential"
+    },
+    {
+      "id": "recursive-function-keeps-bound",
+      "partition": "reuse",
+      "input": {
+        "command": "inspect() { inspect; }; for k in $(printf public); do inspect; done"
+      },
+      "expected": "UR"
+    },
+    {
+      "id": "literal-pipeline-code-candidates",
+      "partition": "reuse",
+      "input": {
+        "command": "for code in 'cat public' 'cat $H/.aws/credentials'; do printf '%s' \"$code\" | sh; done"
+      },
+      "expected": "D",
+      "wire_reason": "credential"
+    }
+  ]
+}

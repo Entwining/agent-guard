@@ -15,17 +15,16 @@ runner=$pkg/bin/agent-guard-native
 if [[ $# == 1 && $1 == --version ]]; then
     exec "$runner" --version
 fi
-event=$(/bin/cat)
 # The package owns the native executable; the hook directory owns relative targets.
 hook_cwd=$PWD
 cd "$pkg" || fail 'package directory unreadable'
 
 # Bash job control establishes the job's group before exec, even without a TTY.
 # A single background command has PID = PGID; ordinary descendants inherit it.
-# Process substitution keeps the runner as the job leader and the event in a pipe.
+# Explicit stdin prevents Bash 3.2 from nulling background input in this substitution.
 reason=$(
     set -m
-    "$runner" "$@" --cwd "$hook_cwd" < <(printf '%s\n' "$event") 2>&1 &
+    "$runner" "$@" --cwd "$hook_cwd" <&0 2>&1 &
     pid=$!
     { /bin/sleep 3; kill -KILL -- -"$pid"; } >/dev/null 2>&1 &
     watchdog=$!
@@ -37,7 +36,7 @@ reason=$(
     exit "$rc"
 ) 2>/dev/null
 rc=$?
-# Only status 3 marks a completed rejection; Go's default crash status is 2.
+# Rust maps checker rejection 2 to runner status 3; faults and panics stay nonzero.
 case $rc in
     (0) [[ -n $reason ]] && printf '%s\n' "$reason"; exit 0 ;;
     (3) ;;

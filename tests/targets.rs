@@ -46,8 +46,12 @@ pub mod opaque_operands_refuse_broad_roots;
 pub mod optional_inplace_suffix_preserves_inline_code;
 #[path = "targets/precommand_wrappers_reach_the_actual_program.rs"]
 pub mod precommand_wrappers_reach_the_actual_program;
+#[path = "targets/process_names_and_perl_argv_preserve_roles.rs"]
+pub mod process_names_and_perl_argv_preserve_roles;
 #[path = "support/batch6.rs"]
 pub mod program_contract;
+#[path = "targets/quoted_pattern_regions_keep_local_expansion.rs"]
+pub mod quoted_pattern_regions_keep_local_expansion;
 #[path = "targets/recognised_wrappers_preserve_effective_git_environment.rs"]
 pub mod recognised_wrappers_preserve_effective_git_environment;
 #[path = "targets/shell.rs"]

@@ -14,7 +14,6 @@
  {"id":"typeset-shadow","partition":"local","expected":"N","input":{"command":"x='a[$(cat .env)]'; y=$x; f(){ typeset y; a=(0); echo $((y)); }; f"}},
  {"id":"local-return-restoration","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; f(){ local y; echo $((y)); }; f; a=(0); echo $((y))"}},
  {"id":"read-armed-literal","partition":"kept","expected":"D","input":{"command":"read y <<< 'a[$(cat .env)]'; a=(0); echo $((y))"}},
- {"id":"read-array-keeps","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read -a y <<< 1; a=(0); echo $((y))"}},
  {"id":"declare-keeps","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; declare y; a=(0); echo $((y))"}},
  {"id":"export-keeps","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; export y; a=(0); echo $((y))"}},
  {"id":"typeset-keeps","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; typeset y; a=(0); echo $((y))"}},

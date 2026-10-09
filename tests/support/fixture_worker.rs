@@ -1,4 +1,7 @@
-#![forbid(unsafe_code)]
+#![expect(
+    clippy::disallowed_methods,
+    reason = "This lifecycle fixture must terminate checker children with the statuses under test."
+)]
 
 use std::{
     fs,
@@ -52,6 +55,18 @@ fn fault_checker(arguments: &[String]) -> io::Result<()> {
         .get(1)
         .ok_or_else(|| io::Error::other("missing receipt"))?;
     fs::write(receipt, format!("ready:{}\n", std::process::id()))?;
+    if mode == "capture-stdin" {
+        let mut bytes = Vec::new();
+        io::Read::read_to_end(&mut io::stdin(), &mut bytes)?;
+        fs::write(format!("{receipt}.stdin"), &bytes)?;
+        let status = agent_guard_rust::entry::check(
+            &arguments[2..],
+            &mut io::Cursor::new(bytes),
+            &mut io::stdout(),
+            &mut io::stderr(),
+        );
+        std::process::exit(agent_guard_rust::entry::checker_status(status));
+    }
     if mode == "large-reason" {
         io::stdout().write_all(&vec![b'O'; 2 * 1024 * 1024])?;
         io::stderr().write_all(&vec![b'E'; 2 * 1024 * 1024])?;

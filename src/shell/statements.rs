@@ -181,14 +181,45 @@ pub(super) enum BindingValue {
     RepeatedFields(Box<LiteralRepetition>),
     Arguments(Vec<crate::record::Word>),
     Array(Box<super::arrays::IndexedArray>),
-    // The lexical representative preserves pre-M2 target inference; it is
+    // The lexical representative preserves target inference; it is
     // never evidence of the runtime value or its arithmetic contents.
     RuntimeUnknown(Option<String>),
     // Derived text must carry its runtime uncertainty through substitution.
     RuntimeDerived(String),
-    ShellMatches(String),
-    ShellDerived(String),
+    ShellMatches(ShellValue),
+    ShellDerived(ShellValue),
     Undetermined,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct ShellValue {
+    pub text: String,
+    pub quoted_ranges: Vec<std::ops::Range<usize>>,
+}
+
+impl ShellValue {
+    pub fn from_word(word: &crate::record::Word) -> Self {
+        Self {
+            text: word.text.clone(),
+            quoted_ranges: word.quoted_ranges.clone(),
+        }
+    }
+}
+
+impl From<String> for ShellValue {
+    fn from(text: String) -> Self {
+        Self {
+            text,
+            quoted_ranges: Vec::new(),
+        }
+    }
+}
+
+impl std::ops::Deref for ShellValue {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.text
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -218,13 +249,12 @@ impl LiteralRepetition {
 }
 
 impl BindingValue {
-    fn lexical(&self) -> Option<&String> {
+    pub(super) fn lexical(&self) -> Option<&String> {
         match self {
             Self::Known(value)
             | Self::RuntimeUnknown(Some(value))
-            | Self::RuntimeDerived(value)
-            | Self::ShellMatches(value)
-            | Self::ShellDerived(value) => Some(value),
+            | Self::RuntimeDerived(value) => Some(value),
+            Self::ShellMatches(value) | Self::ShellDerived(value) => Some(&value.text),
             Self::RepeatedFields(_)
             | Self::Arguments(_)
             | Self::Array(_)
@@ -398,6 +428,42 @@ impl Scope {
         contexts.extend(super::arrays::scalar_contexts(self));
         contexts
     }
+
+    pub fn pattern_contexts(
+        &self,
+        context: &BTreeMap<String, String>,
+    ) -> BTreeMap<String, Vec<std::ops::Range<usize>>> {
+        context
+            .iter()
+            .filter_map(|(name, text)| {
+                let values = &self.bindings.get(name)?.values;
+                let mut masks = values.iter().filter_map(|value| match value {
+                    BindingValue::ShellMatches(value) | BindingValue::ShellDerived(value)
+                        if &value.text == text =>
+                    {
+                        Some(&value.quoted_ranges)
+                    }
+                    _ => None,
+                });
+                let mut ranges = masks.next()?.clone();
+                for mask in masks {
+                    // Equal text from reachable branches may have different
+                    // syntax: only bytes quoted in every branch stay literal.
+                    ranges = ranges
+                        .iter()
+                        .flat_map(|range| {
+                            mask.iter().filter_map(|other| {
+                                let left = range.start.max(other.start);
+                                let right = range.end.min(other.end);
+                                (left < right).then_some(left..right)
+                            })
+                        })
+                        .collect();
+                }
+                Some((name.clone(), ranges))
+            })
+            .collect()
+    }
     fn repeated_word(&self, word: &crate::record::Word) -> bool {
         word.vars.iter().any(|name| {
             self.bindings.get(name).is_some_and(|binding| {
@@ -499,9 +565,9 @@ impl Scope {
         }
         if word.shell_matches {
             return if word.globs || word.expands {
-                BindingValue::ShellDerived(text.into())
+                BindingValue::ShellDerived(ShellValue::from_word(&word.with_text(text.into())))
             } else {
-                BindingValue::ShellMatches(text.into())
+                BindingValue::ShellMatches(ShellValue::from_word(&word.with_text(text.into())))
             };
         }
         let candidates = word.vars.iter().filter_map(|name| self.bindings.get(name));
@@ -830,12 +896,11 @@ fn widen_runtime_repetition(prior: &Scope, next: &mut Scope) {
                         BindingValue::Undetermined
                     } else if tail.contains('/') {
                         let prefix = prefix.strip_suffix("*/**/*").unwrap_or(prefix);
-                        BindingValue::ShellDerived(format!("{prefix}*/**/*{tail}"))
+                        BindingValue::ShellDerived(format!("{prefix}*/**/*{tail}").into())
                     } else {
-                        BindingValue::ShellDerived(format!(
-                            "{}*{tail}",
-                            prefix.trim_end_matches('*')
-                        ))
+                        BindingValue::ShellDerived(
+                            format!("{}*{tail}", prefix.trim_end_matches('*')).into(),
+                        )
                     };
                     break;
                 }
@@ -864,6 +929,7 @@ pub(super) struct Evaluator<'a, 'b> {
     function_runs: usize,
     unresolved_calls: Vec<(usize, bool)>,
     pub(super) deadline: Option<std::time::Instant>,
+    pub(super) parse_cache: BTreeMap<String, std::rc::Rc<super::SourceSyntax>>,
 }
 
 impl<'a, 'b> Evaluator<'a, 'b> {
@@ -877,6 +943,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             function_runs: 0,
             unresolved_calls: Vec::new(),
             deadline: None,
+            parse_cache: BTreeMap::new(),
         }
     }
     pub fn finish(&mut self) {
@@ -978,6 +1045,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             &super::words::ExpansionContext {
                 variables: &variables,
                 runtime_variables: &BTreeSet::new(),
+                pattern_variables: &scope.pattern_contexts(&variables),
                 host: self.frontend.host,
                 cwd: &cwd,
                 tilde_assigned: true,
@@ -1158,7 +1226,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 .map(|v| v.word.clone())
                 .unwrap_or_else(|| crate::record::Word::literal(String::new()));
             word.text = format!("{name}={}", word.text);
-            for range in &mut word.cwd_ranges {
+            for range in word.cwd_ranges.iter_mut().chain(&mut word.quoted_ranges) {
                 range.start += name.len() + 1;
                 range.end += name.len() + 1;
             }
@@ -1188,7 +1256,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 )? {
                     let mut word = expanded.word;
                     word.text = format!("{name}={}", word.text);
-                    for range in &mut word.cwd_ranges {
+                    for range in word.cwd_ranges.iter_mut().chain(&mut word.quoted_ranges) {
                         range.start += name.len() + 1;
                         range.end += name.len() + 1;
                     }
@@ -1467,7 +1535,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                                     .into()
                             });
                             self.source(&code, scope, depth + 1)?;
-                            // Binding-changing eval and function/prefix interactions need a fuller model.
+                            // Target inspection alone does not establish binding restoration after eval.
                             if !scope.frames.is_empty()
                                 || !prior.is_empty()
                                 || scope.state() != before
@@ -1943,7 +2011,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             let value = if w.expands {
                                 BindingValue::RuntimeUnknown(None)
                             } else if w.globs {
-                                BindingValue::ShellMatches(w.text)
+                                BindingValue::ShellMatches(ShellValue::from_word(&w))
                             } else {
                                 BindingValue::Known(w.text)
                             };
@@ -1954,7 +2022,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         let unsplit = if expanded.word.expands {
                             BindingValue::RuntimeUnknown(None)
                         } else if expanded.word.globs {
-                            BindingValue::ShellMatches(expanded.word.text)
+                            BindingValue::ShellMatches(ShellValue::from_word(&expanded.word))
                         } else {
                             BindingValue::Known(expanded.word.text)
                         };
@@ -1968,9 +2036,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 inner.bounded_loop = variable.is_some() && finite && count.is_some();
                 inner.conditional_append = false;
                 if !*empty
-                    && count.is_some()
                     && !values.is_empty()
-                    && finite
                     && let Some(variable) = variable
                     && self.loop_body_is_invariant(body, scope, variable)?
                 {
@@ -1984,7 +2050,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         completed += 1;
                         if !root
                             || inner.bindings == prior.bindings
-                            || completed >= count.unwrap_or(0)
+                            || count.is_some_and(|count| completed >= count)
                         {
                             break;
                         }
@@ -2221,7 +2287,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         Ok(())
     }
     fn loop_body_is_invariant(
-        &self,
+        &mut self,
         body: &[Statement],
         scope: &Scope,
         variable: &str,
@@ -2231,7 +2297,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let mut stable = BTreeSet::new();
         let local = BTreeSet::from([variable.to_owned()]);
         // A body without a carried input needs one candidate-union analysis.
-        // Stateful builtins, functions, repeated loop names and dynamic writes
+        // Stateful builtins, recursive functions, repeated loop names and dynamic writes
         // retain the sequential/convergence owner and its conservative limits.
         Ok(
             self.loop_inputs(body, scope, &local, &mut inputs, &mut writes, &mut stable)?
@@ -2241,7 +2307,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         )
     }
     fn loop_word_inputs(
-        &self,
+        &mut self,
         word: &RawWord,
         scope: &Scope,
         local: &BTreeSet<String>,
@@ -2257,6 +2323,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             &super::words::ExpansionContext {
                 variables: &variables,
                 runtime_variables: &BTreeSet::new(),
+                pattern_variables: &scope.pattern_contexts(&variables),
                 cwd: &cwd,
                 host: self.frontend.host,
                 tilde_assigned: true,
@@ -2284,7 +2351,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             );
         }
         for name in &expanded.word.vars {
-            if !local.contains(name) {
+            if !local.contains(name) && !(local.contains("@") && name.parse::<usize>().is_ok()) {
                 inputs.insert(name.clone());
             }
         }
@@ -2300,17 +2367,18 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             }
         }
         for source in sources {
-            let Some(body) = super::brush::records(&source, &source)?.records else {
+            let parsed = self.parsed_source(&source)?;
+            let Some(body) = &parsed.original else {
                 return Ok(None);
             };
-            if !self.loop_inputs(&body, scope, local, inputs, writes, stable)? {
+            if !self.loop_inputs(body, scope, local, inputs, writes, stable)? {
                 return Ok(None);
             }
         }
         Ok(Some(expanded))
     }
     fn loop_inputs(
-        &self,
+        &mut self,
         body: &[Statement],
         scope: &Scope,
         local: &BTreeSet<String>,
@@ -2432,7 +2500,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         let program = &words[index];
                         if program.expands
                             || !program.vars.is_empty()
-                            || self.functions.contains_key(&program.text)
                             || matches!(
                                 program.rsplit('/').next(),
                                 Some(
@@ -2458,6 +2525,27 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                                 && words.get(index + 1).is_some_and(|w| w == "-v")
                         {
                             return Ok(false);
+                        }
+                        if let Some(function) = self.functions.get(&program.text).cloned() {
+                            if self.running.len() >= MAX_NESTING
+                                || !self.running.insert(program.text.clone())
+                            {
+                                return Ok(false);
+                            }
+                            let mut function_local = local.clone();
+                            function_local.extend(["@".into(), "*".into(), "#".into()]);
+                            let invariant = self.loop_inputs(
+                                &function.body,
+                                scope,
+                                &function_local,
+                                inputs,
+                                writes,
+                                stable,
+                            );
+                            self.running.remove(&program.text);
+                            if !invariant? {
+                                return Ok(false);
+                            }
                         }
                     }
                     for redirect in redirects {
@@ -2971,9 +3059,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 vec![if matches!(binding, BindingValue::RepeatedFields(_)) {
                     binding
                 } else if word.shell_matches && word.expands {
-                    BindingValue::ShellDerived(word.text.clone())
+                    BindingValue::ShellDerived(ShellValue::from_word(word))
                 } else if word.shell_matches {
-                    BindingValue::ShellMatches(word.text.clone())
+                    BindingValue::ShellMatches(ShellValue::from_word(word))
                 } else if word.expands {
                     BindingValue::RuntimeUnknown(None)
                 } else {
@@ -3054,8 +3142,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
             }
         }
-        // D48b applies the wrapper's effective environment before the Git owner
-        // sees it; a child shell inherits the same values, including overrides.
+        // Apply the wrapper's environment before the Git role owner sees it;
+        // a child shell inherits the same effective overrides.
         for change in environment {
             match change {
                 super::argv::EnvironmentChange::Clear => command.environment.clear(),
@@ -3444,8 +3532,15 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         for value in &values {
             let BindingValue::Known(value) = value else {
                 if value == &BindingValue::Undetermined
-                    || matches!(value, BindingValue::RuntimeDerived(text) | BindingValue::ShellDerived(text)
-                        if !matches!(super::arithmetic::armed(text), super::arithmetic::Arming::Inert))
+                    || matches!(
+                        value,
+                        BindingValue::RuntimeDerived(_) | BindingValue::ShellDerived(_)
+                    ) && value.lexical().is_some_and(|text| {
+                        !matches!(
+                            super::arithmetic::armed(text),
+                            super::arithmetic::Arming::Inert
+                        )
+                    })
                 {
                     self.output.gap(CoverageGap::UnsupportedShellSyntax);
                 }
@@ -3505,6 +3600,59 @@ fn compatible_arguments(previous: &[crate::record::Word], choice: &[crate::recor
 
 #[cfg(test)]
 mod candidate_cost {
+    #[test]
+    fn unknown_loop_candidates_converge_before_nested_branching() {
+        let count = |width, depth| {
+            let fields = (0..width)
+                .map(|n| format!("public{n}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let mut source = format!("inspect() {{ cat \"$1\"; }}; for path in {fields}; do ");
+            for level in 0..depth {
+                source.push_str(&format!("for k{level} in $(printf public); do "));
+            }
+            source.push_str("out=$(inspect \"$path\"); cat \"$path\"; ");
+            source.push_str(&"done; ".repeat(depth + 1));
+            let output = crate::shell::observe(
+                &source,
+                crate::shell::Arm::Brush,
+                "/synthetic/home",
+                "/synthetic/project",
+                false,
+            )
+            .unwrap();
+            assert!(
+                !output.gaps.contains(&crate::CoverageGap::InspectionBudget),
+                "width={width} depth={depth}: {:?}",
+                output.gaps
+            );
+            for index in 0..width {
+                assert!(
+                    output.script.commands.iter().any(|command| command
+                        .argv
+                        .first()
+                        .is_some_and(|w| w == "cat")
+                        && command.argv[1] == format!("public{index}").as_str())
+                );
+            }
+            (
+                output.statement_visits,
+                output.script.commands.len(),
+                output.parse_builds,
+            )
+        };
+        let widths = [2, 4, 8, 16].map(|width| count(width, 2));
+        let depths = [1, 2, 4, 8].map(|depth| count(4, depth));
+        println!("unknown loop candidates widths={widths:?}, depths={depths:?}");
+        for (small, large) in widths
+            .iter()
+            .zip(widths.iter().skip(1))
+            .chain(depths.iter().zip(depths.iter().skip(1)))
+        {
+            assert!(large.0 <= small.0 * 3 && large.1 <= small.1 * 3 && large.2 == small.2);
+        }
+    }
+
     #[test]
     fn substitution_body_is_observed_once_per_candidate_union() {
         for width in [2, 4, 8] {

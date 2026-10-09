@@ -85,7 +85,7 @@ fn nesting_frontier_completes_on_default_test_stack() {
         receipt
             .lines()
             .find_map(|line| line.strip_prefix("frontier_receipt="))
-            .expect("child must report every completed frontier observation"),
+            .unwrap_or_else(|| panic!("child must report every completed frontier observation")),
     )
     .unwrap();
     assert_eq!(observed, ids);

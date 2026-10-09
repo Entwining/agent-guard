@@ -49,7 +49,7 @@ fn field(input: &Value, key: &str) -> Result<String, CheckError> {
 }
 
 fn folded_tool_name(name: &str) -> String {
-    // Go folds each rune independently; full mappings would expand U+0130.
+    // Fold one Unicode scalar at a time; full mappings would expand U+0130.
     name.chars()
         .map(|c| c.to_lowercase().next().unwrap_or(c))
         .collect()
@@ -156,8 +156,8 @@ pub(crate) fn decode_protocol(
         });
     }
     let folded_name = folded_tool_name(name);
-    // Go's native stdin protocol uses file_path for every runtime; Pi's
-    // tool-facing input is a separate channel whose adapter owns path.
+    // Native stdin uses file_path for every runtime; Pi's tool-facing input
+    // is a separate protocol with its own path field.
     let pi_path = if protocol == Protocol::Native {
         "file_path"
     } else {
@@ -251,7 +251,7 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
                         .map(|a| a.message())
                         .collect::<Vec<_>>()
                         .join("\n");
-                    // native/core/protocol.go owns the byte order of this protocol.
+                    // Keep the established field order for byte-stable hook output.
                     let context = json!(context);
                     wire.stdout = format!(
                         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\"additionalContext\":{context}}}}}\n"
@@ -275,7 +275,6 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
 }
 
 fn denial_text(consumer: Consumer, reason: &str) -> String {
-    // native/core/protocol.go:76-81 owns consumer framing.
     if consumer == Consumer::Claude {
         format!(
             "DENIED: {reason} Do NOT bypass this restriction or retry the same blocked command.\n"

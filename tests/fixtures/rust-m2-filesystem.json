@@ -22,14 +22,14 @@
     {"id":"pattern-prefix-public","source":"cat /h/public*/item","expected":"N"},
     {"id":"use-appdata","source":"[[ -d /h/Library/Containers ]]","expected":"D"},
     {"id":"use-credential","source":"[[ -d /h/.env ]]","expected":"N"},
-    {"id":"role-du-list","source":"du -sh /h/Library/Containers","expected":"D","role":"List","owner":"native/targets/programs.go:58"},
-    {"id":"role-find-list","source":"find /h/Library/Containers","expected":"D","role":"List","owner":"native/targets/programs.go:95"},
-    {"id":"role-fd-list","source":"fd needle /h/Library/Containers","expected":"D","role":"List","owner":"native/targets/programs.go:96"},
-    {"id":"role-rg-files-list","source":"rg --files /h/Library/Containers","expected":"D","role":"List","owner":"native/targets/search.go:17"},
-    {"id":"role-env-file-use","source":"node --env-file=/h/Library/Containers/item app.js","expected":"D","role":"Use","owner":"native/targets/programs.go:81"},
-    {"id":"role-git-c-enter","source":"git -C /h/Library/Containers status","expected":"D","role":"Enter","owner":"native/targets/git.go:42"},
-    {"id":"role-git-worktree-enter","source":"git --work-tree=/h/Library/Containers status","expected":"D","role":"Enter","owner":"native/targets/git.go:42"},
-    {"id":"role-git-metadata-meta","source":"git status ignored /h/Library/Containers","expected":"D","role":"Meta","owner":"native/targets/git.go:57"}
+    {"id":"role-du-list","source":"du -sh /h/Library/Containers","expected":"D","role":"List","owner":"src/targets.rs::infer_listing"},
+    {"id":"role-find-list","source":"find /h/Library/Containers","expected":"D","role":"List","owner":"src/targets.rs::infer_listing"},
+    {"id":"role-fd-list","source":"fd needle /h/Library/Containers","expected":"D","role":"List","owner":"src/targets.rs::infer_listing"},
+    {"id":"role-rg-files-list","source":"rg --files /h/Library/Containers","expected":"D","role":"List","owner":"src/targets.rs::infer_search"},
+    {"id":"role-env-file-use","source":"node --env-file=/h/Library/Containers/item app.js","expected":"D","role":"Use","owner":"src/targets.rs::infer_at"},
+    {"id":"role-git-c-enter","source":"git -C /h/Library/Containers status","expected":"D","role":"Enter","owner":"src/targets.rs::infer_git"},
+    {"id":"role-git-worktree-enter","source":"git --work-tree=/h/Library/Containers status","expected":"D","role":"Enter","owner":"src/targets.rs::infer_git"},
+    {"id":"role-git-metadata-meta","source":"git status ignored /h/Library/Containers","expected":"D","role":"Meta","owner":"src/targets.rs::infer_git"}
   ],
   "paths": [
     {"id":"data-root","path":"/System/Volumes/Data","public":"/","catalog":"/Users\tUsers\n"},

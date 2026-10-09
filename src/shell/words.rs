@@ -165,6 +165,7 @@ pub(super) fn single_literal(raw: &str) -> Option<String> {
 pub(super) struct ExpansionContext<'a> {
     pub variables: &'a BTreeMap<String, String>,
     pub runtime_variables: &'a std::collections::BTreeSet<String>,
+    pub pattern_variables: &'a BTreeMap<String, Vec<std::ops::Range<usize>>>,
     pub host: crate::record::HostFacts<'a>,
     pub cwd: &'a str,
     pub tilde_assigned: bool,
@@ -315,6 +316,16 @@ pub(super) fn expand(
                     } else {
                         None
                     }
+                })
+                .collect();
+            word.quoted_ranges = out
+                .word
+                .quoted_ranges
+                .iter()
+                .filter_map(|range| {
+                    let left = range.start.max(start);
+                    let right = range.end.min(end);
+                    (left < right).then(|| left - start..right - start)
                 })
                 .collect();
             if out.word.cwd_ranges.iter().any(|range| {
@@ -607,6 +618,7 @@ fn fill(
             continue;
         }
         let start = out.word.text.len();
+        let mut inherited_pattern = false;
         match &piece.piece {
             WordPiece::Text(text) => {
                 out.word.text.push_str(&text.replace("\\\n", ""));
@@ -742,6 +754,19 @@ fn fill(
                         .or_else(|| (name == "HOME").then_some(host.home))
                         .or_else(|| (name == "PWD").then_some(expansion.cwd))
                 }) {
+                    if let Some(ranges) = plain
+                        .as_ref()
+                        .and_then(|name| expansion.pattern_variables.get(name))
+                    {
+                        // A captured pathname expansion keeps its original
+                        // pattern domain through a later quoted reference.
+                        out.word.quoted_ranges.extend(
+                            ranges
+                                .iter()
+                                .map(|range| start + range.start..start + range.end),
+                        );
+                        inherited_pattern = true;
+                    }
                     if plain.as_deref() == Some("PWD") && !variables.contains_key("PWD") {
                         out.word.pwd = true;
                         out.word
@@ -754,14 +779,14 @@ fn fill(
                     {
                         out.word.runtime_unknown = true;
                         out.unknown_splitting |= !quoted;
-                        // R41 keeps lexical target inference. These bytes describe
-                        // unknown output, so their whitespace is not a field boundary.
+                        // Lexical representatives describe unknown output;
+                        // their whitespace is not a runtime field boundary.
                         out.lexical_ranges
                             .push(out.word.text.len()..out.word.text.len() + value.len());
                     }
                     out.word.text.push_str(value);
                     *splitting |= !quoted;
-                    // D1 retains Bash pathname expansion even when Zsh leaves the binding literal.
+                    // Keep Bash pathname expansion even when Zsh leaves the binding literal.
                     out.word.globs |= !quoted && value.contains(['*', '?', '[']);
                 } else {
                     out.word.text.push_str(spelling);
@@ -834,6 +859,14 @@ fn fill(
             )
         {
             out.lexical_ranges.push(start..out.word.text.len());
+            if !inherited_pattern
+                && !matches!(
+                    piece.piece,
+                    WordPiece::DoubleQuotedSequence(_) | WordPiece::GettextDoubleQuotedSequence(_)
+                )
+            {
+                out.word.quoted_ranges.push(start..out.word.text.len());
+            }
         }
     }
     Ok(())
@@ -1007,7 +1040,7 @@ pub(super) fn ansi(text: &str) -> String {
                     digits.push(ch);
                 }
             }
-            // Go accepts one or two hex digits, exactly four Unicode digits, or up to three octal digits.
+            // Hex accepts one or two digits, Unicode exactly four, and octal up to three.
             if !digits.is_empty() && (ch != 'u' || digits.len() == 4) {
                 out.push(
                     u32::from_str_radix(&digits, radix)

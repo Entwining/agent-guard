@@ -94,7 +94,6 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
                     index = argv.len();
                 }
             }
-            // The Go unwrapper owns these boundaries (native/shell/argv.go:66-147).
             // Assignments after the boundary are executable names, unless the
             // wrapper itself accepts assignments (env, sudo and doas).
             "exec" if result.shell && text(argv, index) == "exec" => {

@@ -5,7 +5,8 @@ use crate::record::{Direction, Effect, HostFacts, OptionRole, Role, Via, Walk, W
 mod clients;
 mod secrets;
 const READERS: &str = "cat head tail less more bat sed awk jq yq base64 xxd od strings diff openssl plutil cp tee tar source . sort uniq cut nl fold rev paste comm join iconv hexdump hd zcat gzcat bzcat xzcat ag ack tac column pr vim vi nvim view perl ruby dd scp rsync zip ed ex hg svn sh bash zsh dash ksh wget php zgrep zless zmore";
-const DATA_PROGRAMS: &str = "echo printf print : true false export set unset typeset declare local";
+const DATA_PROGRAMS: &str =
+    "echo printf print : true false export set unset typeset declare local kill";
 
 #[cfg(test)]
 mod message_roles {
@@ -35,6 +36,10 @@ mod message_roles {
 
 #[derive(Debug, Default)]
 pub struct Effects {
+    #[cfg(test)]
+    owner_visits: usize,
+    #[cfg(test)]
+    argv_words: usize,
     pub(crate) independent_arguments: bool,
     pub targets: Vec<Target>,
     pub gaps: Vec<CoverageGap>,
@@ -60,6 +65,11 @@ pub fn infer(command: &CommandRecord, cwd: &str, host: HostFacts<'_>) -> Effects
 
 fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usize) -> Effects {
     let mut effects = Effects::default();
+    #[cfg(test)]
+    {
+        effects.owner_visits += 1;
+        effects.argv_words += command.argv.len();
+    }
     if depth > crate::limits::MAX_NESTING {
         effects.gaps.push(CoverageGap::InspectionBudget);
         return effects;
@@ -83,6 +93,16 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             Via::Redirect,
         );
         target.glob = redirect.globs || redirect.shell_matches;
+        target.pattern = redirect.pattern.as_ref().map(|pattern| {
+            crate::filesystem::absolute_pattern(
+                &crate::filesystem::expand_home(
+                    pattern,
+                    &crate::filesystem::literal_shell_pattern(host.home),
+                    host.user,
+                ),
+                cwd,
+            )
+        });
         target.glob_hidden = !redirect.globs && !redirect.shell_matches;
         target.expands = redirect.expands;
         target.runtime_unknown = redirect.runtime_unknown;
@@ -252,6 +272,13 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
                 && args.iter().all(|arg| !arg.starts_with('-'));
         }
         "tr" => {}
+        "kill" => {
+            effects.independent_arguments = true;
+            effects.targets.extend(
+                args.iter()
+                    .map(|arg| Target::from_word(arg, cwd, host, Effect::Name, Walk::None)),
+            );
+        }
         "mktemp" => {
             effects.gaps.push(CoverageGap::UnknownProgram {
                 program: program.into(),
@@ -271,8 +298,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         "df" | "stat" | "test" | "[" | "chmod" | "chown" | "chgrp" | "chflags" | "touch"
         | "rmdir" | "mkdir" | "mv" | "ln" | "wc" | "file" | "shasum" | "sha1sum" | "sha256sum"
         | "md5" | "md5sum" | "cksum" | "realpath" | "readlink" | "basename" | "dirname" => {
-            // native/targets/programs.go:42-48 assigns metadata, with no walk
-            // for stat/test/[ /mkdir/mv and visible walk for the other entries.
+            // Metadata and content-read roles have different credential decisions;
+            // visible walks still check protected App Data ownership.
             let walk = if ["df", "stat", "test", "[", "mkdir", "mv", "readlink"].contains(&program)
             {
                 Walk::None
@@ -394,8 +421,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             generic_walk = Some(Walk::Visible);
         }
         "jq" | "yq" => {
-            // native/targets/programs.go:172-192 claims the filter, while
-            // -f/--from-file leaves the filter-file operand readable.
+            // The command-line filter is data; -f/--from-file names a readable file.
             if !args.iter().any(|arg| arg == "-f" || arg == "--from-file") {
                 let mut operands = args
                     .iter()
@@ -417,7 +443,6 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             generic_walk = Some(Walk::Visible);
         }
         "rm" => {
-            // native/targets/programs.go:42-48 assigns metadata operands.
             effects.targets.extend(
                 args.iter()
                     .filter(|word| !word.starts_with('-'))
@@ -425,8 +450,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             );
         }
         "git" => {
-            // D48 gives shell-supplied locations the Go option roles
-            // (native/targets/git.go:26-48); Go does not yet infer these env values.
+            // Environment-supplied locations keep the corresponding option
+            // roles, even when no location flag appears in argv.
             for (name, value) in &command.environment {
                 let effect = match name.as_str() {
                     "GIT_DIR" => Effect::Read,
@@ -467,30 +492,43 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
         "python" | "python3" | "node" | "bun" | "ruby" | "perl" | "php" | "osascript" | "lua"
         | "deno" => {
-            effects.gaps.push(CoverageGap::InterpreterChosenRead);
-            let (code, claimed) = interpreter_code(program, args);
-            for code in code {
-                if code.contains("json.load") {
-                    effects.gaps.push(CoverageGap::UnresolvedTarget);
+            if program == "perl"
+                && command.stdin == crate::record::Stdin::None
+                && let Some(forwarded) = perl_exec_argv(args)
+            {
+                // A fixed multivalued exec list does not select a Perl file read.
+                // Its program owns argument roles; a scalar exec has shell semantics.
+                effects.independent_arguments = true;
+                if forwarded[0].contains('/') {
+                    effects.targets.push(read(&forwarded[0], false));
                 }
-                effects.inline.push(code);
-            }
-            for (index, arg) in args.iter().enumerate() {
-                if let Some(path) = arg
-                    .strip_prefix("--env-file=")
-                    .or_else(|| arg.strip_prefix("--env-file-if-exists="))
-                {
-                    let target = Target::from_word(
-                        &arg.with_text(path.to_owned()),
-                        cwd,
-                        host,
-                        Effect::Use,
-                        Walk::None,
-                    );
-                    effects.targets.push(target);
+                infer_wrapper("perl", forwarded, command, cwd, host, &mut effects, depth);
+            } else {
+                effects.gaps.push(CoverageGap::InterpreterChosenRead);
+                let (code, claimed) = interpreter_code(program, args);
+                for code in code {
+                    if code.contains("json.load") {
+                        effects.gaps.push(CoverageGap::UnresolvedTarget);
+                    }
+                    effects.inline.push(code);
                 }
-                if !claimed.contains(&index) && !arg.starts_with('-') {
-                    effects.targets.push(read(arg, false));
+                for (index, arg) in args.iter().enumerate() {
+                    if let Some(path) = arg
+                        .strip_prefix("--env-file=")
+                        .or_else(|| arg.strip_prefix("--env-file-if-exists="))
+                    {
+                        let target = Target::from_word(
+                            &arg.with_text(path.to_owned()),
+                            cwd,
+                            host,
+                            Effect::Use,
+                            Walk::None,
+                        );
+                        effects.targets.push(target);
+                    }
+                    if !claimed.contains(&index) && !arg.starts_with('-') {
+                        effects.targets.push(read(arg, false));
+                    }
                 }
             }
         }
@@ -537,9 +575,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             effects.gaps.push(CoverageGap::UnknownProgram {
                 program: program.to_owned(),
             });
-            // The generic owner reads operands independently (Go
-            // native/targets/infer.go:187-209); unknown width cannot move an
-            // operand between roles unless it is an option value or spelling.
+            // Unknown width cannot move independent operands between roles
+            // unless a candidate can become an option or consume its value.
             effects.independent_arguments = !modelled_program(program)
                 && independent_operands(args, args)
                 && args.iter().all(|word| {
@@ -548,8 +585,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             generic_walk = Some(Walk::Visible);
         }
     }
-    // Go's generic operand loop owns unclaimed glued values, including readers
-    // (native/targets/infer.go:79-95,187-209); special adapters retain their roles.
+    // Unclaimed glued values reach the generic operand role; program-specific
+    // adapters retain ownership of the arguments they already claimed.
     if let Some(walk) = generic_walk {
         for (index, arg) in args.iter().enumerate() {
             if !claimed.contains(&index)
@@ -589,10 +626,9 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         || args
             .iter()
             .any(|word| word.cardinality_unknown && word.expands)
-            && effects
-                .targets
-                .iter()
-                .any(|target| target.effect != Effect::Name)
+            && effects.targets.iter().any(|target| {
+                target.effect != Effect::Name && !matches!(target.via, Via::Redirect | Via::Cwd)
+            })
         || command
             .environment
             .iter()
@@ -614,8 +650,8 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             .iter()
             .flat_map(|r| &r.vars)
             .any(|name| secret_name(name));
-    // Go's command cwd owner (native/targets/infer.go:219-226) also covers
-    // unknown programs; reader arguments alone do not model their behavior.
+    // Unknown programs also enter the command cwd; identifying their readable
+    // arguments does not model the rest of their behavior.
     let named = effects.targets.iter().any(|target| {
         matches!(target.via, Via::Operand | Via::Cwd | Via::Scan)
             && !matches!(target.effect, Effect::Enter | Effect::Name)
@@ -645,8 +681,8 @@ fn label_options<'a>(
 ) -> std::borrow::Cow<'a, [Word]> {
     let mut labelled = std::borrow::Cow::Borrowed(args);
     let mut options = true;
-    // Go resolves program options before GlobalOptions (infer.go:87-104).
-    // Keep values in place so an adapter can claim a stronger program role.
+    // Program options take precedence over generic name-only options;
+    // keep values in place for the adapter that owns their role.
     for (index, word) in args.iter().enumerate() {
         if word == "--" {
             options = false;
@@ -687,10 +723,100 @@ fn label_options<'a>(
 }
 
 fn modelled_program(program: &str) -> bool {
-    // Keep the model boundary aligned with native/targets/programs.go Specs.
+    // A partial option adapter does not by itself model the whole command.
     READERS.split_whitespace().chain(DATA_PROGRAMS.split_whitespace()).chain(
         "stat test [ chmod chown chgrp chflags touch rm rmdir mkdir mv ln wc file shasum sha1sum sha256sum md5 md5sum cksum realpath readlink basename dirname cd pushd popd gh ls tree du install sftp curl git docker node bun deno kubectl ssh ssh-add ssh-keygen dotenvx npm pnpm yarn rg grep find fd".split_whitespace()
     ).any(|name| name == program)
+}
+
+#[cfg(test)]
+mod process_arguments {
+    use super::*;
+
+    fn command(argv: Vec<Word>) -> CommandRecord {
+        let mut record = crate::shell::observe(
+            "true",
+            crate::shell::Arm::Brush,
+            "/synthetic/home",
+            "/synthetic/project",
+            true,
+        )
+        .unwrap()
+        .script
+        .commands
+        .remove(0);
+        record.argv = argv;
+        record
+    }
+
+    #[test]
+    fn kill_unknown_width_visits_names_without_read_targets() {
+        for width in [8, 16, 32, 64] {
+            let mut argv = vec![Word::literal("kill".into()), Word::literal("--".into())];
+            argv.extend((0..width).map(|n| {
+                let mut word = Word::literal(format!("pid{n}"));
+                word.cardinality_unknown = true;
+                word.field_count_unknown = true;
+                word.expands = true;
+                word.runtime_unknown = true;
+                word
+            }));
+            let effects = infer(
+                &command(argv),
+                "/synthetic/project",
+                HostFacts {
+                    home: "/synthetic/home",
+                    user: None,
+                },
+            );
+            assert!(!effects.gaps.contains(&CoverageGap::UnsupportedShellSyntax));
+            assert_eq!(effects.targets.len(), width + 1);
+            assert!(
+                effects
+                    .targets
+                    .iter()
+                    .all(|target| target.effect == Effect::Name)
+            );
+            assert_eq!(effects.owner_visits, 1);
+            assert_eq!(effects.argv_words, width + 2);
+        }
+    }
+
+    #[test]
+    fn perl_argv_forwarding_visits_each_owner_once() {
+        for width in [2, 4, 8, 16] {
+            for depth in [1, 2, 4, 8] {
+                let mut argv = Vec::new();
+                for _ in 0..depth {
+                    argv.extend(
+                        ["perl", "-e", "alarm 10; exec @ARGV"].map(|v| Word::literal(v.into())),
+                    );
+                }
+                argv.push(Word::literal("kill".into()));
+                argv.extend((0..width).map(|n| Word::literal(format!("pid{n}"))));
+                let effects = infer(
+                    &command(argv),
+                    "/synthetic/project",
+                    HostFacts {
+                        home: "/synthetic/home",
+                        user: None,
+                    },
+                );
+                assert!(!effects.gaps.contains(&CoverageGap::InterpreterChosenRead));
+                assert_eq!(effects.owner_visits, depth + 1);
+                assert!(effects.argv_words <= (depth + 1) * (width + 3 * depth + 1));
+                assert_eq!(
+                    effects
+                        .targets
+                        .iter()
+                        .filter(|target| target.effect == Effect::Name)
+                        .count(),
+                    width
+                );
+                assert!(effects.targets.len() <= width + depth + 1);
+            }
+        }
+    }
 }
 
 fn printenv_signature(code: &str) -> bool {
@@ -812,6 +938,11 @@ fn infer_wrapper(
     }
     let nested = child(command, &args[index..], &cwd);
     let mut result = infer_at(&nested, &cwd, host, depth + 1);
+    #[cfg(test)]
+    {
+        effects.owner_visits += result.owner_visits;
+        effects.argv_words += result.argv_words;
+    }
     if cwd != command.cwd {
         for target in &mut result.targets {
             target.path = at(&target.path, &cwd);
@@ -922,8 +1053,8 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
                 option_walk,
             ));
         }
-        // gitTargets leaves this value unclaimed (native/targets/git.go:26-48),
-        // so commandTargets' operand fallback reads it at the command cwd.
+        // Repository-directory values retain the read role at the command cwd,
+        // independently of the work-tree base used for pathspecs.
         let directory = arg
             .strip_prefix("--git-dir=")
             .map(|text| arg.with_text(text.to_owned()))
@@ -944,7 +1075,7 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
         if arg == "-c"
             && let Some(value) = args.get(index + 1)
         {
-            // Go leaves -c's value for the Read operand fallback (git.go:26-48).
+            // Configuration values retain the generic operand's read role.
             effects.targets.push(Target::from_word(
                 value,
                 cwd,
@@ -959,7 +1090,7 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
         return;
     };
     index += 1;
-    // native/rules/secrets.go:166-177 owns credential fill as SecretPrint.
+    // Credential fill exposes stored secrets without naming a file to read.
     effects.stored_secret |=
         sub == "credential" && args.get(index).is_some_and(|arg| arg == "fill");
     let names="branch tag remote switch push fetch pull merge rebase cherry-pick revert reflog rev-parse describe bisect init clone submodule worktree config lfs sparse-checkout".split_whitespace().any(|name|name==sub.as_str());
@@ -1051,7 +1182,7 @@ fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effect
         if let Some(path) = option_path {
             add(&path, &path, Effect::Read, Walk::None, effects);
         } else if !options || !arg.starts_with('-') {
-            // native/targets/git.go:109-151 claims the action and writes create's file.
+            // A bundle action is data; only create's first file is an output.
             if sub == "bundle" && bundle_action.is_none() {
                 bundle_action = Some(arg.text.clone());
                 index += 1;
@@ -1133,7 +1264,7 @@ fn interpreter_code(program: &str, args: &[Word]) -> (Vec<String>, Vec<usize>) {
         } else if arg.starts_with('-') && !arg.starts_with("--") {
             for (offset, ch) in arg.char_indices().skip(1) {
                 // Perl's in-place suffix is attached only; a bare -i does not
-                // consume the next word (native/shell/interpreters.go:75-77).
+                // consume the next word.
                 if program == "perl" && ch == 'i' {
                     break;
                 }
@@ -1164,6 +1295,76 @@ fn interpreter_code(program: &str, args: &[Word]) -> (Vec<String>, Vec<usize>) {
         index += 1;
     }
     (found, claimed)
+}
+
+fn perl_exec_argv(args: &[Word]) -> Option<&[Word]> {
+    let mut sources = Vec::new();
+    let mut index = 0;
+    while let Some(arg) = args.get(index) {
+        if arg.expands || arg.runtime_unknown || arg.cardinality_unknown {
+            return None;
+        }
+        if arg == "--" {
+            index += 1;
+            break;
+        }
+        if let Some(code) = arg.strip_prefix("-e").or_else(|| arg.strip_prefix("-E")) {
+            if code.is_empty() {
+                index += 1;
+                let code = args.get(index)?;
+                if code.expands || code.runtime_unknown || code.cardinality_unknown {
+                    return None;
+                }
+                sources.push(code.text.clone());
+            } else {
+                sources.push(code.to_owned());
+            }
+        } else if arg.starts_with('-') {
+            return None;
+        } else {
+            break;
+        }
+        index += 1;
+    }
+    if sources.is_empty() {
+        return None;
+    }
+    let source = sources.join("\n");
+    let source = source
+        .lines()
+        .map(|line| line.split_once('#').map_or(line, |(code, _)| code))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut statements = source
+        .split(';')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>();
+    if statements.pop()?.strip_prefix("exec")?.trim() != "@ARGV" {
+        return None;
+    }
+    if !statements.iter().all(|statement| {
+        statement.strip_prefix("alarm").is_some_and(|value| {
+            value.starts_with(char::is_whitespace)
+                && !value.trim().is_empty()
+                && value.trim().bytes().all(|byte| byte.is_ascii_digit())
+        })
+    }) {
+        return None;
+    }
+    let forwarded = &args[index..];
+    // Two guaranteed fields select execvp list semantics, even if later array
+    // fields have unknown width. An unresolved program retains the interpreter owner.
+    if forwarded.len() < 2
+        || forwarded[..2].iter().any(|word| word.cardinality_unknown)
+        || forwarded[0].starts_with('-')
+        || forwarded[0].expands
+        || forwarded[0].runtime_unknown
+        || forwarded[0].globs
+    {
+        return None;
+    }
+    Some(forwarded)
 }
 
 fn infer_listing(
@@ -1668,7 +1869,7 @@ fn infer_search(
         patterns.push(operands.remove(0).text);
     }
     effects.independent_arguments = independent_operands(args, &operands);
-    // native/rules/workflow.go:24-32 applies BRE advice only to pattern roles.
+    // Regex advice applies to patterns, never to path operands or fixed strings.
     effects.bre_advice = program == "rg"
         && !fixed
         && patterns.iter().any(|pattern| {
@@ -1744,8 +1945,7 @@ pub fn code_paths(code: &str) -> Vec<String> {
         let ch = code[cursor..].chars().next().unwrap_or_default();
         if ch.is_alphanumeric() || matches!(ch, '.' | '/' | '~' | '_' | '$') {
             let start = cursor;
-            // Go's uninspectable-code owner recognizes a braced HOME prefix
-            // as one token (native/rules/appdata.go:59).
+            // Keep the braced HOME prefix in one pathname token.
             if code[cursor..]
                 .get(..7)
                 .is_some_and(|prefix| prefix.eq_ignore_ascii_case("${HOME}"))

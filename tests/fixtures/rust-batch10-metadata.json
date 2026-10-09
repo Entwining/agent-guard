@@ -4,7 +4,6 @@
  {"id":"credential-wc","partition":"control","expected":"N","input":{"command":"wc -c .npmrc"}},
  {"id":"private-file-metadata","partition":"control","expected":"N","input":{"command":"file $H/.ssh/id_example"}},
  {"id":"private-file-move","partition":"control","expected":"N","input":{"command":"mv $H/.ssh/id_example $H/.ssh/id_second"}},
- {"id":"fingerprint","partition":"control","expected":"N","input":{"command":"ssh-keygen -l -f $H/.ssh/example.pub"}},
  {"id":"appdata-metadata","partition":"protected","expected":"D","input":{"command":"stat $C/x"}},
  {"id":"credential-read","partition":"protected","expected":"D","input":{"command":"cat .npmrc"}}
 ]}

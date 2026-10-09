@@ -65,7 +65,8 @@ pub fn check(
     let mut bytes = Vec::new();
     let result = (|| -> io::Result<_> {
         input.read_to_end(&mut bytes)?;
-        let home = std::fs::canonicalize(std::env::var_os("HOME").unwrap_or_default())?;
+        let home =
+            crate::filesystem::canonicalize_home(std::env::var_os("HOME").unwrap_or_default())?;
         let home = home
             .to_str()
             .ok_or_else(|| io::Error::other("HOME is not UTF-8"))?;
@@ -131,8 +132,8 @@ pub fn supervise(command: &mut Command) -> io::Result<i32> {
 
 pub fn run(args: &[String]) -> io::Result<i32> {
     let mut child = Command::new(std::env::current_exe()?);
-    // Both descriptors point at the same destination, as in the Go runner.
-    // No intermediary pipe can stall while the parent waits for the checker.
+    // Sharing the stdout destination avoids an intermediary pipe that could
+    // stall while the parent waits for the checker.
     let stdout = io::stdout().as_fd().try_clone_to_owned()?;
     child
         .arg("--supervised-checker")

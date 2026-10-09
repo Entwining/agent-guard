@@ -11,6 +11,7 @@ mod words;
 
 use crate::{CheckError, CheckErrorKind, CoverageGap, limits::MAX_NESTING};
 use std::ops::Range;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Arm {
@@ -18,7 +19,7 @@ pub enum Arm {
     Brush,
 }
 
-/// D25: parse comparators never contribute semantic observations.
+/// Parse comparators never contribute semantic observations.
 pub const ACCEPTANCE_ARMS: &[Arm] = &[Arm::Brush];
 
 #[derive(Debug, Clone)]
@@ -106,6 +107,12 @@ struct Parsed {
     spans: Vec<Range<usize>>,
 }
 
+struct SourceSyntax {
+    original: Option<Rc<Vec<Statement>>>,
+    records: Option<Rc<Vec<Statement>>>,
+    detection: Option<divergence::Detection>,
+}
+
 pub use crate::record::{Command as CommandRecord, Redirect, Word};
 
 #[derive(Debug, Default)]
@@ -123,6 +130,10 @@ pub struct Observation {
     candidate_pairs: usize,
     #[cfg(test)]
     pub(crate) source_entries: usize,
+    #[cfg(test)]
+    pub(crate) parse_builds: usize,
+    #[cfg(test)]
+    context_delta_entries: usize,
     #[cfg(test)]
     pub(crate) cwd_candidates: usize,
     #[cfg(test)]
@@ -225,6 +236,51 @@ struct Frontend<'a> {
 }
 
 impl statements::Evaluator<'_, '_> {
+    fn parsed_source(&mut self, source: &str) -> Result<Rc<SourceSyntax>, CheckError> {
+        crate::check_deadline(self.deadline)?;
+        if let Some(parsed) = self.parse_cache.get(source) {
+            return Ok(Rc::clone(parsed));
+        }
+        #[cfg(test)]
+        {
+            self.output.parse_builds += 1;
+        }
+        let original = brush::records(source, source)?;
+        crate::check_deadline(self.deadline)?;
+        let original_records = original.records.map(Rc::new);
+        let lexical = match lexer::Lexed::scan(source) {
+            Ok(lexical) => Some(lexical),
+            Err(lexer::LexError::Nesting) => {
+                return Err(CheckError {
+                    kind: CheckErrorKind::ResourceLimit,
+                });
+            }
+            Err(lexer::LexError::Unterminated { .. }) => None,
+        };
+        let detection = lexical
+            .as_ref()
+            .map(|lexical| divergence::detect_lexed(source, &original.spans, lexical))
+            .transpose()?;
+        let records = if let Some(detection) = &detection
+            && detection.masked != source
+        {
+            brush::records(source, &detection.masked)?
+                .records
+                .map(Rc::new)
+        } else {
+            original_records.clone()
+        };
+        crate::check_deadline(self.deadline)?;
+        let parsed = Rc::new(SourceSyntax {
+            original: original_records,
+            records,
+            detection,
+        });
+        self.parse_cache
+            .insert(source.to_owned(), Rc::clone(&parsed));
+        Ok(parsed)
+    }
+
     fn source(
         &mut self,
         source: &str,
@@ -237,7 +293,7 @@ impl statements::Evaluator<'_, '_> {
         }
         let Frontend { arm, zsh, .. } = self.frontend;
         scope.zsh = zsh;
-        // mvdan's lexer ignores NUL bytes, including inside words (lexer.go:78-81).
+        // NUL is ignored even inside a word, rather than splitting its bytes.
         let without_nul = source.contains('\0').then(|| source.replace('\0', ""));
         let source = without_nul.as_deref().unwrap_or(source);
         crate::check_deadline(self.deadline)?;
@@ -250,28 +306,19 @@ impl statements::Evaluator<'_, '_> {
             self.output.gap(CoverageGap::UnsupportedShellSyntax);
             return Ok(());
         }
-        let original = brush::records(source, source)?;
+        let parsed = self.parsed_source(source)?;
         crate::check_deadline(self.deadline)?;
         let source_id = self.output.parse_successes + self.output.parse_failures;
-        if original.records.is_some() {
+        if parsed.original.is_some() {
             self.output.parse_successes += 1;
         } else {
             self.output.script.parse_failed = true;
             self.output.parse_failures += 1;
         }
-        let lexical = match lexer::Lexed::scan(source) {
-            Ok(lexical) => lexical,
-            Err(lexer::LexError::Nesting) => {
-                return Err(CheckError {
-                    kind: CheckErrorKind::ResourceLimit,
-                });
-            }
-            Err(lexer::LexError::Unterminated { .. }) => {
-                self.output.gap(CoverageGap::UnsupportedShellSyntax);
-                return Ok(());
-            }
+        let Some(detection) = &parsed.detection else {
+            self.output.gap(CoverageGap::UnsupportedShellSyntax);
+            return Ok(());
         };
-        let detection = divergence::detect_lexed(source, &original.spans, &lexical)?;
         if !detection.array_tail_spans.is_empty() {
             self.output.array_tail_regions.push(ArrayTailRegions {
                 source: source.to_owned(),
@@ -286,20 +333,15 @@ impl statements::Evaluator<'_, '_> {
                 CoverageGap::UnsupportedDialectConstruct
             });
         }
-        let records = if detection.masked != source {
-            brush::records(source, &detection.masked)?.records
-        } else {
-            original.records
-        };
-        if let Some(records) = records {
-            self.run(&records, scope, depth, source_id, depth > 0)?;
+        if let Some(records) = &parsed.records {
+            self.run(records, scope, depth, source_id, depth > 0)?;
         } else {
             if !detection.divergent {
                 self.output.gap(CoverageGap::UnsupportedShellSyntax);
             }
         }
-        for code in detection.code {
-            self.isolated_source(&code, scope, depth + 1)?;
+        for code in &detection.code {
+            self.isolated_source(code, scope, depth + 1)?;
         }
         Ok(())
     }
@@ -451,12 +493,13 @@ fn expand_scoped(
         &words::ExpansionContext {
             variables: &first,
             runtime_variables: &std::collections::BTreeSet::new(),
+            pattern_variables: &scope.pattern_contexts(&first),
             host,
             cwd: &cwd,
             tilde_assigned: true,
         },
     )?;
-    let mut contexts = vec![first];
+    let mut contexts = vec![std::collections::BTreeMap::<String, Option<String>>::new()];
     let mut names = seed
         .word
         .vars
@@ -484,7 +527,7 @@ fn expand_scoped(
             let mut next = Vec::new();
             for context in &contexts {
                 for value in &binding.values {
-                    // Preserve pre-M2 inference from present lexical candidates;
+                    // Preserve target inference from present lexical candidates;
                     // absence at a join is runtime data, not a scope refusal.
                     if matches!(value, statements::BindingValue::RuntimeUnknown(Some(value)) if value.is_empty())
                         && binding.values.iter().any(|value| {
@@ -493,37 +536,36 @@ fn expand_scoped(
                     {
                         continue;
                     }
-                    if next.len() == 512 {
-                        evaluator.output.gap(CoverageGap::InspectionBudget);
-                        break;
-                    }
                     if let statements::BindingValue::RepeatedFields(repetition) = value {
                         for projection in repetition.projections() {
-                            if next.len() == 512 {
-                                evaluator.output.gap(CoverageGap::InspectionBudget);
-                                break;
-                            }
                             let mut context = context.clone();
-                            context.insert(name.clone(), projection);
-                            next.push(context);
+                            context.insert(name.clone(), Some(projection));
+                            if !next.contains(&context) {
+                                if next.len() == 512 {
+                                    evaluator.output.gap(CoverageGap::InspectionBudget);
+                                    break;
+                                }
+                                next.push(context);
+                            }
                         }
                         continue;
                     }
                     let mut context = context.clone();
-                    if let statements::BindingValue::Known(value)
-                    | statements::BindingValue::RuntimeUnknown(Some(value))
-                    | statements::BindingValue::RuntimeDerived(value)
-                    | statements::BindingValue::ShellMatches(value)
-                    | statements::BindingValue::ShellDerived(value) = value
-                    {
-                        context.insert(name.clone(), value.clone());
+                    if let Some(value) = value.lexical() {
+                        context.insert(name.clone(), Some(value.clone()));
                     } else {
-                        context.remove(name);
+                        context.insert(name.clone(), None);
                         if value == &statements::BindingValue::Undetermined {
                             evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
                         }
                     }
-                    next.push(context);
+                    if !next.contains(&context) {
+                        if next.len() == 512 {
+                            evaluator.output.gap(CoverageGap::InspectionBudget);
+                            break;
+                        }
+                        next.push(context);
+                    }
                 }
             }
             contexts = next;
@@ -553,7 +595,19 @@ fn expand_scoped(
         }
     }
     let mut result = Vec::new();
-    for context in contexts {
+    let mut context = first;
+    for delta in contexts {
+        #[cfg(test)]
+        {
+            evaluator.output.context_delta_entries += delta.len();
+        }
+        for (name, value) in delta {
+            if let Some(value) = value {
+                context.insert(name, value);
+            } else {
+                context.remove(&name);
+            }
+        }
         for tilde_assigned in if seed.tilde && context.contains_key("PWD") {
             vec![true, false]
         } else {
@@ -586,6 +640,7 @@ fn expand_scoped(
                 &words::ExpansionContext {
                     variables: &context,
                     runtime_variables: &runtime_variables,
+                    pattern_variables: &scope.pattern_contexts(&context),
                     host,
                     cwd: &cwd,
                     tilde_assigned,
@@ -637,7 +692,7 @@ fn expand_scoped(
             if expanded.word.vars.iter().any(|name| {
                 scope.bindings.get(name).is_some_and(|binding| {
                     binding.values.iter().any(|value| matches!(value,
-                        statements::BindingValue::ShellMatches(text) | statements::BindingValue::ShellDerived(text) if context.get(name) == Some(text)))
+                        statements::BindingValue::ShellMatches(text) | statements::BindingValue::ShellDerived(text) if context.get(name) == Some(&text.text)))
                 })
             }) {
                 expanded.word.shell_matches = true;
@@ -720,6 +775,137 @@ struct Expanded {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn identical_sources_share_syntax_but_observe_each_context() {
+        for width in [2, 4, 8, 16] {
+            let mut output = Observation::default();
+            let host = crate::record::HostFacts {
+                home: "/synthetic/home",
+                user: None,
+            };
+            let mut evaluator = statements::Evaluator::new(
+                Frontend {
+                    arm: Arm::Brush,
+                    zsh: true,
+                    host,
+                },
+                &mut output,
+            );
+            for index in 0..width {
+                let mut scope =
+                    statements::Scope::new(host.home, &format!("/synthetic/dir{index}"));
+                scope.assign(
+                    "file".into(),
+                    vec![statements::BindingValue::Known(format!("public{index}"))],
+                );
+                evaluator
+                    .source("cat \"$file\"", &mut scope, index % 2)
+                    .unwrap();
+            }
+            assert_eq!(output.parse_builds, 1, "width={width}");
+            assert_eq!(output.source_entries, width);
+            assert_eq!(output.script.commands.len(), width);
+            for (index, command) in output.script.commands.iter().enumerate() {
+                assert_eq!(command.argv[1].text, format!("public{index}"));
+                assert_eq!(command.cwd, format!("/synthetic/dir{index}"));
+                assert_eq!(command.nested, index % 2 == 1);
+            }
+        }
+    }
+
+    #[test]
+    fn alternative_environments_store_only_binding_deltas() {
+        for width in [4, 16, 64, 256] {
+            let mut output = Observation::default();
+            let host = crate::record::HostFacts {
+                home: "/synthetic/home",
+                user: None,
+            };
+            let mut evaluator = statements::Evaluator::new(
+                Frontend {
+                    arm: Arm::Brush,
+                    zsh: false,
+                    host,
+                },
+                &mut output,
+            );
+            let mut scope = statements::Scope::new(host.home, "/synthetic/project");
+            for index in 0..width {
+                scope.assign(
+                    format!("ambient{index}"),
+                    vec![statements::BindingValue::Known("unchanged".into())],
+                );
+            }
+            scope.assign(
+                "file".into(),
+                vec![
+                    statements::BindingValue::Known("public".into()),
+                    statements::BindingValue::RuntimeUnknown(Some("public".into())),
+                    statements::BindingValue::Known("protected".into()),
+                ],
+            );
+            let values = evaluator
+                .expand(
+                    &RawWord {
+                        raw: "\"$file\"".into(),
+                        syntax: WordSyntax::Shell,
+                        expansions: Vec::new(),
+                    },
+                    &mut scope,
+                    0,
+                )
+                .unwrap();
+            assert_eq!(values.len(), 2);
+            assert_eq!(values[0].word.text, "public");
+            assert!(values[0].word.runtime_unknown);
+            assert_eq!(values[1].word.text, "protected");
+            assert!(!values[1].word.runtime_unknown);
+            assert_eq!(output.context_delta_entries, 2, "ambient width={width}");
+        }
+    }
+
+    #[test]
+    fn syntax_cache_hits_keep_depth_deadline_and_failure_checks() {
+        let mut output = Observation::default();
+        let host = crate::record::HostFacts {
+            home: "/synthetic/home",
+            user: None,
+        };
+        let mut evaluator = statements::Evaluator::new(
+            Frontend {
+                arm: Arm::Brush,
+                zsh: false,
+                host,
+            },
+            &mut output,
+        );
+        let mut scope = statements::Scope::new(host.home, "/synthetic/project");
+        evaluator.source("printf public", &mut scope, 0).unwrap();
+        assert_eq!(
+            evaluator
+                .source("printf public", &mut scope, MAX_NESTING + 1)
+                .unwrap_err()
+                .kind,
+            CheckErrorKind::ResourceLimit
+        );
+        evaluator.deadline = Some(std::time::Instant::now());
+        assert_eq!(
+            evaluator
+                .source("printf public", &mut scope, 0)
+                .unwrap_err()
+                .kind,
+            CheckErrorKind::Deadline
+        );
+        evaluator.deadline = None;
+        for _ in 0..2 {
+            evaluator.source("if", &mut scope, 0).unwrap();
+        }
+        assert_eq!(output.parse_builds, 2);
+        assert_eq!(output.parse_failures, 2);
+        assert!(output.script.parse_failed);
+        assert!(output.gaps.contains(&CoverageGap::UnsupportedShellSyntax));
+    }
+
     #[test]
     fn quoted_star_preserves_unknown_argument_metadata() {
         let observation = observe(

@@ -1,6 +1,6 @@
 //! Caller-materialized, offline evaluation; this example is never a hook entry.
 
-#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(not(test), deny(clippy::unwrap_used))]
 
 use agent_guard_rust::{
     Context, Coverage, CoverageGap, Disposition, Event, Outcome,

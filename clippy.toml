@@ -1,0 +1,7 @@
+disallowed-methods = [
+  { path = "std::fs::metadata", reason = "Inode metadata belongs to the SSH identity probe owner." },
+  { path = "std::fs::symlink_metadata", reason = "Link identity belongs to an explicit filesystem owner." },
+  { path = "std::fs::read_link", reason = "Link reads follow lexical checks at the filesystem probe owner." },
+  { path = "std::fs::canonicalize", reason = "Canonical filesystem identity belongs to an explicit probe owner." },
+  { path = "std::process::exit", reason = "Return ExitCode at an executable boundary; direct termination needs an explicit owner." },
+]

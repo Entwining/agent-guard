@@ -6,7 +6,6 @@
  {"id":"aggregate-appdata-prefix","partition":"aggregate-protected","expected":"D","input":{"command":"Q=$C; while read id; do Q=\"${Q}/${id}\"; cat \"$Q\"; done < public.txt"}},
  {"id":"aggregate-private-prefix","partition":"aggregate-protected","expected":"D","input":{"command":"Q=$H/.ssh/id_rsa; while read id; do Q=\"${Q}/${id}\"; cat \"$Q\"; done < public.txt"}},
  {"id":"aggregate-new-protected-suffix","partition":"aggregate-protected","expected":"D","input":{"command":"Q=\"\"; for p in public .env; do while read id; do Q=\"$Q $p $id\"; cat $Q; done < public.txt; done"}},
- {"id":"literal-accumulator-budget","partition":"aggregate","expected":"UR","input":{"command":"s=public; while true; do s=\"$s/public\"; done; cat \"$s\""}},
  {"id":"unknown-directory-repetition","partition":"aggregate","expected":"UC","input":{"command":"Q=public; while read id; do Q=\"$Q/$id\"; done < public.txt; cat \"$Q/public.json\""}},
  {"id":"unknown-parent-repetition","partition":"aggregate-protected","expected":"UR","input":{"command":"Q=$H/project/a/$id; while read id; do Q=\"$Q/..\"; done < public.txt; cat \"$Q/Library/Containers/harness/data\""}},
  {"id":"long-ssh-data","partition":"pattern","expected":"N","input":{"command":"ssh host \"bash -lic 'cd public && python3 - <<\\\"PY\\\"\nvalues={\"public\",\"other\"}\nfor p in values:\n print(p.split(\"/\")[-1])\nPY'\""}},

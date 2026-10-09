@@ -6,11 +6,17 @@ pub(super) struct Matcher {
     #[cfg(test)]
     pub(super) component_evaluations: usize,
     #[cfg(test)]
+    pub(super) component_queries: usize,
+    #[cfg(test)]
     path_states: usize,
 }
 
 impl Matcher {
     pub(super) fn component(&mut self, pattern: &str, subject: &str) -> bool {
+        #[cfg(test)]
+        {
+            self.component_queries += 1;
+        }
         if let Some(result) = self
             .components
             .get(pattern)
@@ -23,10 +29,12 @@ impl Matcher {
             self.component_evaluations += 1;
         }
         let result = component(pattern, subject);
-        self.components
-            .entry(pattern.into())
-            .or_default()
-            .insert(subject.into(), result);
+        if let Some(subjects) = self.components.get_mut(pattern) {
+            subjects.insert(subject.into(), result);
+        } else {
+            self.components
+                .insert(pattern.into(), BTreeMap::from([(subject.into(), result)]));
+        }
         result
     }
 
@@ -76,6 +84,10 @@ fn tokens(pattern: &str) -> Vec<Token> {
                     index += 1;
                 }
                 while index < chars.len() {
+                    if chars[index] == '\\' && index + 1 < chars.len() {
+                        index += 2;
+                        continue;
+                    }
                     if chars[index] == '[' && chars.get(index + 1) == Some(&':') {
                         index += 2;
                         while index + 1 < chars.len()
@@ -134,21 +146,33 @@ fn class_matches(body: &str, ch: char) -> bool {
             rest = &tail[end + 2..];
             continue;
         }
-        let mut chars = rest.char_indices();
-        let Some((_, first)) = chars.next() else {
+        let Some((first, consumed)) = class_character(rest) else {
             break;
         };
-        if let Some((_, '-')) = chars.next()
-            && let Some((end, last)) = chars.next()
+        let after = &rest[consumed..];
+        if let Some(after) = after.strip_prefix('-')
+            && let Some((last, consumed)) = class_character(after)
         {
             hit |= first <= ch && ch <= last;
-            rest = &rest[end + last.len_utf8()..];
+            rest = &after[consumed..];
         } else {
             hit |= first == ch;
-            rest = &rest[first.len_utf8()..];
+            rest = after;
         }
     }
     hit != negate
+}
+
+fn class_character(text: &str) -> Option<(char, usize)> {
+    let mut chars = text.chars();
+    let first = chars.next()?;
+    if first == '\\'
+        && let Some(next) = chars.next()
+    {
+        Some((next, first.len_utf8() + next.len_utf8()))
+    } else {
+        Some((first, first.len_utf8()))
+    }
 }
 
 fn accepts(token: &Token, ch: char) -> bool {
@@ -169,6 +193,24 @@ fn literal_head(chars: &mut std::str::Chars<'_>) -> Option<char> {
         '\\' => Some(chars.next().unwrap_or('\\')),
         ch => Some(ch),
     }
+}
+
+pub(super) fn literal_prefix(pattern: &str) -> (String, &str) {
+    let mut chars = pattern.chars();
+    let mut prefix = String::new();
+    loop {
+        let rest = chars.as_str();
+        match literal_head(&mut chars) {
+            Some(ch) => prefix.push(ch),
+            None => return (prefix, rest),
+        }
+    }
+}
+
+pub(super) fn recursive_wildcard(pattern: &str) -> bool {
+    tokens(pattern)
+        .windows(2)
+        .any(|pair| matches!(pair, [Token::Star, Token::Star]))
 }
 
 fn literal_last(pattern: &str) -> Option<char> {
@@ -306,6 +348,35 @@ pub(super) fn escape_literal(subject: &str) -> String {
         .collect()
 }
 
+pub(super) fn shell_pattern(text: &str, quoted: &[std::ops::Range<usize>]) -> String {
+    let mut pattern = String::new();
+    for (at, ch) in text.char_indices() {
+        if ch == '\\'
+            || matches!(ch, '\'' | '"')
+            || quoted.iter().any(|range| range.contains(&at)) && "*?[]{}(),|!^-+@$`:".contains(ch)
+        {
+            pattern.push('\\');
+        }
+        pattern.push(ch);
+    }
+    pattern
+}
+
+pub(super) fn shell_syntax(component: &str) -> bool {
+    let mut escaped = false;
+    component.chars().any(|ch| {
+        if escaped {
+            escaped = false;
+            false
+        } else if ch == '\\' {
+            escaped = true;
+            false
+        } else {
+            "*?[{($`".contains(ch)
+        }
+    })
+}
+
 impl Matcher {
     pub(super) fn path_checked(
         &mut self,
@@ -428,23 +499,34 @@ pub(super) fn alternatives(pattern: &str, patterned: bool) -> Vec<String> {
             && let Some(left) = source.char_indices().find_map(|(at, ch)| {
                 (ch == '('
                     && source.as_bytes().get(at.wrapping_sub(1)) != Some(&b'$')
-                    && lexical.context(at).command_depth == 0)
-                    .then_some(at)
+                    && lexical.context(at).word_syntax())
+                .then_some(at)
             })
             && let Some(relative) = source[left + 1..].char_indices().find_map(|(at, ch)| {
-                (ch == ')' && lexical.context(left + 1 + at).command_depth == 0).then_some(at)
+                (ch == ')' && lexical.context(left + 1 + at).word_syntax()).then_some(at)
             })
         {
             let right = left + 1 + relative;
             let mut start = left;
-            if source[..left].ends_with(['*', '?', '+', '!', '@']) {
+            if source[..left].ends_with(['*', '?', '+', '!', '@'])
+                && lexical.context(left - 1).word_syntax()
+            {
                 start -= 1;
             }
             let prefix = &source[..start];
             let suffix = &source[right + 1..];
             let body = &source[left + 1..right];
             let directory = prefix.rsplit_once('/').map_or("", |(dir, _)| dir);
-            for part in body.split('|') {
+            let mut start = 0;
+            let mut members = Vec::new();
+            for (at, ch) in body.char_indices() {
+                if ch == '|' && lexical.context(left + 1 + at).word_syntax() {
+                    members.push(&body[start..at]);
+                    start = at + 1;
+                }
+            }
+            members.push(&body[start..]);
+            for part in members {
                 for next in [
                     format!("{prefix}{part}{suffix}"),
                     format!("{directory}/{part}{suffix}"),
@@ -462,6 +544,25 @@ pub(super) fn alternatives(pattern: &str, patterned: bool) -> Vec<String> {
 
 #[cfg(test)]
 mod cost {
+    #[test]
+    fn quoted_class_delimiters_and_members_remain_literal() {
+        for (pattern, subject, expected) in [
+            (r"[a\]]", "]", true),
+            (r"[a\]]", "a", true),
+            (r"[\-x]", "-", true),
+            (r"[\-x]", "k", false),
+            (r"[\!a]", "b", false),
+            (r"[\!a]", "!", true),
+            (r"[\^a]", "^", true),
+            (r"[\^a]", "b", false),
+        ] {
+            assert_eq!(
+                super::component(pattern, subject),
+                expected,
+                "{pattern} {subject}"
+            );
+        }
+    }
     #[test]
     fn literal_subject_work_grows_with_width_and_pattern_depth() {
         for width in [16, 32, 64, 128] {

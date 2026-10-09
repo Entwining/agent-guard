@@ -1,4 +1,4 @@
-use super::{CheckError, CheckErrorKind, Probe, Resolution, lexical_pattern, unfirmlink};
+use super::{CheckError, CheckErrorKind, Probe, Resolution, lexical::Lexical, unfirmlink};
 use std::{
     collections::{BTreeSet, VecDeque},
     path::Path,
@@ -42,6 +42,7 @@ pub(super) fn follow(
     patterned: bool,
     table: &FirmlinkTable,
     probe: &mut dyn Probe,
+    lexical: &mut Lexical,
 ) -> Result<Resolution, CheckError> {
     let mut pending: VecDeque<String> = parts(absolute).collect();
     let mut prefix = "/".to_owned();
@@ -64,9 +65,7 @@ pub(super) fn follow(
             prefix.push_str(&part);
         }
         let projected = unfirmlink(&prefix);
-        let kind = lexical_pattern(&projected, home, patterned).or_else(|| {
-            resolved_home.and_then(|home| lexical_pattern(&projected, home, patterned))
-        });
+        let kind = lexical.check_both(&projected, home, resolved_home, patterned)?;
         if let Some(kind) = kind {
             return Ok(Resolution::Protected(kind, projected));
         }

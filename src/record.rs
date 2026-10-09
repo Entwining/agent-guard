@@ -23,6 +23,7 @@ pub struct Word {
     pub value: String,
     pub pwd: bool,
     pub cwd_ranges: Vec<std::ops::Range<usize>>,
+    pub quoted_ranges: Vec<std::ops::Range<usize>>,
     pub stream: Option<Box<StreamOutput>>,
 }
 
@@ -49,6 +50,7 @@ impl Word {
             role: Role::Arg,
             pwd: false,
             cwd_ranges: Vec::new(),
+            quoted_ranges: Vec::new(),
             stream: None,
         }
     }
@@ -56,15 +58,68 @@ impl Word {
         &self.text
     }
     pub fn with_text(&self, text: String) -> Self {
+        let quoted_ranges = if let Some(start) = self.text.len().checked_sub(text.len())
+            && self.text.ends_with(&text)
+        {
+            self.quoted_ranges
+                .iter()
+                .filter_map(|range| {
+                    let left = range.start.max(start);
+                    let right = range.end.min(self.text.len());
+                    (left < right).then(|| left - start..right - start)
+                })
+                .collect()
+        } else if text.ends_with(&self.text) {
+            let start = text.len() - self.text.len();
+            self.quoted_ranges
+                .iter()
+                .map(|range| range.start + start..range.end + start)
+                .collect()
+        } else if !self.text.is_empty()
+            && let Some(start) = text.find(&self.text)
+            && text[start + self.text.len()..].find(&self.text).is_none()
+        {
+            self.quoted_ranges
+                .iter()
+                .map(|range| range.start + start..range.end + start)
+                .collect()
+        } else if let Some(start) = self.text.find(&text)
+            && self.text[start + text.len()..].find(&text).is_none()
+        {
+            self.quoted_ranges
+                .iter()
+                .filter_map(|range| {
+                    let left = range.start.max(start);
+                    let right = range.end.min(start + text.len());
+                    (left < right).then(|| left - start..right - start)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         Self {
             text: text.clone(),
             value: text,
             cwd_ranges: Vec::new(),
+            quoted_ranges,
             pwd: false,
             ..self.clone()
         }
     }
     pub(crate) fn reproject_cwd(&mut self, cwd: &str) {
+        let old_ranges = self.cwd_ranges.clone();
+        let project = |at: usize| {
+            let mut changed = at as isize;
+            for range in &old_ranges {
+                if range.end <= at {
+                    changed += cwd.len() as isize - range.len() as isize;
+                }
+            }
+            changed as usize
+        };
+        for range in &mut self.quoted_ranges {
+            *range = project(range.start)..project(range.end);
+        }
         let mut text = String::new();
         let mut value = String::new();
         let mut cursor = 0;
@@ -132,6 +187,7 @@ pub enum Direction {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Redirect {
+    pub pattern: Option<String>,
     pub stream: Option<Box<StreamOutput>>,
     pub direction: Direction,
     pub target: String,
@@ -144,6 +200,8 @@ pub struct Redirect {
 impl Redirect {
     pub fn from_word(word: Word, direction: Direction) -> Self {
         Self {
+            pattern: (word.globs || word.shell_matches)
+                .then(|| crate::filesystem::shell_pattern(&word.text, &word.quoted_ranges)),
             stream: word.stream,
             direction,
             target: word.text,
@@ -253,6 +311,7 @@ pub enum Via {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Target {
+    pub pattern: Option<String>,
     pub path: String,
     pub unresolved: String,
     pub glob: bool,
@@ -268,6 +327,14 @@ pub struct Target {
 }
 
 impl Target {
+    pub(crate) fn pattern_path(&self) -> std::borrow::Cow<'_, str> {
+        match &self.pattern {
+            Some(pattern) => {
+                std::borrow::Cow::Owned(crate::filesystem::normalize(pattern, "/", "/"))
+            }
+            None => std::borrow::Cow::Borrowed(&self.path),
+        }
+    }
     pub fn from_word(
         word: &Word,
         cwd: &str,
@@ -290,6 +357,27 @@ impl Target {
             format!("{cwd}/{input}")
         };
         Self {
+            pattern: (word.globs || word.shell_matches).then(|| {
+                let value =
+                    word.with_text(crate::filesystem::strip_file_url(&word.text).to_owned());
+                let pattern = crate::filesystem::shell_pattern(&value.text, &value.quoted_ranges);
+                let pattern = if matches!(
+                    crate::shell::lexer::initial_quote(&word.raw),
+                    crate::shell::lexer::Quote::Single | crate::shell::lexer::Quote::Double
+                ) {
+                    pattern
+                } else {
+                    crate::filesystem::expand_home(
+                        &pattern,
+                        &crate::filesystem::literal_shell_pattern(host.home),
+                        host.user,
+                    )
+                };
+                crate::filesystem::absolute_pattern(
+                    crate::filesystem::strip_file_url(&pattern),
+                    cwd,
+                )
+            }),
             glob: word.globs || word.shell_matches,
             glob_hidden: !word.globs && !word.shell_matches,
             expands: word.expands,
@@ -298,9 +386,11 @@ impl Target {
         }
     }
     pub fn new(path: String, effect: Effect, walk: Walk, via: Via) -> Self {
+        let normalized = crate::filesystem::normalize(&path, "/", "/");
         Self {
-            unresolved: path.clone(),
-            path: crate::filesystem::normalize(&path, "/", "/"),
+            pattern: None,
+            unresolved: path,
+            path: normalized,
             glob: false,
             glob_hidden: true,
             effect,

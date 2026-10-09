@@ -5,7 +5,7 @@
 ## Prerequisites
 
 - Apple Silicon macOS with a local Claude Code, Codex, or Pi session.
-- Homebrew for installation. The source package builds with Rust; Go is required only for development tools and acceptance harnesses.
+- Homebrew for installation. The source package, development tools and acceptance harnesses build with Rust.
 - Permission to edit the configuration for the runtime you choose. Codex's managed configuration uses the system `/etc/codex/requirements.toml` and may require an administrator.
 
 The Homebrew executable is `/opt/homebrew/bin/agent-guard`. The examples below use that path; replace it if your Homebrew prefix differs.
@@ -23,8 +23,6 @@ brew install loophubs/tap/agent-guard
 ```
 
 For an existing Homebrew installation, use `brew update` followed by `brew upgrade loophubs/tap/agent-guard`.
-
-The Rust source cutover does not update an installed hook. A Rust release requires a tagged version and a tap formula that builds with Rust instead of Go. Until those publication steps are accepted, existing installations retain their released binary. The hook path and registration formats below are unchanged.
 
 ## Register Claude Code
 
@@ -105,7 +103,7 @@ printf '%s\n' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | /opt/homebr
 
 The event is checked, not executed. Require exit code `0` and no output for this event. This smoke check does not show that a runtime loaded its hook. Inspect the runtime's hook listing and confirm registration separately.
 
-Developers can run the full [installed acceptance tool](../cmd/agent-guard-verify) with Go from a checkout of the release being evaluated, passing the absolute installed executable, for example `/opt/homebrew/bin/agent-guard`. The tool is not part of the runtime package.
+Developers can run the full [installed acceptance tool](../cmd/agent-guard-verify/main.rs) with `cargo run --bin agent-guard-verify --` from a checkout of the release being evaluated, passing the absolute installed executable, for example `/opt/homebrew/bin/agent-guard`. The tool is not part of the runtime package.
 
 ## Remove
 
@@ -142,7 +140,7 @@ The guard is a bounded preflight check. It decides from the targets it infers un
 
 **State and resource identity** is which file a path names when the command runs, compared with when the guard checked it. App Data traversal checks lexical protection before each probe and uses readlink alone. SSH identity comparisons additionally use stat/inode metadata after lexical checks; private-key spellings are decided without stat. For an unresolved shell operand or redirect, the fixed prefix may be resolved while the uncertain suffix is judged lexically. Working directories and iterator roots with an unresolved leading expansion, such as `cd "$d/app-link"; cat public` or `find "$d/app-link" -type f`, can lack a fixed path to probe. An earlier command that moves or links a file does not update the preflight model (`mv .env public-moved; cat public-moved`). Child links followed by a recursive program (`rg -L CANARY .`) and a wildcard that expands to a link (`cat da*/x` when `data-link` leads elsewhere) are not exhaustively resolved; a literal link operand can still be resolved and denied.
 
-The following retained boundaries were checked as event data with a synthetic HOME and public fixture files. The examples describe limits; they are not instructions to access real protected material. Historical Go comparison records remain fixture provenance in Git history.
+The following retained boundaries were checked as event data with a synthetic HOME and public fixture files. The examples describe limits; they are not instructions to access real protected material.
 
 | Boundary | Reproducer and observed scope |
 | --- | --- |
@@ -157,8 +155,7 @@ The following retained boundaries were checked as event data with a synthetic HO
 | Executor divergence | `a=(public)#` retains Bash/Zsh divergence refusal. |
 | Inline mentions | `python3 -c "print('~/.ssh/id_rsa')"` is refused although the spelling is data. |
 | Redacted workdir | Codex `shell_command`/`shell` with `workdir: "__REDACTED__"` receives the explained relative-cwd refusal. |
-| Grep on HOME | `Grep` with path `~` retains a rule/reason difference from the frozen Go baseline. |
-| Fresh temporary trees | `d=$(mktemp -d); cp public "$d/file"` retains baseline parity and runtime uncertainty. |
+| Fresh temporary trees | `d=$(mktemp -d); cp public "$d/file"` is permitted with limited preflight because `mktemp` is an unmodelled program; the check does not establish its runtime-generated destination. |
 
 The hook installs no operating system read policy. In a local 2x2 comparison recorded by the [read-enforcement experiment](../experiments/README.md), every run wrapped by `sandbox-exec` exited 71; a control in the sandboxed Codex environment failed with `sandbox_apply: Operation not permitted` before `/usr/bin/true` started. These are execution environment failures, not enforced read denials or proof that Seatbelt is unavailable on macOS 27. Nesting is the likely explanation, not a verified kernel denial record. [Claude Code](https://code.claude.com/docs/en/sandboxing) and [Codex's Seatbelt implementation](https://github.com/openai/codex/blob/main/codex-rs/sandboxing/src/seatbelt.rs) still use Seatbelt. The guard alone denied the direct operand and inline literal forms but allowed paths chosen inside an external script or runtime configuration; those reads remain outside a command text preflight check.
 
@@ -168,17 +165,17 @@ macOS 27 [AppSettings privacy defaults](https://developer.apple.com/documentatio
 
 ## Administrator App Data policy
 
-The [App Data profile generator](../cmd/agent-guard-profile) creates an unsigned policy for an explicitly selected client and prints the exact inspection, MDM deployment, and test steps. Run this optional tool with Go from a checkout of the release being evaluated:
+The [App Data profile generator](../cmd/agent-guard-profile/main.rs) creates an unsigned policy for an explicitly selected client and prints the exact inspection, MDM deployment, and test steps. Run this optional tool with Cargo from a checkout of the release being evaluated:
 
 ```sh
-go run ./cmd/agent-guard-profile --instructions
+cargo run --bin agent-guard-profile -- --instructions
 ```
 
 Follow the printed prerequisite, attribution, deployment, and test steps before applying a profile. They use [Apple's deployment requirements](https://support.apple.com/guide/deployment/privacy-preferences-policy-control-payload-dep38df53c2a/web) and the reviewed [PPPC schema](https://github.com/apple/device-management/blob/09f249a06e7e3289930bf6d05f38fb562f748ebf/mdm/profiles/com.apple.TCC.configuration-profile-policy.yaml). A successful installed-package check or plist validation does not prove OS enforcement.
 
 ## Development checks
 
-Use the Rust toolchain pinned in `rust-toolchain.toml` (1.98.1) and the Go version pinned in `go.mod`. The production runner uses Rust; development tools and runtime harnesses use Go. Cargo's exact parser pins preserve policy semantics, and `Cargo.lock` binds dependency resolution.
+Use the Rust toolchain pinned in `rust-toolchain.toml` (1.98.1) for the production runner, development tools and runtime harnesses. Cargo's exact parser pins preserve policy semantics, and `Cargo.lock` binds dependency resolution.
 
 Install cargo-deny 0.20.2 before running the checks:
 
@@ -188,18 +185,17 @@ cargo install --locked --version 0.20.2 cargo-deny
 
 Keep Cargo's executable directory on `PATH` so `cargo deny --version` reports `cargo-deny 0.20.2`. `cargo deny --locked check` fetches the RustSec advisory database and requires network access; advisory, license, ban and source checks remain enabled. CI installs the same version from the official arm64 macOS release archive and verifies its pinned SHA-256 before extraction.
 
-Keep build outputs, module and build caches, and evidence outside every checkout:
+Keep build outputs and evidence outside every checkout:
 
 ```sh
 out=/absolute/path/outside/checkouts/agent-guard-evidence
-export GOMODCACHE="$out/modcache" GOCACHE="$out/buildcache"
 export CARGO_TARGET_DIR="$out/cargo-target"
 make check
 make build OUT="$out/package"
-go run ./cmd/agent-guard-verify "$out/package/bin/agent-guard"
+cargo run --bin agent-guard-verify -- "$out/package/bin/agent-guard"
 ```
 
-`make check` runs `make rust-check` (rustfmt, Clippy across all targets, locked Rust tests and cargo-deny) and `scripts/check-go` (goimports formatting, go vet, Staticcheck and Go race tests for development tools and harnesses). Go tools are pinned in `go.mod` and run with `go tool`. goimports uses `-format-only`, preserving imports, and `scripts/check-go` prints the fix command for listed files. Set `GO` or `CARGO` to an absolute executable path when absent from `PATH`. Rust tests check frozen contract fixtures for exact verdicts, public exit codes, denial text and advice; they do not build a live Go comparator.
+`make check` runs `make rust-check`: rustfmt, Clippy across all targets, locked Rust tests and cargo-deny. Set `CARGO` to an absolute executable path when absent from `PATH`. Rust tests check frozen contract fixtures for exact verdicts, public exit codes, denial text and advice.
 
 The installed verifier requires the assembled `bin/agent-guard`, adjacent `agent-guard-native` and `VERSION`; it resolves the executable paths, records both hashes and checks that both executables report the package version. Require all 33 protocol cases to pass. It does not prove hook loading or all descendant cleanup.
 

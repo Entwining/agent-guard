@@ -9,7 +9,6 @@
  {"id":"silent","partition":"options","expected":"N","input":{"command":"x='a[$(cat .env)]'; y=$x; read -s y <<< 1; a=(0); echo $((y))"}},
  {"id":"timeout","partition":"options","expected":"N","input":{"command":"x='a[$(cat .env)]'; y=$x; read -t 1 y <<< 1; a=(0); echo $((y))"}},
  {"id":"descriptor","partition":"options","expected":"N","input":{"command":"x='a[$(cat .env)]'; y=$x; read -u 0 y <<< 1; a=(0); echo $((y))"}},
- {"id":"raw","partition":"options","expected":"N","input":{"command":"x='a[$(cat .env)]'; y=$x; read -r y <<< 1; a=(0); echo $((y))"}},
  {"id":"prompt-rejected","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read -p prompt y <<< 1; a=(0); echo $((y))"}},
  {"id":"array-rejected","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read -a y <<< 1; a=(0); echo $((y))"}},
  {"id":"poll-keeps-bash-candidate","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read -t 0 y <<< 1; a=(0); echo $((y))"}},

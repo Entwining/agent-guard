@@ -2,7 +2,7 @@
 
 `agent-guard` checks supported tool calls for protected macOS application data access through registered pre-tool hooks. Runtime registration and operating system access policy belong to the consumer, outside this package. `docs/setup.md` owns the public contract and known limits.
 
-The production implementation uses Rust; Go owns development tools and runtime/lifecycle harnesses. Historical implementations belong to Git history. The production entry is `bin/agent-guard`, beside the compiled `agent-guard-native`; `src/entry.rs` owns the runner and checker boundaries, and `cmd/` owns development executables. Source cutover does not replace an installed hook or authorize a release or client configuration change.
+The production implementation and its development tools use Rust. Historical implementations belong to Git history. The production entry is `bin/agent-guard`, beside the compiled `agent-guard-native`; `src/entry.rs` owns the runner and checker boundaries, and `cmd/` owns development executables. Source cutover does not replace an installed hook or authorize a release or client configuration change.
 
 ## Before changing the implementation
 
@@ -15,10 +15,11 @@ The production implementation uses Rust; Go owns development tools and runtime/l
 
 ## Verification
 
-`make check` owns mechanical checks for the Rust implementation and Go development tools; `make rust-check` runs the Rust portion and `scripts/check-go` runs the Go portion. Keep contract fixtures in `tests/fixtures/`; assert verdicts, public exit codes, denial reasons and advice, including absent advice. Do not test source strings or the absence of a retired implementation. Keep installed protocol, hook loading and lifecycle evidence separate; [lifecycle checks](tests/harness/README.md#instrumented-lifecycle) must instrument the child rather than infer its completion from the parent.
+`make check` owns the mechanical checks. Keep contract fixtures in `tests/fixtures/`; assert verdicts, public exit codes, denial reasons and advice, including absent advice. Do not test source strings or the absence of a retired implementation. Keep installed protocol, hook loading and lifecycle evidence separate; [lifecycle checks](tests/harness/README.md#instrumented-lifecycle) must instrument the child rather than infer its completion from the parent.
 
 - For each new or changed rule or mechanism, temporarily remove or break it, observe a relevant test fail, restore it, and report both the failing test and the recovered result. A test that cannot detect the change needs a stronger assertion or removal; explain any mechanism that cannot be ablated safely.
 - Every concurrent construct needs a measured latency, throughput or behavior benefit on its actual workload; prefer a synchronous alternative when it is equally fast. Race correctness and timely child reaping are separate obligations from performance.
+- Compare latency between release builds through the production entry, excluding build time. Pair each run with the baseline in the same quiet session, and record the load before and after. In-process timings, stress-row means and microbenchmarks are diagnostics, not acceptance.
 - Fixtures contain only synthetic, machine-independent inputs and behavioral expectations; derive HOME-dependent paths from the test's own temporary root. Tests assert product behavior and account for each consumed row, rather than checking fixture provenance, self-consistency or fixed corpus totals; exact values belong only to a documented behavior partition or resource boundary.
 
 ## Documentation and release

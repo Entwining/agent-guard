@@ -6,6 +6,14 @@ fn every_legacy_row_is_accounted_for() {
         let report = differential::report(arm);
         for row in &report {
             for observation in row["observations"].as_array().into_iter().flatten() {
+                assert!(
+                    !observation["go_deny_rust_permit"].as_bool().unwrap()
+                        || observation["category"] == "intended_change",
+                    "{} {}: unruled contract Go-deny/Rust-permit ({})",
+                    row["id"],
+                    observation["consumer"],
+                    observation["category"]
+                );
                 assert_eq!(
                     observation["exit"],
                     if matches!(

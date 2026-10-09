@@ -25,13 +25,6 @@
       "matchPackageNames": ["brush-parser", "tree-sitter", "tree-sitter-bash"],
       "groupName": null,
       "automerge": false
-    },
-    {
-      "description": "Keep the Go version used by CI current.",
-      "matchManagers": ["gomod"],
-      "matchDepNames": ["go"],
-      "matchDepTypes": ["golang"],
-      "rangeStrategy": "bump"
     }
   ]
 }

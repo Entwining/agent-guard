@@ -305,7 +305,7 @@ fn parser_corpus_evaluates_inputs_and_preserves_valid_spans() {
         let row = report
             .iter()
             .find(|row| row["id"] == id)
-            .expect("missing parser witness");
+            .unwrap_or_else(|| panic!("missing parser witness"));
         for parser in ["brush", "tree"] {
             assert_eq!(
                 row[parser]["success"], success,

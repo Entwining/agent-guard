@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>PayloadType</key><string>Configuration</string>
+<key>PayloadVersion</key><integer>1</integer>
+<key>PayloadScope</key><string>System</string>
+<key>PayloadUUID</key><string>{}</string>
+<key>PayloadIdentifier</key><string>{}</string>
+<key>PayloadDisplayName</key><string>Agent Guard App Data Denial</string>
+<key>PayloadContent</key><array><dict>
+<key>PayloadType</key><string>com.apple.TCC.configuration-profile-policy</string>
+<key>PayloadVersion</key><integer>1</integer>
+<key>PayloadUUID</key><string>{}</string>
+<key>PayloadIdentifier</key><string>{}.pppc</string>
+<key>PayloadDisplayName</key><string>Selected Client App Data Denial</string>
+<key>Services</key><dict><key>SystemPolicyAppData</key><array><dict>
+<key>Identifier</key><string>{}</string>
+<key>IdentifierType</key><string>{}</string>
+<key>CodeRequirement</key><string>{}</string>
+<key>Allowed</key><false/>
+</dict></array></dict>
+</dict></array></dict></plist>

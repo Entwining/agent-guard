@@ -154,7 +154,7 @@ fn resolved_ssh_root_and_parent_inode_identity() {
     // on directory hard links, which the host does not permit creating.
     let alias = root.join("alias/config.pub");
     let mut probe = ParentAlias {
-        root: root.clone(),
+        root,
         alias_parent: alias.parent().unwrap().to_owned(),
         inner: support::RecordingProbe::literal_for_quoted_paths(&fixture),
     };

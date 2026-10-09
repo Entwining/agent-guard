@@ -9,8 +9,8 @@ use crate::{
     targets::{self, Target},
 };
 
-// native/rules/appdata.go and credentials.go select these sentences by effect;
-// native/reasons/reasons.go owns their public bytes.
+// Public sentences carry the safe alternatives; diagnostic effect text
+// stays internal and must not replace them in consumer output.
 const APPDATA: &str = "This reads a protected macOS app-data directory. Name a specific non-sensitive file under ~/Library/Application Support instead, or ask the user to inspect the protected file and share the needed fact.";
 const BROAD: &str = "A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path.";
 const FILE: &str = "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.";
@@ -423,12 +423,8 @@ impl Inspection<'_> {
             }
             Some((
                 target.path.clone(),
-                filesystem::broad_root_checked(
-                    &target.path,
-                    &self.context.home,
-                    target.glob,
-                    self.deadline,
-                )?,
+                self.resolver
+                    .broad(&target.pattern_path(), &self.context.home, target.glob)?,
             ))
         } else {
             None
@@ -440,9 +436,12 @@ impl Inspection<'_> {
         // runtime-derived suffix. Its link aliases still need normal resolution.
         let relative_tilde = target.unresolved.starts_with(&format!("{cwd}/~/"));
         let identity = if target.via == Via::Items {
-            let Some(kind) = (target.effect == Effect::Read)
-                .then(|| filesystem::credential_read(&target.path, &self.context.home, target.glob))
-                .flatten()
+            if target.effect != Effect::Read {
+                return Ok(());
+            }
+            let Some(kind) =
+                self.resolver
+                    .credential(&target.path, &self.context.home, target.glob)?
             else {
                 return Ok(());
             };
@@ -465,7 +464,7 @@ impl Inspection<'_> {
                     _ => target.effect == Effect::Read,
                 };
                 if touches {
-                    let rule = target_rule(&target, kind, &self.context.home);
+                    let rule = target_rule(&target, kind, &self.context.home, &mut self.resolver)?;
                     if kind == Protection::AppData {
                         self.appdata_reason.get_or_insert(rule);
                     }
@@ -504,12 +503,8 @@ impl Inspection<'_> {
                     {
                         self.broad_root_queries += 1;
                     }
-                    filesystem::broad_root_checked(
-                        &path,
-                        &resolved_home,
-                        target.glob,
-                        self.deadline,
-                    )?
+                    self.resolver
+                        .broad(&target.pattern_path(), &resolved_home, target.glob)?
                 } else {
                     false
                 };
@@ -654,8 +649,7 @@ impl Inspection<'_> {
                     rule: DenialRule::HiddenSearch,
                 });
             }
-            // native/rules/workflow.go:13-39 owns usage advice; consumer
-            // rendering must preserve its public sentences.
+            // Advice has shared public wording and cannot override protection.
             for (applies, advice) in [
                 (effects.replace_advice, Advice::RgReplace),
                 (effects.include_advice, Advice::RgInclude),
@@ -715,12 +709,17 @@ impl Inspection<'_> {
     }
 }
 
-fn target_rule(target: &Target, kind: Protection, home: &str) -> DenialRule {
-    // native/rules/credentials.go:12-39 distinguishes content from SSH scope;
-    // its filesystem owner at :62-88 selects the search-specific alternative.
-    if kind == Protection::AppData {
+fn target_rule(
+    target: &Target,
+    kind: Protection,
+    home: &str,
+    resolver: &mut filesystem::Resolver<'_>,
+) -> Result<DenialRule, CheckError> {
+    // Credential-content and SSH-scope refusals need distinct alternatives;
+    // search scope must not be presented as an ordinary credential-file read.
+    Ok(if kind == Protection::AppData {
         if !filesystem::appdata_reason(&target.path, home, target.glob)
-            && filesystem::broad_root(&target.path, home, target.glob)
+            && resolver.broad(&target.path, home, target.glob)?
         {
             DenialRule::Broad
         } else {
@@ -731,7 +730,9 @@ fn target_rule(target: &Target, kind: Protection, home: &str) -> DenialRule {
     } else if target.walk == Walk::Hidden && target.effect == Effect::Read {
         DenialRule::HiddenSearch
     } else if target.effect == Effect::Read
-        && filesystem::credential_read(&target.path, home, target.glob).is_some()
+        && resolver
+            .credential(&target.path, home, target.glob)?
+            .is_some()
     {
         if target.via == Via::Code {
             DenialRule::CodeFile
@@ -744,7 +745,7 @@ fn target_rule(target: &Target, kind: Protection, home: &str) -> DenialRule {
         DenialRule::GrepSsh
     } else {
         DenialRule::Ssh
-    }
+    })
 }
 
 fn recovery(context: &Context, cwd: &str, effect: &str) -> Recovery {

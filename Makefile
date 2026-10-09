@@ -1,4 +1,3 @@
-GO ?= go
 CARGO ?= cargo
 
 .PHONY: build check rust-check
@@ -27,7 +26,6 @@ build:
 	install -m 644 VERSION LICENSE README.md "$(OUT)/"
 
 check: rust-check
-	GO="$(GO)" scripts/check-go
 
 rust-check:
 	$(call validate_external_directory,$(CARGO_TARGET_DIR),CARGO_TARGET_DIR)

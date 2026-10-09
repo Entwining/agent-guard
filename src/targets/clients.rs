@@ -19,7 +19,7 @@ fn spec(program: &str) -> Spec {
     };
     match program {
         "cp" | "install" => {
-            // native/targets/programs.go:60,64; infer.go:105-121,203-204.
+            // A copy destination is written, not read for its existing contents.
             spec.destination = true;
             spec.options = &[("-t", Effect::Write), ("--target-directory", Effect::Write)];
             if program == "cp" {
@@ -28,8 +28,7 @@ fn spec(program: &str) -> Spec {
         }
         "ssh" => spec.operand = Effect::Name,
         "scp" => spec.remote = true,
-        // native/targets/programs.go:63-68,86-88: these are operand and
-        // option roles, not exceptions to credential protection.
+        // Client operand and option roles are not exceptions to protection.
         "rsync" => {
             spec.remote = true;
             spec.options = &[
@@ -271,7 +270,7 @@ fn ctags(context: &mut Context<'_>) {
         let value = word.strip_prefix("--exclude=").or_else(|| {
             (context.text(index.wrapping_sub(1)) == "--exclude").then_some(word.as_str())
         });
-        // D54: ctags interprets this pattern value as a file of patterns.
+        // ctags interprets this pattern value as a file of patterns.
         if let Some(path) = value.and_then(|value| value.strip_prefix('@'))
             && !path.is_empty()
         {

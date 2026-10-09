@@ -121,7 +121,7 @@ fn jsonl_dev_contract_and_parser_boundary() {
             assert!(response["parse_ns"].as_u64().is_some());
         }
     }
-    let mut host_request = shell.clone();
+    let mut host_request = shell;
     host_request["context"] = json!({"user":"fixture-user"});
     host_request["event"]["tool_input"]["command"] = json!("ls ~fixture-user/Library/Containers");
     assert_eq!(guard(&request(&host_request).unwrap())["class"], "D");

@@ -6,6 +6,8 @@ pub mod detector_success_and_failure;
 pub mod differential;
 #[path = "filesystem_identity/disk_readlink_errno_partitions_match_go.rs"]
 pub mod disk_readlink_errno_partitions_match_go;
+#[path = "filesystem_identity/escaped_home_keeps_broad_root_protection.rs"]
+pub mod escaped_home_keeps_broad_root_protection;
 #[path = "filesystem_identity/explicit_missing_public_ssh_files_preserve_go_roles.rs"]
 pub mod explicit_missing_public_ssh_files_preserve_go_roles;
 #[path = "filesystem_identity/git_owns_quoted_pathspec_globs.rs"]

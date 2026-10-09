@@ -5,7 +5,7 @@ fn version_reports_the_release_owner() {
     let output = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
         .arg("--version")
         .output()
-        .expect("offline binary should start");
+        .unwrap_or_else(|error| panic!("offline binary should start: {error}"));
     assert!(output.status.success());
     assert_eq!(
         output.stdout,
@@ -20,7 +20,7 @@ fn unsupported_invocations_fail_without_stdout() {
         let output = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
             .args(&arguments)
             .output()
-            .expect("offline binary should start");
+            .unwrap_or_else(|error| panic!("offline binary should start: {error}"));
         assert_eq!(output.status.code(), Some(2), "arguments: {arguments:?}");
         assert!(output.stdout.is_empty(), "arguments: {arguments:?}");
         assert_eq!(
