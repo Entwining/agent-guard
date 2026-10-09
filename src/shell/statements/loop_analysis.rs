@@ -66,8 +66,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             return Ok(None);
         }
         for expression in &expanded.arithmetic {
-            let evaluation = shell::arithmetic::evaluate(expression, &scope.values())?;
-            if evaluation.bounded || !evaluation.code.is_empty() {
+            let evaluation = shell::arithmetic::evaluate(expression)?;
+            if !evaluation.code.is_empty() {
                 return Ok(None);
             }
             inputs.extend(
@@ -316,8 +316,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             if value.word.expands && !value.nested.is_empty() {
                 stable.insert(name.clone());
             } else if value.arithmetic.len() == 1 {
-                let evaluation =
-                    shell::arithmetic::evaluate(&value.arithmetic[0], &scope.values())?;
+                let evaluation = shell::arithmetic::evaluate(&value.arithmetic[0])?;
                 let self_update = scope.bindings.get(name).is_some_and(|binding| {
                     binding.values.iter().all(|candidate| match candidate {
                         BindingValue::Known(value) => value.parse::<i128>().is_ok(),

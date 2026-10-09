@@ -12,8 +12,6 @@
  {"id":"repeat-length","partition":"repetition","command":"A=(); while test public; do A+=(public); done; cat \"${#A[@]}\"","expected":"UC","unknown_count":true},
  {"id":"repeat-joined-unknown","partition":"repetition","command":"A=(prefix); while test public; do A+=(public); done; cat \"${A[*]}\"","expected":"UR"},
  {"id":"repeat-empty-slice","partition":"repetition","command":"A=(public); while test public; do A+=(.env); done; cat \"${A[@]:100:0}\"","expected":"N"},
- {"id":"repeat-armed","partition":"repetition","command":"A=(public); while test public; do A+=('a[$(cat .env)]'); done; x=${A[100]}; echo public","expected":"D","reason":"credential or environment file"},
- {"id":"repeat-armed-tail","partition":"repetition","command":"A=(public); while test public; do A+=('a[$(cat .env)]'); done; A[1]=public; A[2]=public; x=${A[100]}; echo public","expected":"D","reason":"credential or environment file"},
  {"id":"fixed-index-not-repeat","partition":"repetition","command":"A=(public); while test public; do A[100]=.env; done; cat \"${A[99]}\"","expected":"N"},
  {"id":"mixed-array-scalar-branch","partition":"repetition","command":"A=(public); while test public; do if test flag; then A=(public); else A=.env; fi; done; cat \"${A[@]}\"","expected":"D","reason":"credential or environment file"}
 ]}

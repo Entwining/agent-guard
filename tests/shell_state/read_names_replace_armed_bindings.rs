@@ -20,8 +20,3 @@ fn function_local_names_replace_and_restore_bindings() {
         include_str!("../fixtures/rust-batch7-writers.json"),
     );
 }
-
-#[test]
-fn writer_models_preserve_other_armed_consumptions() {
-    batch7::partition("kept", include_str!("../fixtures/rust-batch7-writers.json"));
-}

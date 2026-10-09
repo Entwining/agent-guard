@@ -173,30 +173,4 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
         alternatives
     }
-
-    pub(super) fn command_operand_references(
-        &mut self,
-        argv: &[crate::record::Word],
-        resolved: &shell::argv::Resolution,
-        scope: &mut Scope,
-        depth: usize,
-    ) -> Result<(), CheckError> {
-        if let Some(index) = resolved.program {
-            for (position, word) in argv[index + 1..].iter().enumerate() {
-                let name_operand = resolved.shell
-                    && !self.functions.contains_key(&argv[index].text)
-                    && identifier(&word.text)
-                    && match argv[index].text.as_str() {
-                        "unset" | "export" | "read" => true,
-                        "printf" => position == 1 && argv[index + 1] == "-v",
-                        "local" | "declare" | "typeset" => !scope.frames.is_empty(),
-                        _ => false,
-                    };
-                if !name_operand {
-                    self.armed_word(word, scope, depth)?;
-                }
-            }
-        }
-        Ok(())
-    }
 }

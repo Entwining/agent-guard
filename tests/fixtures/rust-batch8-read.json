@@ -10,7 +10,5 @@
  {"id":"timeout","partition":"options","expected":"N","input":{"command":"x='a[$(cat .env)]'; y=$x; read -t 1 y <<< 1; a=(0); echo $((y))"}},
  {"id":"descriptor","partition":"options","expected":"N","input":{"command":"x='a[$(cat .env)]'; y=$x; read -u 0 y <<< 1; a=(0); echo $((y))"}},
  {"id":"missing-option-value","partition":"control","expected":"N","input":{"command":"read -d <<< public"}},
- {"id":"armed-tail","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; a=(0); read y z <<< \"1 $x\"; echo $((z))"}},
- {"id":"armed-whole","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; a=(0); read y <<< \"$x\"; echo $((y))"}},
  {"id":"benign-first-armed-tail","partition":"replace","expected":"N","input":{"command":"a=(0); read y z <<< '1 a[$(cat .env)]'; echo $((y))"}}
 ]}

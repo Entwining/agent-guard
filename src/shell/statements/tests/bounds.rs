@@ -76,18 +76,6 @@ fn statement_work_bound_applies_without_emitted_commands() {
 }
 
 #[test]
-fn unknown_binding_at_an_arithmetic_sink_refuses() {
-    let data = fixture();
-    let mut scope = Scope::new("/h", "/p");
-    scope.assign("A".into(), vec![BindingValue::Undetermined]);
-    let result = observation(
-        data["sources"]["unknown_arithmetic"].as_str().unwrap(),
-        &mut scope,
-    );
-    assert!(result.gaps.contains(&CoverageGap::UnsupportedShellSyntax));
-}
-
-#[test]
 fn binding_values_and_exit_snapshots_are_bounded() {
     let mut outer = Scope::new("/h", "/p");
     Rc::make_mut(&mut outer.loops).push(Rc::default());

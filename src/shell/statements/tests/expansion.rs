@@ -24,7 +24,7 @@ fn expand_candidates(
             },
             &mut output,
         );
-        crate::shell::expand_scoped(&raw, &mut scope, &mut evaluator, depth, false)
+        crate::shell::expand_scoped(&raw, &mut scope, &mut evaluator, depth)
     };
     (result, output)
 }
@@ -156,7 +156,7 @@ fn assigned_pwd_does_not_duplicate_non_tilde_words() {
         &mut output,
     );
     assert_eq!(
-        crate::shell::expand_scoped(&raw, &mut scope, &mut evaluator, 0, false)
+        crate::shell::expand_scoped(&raw, &mut scope, &mut evaluator, 0)
             .unwrap()
             .len(),
         1

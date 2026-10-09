@@ -80,7 +80,6 @@ pub(in crate::shell) fn expand(
     // Preserve the ordinary word observer for code in indices and slice bounds.
     let contexts = scope.contexts();
     let observed = observe_indices(raw, &contexts, scope, evaluator, depth)?;
-    evaluator.armed_reference(name, scope, depth)?;
     let mut results = Vec::new();
     for state in state
         .zsh
@@ -162,9 +161,6 @@ fn observe_indices(
             tilde_assigned: true,
         },
     )?;
-    for expression in &observed.references {
-        evaluator.armed_references(expression, scope, depth)?;
-    }
     for code in &observed.nested {
         evaluator.isolated_source(code, scope, depth + 1)?;
     }

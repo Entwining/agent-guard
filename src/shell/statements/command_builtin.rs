@@ -16,20 +16,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 };
                 scope.assign(name.text.clone(), vec![binding]);
             } else {
-                let joined = values
-                    .iter()
-                    .skip(1)
-                    .map(|word| word.text.as_str())
-                    .collect::<String>();
-                if !matches!(
-                    shell::arithmetic::armed(&joined),
-                    shell::arithmetic::Arming::Inert
-                ) {
-                    self.output.gap(CoverageGap::UnsupportedShellSyntax);
-                    scope.assign(name.text.clone(), vec![BindingValue::Undetermined]);
-                } else {
-                    scope.assign(name.text.clone(), vec![BindingValue::RuntimeUnknown(None)]);
-                }
+                scope.assign(name.text.clone(), vec![BindingValue::RuntimeUnknown(None)]);
             }
         }
     }

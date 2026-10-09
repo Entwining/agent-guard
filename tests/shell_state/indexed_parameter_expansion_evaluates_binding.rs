@@ -149,36 +149,16 @@ fn indexed_unset_evaluates_binding() {
     partition("index-unset");
 }
 #[test]
-fn indexed_assignment_evaluates_binding() {
-    partition("index-assignment");
-}
-#[test]
 fn non_armed_binding_behaviour_is_preserved() {
     partition("non-armed");
-}
-#[test]
-fn assignment_references_observe_armed_values_after_calls() {
-    partition("attribute-restore");
-}
-#[test]
-fn assignment_reference_is_conservative_after_attribute_removal() {
-    partition("attribute-disable");
 }
 #[test]
 fn literal_integer_value_is_not_general_shell_source() {
     partition("integer-data");
 }
 #[test]
-fn accepted_non_executing_references_observe_nested_source() {
-    partition("conservative");
-}
-#[test]
 fn existing_arithmetic_sinks_retain_protection() {
     partition("existing");
-}
-#[test]
-fn zsh_witnesses_use_the_general_reference_owner() {
-    partition("zsh-sinks");
 }
 #[test]
 fn scope_and_candidate_versions_feed_references() {
@@ -187,20 +167,4 @@ fn scope_and_candidate_versions_feed_references() {
 #[test]
 fn lexer_marks_only_named_subscript_code() {
     partition("lexer-arming");
-}
-#[test]
-fn armed_recursion_is_bounded() {
-    partition("bounds");
-}
-#[test]
-fn general_reference_exit() {
-    partition("zsh-exit");
-}
-#[test]
-fn general_reference_repeat() {
-    partition("zsh-repeat");
-}
-#[test]
-fn general_reference_print() {
-    partition("zsh-print");
 }

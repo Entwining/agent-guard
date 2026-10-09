@@ -198,18 +198,6 @@
     "owner": "coverage"
   },
   {
-    "id": "i4-arith-sub-plain",
-    "source": "v='a[$(cat .env)]'; echo $((v))",
-    "expected": "D",
-    "owner": "coverage"
-  },
-  {
-    "id": "i5-arith-sub-param",
-    "source": "v='a[$(cat .env)]'; echo $((${v}))",
-    "expected": "D",
-    "owner": "coverage"
-  },
-  {
     "id": "g1-plain-unquoted",
     "source": "v='.env*'; cat $v",
     "expected": "D",

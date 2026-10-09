@@ -4,8 +4,6 @@ pub(super) fn binding_contexts(
     seed: &Expanded,
     scope: &mut statements::Scope,
     evaluator: &mut statements::Evaluator<'_, '_>,
-    depth: usize,
-    observe_bindings: bool,
 ) -> Result<Vec<std::collections::BTreeMap<String, Option<String>>>, CheckError> {
     let mut contexts = vec![std::collections::BTreeMap::<String, Option<String>>::new()];
     let mut names = seed
@@ -27,9 +25,6 @@ pub(super) fn binding_contexts(
             })
         {
             evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
-        }
-        if observe_bindings && seed.word.vars.contains(name) {
-            evaluator.armed_reference(name, scope, depth)?;
         }
         contexts = project_binding(seed, scope, evaluator, name, contexts);
     }

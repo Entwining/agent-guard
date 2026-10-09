@@ -51,21 +51,12 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let mut prefixes = Vec::new();
         let mut assignment_scope = scope.clone();
         for (name, raw) in assignments {
-            let observe_bindings = assignment_scope
-                .bindings
-                .get(name.strip_suffix('+').unwrap_or(name))
-                .is_some_and(|binding| binding.arithmetic);
-            // Copying stores the armed value; only an arithmetic attribute
-            // consumes it here. A later assignment replaces the stored value.
             let accumulated = self.literal_accumulation(name, raw, &mut assignment_scope, depth)?;
             let values = if accumulated.is_some() {
                 Vec::new()
             } else {
-                shell::expand_scoped(raw, &mut assignment_scope, self, depth, observe_bindings)?
+                shell::expand_scoped(raw, &mut assignment_scope, self, depth)?
             };
-            for value in &values {
-                self.armed_references(&value.word.text, &mut assignment_scope, depth)?;
-            }
             let origins = assignment_scope.value_origins(&values, &mut self.flow);
             let mut binding = accumulated.unwrap_or_else(|| {
                 values

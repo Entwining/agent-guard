@@ -140,7 +140,6 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         for (name, values) in command_bindings {
             scope.assign(name.clone(), values.clone());
         }
-        self.command_operand_references(&argv, &resolved, scope, depth)?;
         let mut executed_output =
             self.command_builtin(&mut argv, &resolved, scope, &prior, depth)?;
         let shell_source = self.observed_shell_source(&mut argv, scope, program);

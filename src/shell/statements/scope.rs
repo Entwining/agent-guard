@@ -31,8 +31,6 @@ impl Scope {
     }
     pub fn new(home: &str, cwd: &str) -> Self {
         Self {
-            #[cfg(test)]
-            candidate_work: Rc::default(),
             named_dirs: std::rc::Rc::new(BTreeMap::new()),
             directory: Directory::new(cwd),
             bindings: Rc::new(BTreeMap::from([(

@@ -1,6 +1,6 @@
 use crate::support;
 use agent_guard_rust::{
-    CoverageGap, Event, adapters, evaluate_with_arm,
+    Event, adapters, evaluate_with_arm,
     shell::{self, Arm},
 };
 use serde_json::{Value, json};
@@ -75,61 +75,4 @@ fn arithmetic_effects_and_consumer_wire() {
             }
         }
     }
-}
-
-#[test]
-fn arithmetic_uses_current_binding_version_and_scope() {
-    let rows: Vec<_> = rows()
-        .into_iter()
-        .filter(|r| !r["sink"].is_string() && r["id"] != "cycle")
-        .collect();
-    assert!(
-        !rows.is_empty(),
-        "missing arithmetic binding scope partition"
-    );
-    for row in rows {
-        assert_eq!(
-            bodies(row["source"].as_str().unwrap()).contains(&"cat".into()),
-            row["nested"].as_bool().unwrap(),
-            "{}: {}",
-            row["id"],
-            row["scope"]
-        );
-    }
-}
-
-#[test]
-fn arithmetic_binding_cycles_are_bounded() {
-    let rows = rows();
-    let row = rows.iter().find(|r| r["id"] == "cycle").unwrap();
-    let o = shell::observe(
-        row["source"].as_str().unwrap(),
-        Arm::Brush,
-        "/h",
-        "/h/p",
-        true,
-    )
-    .unwrap();
-    assert!(
-        o.gaps.contains(&CoverageGap::InspectionBudget),
-        "recursive binding cannot imply complete coverage"
-    );
-}
-
-#[test]
-fn arithmetic_binding_work_is_bounded() {
-    let rows = rows();
-    let row = rows.iter().find(|r| r["id"] == "fanout").unwrap();
-    let observation = shell::observe(
-        row["source"].as_str().unwrap(),
-        Arm::Brush,
-        "/h",
-        "/h/p",
-        true,
-    )
-    .unwrap();
-    assert!(
-        observation.gaps.contains(&CoverageGap::InspectionBudget),
-        "acyclic binding fanout must exhaust the finite work budget"
-    );
 }

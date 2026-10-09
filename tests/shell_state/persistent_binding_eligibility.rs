@@ -105,10 +105,6 @@ fn function_plain_assignment_is_global() {
     partition("function-global");
 }
 #[test]
-fn function_arithmetic_uses_local_binding() {
-    partition("function-arithmetic");
-}
-#[test]
 fn function_evaluated_variable_uses_local_binding() {
     partition("function-evaluated");
 }

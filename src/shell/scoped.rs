@@ -145,11 +145,10 @@ pub(super) fn expand_scoped(
     scope: &mut statements::Scope,
     evaluator: &mut statements::Evaluator<'_, '_>,
     depth: usize,
-    observe_bindings: bool,
 ) -> Result<Vec<Expanded>, CheckError> {
     // Drop the candidate-building frame before recursively observing source;
     // its temporaries otherwise accumulate across the supported nesting depth.
-    let (mut words, nested) = expand_candidates(raw, scope, evaluator, depth, observe_bindings)?;
+    let (mut words, nested) = expand_candidates(raw, scope, evaluator, depth)?;
     let fields = words.iter().map(|word| word.split.len()).sum::<usize>();
     // Only repetition makes a value longer than the accepted input. A word may
     // still repeat a short value into a longer path.

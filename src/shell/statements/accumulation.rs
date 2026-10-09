@@ -73,18 +73,12 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             scope,
             self,
             depth,
-            false,
         )?;
         for tail in tails {
             let tail = tail.word.text;
             // Field boundaries keep every literal's resource identity independent
             // of repetition count. Contiguous bytes keep the sequential owner.
-            if !tail.starts_with([' ', '\t', '\n'])
-                || !matches!(
-                    shell::arithmetic::armed(&tail),
-                    shell::arithmetic::Arming::Inert
-                )
-            {
+            if !tail.starts_with([' ', '\t', '\n']) {
                 return Ok(None);
             }
             for repetition in &mut repeated {
@@ -113,19 +107,12 @@ fn literal_repetitions(scope: &Scope, name: &str) -> Option<Vec<LiteralRepetitio
     let mut repeated = Vec::new();
     for value in prior {
         let value = match value {
-            BindingValue::Known(prefix)
-                if matches!(
-                    shell::arithmetic::armed(&prefix),
-                    shell::arithmetic::Arming::Inert
-                ) =>
-            {
-                LiteralRepetition {
-                    prefix,
-                    alternatives: Vec::new(),
-                    suffix: String::new(),
-                    may_be_empty: false,
-                }
-            }
+            BindingValue::Known(prefix) => LiteralRepetition {
+                prefix,
+                alternatives: Vec::new(),
+                suffix: String::new(),
+                may_be_empty: false,
+            },
             BindingValue::RepeatedFields(mut value) if value.suffix.is_empty() => {
                 value.may_be_empty = false;
                 *value

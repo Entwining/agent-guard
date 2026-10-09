@@ -2,61 +2,6 @@ use super::super as shell;
 use super::*;
 
 impl Scope {
-    pub(super) fn candidates(&self) -> BTreeMap<String, Vec<BindingValue>> {
-        self.candidates_from(self.bindings.iter())
-    }
-    pub(super) fn named_candidates(&self, name: &str) -> Vec<BindingValue> {
-        let prefix = format!("{name}[");
-        self.candidates_from(
-            self.bindings.get_key_value(name).into_iter().chain(
-                self.bindings
-                    .range(prefix.clone()..)
-                    .take_while(|(key, _)| key.starts_with(&prefix)),
-            ),
-        )
-        .remove(name)
-        .unwrap_or_default()
-    }
-    pub(super) fn candidates_from<'a>(
-        &self,
-        bindings: impl Iterator<Item = (&'a String, &'a Binding)>,
-    ) -> BTreeMap<String, Vec<BindingValue>> {
-        let mut values: BTreeMap<String, Vec<BindingValue>> = BTreeMap::new();
-        let mut seen = BTreeMap::<String, std::collections::HashSet<BindingValue>>::new();
-        for (name, binding) in bindings {
-            let base = name.split_once('[').map_or(name.as_str(), |(base, _)| base);
-            let destination = values.entry(base.into()).or_default();
-            for value in binding.values.iter() {
-                let candidates = match value {
-                    BindingValue::Array(array) => array.binding_values(),
-                    value => vec![value.clone()],
-                };
-                for value in candidates {
-                    #[cfg(test)]
-                    self.candidate_work.set(self.candidate_work.get() + 1);
-                    if seen.entry(base.into()).or_default().insert(value.clone()) {
-                        destination.push(value);
-                    }
-                }
-            }
-        }
-        values
-    }
-    pub fn values(&self) -> BTreeMap<String, Vec<String>> {
-        self.candidates()
-            .into_iter()
-            .map(|(name, values)| {
-                (
-                    name,
-                    values
-                        .iter()
-                        .filter_map(BindingValue::known)
-                        .cloned()
-                        .collect(),
-                )
-            })
-            .collect()
-    }
     pub fn contexts(&self) -> BTreeMap<String, String> {
         let mut contexts = self
             .bindings

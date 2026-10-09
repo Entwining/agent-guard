@@ -23,7 +23,6 @@
  {"id":"unset-f-async-isolation","partition":"unset","source":"f(){ printf public; }; unset -f f & f","expected":"N"},
  {"id":"unset-f-substitution-isolation","partition":"unset","source":"f(){ printf public; }; printf '%s' \"$(unset -f f)\"; f","expected":"N"},
  {"id":"unset-indeterminate","partition":"unset","source":"D=$C/Data; read name; unset \"$name\"; ls \"$D\"","expected":"D"},
- {"id":"export-child-preserved","partition":"unset","source":"x='a[$(cat .env)]'; a=(0); export x; bash -c 'echo $((x))'","expected":"D"},
  {"id":"export-child-unset","partition":"unset","source":"x='a[$(cat .env)]'; export x; unset x; bash -c 'echo $((x))'","expected":"N"},
  {"id":"child-unexported-control","partition":"unset","source":"x='a[$(cat .env)]'; bash -c 'echo $((x))'","expected":"N"},
  {"id":"b5-gitdir-env","partition":"git-environment","source":"GIT_DIR=$C/Data git status","expected":"D"},

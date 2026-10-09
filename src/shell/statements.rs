@@ -172,8 +172,6 @@ type LocalFrame = Rc<BTreeMap<String, Option<Binding>>>;
 
 #[derive(Clone)]
 pub(super) struct Scope {
-    #[cfg(test)]
-    candidate_work: Rc<std::cell::Cell<usize>>,
     pub(super) named_dirs: std::rc::Rc<BTreeMap<String, Vec<BindingValue>>>,
     pub directory: Directory,
     pub bindings: Rc<BTreeMap<String, Binding>>,
@@ -331,12 +329,6 @@ impl ArgumentAlternative {
 
 pub(super) fn assignment(raw: &str) -> Option<(&str, &str)> {
     raw.split_once('=').filter(|(n, _)| identifier(n))
-}
-
-fn indexed_name(name: &str) -> Option<&str> {
-    let (variable, tail) = name.split_once('[')?;
-    identifier(variable).then_some(())?;
-    tail.strip_suffix(']')
 }
 
 mod accumulation;

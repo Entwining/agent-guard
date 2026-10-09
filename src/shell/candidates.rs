@@ -6,7 +6,6 @@ pub(super) fn expand_candidates(
     scope: &mut statements::Scope,
     evaluator: &mut statements::Evaluator<'_, '_>,
     depth: usize,
-    observe_bindings: bool,
 ) -> Result<(Vec<Expanded>, Vec<String>), CheckError> {
     if let WordSyntax::ProcessInput(input) = &raw.syntax {
         return expand_process_input(input, scope, evaluator, depth)
@@ -21,7 +20,7 @@ pub(super) fn expand_candidates(
     let first = scope.contexts();
     let cwd = scope.directory.current.render();
     let seed = seed_expansion(raw, scope, evaluator, &first, &cwd)?;
-    let contexts = contexts::binding_contexts(&seed, scope, evaluator, depth, observe_bindings)?;
+    let contexts = contexts::binding_contexts(&seed, scope, evaluator)?;
     let mut nested = nested_sources(raw, scope, evaluator);
     let mut result = Vec::new();
     let mut updates = std::collections::BTreeMap::<String, Vec<(Option<String>, String)>>::new();
@@ -71,7 +70,6 @@ pub(super) fn expand_candidates(
                             raw,
                             scope,
                             evaluator,
-                            depth,
                             &words::ExpansionContext {
                                 named_dirs,
                                 zsh,
@@ -313,7 +311,6 @@ fn expand_reading(
     raw: &RawWord,
     scope: &mut statements::Scope,
     evaluator: &mut statements::Evaluator<'_, '_>,
-    depth: usize,
     expansion: &words::ExpansionContext<'_>,
 ) -> Result<Expanded, CheckError> {
     let mut expanded = words::expand(&raw.raw, &raw.syntax, expansion)?;
@@ -336,15 +333,11 @@ fn expand_reading(
         });
     }
     for expression in &expanded.arithmetic {
-        evaluator.armed_references(expression, scope, depth)?;
-        for code in evaluator.arithmetic_code(expression, scope)? {
+        for code in super::arithmetic::evaluate(expression)?.code {
             if !expanded.nested.contains(&code) {
                 expanded.nested.push(code);
             }
         }
-    }
-    for expression in &expanded.references {
-        evaluator.armed_references(expression, scope, depth)?;
     }
     Ok(expanded)
 }

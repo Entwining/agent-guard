@@ -6,7 +6,6 @@
  {"id":"kill-unknown-width","partition":"kill","input":{"command":"P=($(printf public)); kill -- \"${P[@]}\""},"expected":"N"},
  {"id":"kill-public-redirect","partition":"kill","input":{"command":"P=($(printf public)); kill -- \"${P[@]}\" < public"},"expected":"N"},
  {"id":"kill-protected-redirect","partition":"kill","input":{"command":"P=($(printf public)); kill -- \"${P[@]}\" < .env"},"expected":"D","wire_reason":"environment-file"},
- {"id":"kill-armed-reference","partition":"kill","input":{"command":"P=('a[$(cat .env)]'); kill -- \"${P[@]}\""},"expected":"D","wire_reason":"environment-file"},
  {"id":"perl-public-search","partition":"perl","input":{"command":"D=(./*public*); perl -e 'alarm 10; exec @ARGV' rg -l -F public -- \"${D[@]}\""},"expected":"N"},
  {"id":"perl-public-list","partition":"perl","input":{"command":"perl -e 'exec @ARGV;' ls public second"},"expected":"N"},
  {"id":"perl-protected-read","partition":"perl","input":{"command":"perl -e 'alarm 10; exec @ARGV' cat .env"},"expected":"D","wire_reason":"environment-file"},

@@ -4,16 +4,9 @@
     {"id":"b6-copy-overwrite-runtime","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; y=$x; y=$(date +%s); a=(0); echo $((y))"},"expected":"UC"},
     {"id":"l2-overwrite-unknown","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; y=$x; y=$UNKNOWN; a=(0); echo $((y))"},"expected":"N"},
     {"id":"b6-unknown-math-control","partition":"overwrite","input":{"command":"y=$UNKNOWN; a=(0); echo $((y))"},"expected":"N"},
-    {"id":"b6-copy-no-overwrite","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; y=$x; a=(0); echo $((y))"},"expected":"D"},
-    {"id":"b6-copy-overwrite-other","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; y=$x; z=1; a=(0); echo $((y))"},"expected":"D"},
     {"id":"b6-self-overwrite","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; x=1; a=(0); echo $((x))"},"expected":"N"},
     {"id":"b6-copy-overwrite-unarmed-expansion","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; y=$x; public=1; y=$public; a=(0); echo $((y))"},"expected":"N"},
     {"id":"b6-copy-quoted-overwrite","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; y=\"$x\"; y=1; a=(0); echo $((y))"},"expected":"N"},
-    {"id":"b6-copy-quoted-no-overwrite","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; y=\"$x\"; a=(0); echo $((y))"},"expected":"D"},
-    {"id":"b6-copy-overwrite-executing-code","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; y=$x; y=$(cat .env); a=(0); echo $((y))"},"expected":"D"},
-    {"id":"b6-typed-copy-consumed-before-overwrite","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; a=(0); declare -i n; n=$x; n=2; echo public"},"expected":"D"},
-    {"id":"b6-typed-copy-after-literal","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; a=(0); declare -i n; n=1; n=$x; n=2; echo public"},"expected":"D"},
-    {"id":"b6-typed-copy-after-join","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; a=(0); if true; then declare -i n; else n=1; fi; n=$x; n=2; echo public"},"expected":"D"},
-    {"id":"r42-runtime-mix","partition":"overwrite","input":{"command":"y='a[$(cat $C/data.txt)]'; a=(0); s=$(true); z=\"$y$s\"; echo $((z))"},"expected":"UR"}
+    {"id":"b6-copy-overwrite-executing-code","partition":"overwrite","input":{"command":"x='a[$(cat .env)]'; y=$x; y=$(cat .env); a=(0); echo $((y))"},"expected":"D"}
   ]
 }
