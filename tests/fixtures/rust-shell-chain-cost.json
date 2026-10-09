@@ -1,0 +1,4 @@
+{"header_words":3000,"chain_terms":10000,"rows":[
+{"id":"identifier-header-public","command":"for f in $HEADER; do cat $f; done","exit":2,"reason":"inspection budget","alternative":"Split loops or function calls into smaller commands"},
+{"id":"logical-chain-public","command":"$CHAIN && cat public.txt","exit":2,"reason":"inspection budget","alternative":"Split loops or function calls into smaller commands"}
+]}

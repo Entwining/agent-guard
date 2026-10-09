@@ -1,7 +1,7 @@
 {"rows":[
  {"id":"literal-rg-root","partition":"visible","expected":"N","input":{"command":"rg x 'a/*' --glob '*.md'"}},
  {"id":"short-rg-filter","partition":"visible","expected":"N","input":{"command":"rg x 'a/*' -g '*.ts'"}},
- {"id":"visible-loop-rg","partition":"visible","expected":"D","input":{"command":"for d in ~/Code/*/; do rg -n x \"$d\" --glob '*.yml'; done"},"wire_reason":"credential-file"},
+ {"id":"visible-loop-rg","partition":"visible","expected":"N","input":{"command":"for d in ~/Code/*/; do rg -n x \"$d\" --glob '*.yml'; done"}},
  {"id":"visible-loop-git-show","partition":"visible","expected":"N","input":{"command":"for f in a/*/credentials.ts; do git show \"HEAD:$f\"; done"}},
  {"id":"visible-loop-git-log","partition":"visible","expected":"N","input":{"command":"for f in a/*/credentials.ts; do git log -- \"$f\"; done"}},
  {"id":"explicit-dot","partition":"control","expected":"D","input":{"command":"cat ~/.*/credentials"}},

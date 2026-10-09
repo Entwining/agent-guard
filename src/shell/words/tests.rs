@@ -113,6 +113,7 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
         named_tildes: std::collections::BTreeSet::new(),
         modifiers: false,
         unset_parameters: std::collections::BTreeSet::new(),
+        empty_parameters: std::collections::BTreeSet::new(),
         unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
@@ -172,21 +173,6 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
     let bytes =
         serde_json::to_vec(&json!({"tool_name":"Bash","tool_input":{"command":out.nested[0]}}))
             .unwrap();
-    struct NoProbe;
-    impl crate::filesystem::Probe for NoProbe {
-        fn stat(
-            &mut self,
-            _: &std::path::Path,
-        ) -> std::io::Result<Option<crate::filesystem::Metadata>> {
-            Ok(None)
-        }
-        fn read_link(
-            &mut self,
-            _: &std::path::Path,
-        ) -> std::io::Result<Option<std::path::PathBuf>> {
-            Ok(None)
-        }
-    }
     let denial = crate::evaluate_with_catalog(
         crate::Event {
             bytes: &bytes,
@@ -294,6 +280,7 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
         named_tildes: std::collections::BTreeSet::new(),
         modifiers: false,
         unset_parameters: std::collections::BTreeSet::new(),
+        empty_parameters: std::collections::BTreeSet::new(),
         unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
@@ -348,6 +335,7 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
         named_tildes: std::collections::BTreeSet::new(),
         modifiers: false,
         unset_parameters: std::collections::BTreeSet::new(),
+        empty_parameters: std::collections::BTreeSet::new(),
         unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
@@ -401,6 +389,7 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
         named_tildes: std::collections::BTreeSet::new(),
         modifiers: false,
         unset_parameters: std::collections::BTreeSet::new(),
+        empty_parameters: std::collections::BTreeSet::new(),
         unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
@@ -444,4 +433,17 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
         "body variables belong to the nested scope"
     );
     assert_eq!(out.word.text, raw, "covered bytes must appear exactly once");
+}
+
+struct NoProbe;
+impl crate::filesystem::Probe for NoProbe {
+    fn stat(
+        &mut self,
+        _: &std::path::Path,
+    ) -> std::io::Result<Option<crate::filesystem::Metadata>> {
+        Ok(None)
+    }
+    fn read_link(&mut self, _: &std::path::Path) -> std::io::Result<Option<std::path::PathBuf>> {
+        Ok(None)
+    }
 }

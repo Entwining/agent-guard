@@ -208,65 +208,7 @@ fn original_parameter_regions_have_supported_or_refused_coverage() {
         ),
         (0..7, true)
     );
-    for (body, expected, cause) in [
-        (
-            "${v@Z}",
-            vec![(0..6, false)],
-            CoverageGap::UnsupportedShellSyntax,
-        ),
-        (
-            "${v[${v@Z}]}",
-            vec![(0..12, true), (4..10, false)],
-            CoverageGap::UnsupportedShellSyntax,
-        ),
-        (
-            "${v:-${v@Z}}",
-            vec![(0..12, false), (5..11, false)],
-            CoverageGap::UnsupportedShellSyntax,
-        ),
-        (
-            "${v:-${(f)v}}",
-            vec![(0..13, false), (5..12, false)],
-            CoverageGap::ExecutorDivergence,
-        ),
-        (
-            "$((${v@Z}))",
-            vec![(3..9, false)],
-            CoverageGap::UnsupportedShellSyntax,
-        ),
-        (
-            "$[${v@Z}]",
-            vec![(2..8, false)],
-            CoverageGap::UnsupportedShellSyntax,
-        ),
-        (
-            "\"${${v}}\"",
-            vec![(1..8, false), (3..7, true)],
-            CoverageGap::UnsupportedShellSyntax,
-        ),
-    ] {
-        let source = format!("echo {body}");
-        let observation = shell::observe(
-            &source,
-            Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/home/project",
-            true,
-        )
-        .unwrap();
-        assert_eq!(observation.gaps, [cause], "word refusal cause: {source}");
-        assert_eq!(observation.word_coverage.len(), 1, "{source}");
-        let word = &observation.word_coverage[0];
-        assert!(word.unsupported);
-        assert_eq!(
-            word.parameters
-                .iter()
-                .map(|r| (r.range.clone(), r.supported))
-                .collect::<Vec<_>>(),
-            expected,
-            "per-region support and span: {word:?}"
-        );
-    }
+    assert_refused_parameter_regions();
     for (source, active) in [
         ("echo ${v:-${w:-x}}", true),
         ("echo '${~v}'", false),
@@ -360,5 +302,68 @@ fn brush_backtick_leniency_keeps_the_input_and_refusal() {
                 .contains(&CoverageGap::UnsupportedShellSyntax)
         );
         assert!(observation.script.commands.is_empty());
+    }
+}
+
+fn assert_refused_parameter_regions() {
+    use agent_guard_rust::shell;
+    for (body, expected, cause) in [
+        (
+            "${v@Z}",
+            vec![(0..6, false)],
+            CoverageGap::UnsupportedShellSyntax,
+        ),
+        (
+            "${v[${v@Z}]}",
+            vec![(0..12, true), (4..10, false)],
+            CoverageGap::UnsupportedShellSyntax,
+        ),
+        (
+            "${v:-${v@Z}}",
+            vec![(0..12, false), (5..11, false)],
+            CoverageGap::UnsupportedShellSyntax,
+        ),
+        (
+            "${v:-${(f)v}}",
+            vec![(0..13, false), (5..12, false)],
+            CoverageGap::ExecutorDivergence,
+        ),
+        (
+            "$((${v@Z}))",
+            vec![(3..9, false)],
+            CoverageGap::UnsupportedShellSyntax,
+        ),
+        (
+            "$[${v@Z}]",
+            vec![(2..8, false)],
+            CoverageGap::UnsupportedShellSyntax,
+        ),
+        (
+            "\"${${v}}\"",
+            vec![(1..8, false), (3..7, true)],
+            CoverageGap::UnsupportedShellSyntax,
+        ),
+    ] {
+        let source = format!("echo {body}");
+        let observation = shell::observe(
+            &source,
+            Arm::Brush,
+            "/synthetic/home",
+            "/synthetic/home/project",
+            true,
+        )
+        .unwrap();
+        assert_eq!(observation.gaps, [cause], "word refusal cause: {source}");
+        assert_eq!(observation.word_coverage.len(), 1, "{source}");
+        let word = &observation.word_coverage[0];
+        assert!(word.unsupported);
+        assert_eq!(
+            word.parameters
+                .iter()
+                .map(|r| (r.range.clone(), r.supported))
+                .collect::<Vec<_>>(),
+            expected,
+            "per-region support and span: {word:?}"
+        );
     }
 }

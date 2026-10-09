@@ -13,7 +13,7 @@
  {"id":"array-rejected","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read -a y <<< 1; a=(0); echo $((y))"}},
  {"id":"poll-keeps-bash-candidate","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read -t 0 y <<< 1; a=(0); echo $((y))"}},
  {"id":"nonstdin-keeps-unknown-candidate","partition":"kept","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read -u 9 y 9<&- <<< 1; a=(0); echo $((y))"}},
- {"id":"default-reply-unmodeled","partition":"fallback","expected":"UR","input":{"command":"read <<< 'a[$(cat .env)]'; a=(0); echo $((REPLY))"}},
+ {"id":"default-reply-consumes-armed-value","partition":"kept","expected":"D","input":{"command":"read <<< 'a[$(cat .env)]'; a=(0); echo $((REPLY))"}},
  {"id":"ifs-keeps-unmodeled-candidate","partition":"fallback","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; IFS=,; read y <<< 1; a=(0); echo $((y))"}},
  {"id":"escape-keeps-unmodeled-candidate","partition":"fallback","expected":"D","input":{"command":"x='a[$(cat .env)]'; y=$x; read y <<< '1\\2'; a=(0); echo $((y))"}},
  {"id":"missing-option-value","partition":"control","expected":"N","input":{"command":"read -d <<< public"}},

@@ -7,6 +7,11 @@ pub(super) struct Chain {
     steps: Vec<(u8, Option<usize>)>,
 }
 
+pub(super) enum Applied {
+    Known(String),
+    RuntimeUnknown(String),
+}
+
 pub(super) fn chain(
     raw: &str,
     expr: &ParameterExpr,
@@ -66,7 +71,8 @@ impl Chain {
         &self,
         mut value: String,
         context: &ExpansionContext<'_>,
-    ) -> Result<Option<String>, crate::CheckError> {
+    ) -> Result<Option<Applied>, crate::CheckError> {
+        let mut runtime_unknown = false;
         for (step, number) in &self.steps {
             crate::check_deadline(context.deadline)?;
             value = match step {
@@ -122,6 +128,11 @@ impl Chain {
                     };
                     crate::filesystem::normalize(&path, "/", "")
                 }
+                b'c' => {
+                    // PATH lookup can replace a basename, but not a directory path.
+                    runtime_unknown |= !value.contains('/');
+                    value
+                }
                 b'q' if value
                     .chars()
                     .all(|ch| ch.is_alphanumeric() || "/._-".contains(ch)) =>
@@ -137,7 +148,11 @@ impl Chain {
                 _ => return Ok(None),
             };
         }
-        Ok(Some(value))
+        Ok(Some(if runtime_unknown {
+            Applied::RuntimeUnknown(value)
+        } else {
+            Applied::Known(value)
+        }))
     }
 }
 

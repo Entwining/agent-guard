@@ -21,6 +21,15 @@ impl agent_guard_rust::filesystem::Probe for NoLinks {
     }
 }
 
+fn command(form: &str, depth: usize, basename: &str) -> String {
+    match form {
+        "literal" => format!("cat {}{basename}", "p/".repeat(depth)),
+        "parameter-prefix" => format!("cat $PWD/{}{basename}", "p/".repeat(depth)),
+        "repeated-parameter" => format!("cat {}/{basename}", "$PWD".repeat(depth)),
+        _ => panic!("unknown deep-path form {form}"),
+    }
+}
+
 #[test]
 fn deep_literal_paths_preserve_public_and_protected_results() {
     let fixture = support::Fixture::new();
@@ -30,10 +39,22 @@ fn deep_literal_paths_preserve_public_and_protected_results() {
         let depth = depth.as_u64().unwrap() as usize;
         for consumer in ["claude", "codex", "pi"] {
             let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
-            for row in contract["rows"].as_array().unwrap() {
+            for (form, row) in contract["forms"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|form| {
+                    contract["rows"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(move |row| (form.as_str().unwrap(), row))
+                })
+            {
                 let name = row["basename"].as_str().unwrap();
                 let class = row["expected"].as_str().unwrap();
-                let body = fixture.body(&json!({"tool":"Bash","input":{"command":format!("cat {}{name}", "p/".repeat(depth))}}));
+                let body = fixture
+                    .body(&json!({"tool":"Bash","input":{"command":command(form, depth, name)}}));
                 let result = evaluate(Event {
                     bytes: &body,
                     context: &context,
@@ -42,7 +63,7 @@ fn deep_literal_paths_preserve_public_and_protected_results() {
                 assert_eq!(
                     support::class(&result),
                     class,
-                    "depth={depth} {consumer} {name}"
+                    "depth={depth} {consumer} {form} {name}"
                 );
                 let wire = adapters::render(context.consumer, &result);
                 assert_eq!(wire.exit, if class == "D" { 2 } else { 0 });
@@ -62,8 +83,17 @@ fn deep_literal_paths_preserve_public_and_protected_results() {
 #[test]
 fn native_checker_completes_twenty_thousand_public_components() {
     let fixture = support::Fixture::new();
-    for consumer in ["claude", "codex", "pi"] {
-        let body = fixture.body(&json!({"tool":"Bash","input":{"command":format!("cat {}file.txt", "p/".repeat(20_000))}}));
+    let contract: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/rust-deep-path-cost.json")).unwrap();
+    for (consumer, form) in ["claude", "codex", "pi"].into_iter().flat_map(|consumer| {
+        contract["forms"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(move |form| (consumer, form.as_str().unwrap()))
+    }) {
+        let body = fixture
+            .body(&json!({"tool":"Bash","input":{"command":command(form, 20_000, "file.txt")}}));
         let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
             .args(["--checker", "--runtime", consumer, "--cwd"])
             .arg(&fixture.project)
@@ -78,7 +108,7 @@ fn native_checker_completes_twenty_thousand_public_components() {
         assert_eq!(
             output.status.code(),
             Some(0),
-            "{consumer}: {}",
+            "{consumer} {form}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
         assert!(output.stdout.is_empty() && output.stderr.is_empty());

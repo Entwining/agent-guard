@@ -73,26 +73,9 @@ pub fn execute(
     }
     let path = command.get_program().to_string_lossy().into_owned();
     let deadline = Instant::now() + timeout;
-    let (mut out, out_writer) = io::pipe().map_err(|error| io_message(&error))?;
-    let (mut err, err_writer) = io::pipe().map_err(|error| io_message(&error))?;
-    command.stderr(Stdio::from(err_writer));
-    if merged {
-        command.stderr(Stdio::from(
-            out_writer.try_clone().map_err(|error| io_message(&error))?,
-        ));
-    }
-    let spawned = command
-        .process_group(0)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::from(out_writer))
-        .spawn();
-    command.stdout(Stdio::null()).stderr(Stdio::null());
-    let mut child = spawned.map_err(|error| format!("fork/exec {path}: {}", io_message(&error)))?;
+    let (mut child, mut out, mut err) = spawn_with_pipes(command, merged, &path)?;
     let pid = Pid::from_raw(child.id() as i32);
-    let stop = || match killpg(pid, Signal::SIGKILL) {
-        Ok(()) | Err(nix::errno::Errno::ESRCH) => Ok(()),
-        Err(error) => Err(io::Error::from(error)),
-    };
+    let stop = || kill_child_group(pid);
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
     let mut timed_out = false;
@@ -143,15 +126,7 @@ pub fn execute(
                             Some(status) => status,
                             None => completion.recv().map_err(io::Error::other)??,
                         };
-                        let until = Instant::now() + pipe_delay;
-                        while !(drain(&mut out, &mut stdout)? && drain(&mut err, &mut stderr)?) {
-                            if Instant::now() >= until {
-                                return Err(io::Error::other(
-                                    "exec: WaitDelay expired before I/O complete",
-                                ));
-                            }
-                            std::thread::sleep(Duration::from_millis(2));
-                        }
+                        drain_after_stop(&mut out, &mut err, &mut stdout, &mut stderr, pipe_delay)?;
                         return Ok(status);
                     }
                     if status.is_none() {
@@ -194,6 +169,38 @@ pub fn execute(
     let reaped = child.wait();
     cleanup.map_err(|error| io_message(&error))?;
     reaped.map_err(|error| io_message(&error))?;
+    completed_output(operation, &stdout, &stderr, timed_out)
+}
+
+fn spawn_with_pipes(
+    command: &mut Command,
+    merged: bool,
+    path: &str,
+) -> Result<(std::process::Child, io::PipeReader, io::PipeReader), String> {
+    let (out, out_writer) = io::pipe().map_err(|error| io_message(&error))?;
+    let (err, err_writer) = io::pipe().map_err(|error| io_message(&error))?;
+    command.stderr(Stdio::from(err_writer));
+    if merged {
+        command.stderr(Stdio::from(
+            out_writer.try_clone().map_err(|error| io_message(&error))?,
+        ));
+    }
+    let spawned = command
+        .process_group(0)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::from(out_writer))
+        .spawn();
+    command.stdout(Stdio::null()).stderr(Stdio::null());
+    let child = spawned.map_err(|error| format!("fork/exec {path}: {}", io_message(&error)))?;
+    Ok((child, out, err))
+}
+
+fn completed_output(
+    operation: io::Result<std::process::ExitStatus>,
+    stdout: &[u8],
+    stderr: &[u8],
+    timed_out: bool,
+) -> Result<ResultOutput, String> {
     let status = operation.map_err(|error| {
         if error.raw_os_error().is_none() {
             error.to_string()
@@ -203,9 +210,35 @@ pub fn execute(
     })?;
     Ok(ResultOutput {
         exit: status.code().unwrap_or(-1),
-        stdout: String::from_utf8_lossy(&stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&stderr).into_owned(),
+        stdout: String::from_utf8_lossy(stdout).into_owned(),
+        stderr: String::from_utf8_lossy(stderr).into_owned(),
         timed_out,
         signal: status.signal(),
     })
+}
+
+fn drain_after_stop(
+    out: &mut io::PipeReader,
+    err: &mut io::PipeReader,
+    stdout: &mut Vec<u8>,
+    stderr: &mut Vec<u8>,
+    pipe_delay: Duration,
+) -> io::Result<()> {
+    let until = Instant::now() + pipe_delay;
+    while !(drain(out, stdout)? && drain(err, stderr)?) {
+        if Instant::now() >= until {
+            return Err(io::Error::other(
+                "exec: WaitDelay expired before I/O complete",
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    Ok(())
+}
+
+fn kill_child_group(pid: Pid) -> io::Result<()> {
+    match killpg(pid, Signal::SIGKILL) {
+        Ok(()) | Err(nix::errno::Errno::ESRCH) => Ok(()),
+        Err(error) => Err(io::Error::from(error)),
+    }
 }

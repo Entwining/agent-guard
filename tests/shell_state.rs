@@ -16,6 +16,8 @@ pub mod conditional_literal_accumulation_preserves_targets;
 pub mod differential;
 #[path = "shell_state/eval_runtime_output_is_unresolved_code.rs"]
 pub mod eval_runtime_output_is_unresolved_code;
+#[path = "shell_state/executable_flow.rs"]
+pub mod executable_flow;
 #[path = "shell_state/function_argv_preserves_fields_and_scope.rs"]
 pub mod function_argv_preserves_fields_and_scope;
 #[path = "shell_state/indexed_arrays_preserve_elements.rs"]

@@ -1,3 +1,6 @@
+mod alternatives;
+pub(super) use alternatives::alternatives;
+
 use std::collections::{BTreeMap, HashSet};
 
 #[derive(Default)]
@@ -44,6 +47,13 @@ impl Matcher {
             || pattern.starts_with('.')
             || pattern.starts_with("\\."))
             && self.component(pattern, subject)
+    }
+
+    pub(super) fn identifies_component(&mut self, pattern: &str, protected: &str) -> bool {
+        let fixed = pattern.trim_matches(['*', '?']);
+        !fixed.is_empty()
+            && (self.component(protected, fixed)
+                || self.component(fixed, protected.trim_matches('*')))
     }
 
     pub(super) fn path(&mut self, pattern: &str, subject: &str) -> bool {
@@ -277,7 +287,7 @@ fn intersects_counted(left: &str, right: &str, comparisons: &mut impl FnMut()) -
     false
 }
 
-pub(super) fn component(pattern: &str, subject: &str) -> bool {
+pub(crate) fn component(pattern: &str, subject: &str) -> bool {
     component_counted(pattern, subject, &mut || {})
 }
 
@@ -335,7 +345,7 @@ pub(super) fn visible_intersects(pattern: &str, protected: &str, hidden: bool) -
         && intersects(pattern, protected)
 }
 
-pub(super) fn escape_literal(subject: &str) -> String {
+pub(crate) fn escape_literal(subject: &str) -> String {
     subject
         .chars()
         .flat_map(|ch| {
@@ -348,7 +358,13 @@ pub(super) fn escape_literal(subject: &str) -> String {
         .collect()
 }
 
-pub(super) fn shell_pattern(text: &str, quoted: &[std::ops::Range<usize>]) -> String {
+pub(crate) fn grep_pattern(root: &str, pattern: &str) -> String {
+    // Grep applies separator-free globs to basenames at every depth.
+    let recursive = if pattern.contains('/') { "" } else { "**/" };
+    format!("{}/{recursive}{pattern}", escape_literal(root))
+}
+
+pub(crate) fn shell_pattern(text: &str, quoted: &[std::ops::Range<usize>]) -> String {
     let mut pattern = String::new();
     for (at, ch) in text.char_indices() {
         if ch == '\\'
@@ -422,310 +438,5 @@ impl Matcher {
     }
 }
 
-fn brace_members(source: &str) -> Option<(usize, usize, Vec<&str>)> {
-    let mut escaped = false;
-    for (left, ch) in source.char_indices() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        if ch == '\\' {
-            escaped = true;
-            continue;
-        }
-        if ch != '{' {
-            continue;
-        }
-        let mut depth = 1;
-        let mut start = left + 1;
-        let mut members = Vec::new();
-        let mut escaped = false;
-        for (offset, ch) in source[left + 1..].char_indices() {
-            let position = left + 1 + offset;
-            if escaped {
-                escaped = false;
-                continue;
-            }
-            if ch == '\\' {
-                escaped = true;
-                continue;
-            }
-            match ch {
-                '{' => depth += 1,
-                '}' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        if !members.is_empty() {
-                            members.push(&source[start..position]);
-                            return Some((left, position, members));
-                        }
-                        break;
-                    }
-                }
-                ',' if depth == 1 => {
-                    members.push(&source[start..position]);
-                    start = position + 1;
-                }
-                _ => {}
-            }
-        }
-    }
-    None
-}
-
-pub(super) fn alternatives(pattern: &str, patterned: bool) -> Vec<String> {
-    let mut result = vec![pattern.to_owned()];
-    let mut index = 0;
-    while index < result.len() && result.len() < 512 {
-        let source = result[index].clone();
-        index += 1;
-        if patterned && let Some((left, right, members)) = brace_members(&source) {
-            for part in members {
-                let next = format!("{}{}{}", &source[..left], part, &source[right + 1..]);
-                if !result.contains(&next) {
-                    result.push(next);
-                }
-            }
-        }
-        if !patterned || !source.contains('(') {
-            continue;
-        }
-        let lexical = crate::shell::lexer::Lexed::parameter_fragment(
-            &source,
-            crate::shell::lexer::Context::default(),
-        )
-        .0;
-        if patterned
-            && let Some(left) = source.char_indices().find_map(|(at, ch)| {
-                (ch == '('
-                    && source.as_bytes().get(at.wrapping_sub(1)) != Some(&b'$')
-                    && lexical.context(at).word_syntax())
-                .then_some(at)
-            })
-            && let Some(relative) = source[left + 1..].char_indices().find_map(|(at, ch)| {
-                (ch == ')' && lexical.context(left + 1 + at).word_syntax()).then_some(at)
-            })
-        {
-            let right = left + 1 + relative;
-            let mut start = left;
-            if source[..left].ends_with(['*', '?', '+', '!', '@'])
-                && lexical.context(left - 1).word_syntax()
-            {
-                start -= 1;
-            }
-            let prefix = &source[..start];
-            let suffix = &source[right + 1..];
-            let body = &source[left + 1..right];
-            let directory = prefix.rsplit_once('/').map_or("", |(dir, _)| dir);
-            let mut start = 0;
-            let mut members = Vec::new();
-            for (at, ch) in body.char_indices() {
-                if ch == '|' && lexical.context(left + 1 + at).word_syntax() {
-                    members.push(&body[start..at]);
-                    start = at + 1;
-                }
-            }
-            members.push(&body[start..]);
-            for part in members {
-                for next in [
-                    format!("{prefix}{part}{suffix}"),
-                    format!("{directory}/{part}{suffix}"),
-                    format!("{}{}", &source[..left], suffix),
-                ] {
-                    if !result.contains(&next) {
-                        result.push(next);
-                    }
-                }
-            }
-        }
-    }
-    result
-}
-
 #[cfg(test)]
-mod cost {
-    #[test]
-    fn quoted_class_delimiters_and_members_remain_literal() {
-        for (pattern, subject, expected) in [
-            (r"[a\]]", "]", true),
-            (r"[a\]]", "a", true),
-            (r"[\-x]", "-", true),
-            (r"[\-x]", "k", false),
-            (r"[\!a]", "b", false),
-            (r"[\!a]", "!", true),
-            (r"[\^a]", "^", true),
-            (r"[\^a]", "b", false),
-        ] {
-            assert_eq!(
-                super::component(pattern, subject),
-                expected,
-                "{pattern} {subject}"
-            );
-        }
-    }
-    #[test]
-    fn literal_subject_work_grows_with_width_and_pattern_depth() {
-        for width in [16, 32, 64, 128] {
-            for depth in [1, 2, 4, 8, 16] {
-                let pattern = format!("{}public", "*x".repeat(depth));
-                let subject = format!("{}{}public", "y".repeat(width), "x".repeat(depth));
-                let mut comparisons = 0;
-                assert!(super::component_counted(&pattern, &subject, &mut || {
-                    comparisons += 1
-                }));
-                assert!(
-                    comparisons <= 2 * (width + depth + 6),
-                    "width={width}, depth={depth}, comparisons={comparisons}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn literal_subject_matching_avoids_the_pattern_product() {
-        for size in [64, 128, 256, 512] {
-            let subject = format!("{}public", "x".repeat(size));
-            let mut comparisons = 0;
-            assert!(super::component_counted("*public", &subject, &mut || {
-                comparisons += 1
-            }));
-            assert!(
-                comparisons <= subject.chars().count() + 7,
-                "size={size}, comparisons={comparisons}"
-            );
-        }
-    }
-    #[test]
-    fn literal_subject_matching_preserves_pattern_intersection_results() {
-        let units = [
-            "a",
-            "b",
-            "*",
-            "?",
-            "[ab]",
-            "[!a]",
-            "[a-c]",
-            "[[:digit:]]",
-            "\\*",
-            "[",
-            "\\",
-            "é",
-        ];
-        let mut patterns = vec![String::new()];
-        patterns.extend(units.iter().map(|s| s.to_string()));
-        for first in units {
-            for second in units {
-                patterns.push(format!("{first}{second}"));
-            }
-        }
-        let mut subjects = vec![String::new()];
-        for width in 1..=3 {
-            let alphabet = ['a', 'b', 'x', '*', '\\', 'é', '1'];
-            for mut index in 0..alphabet.len().pow(width) {
-                let mut subject = String::new();
-                for _ in 0..width {
-                    subject.push(alphabet[index % alphabet.len()]);
-                    index /= alphabet.len();
-                }
-                subjects.push(subject);
-            }
-        }
-        for pattern in patterns {
-            for subject in &subjects {
-                assert_eq!(
-                    super::component(&pattern, subject),
-                    super::intersects(&pattern, &super::escape_literal(subject)),
-                    "pattern={pattern:?}, subject={subject:?}"
-                );
-            }
-        }
-    }
-    #[test]
-    fn incompatible_path_anchors_skip_parent_states() {
-        for size in [8, 16, 32, 64] {
-            let subject = format!("/public/{}/data.json", vec!["nested"; size].join("/"));
-            let mut matcher = super::Matcher::default();
-            assert!(!matcher.path("**/public.pem", &subject));
-            assert!(!matcher.path(&subject, "/h/Library/Containers/x"));
-            assert_eq!(matcher.path_states, 0, "size={size}");
-        }
-    }
-    #[test]
-    fn universal_component_does_not_enumerate_subject_states() {
-        for size in [64, 128, 256, 512] {
-            let subject = "public路径[*]".repeat(size);
-            let mut comparisons = 0;
-            for pattern in ["*", "**", "***"] {
-                assert!(super::component_counted(pattern, &subject, &mut || {
-                    comparisons += 1;
-                }));
-            }
-            assert_eq!(comparisons, 0, "size={size}");
-            assert!(!super::component_counted("", &subject, &mut || {}));
-        }
-    }
-    #[test]
-    fn incompatible_pattern_anchors_skip_product_states() {
-        for size in [64, 128, 256, 512] {
-            let pattern = format!("public{}*[0-9].json", "data".repeat(size));
-            let mut comparisons = 0;
-            for protected in ["*.pem", "*.key", ".env*", "credentials*"] {
-                assert!(!super::intersects_counted(&pattern, protected, &mut || {
-                    comparisons += 1;
-                }));
-            }
-            assert_eq!(comparisons, 0, "size={size}");
-        }
-    }
-    #[test]
-    fn incompatible_literal_anchors_skip_subject_states() {
-        for size in [64, 128, 256, 512] {
-            let subject = format!("{}.json", "public".repeat(size));
-            let mut comparisons = 0;
-            for pattern in ["*.pem", "*.key", ".env*", "config[0-9]*"] {
-                assert!(!super::component_counted(pattern, &subject, &mut || {
-                    comparisons += 1;
-                }));
-            }
-            assert!(comparisons <= 12, "size={size}, comparisons={comparisons}");
-            let long_pattern = format!("public{}*.json", "data".repeat(size));
-            let mut comparisons = 0;
-            for subject in [".env", "containers", "credentials"] {
-                assert!(!super::component_counted(
-                    &long_pattern,
-                    subject,
-                    &mut || {
-                        comparisons += 1;
-                    }
-                ));
-            }
-            assert_eq!(comparisons, 0, "size={size}");
-        }
-    }
-    #[test]
-    fn pattern_state_walk_observes_its_deadline() {
-        let expired = std::time::Instant::now() - std::time::Duration::from_secs(1);
-        assert_eq!(
-            super::Matcher::default()
-                .path_checked("*public", "x", Some(expired))
-                .unwrap_err()
-                .kind,
-            crate::CheckErrorKind::Deadline
-        );
-    }
-    #[test]
-    fn literal_intersection_work_tracks_pattern_length() {
-        for size in [64, 128, 256] {
-            let left = format!("{}[*].id", "m".repeat(size));
-            let right = format!("{}*.id", "m".repeat(size));
-            let mut comparisons = 0;
-            assert!(super::intersects_counted(&left, &right, &mut || {
-                comparisons += 1
-            }));
-            assert!(
-                comparisons <= 4 * (left.len() + right.len()),
-                "size={size}, comparisons={comparisons}"
-            );
-        }
-    }
-}
+mod tests;

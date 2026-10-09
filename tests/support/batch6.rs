@@ -94,6 +94,14 @@ pub fn partition_with(
                     row["id"]
                 );
             }
+            if let Some(text) = row["wire_text"].as_str() {
+                assert!(
+                    wire.stderr.contains(text),
+                    "{consumer}: {}: {}",
+                    row["id"],
+                    wire.stderr
+                );
+            }
             if let Ok(evaluation) = &result {
                 assertion(row, evaluation);
             }

@@ -66,60 +66,7 @@ pub fn check_group(group: &str) {
                 Err(error) => (error.to_string(), Value::Null),
             };
             let class = support::class(&result);
-            let expected_exit = case["exit"].as_i64().unwrap_or(
-                if ["D", "F", "UR", "UO"].contains(&case["class"].as_str().unwrap()) {
-                    2
-                } else {
-                    0
-                },
-            );
-            let mut problems = Vec::new();
-            if class != case["class"] {
-                problems.push("class");
-            }
-            if i64::from(wire.exit) != expected_exit {
-                problems.push("wire");
-            }
-            if let Some(gaps) = case["gaps"].as_array() {
-                for gap in gaps {
-                    if !coverage["gaps"]
-                        .as_array()
-                        .is_some_and(|values| values.contains(gap))
-                    {
-                        problems.push("gap");
-                    }
-                }
-            }
-            if let Some(expected) = case["reason"].as_str()
-                && !reason.contains(expected)
-            {
-                problems.push("reason");
-            }
-            if case["owner_action"] == true && recovery["next_step"]["kind"] != "owner_action" {
-                problems.push("owner action");
-            }
-            if case["no_oracle"] == true && recovery.get("objective").is_some() {
-                problems.push("oracle");
-            }
-            if case["not_qualifier"] == true
-                && recovery.to_string().contains("Zsh executable qualifier")
-            {
-                problems.push("inert qualifier");
-            }
-            if let Some(stdout) = case["stdout"].as_str()
-                && wire.stdout != stdout
-            {
-                problems.push("stdout");
-            }
-            if class == "UR"
-                && coverage["gaps"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|gap| wire.stderr.contains(gap.as_str().unwrap()))
-            {
-                problems.push("Debug gap in wire");
-            }
+            let problems = case_problems(case, class, &wire, &coverage, &reason, &recovery);
             println!(
                 "{}",
                 json!({"id":case["id"],"finding":case["finding"],"arm":format!("{arm:?}"),"problems":problems,"class":class,"coverage":coverage,"reason":reason,"recovery":recovery})
@@ -130,4 +77,67 @@ pub fn check_group(group: &str) {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+fn case_problems(
+    case: &Value,
+    class: &str,
+    wire: &agent_guard_rust::adapters::Wire,
+    coverage: &Value,
+    reason: &str,
+    recovery: &Value,
+) -> Vec<&'static str> {
+    let expected_exit = case["exit"].as_i64().unwrap_or(
+        if ["D", "F", "UR", "UO"].contains(&case["class"].as_str().unwrap()) {
+            2
+        } else {
+            0
+        },
+    );
+    let mut problems = Vec::new();
+    if class != case["class"] {
+        problems.push("class");
+    }
+    if i64::from(wire.exit) != expected_exit {
+        problems.push("wire");
+    }
+    if let Some(gaps) = case["gaps"].as_array() {
+        for gap in gaps {
+            if !coverage["gaps"]
+                .as_array()
+                .is_some_and(|values| values.contains(gap))
+            {
+                problems.push("gap");
+            }
+        }
+    }
+    if let Some(expected) = case["reason"].as_str()
+        && !reason.contains(expected)
+    {
+        problems.push("reason");
+    }
+    if case["owner_action"] == true && recovery["next_step"]["kind"] != "owner_action" {
+        problems.push("owner action");
+    }
+    if case["no_oracle"] == true && recovery.get("objective").is_some() {
+        problems.push("oracle");
+    }
+    if case["not_qualifier"] == true && recovery.to_string().contains("Zsh executable qualifier") {
+        problems.push("inert qualifier");
+    }
+    if let Some(stdout) = case["stdout"].as_str()
+        && wire.stdout != stdout
+    {
+        problems.push("stdout");
+    }
+    if class == "UR"
+        && coverage["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|gap| wire.stderr.contains(gap.as_str().unwrap()))
+    {
+        problems.push("Debug gap in wire");
+    }
+    problems
 }

@@ -16,37 +16,7 @@ fn fixture(args: &[String]) -> Result<u8, Box<dyn std::error::Error>> {
     }
     let fault = args.first().ok_or("missing fault")?;
     if matches!(fault.as_str(), "hang" | "orphan-pipe" | "signal-burst") {
-        let mut child = Command::new("/bin/sleep").arg("20").spawn()?;
-        let delayed_pipe = if fault == "signal-burst" {
-            Some(
-                Command::new("/bin/sleep")
-                    .arg("0.2")
-                    .process_group(0)
-                    .spawn()?,
-            )
-        } else {
-            None
-        };
-        let temporary = std::env::var("TMPDIR")?;
-        let root = Path::new(&temporary)
-            .parent()
-            .ok_or("missing fixture root")?;
-        let mut pids = format!("{} {}", std::process::id(), child.id());
-        if let Some(pipe) = &delayed_pipe {
-            pids.push_str(&format!(" {}", pipe.id()));
-        }
-        fs::write(root.join("fixture-pids"), pids)?;
-        fs::write(
-            root.join("fixture-started"),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos()
-                .to_string(),
-        )?;
-        if fault != "orphan-pipe" {
-            child.wait()?;
-        }
-        return Ok(0);
+        return lifecycle_fixture(fault);
     }
     let runtime = args.get(2).ok_or("missing runtime")?;
     let event: serde_json::Value = serde_json::from_reader(io::stdin())?;
@@ -140,4 +110,38 @@ fn main() -> ExitCode {
             ExitCode::from(7)
         }
     }
+}
+
+fn lifecycle_fixture(fault: &str) -> Result<u8, Box<dyn std::error::Error>> {
+    let mut child = Command::new("/bin/sleep").arg("20").spawn()?;
+    let delayed_pipe = if fault == "signal-burst" {
+        Some(
+            Command::new("/bin/sleep")
+                .arg("0.2")
+                .process_group(0)
+                .spawn()?,
+        )
+    } else {
+        None
+    };
+    let temporary = std::env::var("TMPDIR")?;
+    let root = Path::new(&temporary)
+        .parent()
+        .ok_or("missing fixture root")?;
+    let mut pids = format!("{} {}", std::process::id(), child.id());
+    if let Some(pipe) = &delayed_pipe {
+        pids.push_str(&format!(" {}", pipe.id()));
+    }
+    fs::write(root.join("fixture-pids"), pids)?;
+    fs::write(
+        root.join("fixture-started"),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+            .to_string(),
+    )?;
+    if fault != "orphan-pipe" {
+        child.wait()?;
+    }
+    Ok(0)
 }

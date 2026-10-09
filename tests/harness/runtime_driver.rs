@@ -187,60 +187,12 @@ pub fn run_runtime(options: &RuntimeOptions) -> Result<()> {
     let source = source_bindings(&options.source)?;
     let synthetic = SyntheticHome(synthetic_home(&output)?);
     let home = &synthetic.0;
-    let mut manifest = Vec::new();
-    for name in ["agent-guard", "agent-guard-native"] {
-        let from = if name == "agent-guard" {
-            entry.clone()
-        } else {
-            entry.parent().ok_or("missing entry parent")?.join(name)
-        };
-        let to = home.join("installation/bin").join(name);
-        copy_file(&from, &to)?;
-        manifest.push(hash_file(&to, &format!("bin/{name}"))?);
-    }
+    let manifest = copy_installation(&entry, home)?;
     let helper_binding = hash_file(&options.helper, "runtime-harness")?;
     let mut server = ModelServer::start()?;
     let url = &server.url;
     let trace = home.join("trace.jsonl");
-    let environment: Vec<(String, String)> = vec![
-        ("HOME", home.to_string_lossy().into()),
-        ("PATH", env::var("PATH").unwrap_or_default()),
-        ("TMPDIR", home.to_string_lossy().into()),
-        ("CODEX_HOME", home.join(".codex").to_string_lossy().into()),
-        (
-            "PI_CODING_AGENT_DIR",
-            home.join(".pi").to_string_lossy().into(),
-        ),
-        (
-            "CLAUDE_CONFIG_DIR",
-            home.join(".claude").to_string_lossy().into(),
-        ),
-        ("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1".into()),
-        ("ANTHROPIC_BASE_URL", url.clone()),
-        ("ANTHROPIC_API_KEY", "synthetic-not-a-credential".into()),
-        ("AGENT_GUARD_TEST_MODEL_URL", url.clone()),
-        (
-            "AGENT_GUARD_TEST_ENTRY",
-            home.join("installation/bin/agent-guard")
-                .to_string_lossy()
-                .into(),
-        ),
-        (
-            "AGENT_GUARD_TEST_HOOK_TRACE",
-            trace.to_string_lossy().into(),
-        ),
-        (
-            "AGENT_GUARD_TEST_ABLATE",
-            if options.ablate { "1" } else { "0" }.into(),
-        ),
-        (
-            "AGENT_GUARD_TEST_HELPER",
-            options.helper.to_string_lossy().into(),
-        ),
-    ]
-    .into_iter()
-    .map(|(key, value)| (key.into(), value))
-    .collect();
+    let environment = runtime_environment(options, home, url, &trace);
     let mut records = Vec::new();
     let mut clients = Vec::new();
     let mut file = OpenOptions::new()
@@ -249,75 +201,19 @@ pub fn run_runtime(options: &RuntimeOptions) -> Result<()> {
         .mode(0o600)
         .open(output.join("records.jsonl"))?;
     for runtime in &options.runtimes {
-        let mut identity = RuntimeClient {
-            runtime: runtime.clone(),
-            executable: Binding {
-                path: String::new(),
-                sha256: String::new(),
-                mode: 0,
-            },
-            version: ProcessResult::default(),
-            identity_error: String::new(),
-        };
-        let client = match look_path(runtime) {
-            Ok(path) => {
-                #[expect(
-                    clippy::disallowed_methods,
-                    reason = "The runtime client owner resolves the selected executable before recording its binding."
-                )]
-                let path = fs::canonicalize(path)?;
-                identity.executable = hash_file(&path, &path.to_string_lossy())?;
-                path
-            }
-            Err(e) => {
-                identity.identity_error = e.to_string();
-                PathBuf::from(runtime)
-            }
-        };
-        runtime_config(home, runtime, &client, &options.helper, url)?;
-        identity.version = run(
-            &[client.to_string_lossy().into(), "--version".into()],
-            &[],
-            &home.join("workspace"),
-            &environment,
-            Duration::from_secs(5),
-        )?;
+        let (identity, client) = runtime_client(runtime, home, &options.helper, url, &environment)?;
         clients.push(identity);
         'runtime_calls: for repeat in 0..3 {
             for fixture in CORPUS {
-                server
-                    .model
-                    .lock()
-                    .map_err(|_| "model lock poisoned")?
-                    .begin(runtime, fixture.command);
-                write_file(&trace, &[], 0o600)?;
-                let process = run(
-                    &runtime_args(runtime, &client, home),
-                    &[],
-                    &home.join("workspace"),
+                let row = runtime_call(
+                    runtime,
+                    repeat,
+                    fixture,
+                    &client,
+                    home,
                     &environment,
-                    Duration::from_secs(20),
+                    &server,
                 )?;
-                let (hooks, trace_error) = match read_hooks(&trace) {
-                    Ok(hooks) => (hooks, String::new()),
-                    Err(e) => (Vec::new(), e.to_string()),
-                };
-                let state = server.model.lock().map_err(|_| "model lock poisoned")?;
-                let row = RuntimeRow {
-                    runtime: runtime.clone(),
-                    run: repeat,
-                    id: fixture.id.into(),
-                    command: fixture.command.into(),
-                    expected: fixture.expected.into(),
-                    verdict: runtime_verdict(runtime, &hooks, state.result.as_ref(), fixture),
-                    process,
-                    hooks,
-                    result: state.result.clone(),
-                    model_error: state.error.clone(),
-                    trace_error,
-                    requests: state.requests,
-                };
-                drop(state);
                 json_line(&mut file, &row)?;
                 println!(
                     "{runtime} {repeat} {} {} status={} hooks={}",
@@ -444,4 +340,155 @@ pub fn runtime_config(
             0o600,
         ),
     }
+}
+
+fn runtime_environment(
+    options: &RuntimeOptions,
+    home: &Path,
+    url: &str,
+    trace: &Path,
+) -> Vec<(String, String)> {
+    vec![
+        ("HOME", home.to_string_lossy().into()),
+        ("PATH", env::var("PATH").unwrap_or_default()),
+        ("TMPDIR", home.to_string_lossy().into()),
+        ("CODEX_HOME", home.join(".codex").to_string_lossy().into()),
+        (
+            "PI_CODING_AGENT_DIR",
+            home.join(".pi").to_string_lossy().into(),
+        ),
+        (
+            "CLAUDE_CONFIG_DIR",
+            home.join(".claude").to_string_lossy().into(),
+        ),
+        ("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1".into()),
+        ("ANTHROPIC_BASE_URL", url.into()),
+        ("ANTHROPIC_API_KEY", "synthetic-not-a-credential".into()),
+        ("AGENT_GUARD_TEST_MODEL_URL", url.into()),
+        (
+            "AGENT_GUARD_TEST_ENTRY",
+            home.join("installation/bin/agent-guard")
+                .to_string_lossy()
+                .into(),
+        ),
+        (
+            "AGENT_GUARD_TEST_HOOK_TRACE",
+            trace.to_string_lossy().into(),
+        ),
+        (
+            "AGENT_GUARD_TEST_ABLATE",
+            if options.ablate { "1" } else { "0" }.into(),
+        ),
+        (
+            "AGENT_GUARD_TEST_HELPER",
+            options.helper.to_string_lossy().into(),
+        ),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.into(), value))
+    .collect()
+}
+
+fn runtime_client(
+    runtime: &str,
+    home: &Path,
+    helper: &Path,
+    url: &str,
+    environment: &[(String, String)],
+) -> Result<(RuntimeClient, PathBuf)> {
+    let mut identity = RuntimeClient {
+        runtime: runtime.into(),
+        executable: Binding {
+            path: String::new(),
+            sha256: String::new(),
+            mode: 0,
+        },
+        version: ProcessResult::default(),
+        identity_error: String::new(),
+    };
+    let client = match look_path(runtime) {
+        Ok(path) => {
+            #[expect(
+                clippy::disallowed_methods,
+                reason = "The runtime client owner resolves the selected executable before recording its binding."
+            )]
+            let path = fs::canonicalize(path)?;
+            identity.executable = hash_file(&path, &path.to_string_lossy())?;
+            path
+        }
+        Err(e) => {
+            identity.identity_error = e.to_string();
+            PathBuf::from(runtime)
+        }
+    };
+    runtime_config(home, runtime, &client, helper, url)?;
+    identity.version = run(
+        &[client.to_string_lossy().into(), "--version".into()],
+        &[],
+        &home.join("workspace"),
+        environment,
+        Duration::from_secs(5),
+    )?;
+    Ok((identity, client))
+}
+
+fn runtime_call(
+    runtime: &str,
+    repeat: usize,
+    fixture: &RuntimeCase,
+    client: &Path,
+    home: &Path,
+    environment: &[(String, String)],
+    server: &ModelServer,
+) -> Result<RuntimeRow> {
+    let trace = home.join("trace.jsonl");
+    server
+        .model
+        .lock()
+        .map_err(|_| "model lock poisoned")?
+        .begin(runtime, fixture.command);
+    write_file(&trace, &[], 0o600)?;
+    let process = run(
+        &runtime_args(runtime, client, home),
+        &[],
+        &home.join("workspace"),
+        environment,
+        Duration::from_secs(20),
+    )?;
+    let (hooks, trace_error) = match read_hooks(&trace) {
+        Ok(hooks) => (hooks, String::new()),
+        Err(e) => (Vec::new(), e.to_string()),
+    };
+    let state = server.model.lock().map_err(|_| "model lock poisoned")?;
+    let row = RuntimeRow {
+        runtime: runtime.into(),
+        run: repeat,
+        id: fixture.id.into(),
+        command: fixture.command.into(),
+        expected: fixture.expected.into(),
+        verdict: runtime_verdict(runtime, &hooks, state.result.as_ref(), fixture),
+        process,
+        hooks,
+        result: state.result.clone(),
+        model_error: state.error.clone(),
+        trace_error,
+        requests: state.requests,
+    };
+    drop(state);
+    Ok(row)
+}
+
+fn copy_installation(entry: &Path, home: &Path) -> Result<Vec<Binding>> {
+    let mut manifest = Vec::new();
+    for name in ["agent-guard", "agent-guard-native"] {
+        let from = if name == "agent-guard" {
+            entry.to_path_buf()
+        } else {
+            entry.parent().ok_or("missing entry parent")?.join(name)
+        };
+        let to = home.join("installation/bin").join(name);
+        copy_file(&from, &to)?;
+        manifest.push(hash_file(&to, &format!("bin/{name}"))?);
+    }
+    Ok(manifest)
 }

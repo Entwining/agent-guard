@@ -79,99 +79,9 @@ fn partition(name: &str) {
                     probe: &mut probe,
                 })
             };
-            if name == "aliases" {
-                for path in probe.calls.iter().chain(&probe.stat_calls) {
-                    assert!(
-                        !["/.nofollow", "/.resolve", "/.vol"]
-                            .iter()
-                            .any(|alias| path.starts_with(alias)),
-                        "alias reached probe: {path}"
-                    );
-                }
-            }
-            if name == "descriptors" {
-                assert!(
-                    !probe
-                        .calls
-                        .iter()
-                        .chain(&probe.stat_calls)
-                        .any(|path| path.starts_with("/dev/fd")),
-                    "descriptor reached probe"
-                );
-            }
-            assert_eq!(
-                support::class(&result),
-                row["expected"],
-                "{consumer} {}: {result:?}",
-                row["id"]
-            );
-            let wire = adapters::render(context.consumer, &result);
-            assert_eq!(
-                wire.exit,
-                if matches!(row["expected"].as_str(), Some("D" | "UR" | "F")) {
-                    2
-                } else {
-                    0
-                },
-                "{}",
-                row["id"]
-            );
-            assert!(wire.stdout.is_empty(), "{}: unexpected advice", row["id"]);
-            for field in ["reason", "alternative"] {
-                if let Some(text) = row[field].as_str() {
-                    assert!(
-                        wire.stderr.contains(text),
-                        "{consumer} {}: missing {field}: {}",
-                        row["id"],
-                        wire.stderr
-                    );
-                }
-            }
-            if let Some(text) = row["reason_absent"].as_str() {
-                assert!(
-                    !wire.stderr.contains(text),
-                    "{}: inaccurate location: {}",
-                    row["id"],
-                    wire.stderr
-                );
-            }
-            if wire.exit == 0 {
-                assert!(wire.stderr.is_empty(), "{}", row["id"]);
-            }
+            let wire = assert_dispatch_contract(name, row, consumer, &context, &probe, &result);
             if row["native"] == true {
-                use std::{
-                    io::Write,
-                    process::{Command, Stdio},
-                };
-                let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
-                    .args(["--checker", "--runtime", consumer, "--cwd"])
-                    .arg(&fixture.project)
-                    .env("HOME", &fixture.home)
-                    .stdin(Stdio::piped())
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
-                    .spawn()
-                    .unwrap();
-                child.stdin.take().unwrap().write_all(&body).unwrap();
-                let output = child.wait_with_output().unwrap();
-                assert_eq!(
-                    output.status.code(),
-                    Some(wire.exit),
-                    "native {}",
-                    row["id"]
-                );
-                assert_eq!(
-                    output.stdout,
-                    wire.stdout.as_bytes(),
-                    "native {}",
-                    row["id"]
-                );
-                assert_eq!(
-                    output.stderr,
-                    wire.stderr.as_bytes(),
-                    "native {}",
-                    row["id"]
-                );
+                assert_native_dispatch(&fixture, &body, consumer, &wire, row);
             }
         }
     }
@@ -180,7 +90,7 @@ fn partition(name: &str) {
 }
 
 #[test]
-fn wildcard_basenames_intersect_sensitive_patterns() {
+fn wildcard_basenames_require_credential_identifying_text() {
     partition("wildcard");
 }
 
@@ -195,6 +105,11 @@ fn grep_tool_preserves_relative_glob_segments() {
 }
 
 #[test]
+fn credential_catalog_intersection_requires_identifying_glob_text() {
+    partition("glob-identifier");
+}
+
+#[test]
 fn codex_native_shell_envelopes_use_the_tool_decoder() {
     partition("codex-native");
 }
@@ -205,7 +120,7 @@ fn descriptor_operands_check_redirects_without_probing_inherited_fds() {
 }
 
 #[test]
-fn credential_resource_changes_are_distinct_from_metadata_maintenance() {
+fn credential_relocation_checks_source_and_destination_protection() {
     partition("resource-change");
 }
 
@@ -222,4 +137,116 @@ fn ssh_scope_reasons_describe_the_named_directory() {
 #[test]
 fn cost_identity_and_deadline_refusals_give_concrete_next_steps() {
     partition("refusal-advice");
+}
+
+fn assert_native_dispatch(
+    fixture: &support::Fixture,
+    body: &[u8],
+    consumer: &str,
+    wire: &agent_guard_rust::adapters::Wire,
+    row: &Value,
+) {
+    use std::{
+        io::Write,
+        process::{Command, Stdio},
+    };
+    let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
+        .args(["--checker", "--runtime", consumer, "--cwd"])
+        .arg(&fixture.project)
+        .env("HOME", &fixture.home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(body).unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(wire.exit),
+        "native {}",
+        row["id"]
+    );
+    assert_eq!(
+        output.stdout,
+        wire.stdout.as_bytes(),
+        "native {}",
+        row["id"]
+    );
+    assert_eq!(
+        output.stderr,
+        wire.stderr.as_bytes(),
+        "native {}",
+        row["id"]
+    );
+}
+
+fn assert_dispatch_contract(
+    name: &str,
+    row: &Value,
+    consumer: &str,
+    context: &agent_guard_rust::Context,
+    probe: &support::RecordingProbe,
+    result: &Result<agent_guard_rust::Evaluation, agent_guard_rust::CheckError>,
+) -> agent_guard_rust::adapters::Wire {
+    if name == "aliases" {
+        for path in probe.calls.iter().chain(&probe.stat_calls) {
+            assert!(
+                !["/.nofollow", "/.resolve", "/.vol"]
+                    .iter()
+                    .any(|alias| path.starts_with(alias)),
+                "alias reached probe: {path}"
+            );
+        }
+    }
+    if name == "descriptors" {
+        assert!(
+            !probe
+                .calls
+                .iter()
+                .chain(&probe.stat_calls)
+                .any(|path| path.starts_with("/dev/fd")),
+            "descriptor reached probe"
+        );
+    }
+    assert_eq!(
+        support::class(result),
+        row["expected"],
+        "{consumer} {}: {result:?}",
+        row["id"]
+    );
+    let wire = adapters::render(context.consumer, result);
+    assert_eq!(
+        wire.exit,
+        if matches!(row["expected"].as_str(), Some("D" | "UR" | "F")) {
+            2
+        } else {
+            0
+        },
+        "{}",
+        row["id"]
+    );
+    assert!(wire.stdout.is_empty(), "{}: unexpected advice", row["id"]);
+    for field in ["reason", "alternative"] {
+        if let Some(text) = row[field].as_str() {
+            assert!(
+                wire.stderr.contains(text),
+                "{consumer} {}: missing {field}: {}",
+                row["id"],
+                wire.stderr
+            );
+        }
+    }
+    if let Some(text) = row["reason_absent"].as_str() {
+        assert!(
+            !wire.stderr.contains(text),
+            "{}: inaccurate location: {}",
+            row["id"],
+            wire.stderr
+        );
+    }
+    if wire.exit == 0 {
+        assert!(wire.stderr.is_empty(), "{}", row["id"]);
+    }
+    wire
 }

@@ -22,68 +22,7 @@ fn jsonl_dev_contract_and_parser_boundary() {
         "S01-read-appdata-claude",
         "S18-json-claude",
     ];
-    let mut input = Vec::new();
-    for (index, id) in ids.iter().enumerate() {
-        let row = rows.iter().find(|r| r["id"] == *id).unwrap();
-        let mut request = json!({"id":id,"consumer":row["consumer"],"arm":"brush","home":fixture.home,"cwd":fixture.expand(support::text(row,"cwd"))});
-        let body = fixture.body(row);
-        if index == 1 {
-            request["event"] = serde_json::from_slice(&body).unwrap();
-        } else {
-            request["event_raw"] = json!(String::from_utf8(body).unwrap());
-        }
-        serde_json::to_writer(&mut input, &request).unwrap();
-        input.push(b'\n');
-    }
-    let mut output = Vec::new();
-    handle_requests(Mode::Guard, io::Cursor::new(&input), &mut output).unwrap();
-    let actual: Vec<Value> = String::from_utf8(output)
-        .unwrap()
-        .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
-        .collect();
-    assert_eq!(actual.len(), ids.len());
-    for (id, response) in ids.iter().zip(&actual) {
-        let row = rows.iter().find(|r| r["id"] == *id).unwrap();
-        assert_eq!(response["id"], *id);
-        support::assert_preflight_tuple(row, response);
-        let mut probe = DiskProbe;
-        let result = evaluate_with_arm(
-            Event {
-                bytes: &fixture.body(row),
-                context: &fixture.context(row),
-                probe: &mut probe,
-            },
-            Arm::Brush,
-        );
-        let wire = adapters::render(Consumer::Claude, &result);
-        assert_eq!(response["exit"], wire.exit);
-        assert_eq!(response["stdout"], wire.stdout);
-        assert_eq!(response["stderr"], wire.stderr);
-        assert!(response["evaluate_ns"].as_u64().is_some());
-        match result {
-            Ok(e) => match e.outcome {
-                Outcome::ProtectedDenial { reason, recovery } => {
-                    assert_eq!(response["outcome"], "ProtectedDenial");
-                    assert_eq!(response["reason"], reason.effect);
-                    assert_eq!(response["recovery"], adapters::recovery_value(&recovery));
-                    assert!(response["reason"].as_str().unwrap().contains("App Data"));
-                }
-                Outcome::NoObjection => {
-                    assert_eq!(response["outcome"], "NoObjection");
-                    assert!(response["reason"].is_null() && response["recovery"].is_null());
-                }
-                _ => panic!("unexpected dev outcome"),
-            },
-            Err(error) => {
-                assert_eq!(error.kind, agent_guard_rust::CheckErrorKind::MalformedInput);
-                assert_eq!(response["coverage"]["error_kind"], "MalformedInput");
-                assert!(response["outcome"].is_null() && response["recovery"].is_null());
-                assert_eq!(response["disposition"], "BlockOnCheckError");
-            }
-        }
-        assert_eq!(response["advice"], json!([]));
-    }
+    let input = assert_guard_responses(&fixture, &rows, &ids);
 
     let shell = json!({"id":"parser","consumer":"claude","arm":"brush","home":fixture.home,"cwd":fixture.project,"event":{"tool_name":"Bash","tool_input":{"command":format!("cat '{}'",fixture.container)}}});
     for arm in ["brush", "structured"] {
@@ -147,4 +86,71 @@ fn jsonl_dev_contract_and_parser_boundary() {
     }
     assert_eq!(responses[3]["id"], ids[0]);
     assert_eq!(responses[3]["class"], "N");
+}
+
+fn assert_guard_responses(fixture: &support::Fixture, rows: &[Value], ids: &[&str]) -> Vec<u8> {
+    let mut input = Vec::new();
+    for (index, id) in ids.iter().enumerate() {
+        let row = rows.iter().find(|r| r["id"] == *id).unwrap();
+        let mut request = json!({"id":id,"consumer":row["consumer"],"arm":"brush","home":fixture.home,"cwd":fixture.expand(support::text(row,"cwd"))});
+        let body = fixture.body(row);
+        if index == 1 {
+            request["event"] = serde_json::from_slice(&body).unwrap();
+        } else {
+            request["event_raw"] = json!(String::from_utf8(body).unwrap());
+        }
+        serde_json::to_writer(&mut input, &request).unwrap();
+        input.push(b'\n');
+    }
+    let mut output = Vec::new();
+    handle_requests(Mode::Guard, io::Cursor::new(&input), &mut output).unwrap();
+    let actual: Vec<Value> = String::from_utf8(output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(actual.len(), ids.len());
+    for (id, response) in ids.iter().zip(&actual) {
+        let row = rows.iter().find(|r| r["id"] == *id).unwrap();
+        assert_eq!(response["id"], *id);
+        support::assert_preflight_tuple(row, response);
+        let mut probe = DiskProbe;
+        let result = evaluate_with_arm(
+            Event {
+                bytes: &fixture.body(row),
+                context: &fixture.context(row),
+                probe: &mut probe,
+            },
+            Arm::Brush,
+        );
+        let wire = adapters::render(Consumer::Claude, &result);
+        assert_eq!(response["exit"], wire.exit);
+        assert_eq!(response["stdout"], wire.stdout);
+        assert_eq!(response["stderr"], wire.stderr);
+        assert!(response["evaluate_ns"].as_u64().is_some());
+        match result {
+            Ok(e) => match e.outcome {
+                Outcome::ProtectedDenial { reason, recovery } => {
+                    assert_eq!(response["outcome"], "ProtectedDenial");
+                    assert_eq!(response["reason"], reason.effect);
+                    assert_eq!(response["recovery"], adapters::recovery_value(&recovery));
+                    assert!(response["reason"].as_str().unwrap().contains("App Data"));
+                }
+                Outcome::NoObjection => {
+                    assert_eq!(response["outcome"], "NoObjection");
+                    assert!(response["reason"].is_null() && response["recovery"].is_null());
+                }
+                _ => panic!("unexpected dev outcome"),
+            },
+            Err(error) => {
+                assert_eq!(error.kind, agent_guard_rust::CheckErrorKind::MalformedInput);
+                assert_eq!(response["coverage"]["error_kind"], "MalformedInput");
+                assert!(response["outcome"].is_null() && response["recovery"].is_null());
+                assert_eq!(response["disposition"], "BlockOnCheckError");
+            }
+        }
+        assert_eq!(response["advice"], json!([]));
+    }
+
+    input
 }

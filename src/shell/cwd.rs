@@ -1,5 +1,6 @@
 use super::{Operator, Statement, words};
 use crate::CoverageGap;
+use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum CwdPath {
@@ -107,8 +108,8 @@ fn clean(path: &str) -> String {
 pub(super) struct Directory {
     pub relative_growth: usize,
     pub current: CwdPath,
-    pub alternatives: Vec<CwdPath>,
-    pub failures: Option<Vec<CwdPath>>,
+    pub alternatives: Rc<Vec<CwdPath>>,
+    pub failures: Option<Rc<Vec<CwdPath>>>,
     pub gap: Option<CoverageGap>,
 }
 
@@ -122,21 +123,21 @@ impl Directory {
             .cloned();
         if let Some(unknown) = unknown {
             let prior = std::mem::replace(&mut self.current, unknown);
-            self.alternatives.retain(|path| path != &self.current);
-            extend_unique(&mut self.alternatives, [prior]);
+            Rc::make_mut(&mut self.alternatives).retain(|path| path != &self.current);
+            extend_unique(Rc::make_mut(&mut self.alternatives), [prior]);
         }
     }
     pub fn widen_loop(&mut self, initial: &Directory) {
-        let mut origins = self.alternatives.clone();
+        let mut origins = self.alternatives.as_ref().clone();
         origins.push(self.current.clone());
         origins.push(initial.current.clone());
         origins.push(CwdPath::LoopUnknown(match &initial.current {
             CwdPath::LoopUnknown(base) => base.clone(),
             path => path.render(),
         }));
-        self.alternatives.clear();
+        self.alternatives = Rc::default();
         extend_unique(
-            &mut self.alternatives,
+            Rc::make_mut(&mut self.alternatives),
             origins.into_iter().filter(|path| path != &self.current),
         );
         self.gap = self.gap.take().or(Some(CoverageGap::UnresolvedTarget));
@@ -145,7 +146,7 @@ impl Directory {
         Self {
             relative_growth: 0,
             current: CwdPath::initial(path),
-            alternatives: Vec::new(),
+            alternatives: Rc::default(),
             failures: None,
             gap: None,
         }
@@ -160,7 +161,9 @@ impl Directory {
                 .collect(),
             home,
         );
-        self.alternatives = alternatives;
+        if self.alternatives.as_ref() != &alternatives {
+            self.alternatives = Rc::new(alternatives);
+        }
         self.gap = self.gap.take().or(gap);
     }
     pub fn move_to(&mut self, targets: &[String], physical: bool, disputed: bool, home: &str) {
@@ -181,7 +184,7 @@ impl Directory {
             .collect::<Vec<_>>();
         let mut candidates = Vec::new();
         if let Some(failures) = &mut self.failures {
-            extend_unique(failures, stayed);
+            extend_unique(Rc::make_mut(failures), stayed);
         } else {
             candidates.extend(stayed);
         }
@@ -192,12 +195,14 @@ impl Directory {
                 .iter()
                 .any(|path| matches!(path, CwdPath::LoopUnknown(_)))
         {
-            for cwd in &self.alternatives {
+            for cwd in self.alternatives.iter() {
                 candidates.extend(move_from(cwd));
             }
         }
         let (alternatives, gap) = bounded(&next, candidates, home);
-        self.alternatives = alternatives;
+        if self.alternatives.as_ref() != &alternatives {
+            self.alternatives = Rc::new(alternatives);
+        }
         self.gap = self.gap.take().or(gap);
         self.current = next;
     }
@@ -252,7 +257,11 @@ enum Movement {
     Uncertain,
 }
 
-fn movement(statement: &Statement) -> Movement {
+fn movement(statement: &Statement, #[cfg(test)] visits: &mut usize) -> Movement {
+    #[cfg(test)]
+    {
+        *visits += 1;
+    }
     match statement {
         Statement::Command { argv, .. } => {
             let program = argv.first().and_then(|w| words::first_literal(&w.raw));
@@ -272,7 +281,18 @@ fn movement(statement: &Statement) -> Movement {
                 _ => Movement::Unchanged,
             }
         }
-        Statement::Binary(Operator::And, left, right) => match (movement(left), movement(right)) {
+        Statement::Binary(Operator::And, left, right) => match (
+            movement(
+                left,
+                #[cfg(test)]
+                visits,
+            ),
+            movement(
+                right,
+                #[cfg(test)]
+                visits,
+            ),
+        ) {
             (Movement::Uncertain, _) | (_, Movement::Uncertain) => Movement::Uncertain,
             (Movement::Moved, _) | (_, Movement::Moved) => Movement::Moved,
             _ => Movement::Unchanged,
@@ -281,66 +301,95 @@ fn movement(statement: &Statement) -> Movement {
     }
 }
 
-pub(super) fn moved_on_success(statement: &Statement) -> bool {
-    movement(statement) == Movement::Moved
-}
-
-pub(super) fn directory_success_guard(statement: &Statement) -> bool {
+fn directory_success_guard(statement: &Statement, #[cfg(test)] visits: &mut usize) -> bool {
+    #[cfg(test)]
+    {
+        *visits += 1;
+    }
     match statement {
         Statement::Command { argv, .. } => argv
             .first()
             .and_then(|word| words::first_literal(&word.raw))
             .is_some_and(|program| matches!(program.as_str(), "cd" | "pushd" | "popd")),
         Statement::Binary(Operator::And, left, right) => {
-            directory_success_guard(left) || directory_success_guard(right)
+            directory_success_guard(
+                left,
+                #[cfg(test)]
+                visits,
+            ) || directory_success_guard(
+                right,
+                #[cfg(test)]
+                visits,
+            )
         }
         _ => false,
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn failure_collection_has_polynomial_cost() {
-        for zsh in [true, false] {
-            let cost = |parts| {
-                let source = std::iter::once("cd /synthetic/child")
-                    .chain(std::iter::repeat_n("echo public", parts))
-                    .collect::<Vec<_>>()
-                    .join(" && ");
-                let observation = crate::shell::observe(
-                    &source,
-                    crate::shell::Arm::Brush,
-                    "/synthetic/home",
-                    "/synthetic/work",
-                    zsh,
-                )
-                .unwrap();
-                assert!(observation.gaps.is_empty());
-                observation.failure_copies
+pub(super) struct LogicalContinuation<'a> {
+    pub operator: &'a Operator,
+    pub right: &'a Statement,
+    pub qualified: bool,
+    pub definition_on_success: bool,
+}
+
+pub(super) fn logical_continuations<'a>(
+    statement: &'a Statement,
+    #[cfg(test)] visits: &mut usize,
+) -> (&'a Statement, Vec<LogicalContinuation<'a>>) {
+    let mut spine = Vec::new();
+    let mut current = statement;
+    while let Statement::Binary(operator @ (Operator::And | Operator::Or), left, right) = current {
+        spine.push((operator, right.as_ref()));
+        current = left;
+    }
+    let mut moved = movement(
+        current,
+        #[cfg(test)]
+        visits,
+    );
+    let mut guarded = directory_success_guard(
+        current,
+        #[cfg(test)]
+        visits,
+    );
+    let mut continuations = Vec::with_capacity(spine.len());
+    // Each left prefix inherits the prior summary; it never rewalks that tree.
+    for (operator, right) in spine.into_iter().rev() {
+        let and = matches!(operator, Operator::And);
+        let qualified = and && moved == Movement::Moved;
+        continuations.push(LogicalContinuation {
+            operator,
+            right,
+            qualified,
+            definition_on_success: and && (qualified || guarded),
+        });
+        if and {
+            moved = match (
+                moved,
+                movement(
+                    right,
+                    #[cfg(test)]
+                    visits,
+                ),
+            ) {
+                (Movement::Uncertain, _) | (_, Movement::Uncertain) => Movement::Uncertain,
+                (Movement::Moved, _) | (_, Movement::Moved) => Movement::Moved,
+                _ => Movement::Unchanged,
             };
-            let small = cost(4);
-            let large = cost(8);
-            assert_eq!(cost(4), small, "each observation owns its counter");
-            println!("zsh={zsh}: failure-path copies {small} -> {large}");
-            assert!(small > 0);
-            assert!(
-                large <= small * 4,
-                "assertion: failure-path copies {small} -> {large}"
+            guarded |= directory_success_guard(
+                right,
+                #[cfg(test)]
+                visits,
             );
+        } else {
+            moved = Movement::Uncertain;
+            guarded = false;
         }
     }
-
-    #[test]
-    fn shell_frontend_removes_only_dot_segments() {
-        let result = crate::shell::observe(
-            "printf public",
-            crate::shell::Arm::Brush,
-            "/h",
-            "/a/./link/../tail",
-            true,
-        )
-        .unwrap();
-        assert_eq!(result.script.commands[0].cwd, "/a/link/../tail");
-    }
+    continuations.reverse();
+    (current, continuations)
 }
+
+#[cfg(test)]
+mod tests;

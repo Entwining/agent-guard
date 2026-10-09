@@ -43,68 +43,7 @@ fn rows(owner: &str) {
             }
             assert_eq!(wire.exit, if ["N", "UC"].contains(&class) { 0 } else { 2 });
             assert!(wire.stdout.is_empty(), "absent advice: {row}");
-            match &result.as_ref().unwrap().outcome {
-                Outcome::NoObjection => assert!(wire.stderr.is_empty()),
-                Outcome::ProtectedDenial { reason, recovery } => {
-                    assert!(
-                        reason.effect.contains(row["reason"].as_str().unwrap()),
-                        "denial reason: {row}"
-                    );
-                    assert!(wire.stderr.contains(reason.rule.message()));
-                    assert!(!recovery.excluded_scope.is_empty());
-                    assert!(!wire.stderr.contains("recovery:"));
-                    if matches!(owner, "forwarding" | "framing-sweep") {
-                        let protection = if row["reason"] == "private-key" {
-                            agent_guard_rust::filesystem::Protection::SshPrivate
-                        } else {
-                            agent_guard_rust::filesystem::Protection::Environment
-                        };
-                        assert!(
-                            result.as_ref().unwrap().effects.contains(
-                                &EffectRecord::ProtectedTarget {
-                                    protection,
-                                    write: false,
-                                    source: if row["id"] == "g14-subshell" {
-                                        EffectSource::Operand
-                                    } else {
-                                        EffectSource::Nested
-                                    }
-                                }
-                            ),
-                            "nested protected effect: {row}"
-                        );
-                    }
-                }
-                Outcome::CoverageInsufficient {
-                    cause, recovery, ..
-                } => {
-                    if row["reason"] == "syntax" {
-                        assert_eq!(cause, &CoverageGap::UnsupportedShellSyntax);
-                    } else if row["reason"] == "unknown" {
-                        assert!(matches!(cause, CoverageGap::UnknownProgram { .. }));
-                    } else {
-                        assert_eq!(
-                            cause,
-                            &if consumer == "pi" {
-                                CoverageGap::UnsupportedDialectConstruct
-                            } else {
-                                CoverageGap::ExecutorDivergence
-                            }
-                        );
-                    }
-                    if class == "UR" {
-                        assert!(if *cause == CoverageGap::UnsupportedShellSyntax {
-                            wire.stderr.contains("shell syntax")
-                                && wire.stderr.contains("explicit paths")
-                        } else {
-                            wire.stderr.contains("unsupported") && wire.stderr.contains("recheck")
-                        });
-                        assert!(recovery.is_some());
-                    }
-                    assert!(!wire.stderr.contains("checker failed"));
-                }
-                other => panic!("unexpected advice/outcome: {other:?}"),
-            }
+            assert_row_outcome(owner, row, consumer, &result, &wire, class);
             if owner == "redirect" {
                 let lexical = Lexed::scan(source).unwrap();
                 assert!(
@@ -298,5 +237,78 @@ fn control_byte_before_name_is_not_an_array_assignment_boundary() {
     for byte in ['\r', '\u{000b}', '\u{000c}'] {
         let source = format!("printf '%s\\n' {byte}a=(x)#X");
         assert!(Lexed::scan(&source).unwrap().array_tail_spans().is_empty());
+    }
+}
+
+fn assert_row_outcome(
+    owner: &str,
+    row: &Value,
+    consumer: &str,
+    result: &Result<agent_guard_rust::Evaluation, agent_guard_rust::CheckError>,
+    wire: &agent_guard_rust::adapters::Wire,
+    class: &str,
+) {
+    match &result.as_ref().unwrap().outcome {
+        Outcome::NoObjection => assert!(wire.stderr.is_empty()),
+        Outcome::ProtectedDenial { reason, recovery } => {
+            assert!(
+                reason.effect.contains(row["reason"].as_str().unwrap()),
+                "denial reason: {row}"
+            );
+            assert!(wire.stderr.contains(reason.rule.message()));
+            assert!(!recovery.excluded_scope.is_empty());
+            assert!(!wire.stderr.contains("recovery:"));
+            if matches!(owner, "forwarding" | "framing-sweep") {
+                let protection = if row["reason"] == "private-key" {
+                    agent_guard_rust::filesystem::Protection::SshPrivate
+                } else {
+                    agent_guard_rust::filesystem::Protection::Environment
+                };
+                assert!(
+                    result
+                        .as_ref()
+                        .unwrap()
+                        .effects
+                        .contains(&EffectRecord::ProtectedTarget {
+                            protection,
+                            write: false,
+                            source: if row["id"] == "g14-subshell" {
+                                EffectSource::Operand
+                            } else {
+                                EffectSource::Nested
+                            }
+                        }),
+                    "nested protected effect: {row}"
+                );
+            }
+        }
+        Outcome::CoverageInsufficient {
+            cause, recovery, ..
+        } => {
+            if row["reason"] == "syntax" {
+                assert_eq!(cause, &CoverageGap::UnsupportedShellSyntax);
+            } else if row["reason"] == "unknown" {
+                assert!(matches!(cause, CoverageGap::UnknownProgram { .. }));
+            } else {
+                assert_eq!(
+                    cause,
+                    &if consumer == "pi" {
+                        CoverageGap::UnsupportedDialectConstruct
+                    } else {
+                        CoverageGap::ExecutorDivergence
+                    }
+                );
+            }
+            if class == "UR" {
+                assert!(if *cause == CoverageGap::UnsupportedShellSyntax {
+                    wire.stderr.contains("shell syntax") && wire.stderr.contains("explicit paths")
+                } else {
+                    wire.stderr.contains("unsupported") && wire.stderr.contains("recheck")
+                });
+                assert!(recovery.is_some());
+            }
+            assert!(!wire.stderr.contains("checker failed"));
+        }
+        other => panic!("unexpected advice/outcome: {other:?}"),
     }
 }

@@ -101,45 +101,7 @@ pub(crate) fn decode_protocol(
     {
         return Err(malformed());
     }
-    let (name, input) = if normalized || protocol == Protocol::Native && !raw_codex_shell {
-        (
-            if protocol == Protocol::Native {
-                value
-                    .get("tool_name")
-                    .and_then(Value::as_str)
-                    .unwrap_or("Bash")
-            } else {
-                value
-                    .get("tool_name")
-                    .and_then(Value::as_str)
-                    .ok_or_else(malformed)?
-            },
-            value.get("tool_input").cloned().unwrap_or(Value::Null),
-        )
-    } else {
-        match consumer {
-            Consumer::Claude => return Err(malformed()),
-            Consumer::Codex => {
-                let name = value
-                    .get("tool_name")
-                    .or_else(|| value.get("name"))
-                    .and_then(Value::as_str)
-                    .ok_or_else(malformed)?;
-                let mut input = value.get("arguments").cloned().ok_or_else(malformed)?;
-                if let Some(text) = input.as_str() {
-                    input = serde_json::from_str(text)?;
-                }
-                (name, input)
-            }
-            Consumer::Pi => (
-                value
-                    .get("toolName")
-                    .and_then(Value::as_str)
-                    .ok_or_else(malformed)?,
-                value.get("input").cloned().ok_or_else(malformed)?,
-            ),
-        }
-    };
+    let (name, input) = decode_envelope(consumer, &value, protocol, normalized, raw_codex_shell)?;
     let workdir = if consumer == Consumer::Codex
         && ["exec_command", "functions.exec_command"].contains(&name)
     {
@@ -298,4 +260,53 @@ pub fn permits_call(consumer: Consumer, wire: &Wire) -> bool {
         Consumer::Claude | Consumer::Codex => wire.exit != 2,
         Consumer::Pi => wire.exit == 0,
     }
+}
+
+fn decode_envelope(
+    consumer: Consumer,
+    value: &Value,
+    protocol: Protocol,
+    normalized: bool,
+    raw_codex_shell: bool,
+) -> Result<(&str, Value), CheckError> {
+    let decoded = if normalized || protocol == Protocol::Native && !raw_codex_shell {
+        (
+            if protocol == Protocol::Native {
+                value
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Bash")
+            } else {
+                value
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .ok_or_else(malformed)?
+            },
+            value.get("tool_input").cloned().unwrap_or(Value::Null),
+        )
+    } else {
+        match consumer {
+            Consumer::Claude => return Err(malformed()),
+            Consumer::Codex => {
+                let name = value
+                    .get("tool_name")
+                    .or_else(|| value.get("name"))
+                    .and_then(Value::as_str)
+                    .ok_or_else(malformed)?;
+                let mut input = value.get("arguments").cloned().ok_or_else(malformed)?;
+                if let Some(text) = input.as_str() {
+                    input = serde_json::from_str(text)?;
+                }
+                (name, input)
+            }
+            Consumer::Pi => (
+                value
+                    .get("toolName")
+                    .and_then(Value::as_str)
+                    .ok_or_else(malformed)?,
+                value.get("input").cloned().ok_or_else(malformed)?,
+            ),
+        }
+    };
+    Ok(decoded)
 }

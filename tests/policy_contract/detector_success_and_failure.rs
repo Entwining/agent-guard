@@ -323,16 +323,18 @@ fn agent_continuation_preserves_chosen_search_data() {
         assert_eq!(decoded.input["pattern"], "different phrase");
         assert_eq!(decoded.input["glob"], "*.txt");
         let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        assert_eq!(
-            support::class(&evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &ctx,
-                    probe: &mut probe
-                },
-                arm
-            )),
-            "N"
+        let result = evaluate_with_arm(
+            Event {
+                bytes: &bytes,
+                context: &ctx,
+                probe: &mut probe,
+            },
+            arm,
         );
+        assert_eq!(support::class(&result), "N");
+        let wire = agent_guard_rust::adapters::render(ctx.consumer, &result);
+        assert_eq!(wire.exit, 0);
+        assert!(wire.stdout.is_empty());
+        assert!(wire.stderr.is_empty());
     }
 }

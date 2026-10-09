@@ -3,6 +3,26 @@ mod support;
 use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell};
 use serde_json::{Value, json};
 
+#[test]
+fn runtime_named_directories_keep_protected_suffixes_and_unknown_identity() {
+    partition("runtime_named_tilde");
+}
+
+#[test]
+fn pipeline_filters_preserve_producer_candidates_for_read() {
+    partition("pipeline_filters");
+}
+
+#[test]
+fn runtime_parameter_defaults_preserve_empty_and_present_candidates() {
+    partition("runtime_defaults");
+}
+
+#[test]
+fn shared_snapshots_preserve_protected_candidates_and_isolated_state() {
+    partition("snapshots");
+}
+
 fn partition(name: &str) {
     let fixture = support::Fixture::new();
     let packet: Value =
@@ -36,19 +56,7 @@ fn partition(name: &str) {
                 .get("expected_pi")
                 .filter(|_| consumer == "pi")
                 .unwrap_or(&row["expected"]);
-            if let Some(name) = row["no_private_probe"].as_str() {
-                assert!(
-                    probe
-                        .calls
-                        .iter()
-                        .all(|path| !path.split('/').any(|part| part == name))
-                        && probe.stat_calls.is_empty(),
-                    "{}: {:?} {:?}",
-                    row["id"],
-                    probe.calls,
-                    probe.stat_calls
-                );
-            }
+            assert_probe_paths(row, &probe);
             assert_eq!(
                 support::class(&result),
                 expected,
@@ -92,77 +100,7 @@ fn partition(name: &str) {
                     wire.stderr
                 );
             }
-            if let Some(word) = row["word_zsh"]
-                .as_str()
-                .filter(|_| consumer != "pi")
-                .or_else(|| row["word"].as_str())
-            {
-                let observed = shell::observe_with_user(
-                    input["command"].as_str().unwrap(),
-                    shell::Arm::Brush,
-                    &context.home,
-                    &context.cwd,
-                    context.user.as_deref(),
-                    context.zsh_executor,
-                )
-                .unwrap();
-                let expected = fixture.expand(word);
-                assert!(
-                    observed
-                        .script
-                        .commands
-                        .iter()
-                        .any(
-                            |command| command.program.is_some_and(|i| command.argv[i] == "cat"
-                                && command
-                                    .argv
-                                    .last()
-                                    .is_some_and(|word| word.text == expected))
-                        ),
-                    "{consumer}: {}: missing computed word {expected:?}: {:?}",
-                    row["id"],
-                    observed.script
-                );
-            }
-            if let Some(field) = row["field_zsh"].as_str().filter(|_| consumer != "pi") {
-                let expected = fixture.expand(field);
-                let prefix = expected.split(' ').next().unwrap();
-                let observed = shell::observe_with_user(
-                    input["command"].as_str().unwrap(),
-                    shell::Arm::Brush,
-                    &context.home,
-                    &context.cwd,
-                    context.user.as_deref(),
-                    context.zsh_executor,
-                )
-                .unwrap();
-                let commands: Vec<_> = observed
-                    .script
-                    .commands
-                    .iter()
-                    .filter(|command| {
-                        command
-                            .program
-                            .is_some_and(|index| command.argv[index] == "cat")
-                            && command
-                                .argv
-                                .iter()
-                                .any(|word| word.text.starts_with(prefix))
-                    })
-                    .collect();
-                assert!(!commands.is_empty(), "{}", row["id"]);
-                for command in commands {
-                    let index = command.program.unwrap();
-                    assert_eq!(
-                        command.argv.len(),
-                        index + 2,
-                        "{}: {:?}",
-                        row["id"],
-                        command.argv
-                    );
-                    assert_eq!(command.argv[index + 1].text, expected, "{}", row["id"]);
-                }
-            }
+            assert_parameter_fields(&fixture, row, &input, &context, consumer);
         }
     }
 }
@@ -227,6 +165,11 @@ fn zsh_cdpath_ties_follow_updates_and_scope_restoration() {
 #[test]
 fn zsh_parameter_modifiers_share_braced_and_unbraced_semantics() {
     partition("zsh_modifiers");
+}
+
+#[test]
+fn command_path_modifiers_keep_runtime_lookup_and_protected_reads() {
+    partition("command_paths");
 }
 
 #[test]
@@ -367,5 +310,114 @@ fn quoted_delimiters_are_data_and_real_nesting_stays_bounded() {
         assert!(wire.stderr.contains("within its resource limit"));
         assert!(wire.stderr.contains("Split the work into smaller calls"));
         assert!(wire.stderr.contains("recheck each call"));
+    }
+}
+
+fn assert_probe_paths(row: &Value, probe: &support::RecordingProbe) {
+    if let Some(name) = row["no_private_probe"].as_str() {
+        assert!(
+            probe
+                .calls
+                .iter()
+                .all(|path| !path.split('/').any(|part| part == name))
+                && probe.stat_calls.is_empty(),
+            "{}: {:?} {:?}",
+            row["id"],
+            probe.calls,
+            probe.stat_calls
+        );
+    }
+    if let Some(suffix) = row["no_protected_probe_suffix"].as_str() {
+        assert!(
+            probe
+                .calls
+                .iter()
+                .chain(&probe.stat_calls)
+                .all(|path| !path.ends_with(suffix)),
+            "{}: protected probe: {:?} {:?}",
+            row["id"],
+            probe.calls,
+            probe.stat_calls
+        );
+    }
+}
+
+fn assert_parameter_fields(
+    fixture: &support::Fixture,
+    row: &Value,
+    input: &Value,
+    context: &agent_guard_rust::Context,
+    consumer: &str,
+) {
+    if let Some(word) = row["word_zsh"]
+        .as_str()
+        .filter(|_| consumer != "pi")
+        .or_else(|| row["word"].as_str())
+    {
+        let observed = shell::observe_with_user(
+            input["command"].as_str().unwrap(),
+            shell::Arm::Brush,
+            &context.home,
+            &context.cwd,
+            context.user.as_deref(),
+            context.zsh_executor,
+        )
+        .unwrap();
+        let expected = fixture.expand(word);
+        assert!(
+            observed
+                .script
+                .commands
+                .iter()
+                .any(
+                    |command| command.program.is_some_and(|i| command.argv[i] == "cat"
+                        && command
+                            .argv
+                            .last()
+                            .is_some_and(|word| word.text == expected))
+                ),
+            "{consumer}: {}: missing computed word {expected:?}: {:?}",
+            row["id"],
+            observed.script
+        );
+    }
+    if let Some(field) = row["field_zsh"].as_str().filter(|_| consumer != "pi") {
+        let expected = fixture.expand(field);
+        let prefix = expected.split(' ').next().unwrap();
+        let observed = shell::observe_with_user(
+            input["command"].as_str().unwrap(),
+            shell::Arm::Brush,
+            &context.home,
+            &context.cwd,
+            context.user.as_deref(),
+            context.zsh_executor,
+        )
+        .unwrap();
+        let commands: Vec<_> = observed
+            .script
+            .commands
+            .iter()
+            .filter(|command| {
+                command
+                    .program
+                    .is_some_and(|index| command.argv[index] == "cat")
+                    && command
+                        .argv
+                        .iter()
+                        .any(|word| word.text.starts_with(prefix))
+            })
+            .collect();
+        assert!(!commands.is_empty(), "{}", row["id"]);
+        for command in commands {
+            let index = command.program.unwrap();
+            assert_eq!(
+                command.argv.len(),
+                index + 2,
+                "{}: {:?}",
+                row["id"],
+                command.argv
+            );
+            assert_eq!(command.argv[index + 1].text, expected, "{}", row["id"]);
+        }
     }
 }

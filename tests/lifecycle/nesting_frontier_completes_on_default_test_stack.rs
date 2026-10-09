@@ -81,10 +81,11 @@ fn nesting_frontier_completes_on_default_test_stack() {
         std::fs::read_to_string(&log).unwrap()
     );
     let receipt = std::fs::read_to_string(&log).unwrap();
+    // Serial libtest can prepend its test-name banner on the child's receipt line.
     let observed: Vec<String> = serde_json::from_str(
         receipt
             .lines()
-            .find_map(|line| line.strip_prefix("frontier_receipt="))
+            .find_map(|line| line.split_once("frontier_receipt=").map(|(_, json)| json))
             .unwrap_or_else(|| panic!("child must report every completed frontier observation")),
     )
     .unwrap();

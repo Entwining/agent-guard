@@ -39,7 +39,6 @@ pub(super) fn follow(
     absolute: &str,
     home: &str,
     resolved_home: Option<&str>,
-    patterned: bool,
     table: &FirmlinkTable,
     probe: &mut dyn Probe,
     lexical: &mut Lexical,
@@ -50,7 +49,8 @@ pub(super) fn follow(
     let mut pending: VecDeque<String> = parts(absolute).collect();
     let mut prefix = "/".to_owned();
     let mut lower_prefix = "/".to_owned();
-    let mut literal = (!patterned).then(|| lexical.literal_walk(home, resolved_home));
+    // resolve_pattern supplies only the fixed prefix; link targets are literals too.
+    let mut literal = lexical.literal_walk(home, resolved_home);
     let mut followed = false;
     let mut depth = 0;
     while let Some(part) = pending.pop_front() {
@@ -64,20 +64,18 @@ pub(super) fn follow(
             for path in [&mut prefix, &mut lower_prefix] {
                 path.truncate(path.rfind('/').map_or(1, |at| at.max(1)));
             }
-            if let Some(walk) = &mut literal {
-                if rebased {
-                    walk.restart();
-                    for component in parts(super::unfirmlink_path(&prefix)) {
-                        crate::check_deadline(lexical.deadline)?;
-                        #[cfg(test)]
-                        {
-                            lexical.classified_bytes += component.len();
-                        }
-                        walk.push(&component, false);
+            if rebased {
+                literal.restart();
+                for component in parts(super::unfirmlink_path(&prefix)) {
+                    crate::check_deadline(lexical.deadline)?;
+                    #[cfg(test)]
+                    {
+                        lexical.classified_bytes += component.len();
                     }
-                } else {
-                    walk.pop();
+                    literal.push(&component, false);
                 }
+            } else {
+                literal.pop();
             }
         } else if part != "." {
             if prefix != "/" {
@@ -86,27 +84,20 @@ pub(super) fn follow(
             }
             prefix.push_str(&part);
             lower_prefix.push_str(&part.to_lowercase());
-            if let Some(walk) = &mut literal {
-                #[cfg(test)]
-                {
-                    lexical.classified_bytes += part.len();
-                }
-                walk.push(
-                    &part,
-                    super::unfirmlink_path(&prefix) == "/" && prefix != "/",
-                );
+            #[cfg(test)]
+            {
+                lexical.classified_bytes += part.len();
             }
+            literal.push(
+                &part,
+                super::unfirmlink_path(&prefix) == "/" && prefix != "/",
+            );
         }
         let projected = super::unfirmlink_path(&prefix);
         if projected == "/.vol" || projected.starts_with("/.vol/") {
             return Ok(Resolution::InodeAlias);
         }
-        let kind = if let Some(walk) = &literal {
-            walk.protection()
-        } else {
-            lexical.check_both(projected, home, resolved_home, patterned)?
-        };
-        if let Some(kind) = kind {
+        if let Some(kind) = literal.protection() {
             return Ok(Resolution::Protected(kind, projected.to_owned()));
         }
         let target = probe
@@ -141,9 +132,7 @@ pub(super) fn follow(
             prefix.push('/');
             lower_prefix.clear();
             lower_prefix.push('/');
-            if let Some(walk) = &mut literal {
-                walk.restart();
-            }
+            literal.restart();
             followed = true;
         }
     }
@@ -162,93 +151,4 @@ fn parts(path: &str) -> impl Iterator<Item = String> + '_ {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn literal_walk_checks_deadline_after_each_probe() {
-        struct Expiring {
-            deadline: std::time::Instant,
-            calls: usize,
-        }
-        impl Probe for Expiring {
-            fn read_link(&mut self, _: &Path) -> std::io::Result<Option<std::path::PathBuf>> {
-                self.calls += 1;
-                if self.calls == 1 {
-                    std::thread::sleep(
-                        self.deadline
-                            .saturating_duration_since(std::time::Instant::now()),
-                    );
-                    Ok(None)
-                } else {
-                    Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
-                }
-            }
-            fn stat(&mut self, _: &Path) -> std::io::Result<Option<super::super::Metadata>> {
-                panic!("link walk must not stat");
-            }
-        }
-        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(25);
-        let mut probe = Expiring { deadline, calls: 0 };
-        let mut lexical = Lexical::new(Some(deadline));
-        let result = follow(
-            "/public/next",
-            "/synthetic/home",
-            None,
-            false,
-            &FirmlinkTable::from_text(""),
-            &mut probe,
-            &mut lexical,
-        );
-        assert_eq!(result.err().unwrap().kind, CheckErrorKind::Deadline);
-        assert!(probe.calls <= 1);
-        println!("probe_calls_before_deadline={}", probe.calls);
-    }
-    #[test]
-    fn literal_walk_work_grows_with_path_bytes() {
-        struct NoLinks;
-        impl Probe for NoLinks {
-            fn read_link(&mut self, _: &Path) -> std::io::Result<Option<std::path::PathBuf>> {
-                Ok(None)
-            }
-            fn stat(&mut self, _: &Path) -> std::io::Result<Option<super::super::Metadata>> {
-                panic!("public literal identity does not need stat");
-            }
-        }
-        for depth in [128, 256, 512, 1024, 2048] {
-            let path = format!("/public/{}file.txt", "p/".repeat(depth));
-            let table = FirmlinkTable::from_text("");
-            let mut owner = super::super::Resolver::new("/synthetic/home", &table);
-            let mut target = crate::record::Target::new(
-                path.clone(),
-                crate::record::Effect::Read,
-                crate::record::Walk::None,
-                crate::record::Via::Operand,
-            );
-            assert_eq!(
-                owner.target(&mut target, "/public", &mut NoLinks).unwrap(),
-                super::super::Identity::Public(path.clone())
-            );
-            println!(
-                "depth={depth}, path_bytes={}, lexical_bytes={}",
-                path.len(),
-                owner.lexical.classified_bytes
-            );
-            assert!(
-                owner.lexical.classified_bytes <= 8 * path.len(),
-                "prefix walk rescanned path bytes at depth {depth}"
-            );
-        }
-    }
-    #[test]
-    fn catalog_read_fault_is_probe_fault() {
-        let result = FirmlinkTable::from_read(Err(std::io::Error::from(
-            std::io::ErrorKind::PermissionDenied,
-        )));
-        assert!(matches!(
-            result,
-            Err(CheckError {
-                kind: CheckErrorKind::ProbeFault
-            })
-        ));
-    }
-}
+mod tests;

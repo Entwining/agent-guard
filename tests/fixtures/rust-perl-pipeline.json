@@ -1,0 +1,8 @@
+{"rows":[
+{"id":"conditional-array-pipeline","partition":"pipeline","input":{"command":"cd . && D=(./*public*); perl -e 'alarm 120; exec @ARGV' rg -l -F x -- \"${D[@]}\" | sort -u"},"expected":"N"},
+{"id":"conditional-array-no-pipeline","partition":"pipeline","input":{"command":"cd . && D=(./*public*); perl -e 'alarm 120; exec @ARGV' rg -l -F x -- \"${D[@]}\""},"expected":"N"},
+{"id":"upstream-data-array","partition":"pipeline","input":{"command":"cd . && D=(./*public*); printf public | perl -e 'exec @ARGV' rg -l -F x -- \"${D[@]}\" | sort -u"},"expected":"N"},
+{"id":"conditional-credential-array","partition":"pipeline","input":{"command":"cd . && D=(.env); perl -e 'alarm 120; exec @ARGV' rg -l -F x -- \"${D[@]}\" | sort -u"},"expected":"D","wire_text":"This reads a credential or environment file"},
+{"id":"upstream-protected-operand","partition":"pipeline","input":{"command":"printf public | perl -e 'exec @ARGV' cat .env"},"expected":"D","wire_text":"This reads a credential or environment file"},
+{"id":"protected-input-redirect","partition":"pipeline","input":{"command":"perl -e 'exec @ARGV' cat public < .env | sort -u"},"expected":"D","wire_text":"This reads a credential or environment file"}
+]}

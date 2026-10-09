@@ -1,12 +1,14 @@
 //! Semantic records carried between the shell, target and rule owners.
 
+pub mod stream;
+
 #[derive(Clone, Copy)]
 pub struct HostFacts<'a> {
     pub home: &'a str,
     pub user: Option<&'a str>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Word {
     pub text: String,
     pub raw: String,
@@ -27,10 +29,11 @@ pub struct Word {
     pub stream: Option<Box<StreamOutput>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StreamOutput {
-    Known(Vec<String>),
-    Unknown,
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StreamOutput {
+    pub value: stream::Flow,
+    pub known: Vec<String>,
+    pub unknown: bool,
 }
 
 impl Word {
@@ -155,7 +158,7 @@ impl PartialEq<str> for Word {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Role {
     Arg,
     Assign,
@@ -170,7 +173,7 @@ pub enum Role {
     Glob,
     Option(OptionRole),
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OptionRole {
     Flag,
     PatternFile,
@@ -190,6 +193,8 @@ pub struct Redirect {
     pub pattern: Option<String>,
     pub stream: Option<Box<StreamOutput>>,
     pub direction: Direction,
+    pub fd: i32,
+    pub duplicate: bool,
     pub target: String,
     pub globs: bool,
     pub shell_matches: bool,
@@ -198,12 +203,14 @@ pub struct Redirect {
     pub vars: Vec<String>,
 }
 impl Redirect {
-    pub fn from_word(word: Word, direction: Direction) -> Self {
+    pub fn from_word(word: Word, direction: Direction, fd: i32, duplicate: bool) -> Self {
         Self {
             pattern: (word.globs || word.shell_matches)
                 .then(|| crate::filesystem::shell_pattern(&word.text, &word.quoted_ranges)),
             stream: word.stream,
             direction,
+            fd,
+            duplicate,
             target: word.text,
             globs: word.globs,
             shell_matches: word.shell_matches,
@@ -326,6 +333,7 @@ pub struct Target {
     pub via: Via,
     pub search: bool,
     pub command: Option<usize>,
+    pub relocation_destination: Option<std::rc::Rc<Target>>,
 }
 
 impl Target {
@@ -403,57 +411,10 @@ impl Target {
             sends: false,
             search: false,
             command: None,
+            relocation_destination: None,
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn rewritten_word_clears_cwd_projection_and_preserves_raw_provenance() {
-        let mut old = super::Word::literal("/old".into());
-        old.raw = "$(pwd)/old".into();
-        old.pwd = true;
-        old.cwd_ranges = std::iter::once(0..4).collect();
-        let new = old.with_text("/new".into());
-        assert_eq!((new.text.as_str(), new.value.as_str()), ("/new", "/new"));
-        assert!(!new.pwd && new.cwd_ranges.is_empty());
-        assert_eq!(new.raw, old.raw);
-    }
-    #[test]
-    fn projected_cwd_ranges_describe_current_word_bytes() {
-        let packet: serde_json::Value =
-            serde_json::from_str(include_str!("../tests/fixtures/rust-m2-cwd.json")).unwrap();
-        let mut projected = 0;
-        for row in packet["rows"].as_array().unwrap() {
-            let result = crate::shell::observe(
-                row["source"].as_str().unwrap(),
-                crate::shell::Arm::Brush,
-                "/h",
-                row["cwd"].as_str().unwrap(),
-                true,
-            )
-            .unwrap();
-            for command in result.script.commands {
-                for word in command.argv {
-                    for range in word.cwd_ranges {
-                        assert_eq!(
-                            word.text.get(range.clone()),
-                            Some(command.cwd.as_str()),
-                            "{}",
-                            row["id"]
-                        );
-                        assert_eq!(
-                            word.value.get(range),
-                            Some(command.cwd.as_str()),
-                            "{}",
-                            row["id"]
-                        );
-                        projected += 1;
-                    }
-                }
-            }
-        }
-        assert!(projected > 0);
-    }
-}
+mod tests;

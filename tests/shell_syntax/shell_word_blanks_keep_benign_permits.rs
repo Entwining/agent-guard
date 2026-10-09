@@ -86,43 +86,7 @@ fn rows(owner: &str, expected: &[&str]) {
                 );
             }
             assert!(wire.stdout.is_empty(), "no advice: {row}");
-            match &result.as_ref().unwrap().outcome {
-                Outcome::ProtectedDenial { reason, .. } => {
-                    assert!(
-                        reason.effect.contains("environment-file"),
-                        "Environment owner: {row}"
-                    );
-                    assert!(
-                        result
-                            .as_ref()
-                            .unwrap()
-                            .effects
-                            .contains(&EffectRecord::ProtectedTarget {
-                                protection: Protection::Environment,
-                                write: false,
-                                source: if row["effect_source"] == "nested" {
-                                    EffectSource::Nested
-                                } else {
-                                    EffectSource::Operand
-                                },
-                            }),
-                        "effect provenance: {row}"
-                    );
-                }
-                Outcome::CoverageInsufficient { cause, .. } if owner == "array-blank" => {
-                    assert_eq!(
-                        cause,
-                        &if consumer == "pi" {
-                            CoverageGap::UnsupportedDialectConstruct
-                        } else {
-                            CoverageGap::ExecutorDivergence
-                        },
-                        "ruling31 cause: {row}"
-                    );
-                }
-                Outcome::CoverageInsufficient { .. } | Outcome::NoObjection => {}
-                other => panic!("unexpected outcome for {row}: {other:?}"),
-            }
+            assert_blank_outcome(row, owner, consumer, &result);
             assert!(!wire.stderr.contains("checker failed"));
         }
     }
@@ -151,4 +115,49 @@ fn heredoc_delimiter_blanks_keep_data_and_reject_wrong_terminators() {
 #[test]
 fn array_closer_blanks_have_the_ruled_cause() {
     rows("array-blank", &["UR", "N"]);
+}
+
+fn assert_blank_outcome(
+    row: &Value,
+    owner: &str,
+    consumer: &str,
+    result: &Result<agent_guard_rust::Evaluation, agent_guard_rust::CheckError>,
+) {
+    match &result.as_ref().unwrap().outcome {
+        Outcome::ProtectedDenial { reason, .. } => {
+            assert!(
+                reason.effect.contains("environment-file"),
+                "Environment owner: {row}"
+            );
+            assert!(
+                result
+                    .as_ref()
+                    .unwrap()
+                    .effects
+                    .contains(&EffectRecord::ProtectedTarget {
+                        protection: Protection::Environment,
+                        write: false,
+                        source: if row["effect_source"] == "nested" {
+                            EffectSource::Nested
+                        } else {
+                            EffectSource::Operand
+                        },
+                    }),
+                "effect provenance: {row}"
+            );
+        }
+        Outcome::CoverageInsufficient { cause, .. } if owner == "array-blank" => {
+            assert_eq!(
+                cause,
+                &if consumer == "pi" {
+                    CoverageGap::UnsupportedDialectConstruct
+                } else {
+                    CoverageGap::ExecutorDivergence
+                },
+                "ruling31 cause: {row}"
+            );
+        }
+        Outcome::CoverageInsufficient { .. } | Outcome::NoObjection => {}
+        other => panic!("unexpected outcome for {row}: {other:?}"),
+    }
 }

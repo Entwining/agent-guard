@@ -1,5 +1,6 @@
 {
   "depths": [512, 1024, 2048, 20000],
+  "forms": ["literal", "parameter-prefix", "repeated-parameter"],
   "rows": [
     {"basename":"file.txt","expected":"N"},
     {"basename":".env.example","expected":"N"},

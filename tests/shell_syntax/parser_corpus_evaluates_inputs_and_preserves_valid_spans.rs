@@ -204,6 +204,50 @@ fn compare(id: &str, source: &str) -> Value {
 #[test]
 fn parser_corpus_evaluates_inputs_and_preserves_valid_spans() {
     let fixture = support::Fixture::new();
+    let inputs = parser_inputs(&fixture);
+    let expected_ids: BTreeSet<_> = inputs.iter().map(|(id, _)| id.as_str()).collect();
+    assert_eq!(expected_ids.len(), inputs.len(), "duplicate parser input");
+    let report: Vec<_> = inputs
+        .iter()
+        .map(|(id, source)| match source {
+            Ok(source) => compare(id, source),
+            Err(status) => json!({"id":id,"status":status}),
+        })
+        .collect();
+    assert_eq!(
+        report
+            .iter()
+            .map(|row| row["id"].as_str().unwrap())
+            .collect::<BTreeSet<_>>(),
+        expected_ids,
+        "every parser input must be evaluated"
+    );
+    // Unicode words exercise character-to-byte spans; incomplete syntax exercises errors.
+    for (id, success) in [("variant:10", true), ("variant:12", false)] {
+        let row = report
+            .iter()
+            .find(|row| row["id"] == id)
+            .unwrap_or_else(|| panic!("missing parser witness"));
+        for parser in ["brush", "tree"] {
+            assert_eq!(
+                row[parser]["success"], success,
+                "{id}: {parser} parse outcome"
+            );
+            if success {
+                assert!(
+                    !row[parser]["statements"].as_array().unwrap().is_empty(),
+                    "{id}: {parser} statement spans missing"
+                );
+                assert!(
+                    !row[parser]["words"].as_array().unwrap().is_empty(),
+                    "{id}: {parser} word spans missing"
+                );
+            }
+        }
+    }
+}
+
+fn parser_inputs(fixture: &support::Fixture) -> Vec<(String, Result<String, &'static str>)> {
     let mut inputs = Vec::new();
     let legacy: Vec<Value> = include_str!("../fixtures/contract.jsonl")
         .lines()
@@ -283,44 +327,5 @@ fn parser_corpus_evaluates_inputs_and_preserves_valid_spans() {
     {
         inputs.push((format!("variant:{i}"), Ok(source.to_string())));
     }
-    let expected_ids: BTreeSet<_> = inputs.iter().map(|(id, _)| id.as_str()).collect();
-    assert_eq!(expected_ids.len(), inputs.len(), "duplicate parser input");
-    let report: Vec<_> = inputs
-        .iter()
-        .map(|(id, source)| match source {
-            Ok(source) => compare(id, source),
-            Err(status) => json!({"id":id,"status":status}),
-        })
-        .collect();
-    assert_eq!(
-        report
-            .iter()
-            .map(|row| row["id"].as_str().unwrap())
-            .collect::<BTreeSet<_>>(),
-        expected_ids,
-        "every parser input must be evaluated"
-    );
-    // Unicode words exercise character-to-byte spans; incomplete syntax exercises errors.
-    for (id, success) in [("variant:10", true), ("variant:12", false)] {
-        let row = report
-            .iter()
-            .find(|row| row["id"] == id)
-            .unwrap_or_else(|| panic!("missing parser witness"));
-        for parser in ["brush", "tree"] {
-            assert_eq!(
-                row[parser]["success"], success,
-                "{id}: {parser} parse outcome"
-            );
-            if success {
-                assert!(
-                    !row[parser]["statements"].as_array().unwrap().is_empty(),
-                    "{id}: {parser} statement spans missing"
-                );
-                assert!(
-                    !row[parser]["words"].as_array().unwrap().is_empty(),
-                    "{id}: {parser} word spans missing"
-                );
-            }
-        }
-    }
+    inputs
 }

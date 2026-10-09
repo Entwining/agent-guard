@@ -39,158 +39,12 @@ pub(super) fn integer(
     unknown: &std::collections::BTreeSet<String>,
     deadline: Option<std::time::Instant>,
 ) -> Result<Integer, CheckError> {
-    fn resolve(
-        expression: &str,
-        bindings: &BTreeMap<String, String>,
-        unknown: &std::collections::BTreeSet<String>,
-        running: &mut Vec<String>,
-        memo: &mut BTreeMap<String, Option<i64>>,
-        #[cfg(test)] stats: &mut Integer,
-        deadline: Option<std::time::Instant>,
-    ) -> Result<Option<i64>, CheckError> {
-        use brush_parser::ast::{
-            ArithmeticExpr as Expr, ArithmeticTarget, BinaryOperator as Binary,
-            UnaryOperator as Unary,
-        };
-        crate::check_deadline(deadline)?;
-        let Ok(tree) = brush_parser::arithmetic::parse(expression) else {
-            return Ok(None);
-        };
-        enum Work<'a> {
-            Value(&'a Expr),
-            Unary(Unary),
-            Right(Binary, &'a Expr),
-            Binary(Binary, i64),
-            Conditional(&'a Expr, &'a Expr),
-        }
-        let mut work = vec![Work::Value(&tree)];
-        let mut values = Vec::new();
-        while let Some(step) = work.pop() {
-            crate::check_deadline(deadline)?;
-            match step {
-                Work::Value(expr) => match expr {
-                    Expr::Literal(value) => values.push(*value),
-                    Expr::Reference(ArithmeticTarget::Variable(name)) => {
-                        if unknown.contains(name)
-                            || running.contains(name)
-                            || running.len() >= MAX_NESTING
-                        {
-                            return Ok(None);
-                        }
-                        if let Some(value) = memo.get(name) {
-                            let Some(value) = value else { return Ok(None) };
-                            values.push(*value);
-                            continue;
-                        }
-                        #[cfg(test)]
-                        {
-                            stats.bindings_evaluated += 1;
-                        }
-                        let value = if let Some(value) = bindings.get(name) {
-                            running.push(name.clone());
-                            let result = resolve(
-                                value,
-                                bindings,
-                                unknown,
-                                running,
-                                memo,
-                                #[cfg(test)]
-                                stats,
-                                deadline,
-                            );
-                            running.pop();
-                            result?
-                        } else {
-                            Some(0)
-                        };
-                        memo.insert(name.clone(), value);
-                        let Some(value) = value else { return Ok(None) };
-                        values.push(value);
-                    }
-                    Expr::UnaryOp(op, value) => {
-                        work.push(Work::Unary(*op));
-                        work.push(Work::Value(value));
-                    }
-                    Expr::BinaryOp(op, left, right) => {
-                        work.push(Work::Right(*op, right));
-                        work.push(Work::Value(left));
-                    }
-                    Expr::Conditional(test, yes, no) => {
-                        work.push(Work::Conditional(yes, no));
-                        work.push(Work::Value(test));
-                    }
-                    _ => return Ok(None),
-                },
-                Work::Unary(op) => {
-                    let Some(value) = values.pop() else {
-                        return Ok(None);
-                    };
-                    values.push(match op {
-                        Unary::UnaryPlus => value,
-                        Unary::UnaryMinus => value.wrapping_neg(),
-                        Unary::BitwiseNot => !value,
-                        Unary::LogicalNot => i64::from(value == 0),
-                    });
-                }
-                Work::Right(op, right) => {
-                    let Some(left) = values.pop() else {
-                        return Ok(None);
-                    };
-                    if matches!(op, Binary::LogicalAnd) && left == 0 {
-                        values.push(0);
-                    } else if matches!(op, Binary::LogicalOr) && left != 0 {
-                        values.push(1);
-                    } else {
-                        work.push(Work::Binary(op, left));
-                        work.push(Work::Value(right));
-                    }
-                }
-                Work::Binary(op, left) => {
-                    let Some(right) = values.pop() else {
-                        return Ok(None);
-                    };
-                    let value = match op {
-                        Binary::Add => Some(left.wrapping_add(right)),
-                        Binary::Subtract => Some(left.wrapping_sub(right)),
-                        Binary::Multiply => Some(left.wrapping_mul(right)),
-                        Binary::Divide => left.checked_div(right),
-                        Binary::Modulo => left.checked_rem(right),
-                        Binary::Power => u32::try_from(right)
-                            .ok()
-                            .map(|right| left.wrapping_pow(right)),
-                        Binary::ShiftLeft => Some(left.wrapping_shl(right as u32)),
-                        Binary::ShiftRight => Some(left.wrapping_shr(right as u32)),
-                        Binary::BitwiseAnd => Some(left & right),
-                        Binary::BitwiseOr => Some(left | right),
-                        Binary::BitwiseXor => Some(left ^ right),
-                        Binary::LogicalAnd | Binary::LogicalOr => Some(i64::from(right != 0)),
-                        Binary::Equals => Some(i64::from(left == right)),
-                        Binary::NotEquals => Some(i64::from(left != right)),
-                        Binary::LessThan => Some(i64::from(left < right)),
-                        Binary::LessThanOrEqualTo => Some(i64::from(left <= right)),
-                        Binary::GreaterThan => Some(i64::from(left > right)),
-                        Binary::GreaterThanOrEqualTo => Some(i64::from(left >= right)),
-                        Binary::Comma => Some(right),
-                    };
-                    let Some(value) = value else { return Ok(None) };
-                    values.push(value);
-                }
-                Work::Conditional(yes, no) => {
-                    let Some(test) = values.pop() else {
-                        return Ok(None);
-                    };
-                    work.push(Work::Value(if test != 0 { yes } else { no }));
-                }
-            }
-        }
-        Ok(values.pop())
-    }
     let mut result = Integer {
         value: None,
         #[cfg(test)]
         bindings_evaluated: 0,
     };
-    result.value = resolve(
+    result.value = resolve_integer(
         expression,
         bindings,
         unknown,
@@ -348,50 +202,176 @@ fn visit(
 }
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn constant_binding_arithmetic_evaluates_each_binding_once() {
-        for width in [4, 8, 16] {
-            let mut bindings = std::collections::BTreeMap::from([("n0".into(), "1".into())]);
-            for n in 1..=width {
-                bindings.insert(format!("n{n}"), format!("n{}+n{}", n - 1, n - 1));
+mod tests;
+
+fn resolve_integer(
+    expression: &str,
+    bindings: &BTreeMap<String, String>,
+    unknown: &std::collections::BTreeSet<String>,
+    running: &mut Vec<String>,
+    memo: &mut BTreeMap<String, Option<i64>>,
+    #[cfg(test)] stats: &mut Integer,
+    deadline: Option<std::time::Instant>,
+) -> Result<Option<i64>, CheckError> {
+    use brush_parser::ast::{
+        ArithmeticExpr as Expr, ArithmeticTarget, BinaryOperator as Binary, UnaryOperator as Unary,
+    };
+    crate::check_deadline(deadline)?;
+    let Ok(tree) = brush_parser::arithmetic::parse(expression) else {
+        return Ok(None);
+    };
+    enum Work<'a> {
+        Value(&'a Expr),
+        Unary(Unary),
+        Right(Binary, &'a Expr),
+        Binary(Binary, i64),
+        Conditional(&'a Expr, &'a Expr),
+    }
+    let mut work = vec![Work::Value(&tree)];
+    let mut values = Vec::new();
+    while let Some(step) = work.pop() {
+        crate::check_deadline(deadline)?;
+        match step {
+            Work::Value(expr) => match expr {
+                Expr::Literal(value) => values.push(*value),
+                Expr::Reference(ArithmeticTarget::Variable(name)) => {
+                    let Some(value) = binding_integer(
+                        name,
+                        bindings,
+                        unknown,
+                        running,
+                        memo,
+                        #[cfg(test)]
+                        stats,
+                        deadline,
+                    )?
+                    else {
+                        return Ok(None);
+                    };
+                    values.push(value);
+                }
+                Expr::UnaryOp(op, value) => {
+                    work.push(Work::Unary(*op));
+                    work.push(Work::Value(value));
+                }
+                Expr::BinaryOp(op, left, right) => {
+                    work.push(Work::Right(*op, right));
+                    work.push(Work::Value(left));
+                }
+                Expr::Conditional(test, yes, no) => {
+                    work.push(Work::Conditional(yes, no));
+                    work.push(Work::Value(test));
+                }
+                _ => return Ok(None),
+            },
+            Work::Unary(op) => {
+                let Some(value) = values.pop() else {
+                    return Ok(None);
+                };
+                values.push(match op {
+                    Unary::UnaryPlus => value,
+                    Unary::UnaryMinus => value.wrapping_neg(),
+                    Unary::BitwiseNot => !value,
+                    Unary::LogicalNot => i64::from(value == 0),
+                });
             }
-            let result = super::integer(
-                &format!("n{width}-n{width}"),
-                &bindings,
-                &std::collections::BTreeSet::new(),
-                None,
-            )
-            .unwrap();
-            assert_eq!(result.value, Some(0));
-            assert!(
-                result.bindings_evaluated <= width + 1,
-                "width={width}: {} binding evaluations",
-                result.bindings_evaluated
-            );
+            Work::Right(op, right) => {
+                let Some(left) = values.pop() else {
+                    return Ok(None);
+                };
+                if matches!(op, Binary::LogicalAnd) && left == 0 {
+                    values.push(0);
+                } else if matches!(op, Binary::LogicalOr) && left != 0 {
+                    values.push(1);
+                } else {
+                    work.push(Work::Binary(op, left));
+                    work.push(Work::Value(right));
+                }
+            }
+            Work::Binary(op, left) => {
+                let Some(right) = values.pop() else {
+                    return Ok(None);
+                };
+                let value = binary_integer(op, left, right);
+                let Some(value) = value else { return Ok(None) };
+                values.push(value);
+            }
+            Work::Conditional(yes, no) => {
+                let Some(test) = values.pop() else {
+                    return Ok(None);
+                };
+                work.push(Work::Value(if test != 0 { yes } else { no }));
+            }
         }
     }
-    use super::*;
+    Ok(values.pop())
+}
 
-    #[test]
-    fn armed_classifier_refuses_its_own_lexer_bound() {
-        let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../tests/fixtures/rust-m2-arith-sinks.json"
-        ))
-        .unwrap();
-        let row = fixture["rows"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|row| row["id"] == "armed-lexer-bound")
-            .unwrap();
-        let value = row["source"]
-            .as_str()
-            .unwrap()
-            .strip_prefix("x='")
-            .unwrap()
-            .strip_suffix("'; echo x")
-            .unwrap();
-        assert!(matches!(armed(value), Arming::Unresolved));
+fn binding_integer(
+    name: &String,
+    bindings: &BTreeMap<String, String>,
+    unknown: &std::collections::BTreeSet<String>,
+    running: &mut Vec<String>,
+    memo: &mut BTreeMap<String, Option<i64>>,
+    #[cfg(test)] stats: &mut Integer,
+    deadline: Option<std::time::Instant>,
+) -> Result<Option<i64>, CheckError> {
+    if unknown.contains(name) || running.contains(name) || running.len() >= MAX_NESTING {
+        return Ok(None);
+    }
+    if let Some(value) = memo.get(name) {
+        let Some(value) = value else { return Ok(None) };
+        return Ok(Some(*value));
+    }
+    #[cfg(test)]
+    {
+        stats.bindings_evaluated += 1;
+    }
+    let value = if let Some(value) = bindings.get(name) {
+        running.push(name.clone());
+        let result = resolve_integer(
+            value,
+            bindings,
+            unknown,
+            running,
+            memo,
+            #[cfg(test)]
+            stats,
+            deadline,
+        );
+        running.pop();
+        result?
+    } else {
+        Some(0)
+    };
+    memo.insert(name.clone(), value);
+    let Some(value) = value else { return Ok(None) };
+    Ok(Some(value))
+}
+
+fn binary_integer(op: brush_parser::ast::BinaryOperator, left: i64, right: i64) -> Option<i64> {
+    use brush_parser::ast::BinaryOperator as Binary;
+    match op {
+        Binary::Add => Some(left.wrapping_add(right)),
+        Binary::Subtract => Some(left.wrapping_sub(right)),
+        Binary::Multiply => Some(left.wrapping_mul(right)),
+        Binary::Divide => left.checked_div(right),
+        Binary::Modulo => left.checked_rem(right),
+        Binary::Power => u32::try_from(right)
+            .ok()
+            .map(|right| left.wrapping_pow(right)),
+        Binary::ShiftLeft => Some(left.wrapping_shl(right as u32)),
+        Binary::ShiftRight => Some(left.wrapping_shr(right as u32)),
+        Binary::BitwiseAnd => Some(left & right),
+        Binary::BitwiseOr => Some(left | right),
+        Binary::BitwiseXor => Some(left ^ right),
+        Binary::LogicalAnd | Binary::LogicalOr => Some(i64::from(right != 0)),
+        Binary::Equals => Some(i64::from(left == right)),
+        Binary::NotEquals => Some(i64::from(left != right)),
+        Binary::LessThan => Some(i64::from(left < right)),
+        Binary::LessThanOrEqualTo => Some(i64::from(left <= right)),
+        Binary::GreaterThan => Some(i64::from(left > right)),
+        Binary::GreaterThanOrEqualTo => Some(i64::from(left >= right)),
+        Binary::Comma => Some(right),
     }
 }

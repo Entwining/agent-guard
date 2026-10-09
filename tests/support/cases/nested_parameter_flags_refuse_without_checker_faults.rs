@@ -102,80 +102,7 @@ pub fn mechanism_rows(owner: &str) {
                 failures.push(json!({"id":row["id"],"consumer":consumer,"expected":row["expected"],"actual":support::class(&result),"result":format!("{result:?}"),"wire":format!("{wire:?}")}));
             }
             assert!(wire.stdout.is_empty());
-            match &result.as_ref().unwrap().outcome {
-                agent_guard_rust::Outcome::NoObjection => assert!(wire.stderr.is_empty()),
-                agent_guard_rust::Outcome::ProtectedDenial { reason, recovery } => {
-                    let environmental = matches!(
-                        row["id"].as_str().unwrap(),
-                        "A102-herestring-eval"
-                            | "A043-herestring-direct"
-                            | "A056-subscript-assign"
-                            | "g1-plain-unquoted"
-                            | "g8-plain-literal"
-                            | "coverage-sibling"
-                            | "coverage-nested-effect"
-                            | "coverage-eval-queue"
-                            | "coverage-qualifier-queue"
-                            | "qualifier-nested-quotes"
-                            | "i4-arith-sub-plain"
-                            | "i5-arith-sub-param"
-                    );
-                    assert!(
-                        reason.effect.contains(if environmental {
-                            "environment"
-                        } else {
-                            "private-key"
-                        }),
-                        "{row}: {reason:?}"
-                    );
-                    assert!(wire.stderr.contains(reason.rule.message()));
-                    assert!(!recovery.excluded_scope.is_empty());
-                    assert!(!recovery.automatic_application_supported);
-                    assert!(!wire.stderr.contains("recovery:"));
-                }
-                agent_guard_rust::Outcome::CoverageInsufficient {
-                    cause, recovery, ..
-                } => {
-                    if row["expected"] == "UC" {
-                        assert_eq!(cause, &CoverageGap::UnresolvedTarget);
-                        assert!(recovery.is_none());
-                        assert!(wire.stderr.is_empty());
-                    } else {
-                        let syntax = matches!(
-                            row["id"].as_str().unwrap(),
-                            "s3-idx-atZ"
-                                | "s6-arith-atZ"
-                                | "s9-legacy-atZ"
-                                | "c3-top-atZ"
-                                | "l3-trim-quoted-nested"
-                                | "l4-default-nested"
-                                | "l5-top-quoted-nested"
-                        );
-                        assert_eq!(
-                            cause,
-                            &if syntax {
-                                CoverageGap::UnsupportedShellSyntax
-                            } else if consumer == "pi" {
-                                CoverageGap::UnsupportedDialectConstruct
-                            } else {
-                                CoverageGap::ExecutorDivergence
-                            },
-                            "{row}"
-                        );
-                        let recovery = recovery.as_ref().unwrap();
-                        assert!(!recovery.excluded_scope.is_empty());
-                        assert!(!recovery.automatic_application_supported);
-                        assert!(if syntax {
-                            wire.stderr.contains("shell syntax")
-                                && wire.stderr.contains("explicit paths")
-                        } else {
-                            wire.stderr.contains("unsupported") && wire.stderr.contains("recheck")
-                        });
-                        assert!(!wire.stderr.contains("checker failed"));
-                    }
-                }
-                other => panic!("unexpected advice/outcome: {row}: {other:?}"),
-            }
+            assert_mechanism_outcome(row, consumer, &result, &wire);
         }
     }
     println!("{}", json!({"owner":owner,"failures":failures}));
@@ -184,4 +111,85 @@ pub fn mechanism_rows(owner: &str) {
         "{owner} observation failures: {}",
         failures.len()
     );
+}
+
+fn assert_mechanism_outcome(
+    row: &Value,
+    consumer: &str,
+    result: &Result<agent_guard_rust::Evaluation, agent_guard_rust::CheckError>,
+    wire: &agent_guard_rust::adapters::Wire,
+) {
+    match &result.as_ref().unwrap().outcome {
+        agent_guard_rust::Outcome::NoObjection => assert!(wire.stderr.is_empty()),
+        agent_guard_rust::Outcome::ProtectedDenial { reason, recovery } => {
+            let environmental = matches!(
+                row["id"].as_str().unwrap(),
+                "A102-herestring-eval"
+                    | "A043-herestring-direct"
+                    | "A056-subscript-assign"
+                    | "g1-plain-unquoted"
+                    | "g8-plain-literal"
+                    | "coverage-sibling"
+                    | "coverage-nested-effect"
+                    | "coverage-eval-queue"
+                    | "coverage-qualifier-queue"
+                    | "qualifier-nested-quotes"
+                    | "i4-arith-sub-plain"
+                    | "i5-arith-sub-param"
+            );
+            assert!(
+                reason.effect.contains(if environmental {
+                    "environment"
+                } else {
+                    "private-key"
+                }),
+                "{row}: {reason:?}"
+            );
+            assert!(wire.stderr.contains(reason.rule.message()));
+            assert!(!recovery.excluded_scope.is_empty());
+            assert!(!recovery.automatic_application_supported);
+            assert!(!wire.stderr.contains("recovery:"));
+        }
+        agent_guard_rust::Outcome::CoverageInsufficient {
+            cause, recovery, ..
+        } => {
+            if row["expected"] == "UC" {
+                assert_eq!(cause, &CoverageGap::UnresolvedTarget);
+                assert!(recovery.is_none());
+                assert!(wire.stderr.is_empty());
+            } else {
+                let syntax = matches!(
+                    row["id"].as_str().unwrap(),
+                    "s3-idx-atZ"
+                        | "s6-arith-atZ"
+                        | "s9-legacy-atZ"
+                        | "c3-top-atZ"
+                        | "l3-trim-quoted-nested"
+                        | "l4-default-nested"
+                        | "l5-top-quoted-nested"
+                );
+                assert_eq!(
+                    cause,
+                    &if syntax {
+                        CoverageGap::UnsupportedShellSyntax
+                    } else if consumer == "pi" {
+                        CoverageGap::UnsupportedDialectConstruct
+                    } else {
+                        CoverageGap::ExecutorDivergence
+                    },
+                    "{row}"
+                );
+                let recovery = recovery.as_ref().unwrap();
+                assert!(!recovery.excluded_scope.is_empty());
+                assert!(!recovery.automatic_application_supported);
+                assert!(if syntax {
+                    wire.stderr.contains("shell syntax") && wire.stderr.contains("explicit paths")
+                } else {
+                    wire.stderr.contains("unsupported") && wire.stderr.contains("recheck")
+                });
+                assert!(!wire.stderr.contains("checker failed"));
+            }
+        }
+        other => panic!("unexpected advice/outcome: {row}: {other:?}"),
+    }
 }

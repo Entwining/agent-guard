@@ -1,7 +1,7 @@
 {"rows":[
- {"id":"all-wildcard","partition":"wildcard","tool":"Bash","input":{"command":"cat *"},"expected":"D","reason":"credential or environment file","alternative":"pass it through that program's own option"},
- {"id":"question-wildcard","partition":"wildcard","tool":"Bash","input":{"command":"cat ?*"},"expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file"},
- {"id":"fixed-prefix-wildcard","partition":"wildcard","tool":"Bash","input":{"command":"cat s*"},"expected":"D","reason":"credential or environment file","alternative":"read a non-sensitive config file"},
+ {"id":"all-wildcard","partition":"wildcard","tool":"Bash","input":{"command":"cat *"},"expected":"N"},
+ {"id":"question-wildcard","partition":"wildcard","tool":"Bash","input":{"command":"cat ?*"},"expected":"N"},
+ {"id":"fixed-prefix-wildcard","partition":"wildcard","tool":"Bash","input":{"command":"cat s*"},"expected":"N"},
  {"id":"pem-wildcard","partition":"wildcard","tool":"Bash","input":{"command":"cat *.pem"},"expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file"},
  {"id":"txt-wildcard","partition":"wildcard","tool":"Bash","input":{"command":"cat *.txt"},"expected":"N"},
  {"id":"wildcard-public-child","partition":"wildcard","tool":"Bash","input":{"command":"cat */package.json"},"expected":"N"},
@@ -18,12 +18,25 @@
  ,{"id":"volfs-inode","partition":"aliases","tool":"Read","input":{"file_path":"/.vol/1/2"},"expected":"UR","reason":"inode-addressed","alternative":"ordinary file path"}
  ,{"id":"alias-link-appdata","partition":"aliases","tool":"Read","input":{"file_path":"$P/alias-link"},"synthetic_setup":{"links":[["$P/alias-link","/.nofollow$C/data.txt"]]},"expected":"D","reason":"protected macOS app-data directory","alternative":"ask the user to inspect the protected file"}
  ,{"id":"inode-link","partition":"aliases","tool":"Read","input":{"file_path":"$P/inode-link"},"synthetic_setup":{"links":[["$P/inode-link","/.vol/1/2"]]},"expected":"UR","reason":"inode-addressed","alternative":"ordinary file path"}
- ,{"id":"grep-aws-glob","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"**/.aws/credentials"},"expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file"}
- ,{"id":"grep-ssh-glob","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"**/.ssh/id_rsa"},"expected":"D","reason":"credential or environment file","alternative":"read a non-sensitive config file"}
+ ,{"id":"grep-source-extension","partition":"glob-identifier","tool":"Grep","input":{"path":"$P","glob":"**/*.ts"},"expected":"N","native":true}
+ ,{"id":"grep-aws-glob","partition":"glob-identifier","tool":"Grep","input":{"path":"$P","glob":"**/.aws/credentials"},"expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file","native":true}
+ ,{"id":"grep-source-braces","partition":"glob-identifier","tool":"Grep","input":{"glob":"**/*.{ts,tsx,js}"},"expected":"N"}
+ ,{"id":"grep-source-directory-braces","partition":"glob-identifier","tool":"Grep","input":{"glob":"components/**/*.{ts,tsx}"},"expected":"N"}
+ ,{"id":"grep-public-substring","partition":"glob-identifier","tool":"Grep","input":{"glob":"**/*crm*"},"expected":"N"}
+ ,{"id":"grep-public-json-extension","partition":"glob-identifier","tool":"Grep","input":{"path":"$P","glob":"**/*.json"},"expected":"N"}
+ ,{"id":"shell-source-extension","partition":"glob-identifier","tool":"Bash","input":{"command":"cat **/*.ts"},"expected":"N"}
+ ,{"id":"shell-aws-glob","partition":"glob-identifier","tool":"Bash","input":{"command":"cat **/.aws/credentials"},"expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file"}
+ ,{"id":"grep-ssh-glob","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"**/.ssh/id_*"},"expected":"D","reason":"credential or environment file","alternative":"read a non-sensitive config file"}
  ,{"id":"grep-kube-glob","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"**/.kube/config"},"expected":"D","reason":"credential or environment file","alternative":"pass it through that program's own option"}
  ,{"id":"grep-public-glob","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"**/src/*.txt"},"expected":"N"}
  ,{"id":"grep-exclusion-glob","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"!**/.aws/credentials"},"expected":"N"}
- ,{"id":"grep-literal-root","partition":"grep-glob","tool":"Grep","input":{"path":"$P/*","glob":"credentials.ts"},"expected":"N"}
+ ,{"id":"grep-literal-root","partition":"grep-glob","tool":"Grep","input":{"path":"$H/Libr*/Containers/project","glob":"**/src/*.txt"},"expected":"N","native":true}
+ ,{"id":"grep-literal-root-recursive-basename","partition":"grep-glob","tool":"Grep","input":{"path":"$P/*","glob":"credentials.ts"},"expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file"}
+ ,{"id":"grep-basename-credentials","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"credentials"},"synthetic_setup":{"files":{"$P/.aws/credentials":"SYNTHETIC_CANARY\n"}},"expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file","native":true}
+ ,{"id":"grep-basename-source-extension","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"*.ts"},"expected":"N","native":true}
+ ,{"id":"grep-basename-config","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"config"},"expected":"D","reason":"credential or environment file","alternative":"pass it through that program's own option"}
+ ,{"id":"grep-basename-public","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"public.txt"},"expected":"N","native":true}
+ ,{"id":"grep-anchored-public-name","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"src/credentials"},"expected":"N"}
  ,{"id":"exec-command-key","partition":"codex-native","consumer":"codex","native":true,"tool":"exec_command","input":{"cmd":"cat $H/.ssh/id_rsa"},"expected":"D","reason":"credential or environment file","alternative":"ssh -i"}
  ,{"id":"qualified-exec-appdata","partition":"codex-native","consumer":"codex","native":true,"tool":"functions.exec_command","input":{"cmd":"cat $C/data.txt"},"expected":"D","reason":"protected macOS app-data directory","alternative":"ask the user to inspect the protected file"}
  ,{"id":"exec-command-public","partition":"codex-native","consumer":"codex","native":true,"tool":"exec_command","input":{"cmd":"cat input.txt"},"expected":"N"}
@@ -37,15 +50,15 @@
  ,{"id":"bound-appdata-descriptor","partition":"descriptors","tool":"Bash","native":true,"input":{"command":"cat /dev/fd/3 3<$C/data.txt"},"expected":"D","reason":"protected macOS app-data directory","alternative":"ask the user to inspect the protected file"}
  ,{"id":"descriptor-link","partition":"descriptors","tool":"Read","input":{"file_path":"$P/fd-link"},"synthetic_setup":{"links":[["$P/fd-link","/dev/fd/9"]]},"expected":"UC"}
  ,{"id":"descriptor-spelling-public","partition":"descriptors","tool":"Bash","input":{"command":"cat $P/dev/fd/3"},"expected":"N"}
- ,{"id":"rm-ssh-root","partition":"resource-change","tool":"Bash","input":{"command":"rm -rf $H/.ssh"},"expected":"D","reason":"changes a protected","alternative":"ask the user to perform the change"}
- ,{"id":"rm-env","partition":"resource-change","tool":"Bash","input":{"command":"rm .env"},"expected":"D","reason":"changes a protected","alternative":"ask the user to perform the change"}
- ,{"id":"mv-key-source","partition":"resource-change","tool":"Bash","input":{"command":"mv $H/.ssh/id_rsa public"},"expected":"D","reason":"changes a protected","alternative":"ask the user to perform the change"}
- ,{"id":"mv-key-target","partition":"resource-change","tool":"Bash","input":{"command":"mv input.txt $H/.ssh/id_rsa"},"expected":"D","reason":"changes a protected","alternative":"ask the user to perform the change"}
- ,{"id":"link-key-source","partition":"resource-change","tool":"Bash","input":{"command":"ln $H/.ssh/id_rsa public"},"expected":"D","reason":"changes a protected","alternative":"ask the user to perform the change"}
- ,{"id":"link-key-target","partition":"resource-change","tool":"Bash","input":{"command":"ln -s input.txt $H/.ssh/id_rsa"},"expected":"D","reason":"changes a protected","alternative":"ask the user to perform the change"}
+ ,{"id":"rm-ssh-root","partition":"resource-change","tool":"Bash","input":{"command":"rm -rf $H/.ssh"},"expected":"N"}
+ ,{"id":"rm-env","partition":"resource-change","tool":"Bash","input":{"command":"rm .env"},"expected":"N"}
+ ,{"id":"mv-key-source","partition":"resource-change","tool":"Bash","input":{"command":"mv $H/.ssh/id_rsa public"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"mv-key-target","partition":"resource-change","tool":"Bash","input":{"command":"mv input.txt $H/.ssh/id_rsa"},"expected":"N"}
+ ,{"id":"link-key-source","partition":"resource-change","tool":"Bash","input":{"command":"ln $H/.ssh/id_rsa public"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"link-key-target","partition":"resource-change","tool":"Bash","input":{"command":"ln -s input.txt $H/.ssh/id_rsa"},"expected":"N"}
  ,{"id":"copy-credential-source","partition":"resource-change","tool":"Bash","input":{"command":"cp .env public"},"expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file"}
- ,{"id":"copy-credential-target","partition":"resource-change","tool":"Bash","input":{"command":"cp input.txt .env"},"expected":"D","reason":"changes a protected","alternative":"ask the user to perform the change"}
- ,{"id":"copy-option-target","partition":"resource-change","tool":"Bash","input":{"command":"cp -t $H/.ssh input.txt"},"expected":"D","reason":"changes a protected","alternative":"ask the user to perform the change"}
+ ,{"id":"copy-credential-target","partition":"resource-change","tool":"Bash","input":{"command":"cp input.txt .env"},"expected":"N"}
+ ,{"id":"copy-option-target","partition":"resource-change","tool":"Bash","input":{"command":"cp -t $H/.ssh input.txt"},"expected":"D","reason":"private material","alternative":"exact public key or client-config path"}
  ,{"id":"chmod-key","partition":"resource-change","tool":"Bash","input":{"command":"chmod 600 $H/.ssh/id_rsa"},"expected":"N"}
  ,{"id":"chown-key","partition":"resource-change","tool":"Bash","input":{"command":"chown fixture $H/.ssh/id_rsa"},"expected":"N"}
  ,{"id":"touch-key","partition":"resource-change","tool":"Bash","input":{"command":"touch $H/.ssh/id_rsa"},"expected":"N"}
@@ -77,4 +90,36 @@
  ,{"id":"inspection-budget-advice","partition":"refusal-advice","tool":"Bash","input":{"command":"f0() { f1; f1; }; f1() { f2; f2; }; f2() { f3; f3; }; f3() { f4; f4; }; f4() { f5; f5; }; f5() { f6; f6; }; f6() { f7; f7; }; f7() { f8; f8; }; f8() { f9; f9; }; f9() { true; }; f0"},"expected":"UR","reason":"inspection budget","alternative":"Split loops or function calls into smaller commands","reason_absent":"unsupported construct"}
  ,{"id":"identity-bound-advice","partition":"refusal-advice","tool":"Bash","input":{"command":"cat loop-a"},"synthetic_setup":{"links":[["$P/loop-a","loop-b"],["$P/loop-b","loop-a"]]},"expected":"UR","reason":"cannot resolve this path","alternative":"ordinary absolute path","reason_absent":"unsupported construct"}
  ,{"id":"deadline-advice","partition":"refusal-advice","tool":"Bash","input":{"command":"true"},"expired_deadline":true,"expected":"F","reason":"deadline","alternative":"Split the work into smaller calls","reason_absent":"repair the failed check"}
+ ,{"id":"rename-protected-ssh","partition":"resource-change","tool":"Bash","input":{"command":"mv $H/.ssh/id_example $H/.ssh/id_second"},"expected":"N"}
+ ,{"id":"rename-protected-pem","partition":"resource-change","tool":"Bash","input":{"command":"mv $H/.ssh/a.pem $H/.ssh/b.pem"},"expected":"N"}
+ ,{"id":"rename-protected-env","partition":"resource-change","tool":"Bash","input":{"command":"mv .env .env.local"},"expected":"N"}
+ ,{"id":"link-protected-env","partition":"resource-change","tool":"Bash","input":{"command":"ln .env .env.local"},"expected":"N"}
+ ,{"id":"symlink-protected-source","partition":"resource-change","tool":"Bash","input":{"command":"ln -s $H/.ssh/id_rsa public"},"expected":"N"}
+ ,{"id":"symlink-grouped-options","partition":"resource-change","tool":"Bash","input":{"command":"ln -sf $H/.ssh/id_rsa public"},"expected":"N"}
+ ,{"id":"symlink-long-option","partition":"resource-change","tool":"Bash","input":{"command":"ln --symbolic $H/.ssh/id_rsa public"},"expected":"N"}
+ ,{"id":"symlink-env-target","partition":"resource-change","tool":"Bash","input":{"command":"ln -s input.txt .env"},"expected":"N"}
+ ,{"id":"copy-unknown-env-target","partition":"resource-change","tool":"Bash","input":{"command":"probe_root=$(mktemp -d); cp /dev/null \"$probe_root/.env.local\""},"expected":"UC"}
+ ,{"id":"remove-probe-wildcard","partition":"resource-change","tool":"Bash","input":{"command":"rm -f out/*-probe.*"},"expected":"N"}
+ ,{"id":"relocate-env-read","partition":"resource-change","tool":"Bash","input":{"command":"mv .env public-moved; cat public-moved"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"link-env-read","partition":"resource-change","tool":"Bash","input":{"command":"ln .env public-linked; cat public-linked"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"relocate-ssh-root","partition":"resource-change","tool":"Bash","input":{"command":"mv $H/.ssh public-dir"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"relocate-multiple-sources","partition":"resource-change","tool":"Bash","input":{"command":"mv input.txt $H/.ssh/id_rsa output/"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"relocate-target-directory","partition":"resource-change","tool":"Bash","input":{"command":"mv -t output $H/.ssh/id_rsa"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"relocate-glued-directory","partition":"resource-change","tool":"Bash","input":{"command":"mv -toutput $H/.ssh/id_rsa"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"relocate-long-directory","partition":"resource-change","tool":"Bash","input":{"command":"mv --target-directory=output $H/.ssh/id_rsa"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"link-implicit-cwd","partition":"resource-change","tool":"Bash","input":{"command":"ln $H/.ssh/id_rsa"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"link-target-directory","partition":"resource-change","tool":"Bash","input":{"command":"ln -t output $H/.ssh/id_rsa"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"rename-target-directory-protected","partition":"resource-change","tool":"Bash","input":{"command":"mv -t $H/.ssh $H/.ssh/id_rsa"},"expected":"N"}
+ ,{"id":"rename-option-terminator","partition":"resource-change","tool":"Bash","input":{"command":"mv -- $H/.ssh/id_rsa $H/.ssh/id_second"},"expected":"N"}
+ ,{"id":"rename-appdata-destination","partition":"resource-change","tool":"Bash","input":{"command":"mv input.txt $C/output"},"expected":"D","reason":"protected macOS app-data directory","alternative":"ask the user to inspect the protected file"}
+ ,{"id":"remove-appdata","partition":"resource-change","tool":"Bash","input":{"command":"rm -rf $C"},"expected":"D","reason":"protected macOS app-data directory","alternative":"ask the user to inspect the protected file"}
+ ,{"id":"wrapped-relocation","partition":"resource-change","tool":"Bash","input":{"command":"env mv $H/.ssh/id_rsa public"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"read-created-symlink","partition":"resource-change","tool":"Bash","input":{"command":"cat public-key-link"},"synthetic_setup":{"links":[["$P/public-key-link","$H/.ssh/id_rsa"]]},"expected":"D","reason":"credential or environment file","alternative":"ssh -i"}
+ ,{"id":"link-glued-directory","partition":"resource-change","tool":"Bash","input":{"command":"ln -toutside $H/.ssh/id_rsa"},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"rename-backup-suffix","partition":"resource-change","tool":"Bash","input":{"command":"mv --suffix=.pem input.txt output"},"expected":"N"}
+ ,{"id":"relocation-replaces-final-symlink","partition":"resource-change","tool":"Bash","input":{"command":"mv $H/.ssh/id_rsa public-target-link"},"synthetic_setup":{"links":[["$P/public-target-link","$H/.ssh/id_second"]]},"expected":"D","reason":"relocates protected","alternative":"ask the user to perform the change"}
+ ,{"id":"relocation-protected-parent-alias","partition":"resource-change","tool":"Bash","input":{"command":"mv $H/.ssh/id_rsa ssh-dir-link/id_second"},"synthetic_setup":{"links":[["$P/ssh-dir-link","$H/.ssh"]]},"expected":"N"}
+ ,{"id":"credential-pattern-appdata-list","partition":"wildcard","tool":"Bash","input":{"command":"ls data-link/*.pem"},"expected":"D","reason":"protected macOS app-data directory","alternative":"ask the user to inspect the protected file"}
+ ,{"id":"credential-pattern-appdata-cwd","partition":"wildcard","tool":"Bash","input":{"command":"cd data-link/*.pem && echo ready"},"expected":"D","reason":"protected macOS app-data directory","alternative":"ask the user to inspect the protected file"}
+ ,{"id":"credential-pattern-appdata-remove","partition":"resource-change","tool":"Bash","input":{"command":"rm data-link/*.pem"},"expected":"D","reason":"protected macOS app-data directory","alternative":"ask the user to inspect the protected file"}
 ]}

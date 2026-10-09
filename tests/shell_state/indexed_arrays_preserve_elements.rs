@@ -68,51 +68,7 @@ fn partition(name: &str) {
                         wire.stderr
                     );
                 }
-                if let Some(argv) = row["argv"].as_array() {
-                    let observation = agent_guard_rust::shell::observe(
-                        &fixture.expand(source),
-                        Arm::Brush,
-                        &context.home,
-                        &context.cwd,
-                        zsh,
-                    )
-                    .unwrap();
-                    let command = observation
-                        .script
-                        .commands
-                        .iter()
-                        .rev()
-                        .find(|command| command.argv.first().is_some_and(|word| word == "cat"))
-                        .unwrap();
-                    assert_eq!(
-                        command
-                            .argv
-                            .iter()
-                            .map(|word| word.text.as_str())
-                            .collect::<Vec<_>>(),
-                        argv.iter()
-                            .map(|word| word.as_str().unwrap())
-                            .collect::<Vec<_>>()
-                    );
-                }
-                if let Some(unknown) = row["unknown_count"].as_bool() {
-                    let observation = agent_guard_rust::shell::observe(
-                        &fixture.expand(source),
-                        Arm::Brush,
-                        &context.home,
-                        &context.cwd,
-                        zsh,
-                    )
-                    .unwrap();
-                    let command = observation
-                        .script
-                        .commands
-                        .iter()
-                        .rev()
-                        .find(|command| command.argv.first().is_some_and(|word| word == "cat"))
-                        .unwrap();
-                    assert_eq!(command.argv.last().unwrap().runtime_unknown, unknown);
-                }
+                assert_array_observation(&fixture, row, &context, source, zsh);
             }
         }
     }
@@ -152,4 +108,58 @@ fn array_dynamic_width_preserves_quoting_and_dialect() {
 #[test]
 fn array_repetition_preserves_protected_elements_and_positions() {
     partition("repetition");
+}
+
+fn assert_array_observation(
+    fixture: &support::Fixture,
+    row: &Value,
+    context: &agent_guard_rust::Context,
+    source: &str,
+    zsh: bool,
+) {
+    if let Some(argv) = row["argv"].as_array() {
+        let observation = agent_guard_rust::shell::observe(
+            &fixture.expand(source),
+            Arm::Brush,
+            &context.home,
+            &context.cwd,
+            zsh,
+        )
+        .unwrap();
+        let command = observation
+            .script
+            .commands
+            .iter()
+            .rev()
+            .find(|command| command.argv.first().is_some_and(|word| word == "cat"))
+            .unwrap();
+        assert_eq!(
+            command
+                .argv
+                .iter()
+                .map(|word| word.text.as_str())
+                .collect::<Vec<_>>(),
+            argv.iter()
+                .map(|word| word.as_str().unwrap())
+                .collect::<Vec<_>>()
+        );
+    }
+    if let Some(unknown) = row["unknown_count"].as_bool() {
+        let observation = agent_guard_rust::shell::observe(
+            &fixture.expand(source),
+            Arm::Brush,
+            &context.home,
+            &context.cwd,
+            zsh,
+        )
+        .unwrap();
+        let command = observation
+            .script
+            .commands
+            .iter()
+            .rev()
+            .find(|command| command.argv.first().is_some_and(|word| word == "cat"))
+            .unwrap();
+        assert_eq!(command.argv.last().unwrap().runtime_unknown, unknown);
+    }
 }

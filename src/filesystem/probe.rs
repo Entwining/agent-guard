@@ -33,6 +33,12 @@ impl Probe for DiskProbe {
         }
     }
     fn read_link(&mut self, path: &Path) -> io::Result<Option<PathBuf>> {
+        // Darwin rejects overlong names, already treated below as non-links.
+        // Avoid copying every growing prefix into a syscall argument.
+        #[cfg(target_os = "macos")]
+        if path.as_os_str().len() >= nix::libc::PATH_MAX as usize {
+            return Ok(None);
+        }
         match std::fs::read_link(path) {
             Ok(target) => Ok(Some(target)),
             // Darwin ENAMETOOLONG is a benign non-link result.

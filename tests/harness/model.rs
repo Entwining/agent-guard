@@ -73,37 +73,7 @@ impl ScriptedModel {
         let request = serde_json::from_slice::<Option<ModelRequest>>(body)?.unwrap_or_default();
         let model_name = request.model.as_deref().unwrap_or("");
         if self.runtime == "codex" {
-            if let Some(input) = &request.input {
-                for item in input.iter().flatten() {
-                    if item.kind.as_deref() == Some("function_call_output") {
-                        self.result = Some(ToolResult {
-                            text: serde_json::from_value::<Option<String>>(item.output.clone())?
-                                .unwrap_or_default(),
-                            is_error: false,
-                            raw: item.output.clone(),
-                        });
-                    }
-                }
-            }
-            let item = if self.result.is_none() {
-                json!({"type":"function_call","id":"fc_harness","call_id":"call_harness","name":"exec_command","arguments":json!({"cmd":self.command,"yield_time_ms":1000,"max_output_tokens":1000}).to_string(),"status":"completed"})
-            } else {
-                json!({"type":"message","id":"msg_harness","role":"assistant","status":"completed","content":[{"type":"output_text","text":"done","annotations":[]}]})
-            };
-            let response = json!({"id":format!("resp_harness_{}",self.requests),"object":"response","created_at":SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),"status":"completed","model":model_name,"output":[item],"usage":{"input_tokens":10,"output_tokens":10,"total_tokens":20,"input_tokens_details":{"cached_tokens":0},"output_tokens_details":{"reasoning_tokens":0}}});
-            let mut started = response.clone();
-            started["status"] = json!("in_progress");
-            started["output"] = json!([]);
-            let mut events = vec![
-                json!({"type":"response.created","response":started}),
-                json!({"type":"response.output_item.added","output_index":0,"item":item}),
-                json!({"type":"response.output_item.done","output_index":0,"item":item}),
-                json!({"type":"response.completed","response":response}),
-            ];
-            for (i, event) in events.iter_mut().enumerate() {
-                event["sequence_number"] = json!(i);
-            }
-            return Ok(("text/event-stream".into(), events_text(&events)));
+            return self.responses_response(&request, model_name);
         }
         if !path.contains("/messages") {
             return Ok(("application/json".into(), "{\"input_tokens\":10}".into()));
@@ -181,6 +151,43 @@ impl ScriptedModel {
                 json!({"type":"message_stop"}),
             ]),
         ))
+    }
+    fn responses_response(
+        &mut self,
+        request: &ModelRequest,
+        model_name: &str,
+    ) -> Result<(String, String)> {
+        if let Some(input) = &request.input {
+            for item in input.iter().flatten() {
+                if item.kind.as_deref() == Some("function_call_output") {
+                    self.result = Some(ToolResult {
+                        text: serde_json::from_value::<Option<String>>(item.output.clone())?
+                            .unwrap_or_default(),
+                        is_error: false,
+                        raw: item.output.clone(),
+                    });
+                }
+            }
+        }
+        let item = if self.result.is_none() {
+            json!({"type":"function_call","id":"fc_harness","call_id":"call_harness","name":"exec_command","arguments":json!({"cmd":self.command,"yield_time_ms":1000,"max_output_tokens":1000}).to_string(),"status":"completed"})
+        } else {
+            json!({"type":"message","id":"msg_harness","role":"assistant","status":"completed","content":[{"type":"output_text","text":"done","annotations":[]}]})
+        };
+        let response = json!({"id":format!("resp_harness_{}",self.requests),"object":"response","created_at":SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),"status":"completed","model":model_name,"output":[item],"usage":{"input_tokens":10,"output_tokens":10,"total_tokens":20,"input_tokens_details":{"cached_tokens":0},"output_tokens_details":{"reasoning_tokens":0}}});
+        let mut started = response.clone();
+        started["status"] = json!("in_progress");
+        started["output"] = json!([]);
+        let mut events = vec![
+            json!({"type":"response.created","response":started}),
+            json!({"type":"response.output_item.added","output_index":0,"item":item}),
+            json!({"type":"response.output_item.done","output_index":0,"item":item}),
+            json!({"type":"response.completed","response":response}),
+        ];
+        for (i, event) in events.iter_mut().enumerate() {
+            event["sequence_number"] = json!(i);
+        }
+        Ok(("text/event-stream".into(), events_text(&events)))
     }
 }
 fn events_text(events: &[Value]) -> String {
