@@ -7,7 +7,7 @@
  {"id":"kill-public-redirect","partition":"kill","input":{"command":"P=($(printf public)); kill -- \"${P[@]}\" < public"},"expected":"N"},
  {"id":"kill-protected-redirect","partition":"kill","input":{"command":"P=($(printf public)); kill -- \"${P[@]}\" < .env"},"expected":"D","wire_reason":"environment-file"},
  {"id":"kill-armed-reference","partition":"kill","input":{"command":"P=('a[$(cat .env)]'); kill -- \"${P[@]}\""},"expected":"D","wire_reason":"environment-file"},
- {"id":"perl-public-search","partition":"perl","input":{"command":"D=(./*public*); perl -e 'alarm 10; exec @ARGV' rg -l -F public -- \"${D[@]}\""},"expected":"N"},
+ {"id":"perl-public-search","partition":"perl","input":{"command":"D=(./*public*); perl -e 'alarm 10; exec @ARGV' rg -l -F public -- \"${D[@]}\""},"expected":"D","wire_reason":"credential-file"},
  {"id":"perl-public-list","partition":"perl","input":{"command":"perl -e 'exec @ARGV;' ls public second"},"expected":"N"},
  {"id":"perl-protected-read","partition":"perl","input":{"command":"perl -e 'alarm 10; exec @ARGV' cat .env"},"expected":"D","wire_reason":"environment-file"},
  {"id":"perl-protected-list","partition":"perl","input":{"command":"perl -e 'exec @ARGV' ls \"$H/.ssh/id_process_fixture\""},"expected":"D"},
@@ -16,5 +16,6 @@
  {"id":"perl-local-program-read","partition":"perl","input":{"command":"perl -e 'exec @ARGV' ./.env public"},"expected":"D","wire_reason":"environment-file"},
  {"id":"perl-scalar-fallback","partition":"perl","input":{"command":"perl -e 'exec @ARGV' public"},"expected":"UC"},
  {"id":"perl-scalar-protected-fallback","partition":"perl","input":{"command":"perl -e 'exec @ARGV' .env"},"expected":"D","wire_reason":"environment-file"},
- {"id":"perl-import-fallback","partition":"perl","input":{"command":"perl -Mstrict -e 'exec @ARGV' cat .env"},"expected":"D","wire_reason":"environment-file"}
+ {"id":"perl-import-fallback","partition":"perl","input":{"command":"perl -Mstrict -e 'exec @ARGV' cat .env"},"expected":"D","wire_reason":"environment-file"},
+ {"id":"perl-text-search","partition":"perl","input":{"command":"D=(./public*/*.txt); perl -e 'alarm 10; exec @ARGV' rg -l -F public -- \"${D[@]}\""},"expected":"N"}
 ]}

@@ -549,9 +549,12 @@
       "id": "armed-lexer-bound",
       "partition": "bounds",
       "source": "x='a[$($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($($(echo public)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))]'; echo x",
-      "expected": "F",
+      "expected": "UR",
       "nested": false,
-      "scope": "existing frontdoor ResourceLimit; binding classifier independently refuses"
+      "gap": "InspectionBudget",
+      "reason": "inspection budget",
+      "alternative": "Split loops or function calls",
+      "scope": "quoted data is checked by the armed binding classifier when referenced"
     },
     {
       "id": "armed-local-version",

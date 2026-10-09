@@ -1,0 +1,11 @@
+{
+  "width": 16000,
+  "rows": [
+    {"id":"public","command":"cat $WORDS","expected":"N"},
+    {"id":"credential-tail","command":"cat $WORDS .env","expected":"D","reason":"credential or environment file","alternative":"Otherwise read a non-sensitive config file"},
+    {"id":"appdata-tail","command":"cat $WORDS $C/data.txt","expected":"D","reason":"protected macOS app-data directory","alternative":"Name a specific non-sensitive file"},
+    {"id":"key-tail","command":"cat $WORDS $H/.ssh/id_rsa","expected":"D","reason":"credential or environment file","alternative":"Otherwise read a non-sensitive config file"},
+    {"id":"bound-public","command":"if true; then p=public; else p=other; fi; cat \"$p\" \"$p\"","expected":"N"},
+    {"id":"bound-protected","command":"if true; then p=public; else p=.env; fi; cat \"$p\" \"$p\"","expected":"D","reason":"credential or environment file","alternative":"Otherwise read a non-sensitive config file"}
+  ]
+}

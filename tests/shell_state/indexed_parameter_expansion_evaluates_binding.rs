@@ -55,6 +55,28 @@ fn partition(name: &str) {
                 }
             );
             assert!(wire.stdout.is_empty());
+            if let Some(reason) = row["reason"].as_str() {
+                assert!(
+                    wire.stderr.contains(reason),
+                    "{}: {}",
+                    row["id"],
+                    wire.stderr
+                );
+            }
+            if let Some(alternative) = row["alternative"].as_str() {
+                assert!(wire.stderr.contains(alternative), "{}", wire.stderr);
+            }
+            if let Some(gap) = row["gap"].as_str() {
+                assert!(
+                    support::coverage(&result)["gaps"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|candidate| candidate == gap),
+                    "{}: {result:?}",
+                    row["id"]
+                );
+            }
             if row["expected"] == "F" {
                 assert_eq!(
                     result.unwrap_err().kind,

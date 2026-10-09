@@ -1,8 +1,8 @@
 {"rows":[
- {"id":"env-destination","partition":"destination","expected":"N","input":{"command":"cp /dev/null .env.local"}},
- {"id":"target-directory","partition":"destination","expected":"N","input":{"command":"cp -t .env.local public"}},
- {"id":"long-directory","partition":"destination","expected":"N","input":{"command":"cp --target-directory=.env.local public"}},
- {"id":"explicit-end-options","partition":"destination","expected":"N","input":{"command":"cp -- public .env.local"}},
+ {"id":"env-destination","partition":"destination","expected":"D","input":{"command":"cp /dev/null .env.local"}},
+ {"id":"target-directory","partition":"destination","expected":"D","input":{"command":"cp -t .env.local public"}},
+ {"id":"long-directory","partition":"destination","expected":"D","input":{"command":"cp --target-directory=.env.local public"}},
+ {"id":"explicit-end-options","partition":"destination","expected":"D","input":{"command":"cp -- public .env.local"}},
  {"id":"env-source","partition":"protected","expected":"D","input":{"command":"cp .env public"}},
  {"id":"target-dir-source","partition":"protected","expected":"D","input":{"command":"cp -t public .env"}},
  {"id":"abbreviated-directory-source","partition":"protected","expected":"D","input":{"command":"cp --target=/var/empty .env"}},

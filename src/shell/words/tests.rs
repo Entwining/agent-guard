@@ -110,6 +110,9 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
     pieces.last_mut().unwrap().end_index = raw.len() + 1;
     let lexical = Lexed::scan(raw).unwrap();
     let mut out = Expanded {
+        named_tildes: std::collections::BTreeSet::new(),
+        modifiers: false,
+        unset_parameters: std::collections::BTreeSet::new(),
         unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
@@ -117,6 +120,7 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
         nested: Vec::new(),
         arithmetic: Vec::new(),
         references: Vec::new(),
+        assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
@@ -127,6 +131,11 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
         &pieces,
         &lexical,
         &ExpansionContext {
+            named_dirs: &BTreeMap::new(),
+            zsh: false,
+            assignments: &[],
+            unknown_variables: &std::collections::BTreeSet::new(),
+            deadline: None,
             runtime_variables: &std::collections::BTreeSet::new(),
             pattern_variables: &BTreeMap::new(),
             variables: &BTreeMap::new(),
@@ -218,6 +227,11 @@ fn brush_accepted_word_lexer_refusal_is_unsupported() {
         raw,
         &crate::shell::WordSyntax::Shell,
         &ExpansionContext {
+            named_dirs: &BTreeMap::new(),
+            zsh: false,
+            assignments: &[],
+            unknown_variables: &std::collections::BTreeSet::new(),
+            deadline: None,
             runtime_variables: &std::collections::BTreeSet::new(),
             pattern_variables: &BTreeMap::new(),
             variables: &BTreeMap::new(),
@@ -243,6 +257,11 @@ fn outer_early_closer_has_its_own_unsupported_region() {
         raw,
         &crate::shell::WordSyntax::Shell,
         &ExpansionContext {
+            named_dirs: &BTreeMap::new(),
+            zsh: false,
+            assignments: &[],
+            unknown_variables: &std::collections::BTreeSet::new(),
+            deadline: None,
             runtime_variables: &std::collections::BTreeSet::new(),
             pattern_variables: &BTreeMap::new(),
             variables: &BTreeMap::new(),
@@ -272,6 +291,9 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
     pieces[0].end_index -= 1;
     let lexical = Lexed::scan(raw).unwrap();
     let mut out = Expanded {
+        named_tildes: std::collections::BTreeSet::new(),
+        modifiers: false,
+        unset_parameters: std::collections::BTreeSet::new(),
         unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
@@ -279,6 +301,7 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
         nested: Vec::new(),
         arithmetic: Vec::new(),
         references: Vec::new(),
+        assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
@@ -289,6 +312,11 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
         &pieces,
         &lexical,
         &ExpansionContext {
+            named_dirs: &BTreeMap::new(),
+            zsh: false,
+            assignments: &[],
+            unknown_variables: &std::collections::BTreeSet::new(),
+            deadline: None,
             runtime_variables: &std::collections::BTreeSet::new(),
             pattern_variables: &BTreeMap::new(),
             variables: &BTreeMap::new(),
@@ -317,6 +345,9 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
     pieces.truncate(1);
     let lexical = Lexed::scan(raw).unwrap();
     let mut out = Expanded {
+        named_tildes: std::collections::BTreeSet::new(),
+        modifiers: false,
+        unset_parameters: std::collections::BTreeSet::new(),
         unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
@@ -324,6 +355,7 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
         nested: Vec::new(),
         arithmetic: Vec::new(),
         references: Vec::new(),
+        assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
@@ -334,6 +366,11 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
         &pieces,
         &lexical,
         &ExpansionContext {
+            named_dirs: &BTreeMap::new(),
+            zsh: false,
+            assignments: &[],
+            unknown_variables: &std::collections::BTreeSet::new(),
+            deadline: None,
             runtime_variables: &std::collections::BTreeSet::new(),
             pattern_variables: &BTreeMap::new(),
             variables: &BTreeMap::new(),
@@ -361,6 +398,9 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
     let pieces = word::parse(raw, &ParserOptions::default()).unwrap();
     let lexical = Lexed::scan(raw).unwrap();
     let mut out = Expanded {
+        named_tildes: std::collections::BTreeSet::new(),
+        modifiers: false,
+        unset_parameters: std::collections::BTreeSet::new(),
         unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
@@ -368,6 +408,7 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
         nested: Vec::new(),
         arithmetic: Vec::new(),
         references: Vec::new(),
+        assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
@@ -378,6 +419,11 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
         &pieces,
         &lexical,
         &ExpansionContext {
+            named_dirs: &BTreeMap::new(),
+            zsh: false,
+            assignments: &[],
+            unknown_variables: &std::collections::BTreeSet::new(),
+            deadline: None,
             runtime_variables: &std::collections::BTreeSet::new(),
             pattern_variables: &BTreeMap::new(),
             variables: &BTreeMap::from([("secret".into(), "binding-data".into())]),

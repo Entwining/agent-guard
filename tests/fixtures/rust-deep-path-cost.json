@@ -1,0 +1,8 @@
+{
+  "depths": [512, 1024, 2048, 20000],
+  "rows": [
+    {"basename":"file.txt","expected":"N"},
+    {"basename":".env.example","expected":"N"},
+    {"basename":".env","expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file"}
+  ]
+}

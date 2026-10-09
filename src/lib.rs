@@ -107,6 +107,7 @@ pub struct Reason {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DenialRule {
+    ResourceChange,
     AppData,
     Broad,
     File,
@@ -165,6 +166,7 @@ pub enum Coverage {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CoverageGap {
+    InodeAlias,
     InputByteLimit,
     NestingLimit,
     AbsoluteCwdRequired,
@@ -203,7 +205,25 @@ pub enum CheckErrorKind {
 
 impl CheckError {
     pub(crate) fn consumer_message(self) -> &'static str {
-        "The agent guard could not complete this check, so the call is blocked. Have the checker owner repair the failed check, then recheck the call before running it."
+        match self.kind {
+            CheckErrorKind::Deadline => {
+                "The agent guard could not complete this check before its deadline, so the call is blocked. Split the work into smaller calls naming explicit public targets, then recheck each call."
+            }
+            CheckErrorKind::ResourceLimit => {
+                "The agent guard could not complete this check within its resource limit, so the call is blocked. Split the work into smaller calls naming explicit public targets, then recheck each call."
+            }
+            CheckErrorKind::RelativeCwd => {
+                "The agent guard could not complete this check, so the call is blocked. Supply an absolute cwd in the event, then recheck the call."
+            }
+            CheckErrorKind::InvalidEncoding
+            | CheckErrorKind::MalformedInput
+            | CheckErrorKind::InputFailure => {
+                "The agent guard could not complete this check, so the call is blocked. Send a complete UTF-8 JSON event with the documented tool fields and an absolute cwd, then recheck the call."
+            }
+            _ => {
+                "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and check a single public file, repair the reported fault, then recheck the call before running it."
+            }
+        }
     }
 }
 

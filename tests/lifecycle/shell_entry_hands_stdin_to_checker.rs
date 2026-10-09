@@ -141,6 +141,8 @@ fn shell_entry_keeps_outcomes_hook_cwd_and_version() {
 
 #[test]
 fn shell_entry_only_accepts_completed_runner_statuses() {
+    let advice: serde_json::Value =
+        serde_json::from_str(include_str!("../fixtures/rust-refusal-advice.json")).unwrap();
     let package = Package::new("statuses");
     package.script_runner(
         "#!/bin/bash -p\nprintf '%s\\n' 'fixture reason'\nexit \"$AG_TEST_STATUS\"\n",
@@ -166,6 +168,12 @@ fn shell_entry_only_accepts_completed_runner_statuses() {
                 assert!(output.stdout.is_empty());
                 assert!(String::from_utf8_lossy(&output.stderr).contains("guard failed"));
                 assert!(!String::from_utf8_lossy(&output.stderr).contains("fixture reason"));
+                for field in ["reason", "alternative", "owner_step"] {
+                    assert!(
+                        String::from_utf8_lossy(&output.stderr)
+                            .contains(advice["shell_fault"][field].as_str().unwrap())
+                    );
+                }
             }
         }
     }

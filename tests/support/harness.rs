@@ -944,8 +944,7 @@ fn assert_effect_or_failure(row: &Value, actual: &Value, conditional: bool) {
     } else if required.contains("SSH") || required.contains("private-key") {
         protected("SshPrivate", required.contains("write"))
             && (stderr.contains("credential or environment file")
-                || stderr.contains("private material under ~/.ssh")
-                || stderr.contains("private ~/.ssh"))
+                || stderr.contains("private material in the named .ssh directory"))
     } else if required.contains("broad") {
         effects.iter().any(|effect| effect["kind"] == "BroadRoot")
             && stderr.contains("home directory")
@@ -1014,7 +1013,7 @@ fn assert_observers(row: &Value, actual: &Value) {
         if id.contains("credential") {
             assert!(
                 stderr.contains("credential or environment file")
-                    || stderr.contains("private material under ~/.ssh")
+                    || stderr.contains("private material in the named .ssh directory")
             );
         }
         if id.contains("env") && !id.contains("dump") {

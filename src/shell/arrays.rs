@@ -363,6 +363,65 @@ pub(super) fn update(scope: &mut Scope, name: &str, values: &mut Vec<BindingValu
     }
 }
 
+pub(super) fn tied_cdpath(name: &str, values: &[BindingValue]) -> Vec<BindingValue> {
+    let mut result = Vec::new();
+    for value in values {
+        if name == "CDPATH" {
+            if let BindingValue::Known(value) = value {
+                let mut array = IndexedArray::new(true);
+                for entry in value.split(':') {
+                    array.push(vec![Word::literal(entry.into())]);
+                }
+                result.push(BindingValue::Array(Box::new(array)));
+            } else {
+                result.push(BindingValue::RuntimeUnknown(None));
+            }
+        } else if let BindingValue::Array(array) = value {
+            let state = array.zsh.as_deref().unwrap_or(array);
+            if !state.exact || !state.unknown.is_empty() || state.tail.is_some() {
+                result.push(BindingValue::RuntimeUnknown(None));
+            }
+            let mut candidates = vec![String::new()];
+            for (index, words) in state.elements.values().enumerate() {
+                let mut next = Vec::new();
+                for prefix in &candidates {
+                    for word in words {
+                        if word.expands || word.runtime_unknown || word.globs || word.shell_matches
+                        {
+                            if !result.contains(&BindingValue::RuntimeUnknown(None)) {
+                                result.push(BindingValue::RuntimeUnknown(None));
+                            }
+                            continue;
+                        }
+                        let joined =
+                            format!("{prefix}{}{}", if index == 0 { "" } else { ":" }, word.text);
+                        if !next.contains(&joined) {
+                            if next.len() == 512 {
+                                return vec![BindingValue::Undetermined];
+                            }
+                            next.push(joined);
+                        }
+                    }
+                }
+                candidates = next;
+            }
+            result.extend(candidates.into_iter().map(BindingValue::Known));
+        } else {
+            result.push(BindingValue::RuntimeUnknown(None));
+        }
+    }
+    result
+}
+
+pub(super) fn bash_only(mut values: Vec<BindingValue>) -> Vec<BindingValue> {
+    for value in &mut values {
+        if let BindingValue::Array(array) = value {
+            array.zsh = None;
+        }
+    }
+    values
+}
+
 pub(super) fn store(scope: &mut Scope, name: &str, state: IndexedArray) {
     let prefix = format!("{name}[");
     scope
@@ -709,7 +768,12 @@ pub(super) fn expand(
         &raw.raw,
         &raw.syntax,
         &words::ExpansionContext {
+            named_dirs: &BTreeMap::new(),
+            zsh: false,
+            assignments: &[],
             variables: &contexts,
+            unknown_variables: &scope.unknown_parameters(&contexts),
+            deadline: evaluator.deadline,
             runtime_variables: &BTreeSet::new(),
             pattern_variables: &scope.pattern_contexts(&contexts),
             host: evaluator.frontend.host,
@@ -922,6 +986,9 @@ pub(super) fn expand(
                 .cloned()
                 .unwrap_or_else(|| Word::literal(String::new()));
             let expanded = Expanded {
+                named_tildes: std::collections::BTreeSet::new(),
+                modifiers: false,
+                unset_parameters: std::collections::BTreeSet::new(),
                 unknown_splitting: unknown_count,
                 word,
                 split: sequence,
@@ -929,6 +996,7 @@ pub(super) fn expand(
                 nested: Vec::new(),
                 arithmetic: Vec::new(),
                 references: Vec::new(),
+                assignments: Vec::new(),
                 tilde: false,
                 parameters: Vec::new(),
                 unsupported: false,

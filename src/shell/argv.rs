@@ -10,14 +10,14 @@ pub(super) struct Resolution {
     pub environment: Vec<EnvironmentChange>,
 }
 
-pub(super) enum EnvironmentChange {
+pub(crate) enum EnvironmentChange {
     Clear,
     Unset(String),
     Set(String, Word),
 }
 
 impl EnvironmentChange {
-    fn assignment(word: &Word) -> Option<Self> {
+    pub(crate) fn assignment(word: &Word) -> Option<Self> {
         let (name, value) = word.text.split_once('=')?;
         let mut value = word.with_text(value.into());
         if super::lexer::initial_quote(&value.raw) == super::lexer::Quote::Unquoted {
@@ -27,6 +27,17 @@ impl EnvironmentChange {
                 .map_or(value.raw.clone(), |(_, raw)| raw.into());
         }
         Some(Self::Set(name.into(), value))
+    }
+
+    pub(crate) fn apply(&self, environment: &mut Vec<(String, Word)>) {
+        match self {
+            Self::Clear => environment.clear(),
+            Self::Unset(name) => environment.retain(|(key, _)| key != name),
+            Self::Set(name, value) => {
+                environment.retain(|(key, _)| key != name);
+                environment.push((name.clone(), value.clone()));
+            }
+        }
     }
 }
 

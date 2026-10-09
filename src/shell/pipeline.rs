@@ -129,13 +129,13 @@ fn producer(commands: &[Command]) -> Option<(&Command, usize)> {
 
 pub(super) fn read_input(
     commands: &[Command],
-    pipeline: (usize, usize),
+    pipeline: Option<(usize, usize)>,
     known: impl Fn(&Word) -> bool,
 ) -> Option<Vec<String>> {
     let stages = commands
         .iter()
         .rev()
-        .filter(|command| command.pipeline == Some(pipeline));
+        .filter(|command| pipeline.is_none_or(|pipeline| command.pipeline == Some(pipeline)));
     producer_outputs(stages, known)
 }
 

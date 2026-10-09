@@ -1,0 +1,85 @@
+{
+  "errors": [
+    {
+      "kind": "Deadline",
+      "sentence": "The agent guard could not complete this check before its deadline, so the call is blocked. Split the work into smaller calls naming explicit public targets, then recheck each call."
+    },
+    {
+      "kind": "ResourceLimit",
+      "sentence": "The agent guard could not complete this check within its resource limit, so the call is blocked. Split the work into smaller calls naming explicit public targets, then recheck each call."
+    },
+    {
+      "kind": "RelativeCwd",
+      "sentence": "The agent guard could not complete this check, so the call is blocked. Supply an absolute cwd in the event, then recheck the call."
+    },
+    {
+      "kind": "InvalidEncoding",
+      "sentence": "The agent guard could not complete this check, so the call is blocked. Send a complete UTF-8 JSON event with the documented tool fields and an absolute cwd, then recheck the call."
+    },
+    {
+      "kind": "MalformedInput",
+      "sentence": "The agent guard could not complete this check, so the call is blocked. Send a complete UTF-8 JSON event with the documented tool fields and an absolute cwd, then recheck the call."
+    },
+    {
+      "kind": "InputFailure",
+      "sentence": "The agent guard could not complete this check, so the call is blocked. Send a complete UTF-8 JSON event with the documented tool fields and an absolute cwd, then recheck the call."
+    },
+    {
+      "kind": "GuardFault",
+      "sentence": "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and check a single public file, repair the reported fault, then recheck the call before running it."
+    },
+    {
+      "kind": "ProbeFault",
+      "sentence": "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and check a single public file, repair the reported fault, then recheck the call before running it."
+    },
+    {
+      "kind": "Cancelled",
+      "sentence": "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and check a single public file, repair the reported fault, then recheck the call before running it."
+    },
+    {
+      "kind": "BrokenEnrollment",
+      "sentence": "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and check a single public file, repair the reported fault, then recheck the call before running it."
+    }
+  ],
+  "refusals": [
+    {
+      "kind": "IdentityBound",
+      "sentence": "The guard cannot resolve this path through bounded or cyclic aliases. Name the file by an ordinary absolute path without the cyclic or deep alias chain, then recheck the call."
+    },
+    {
+      "kind": "InspectionBudget",
+      "sentence": "This command exceeds the guard's inspection budget. Split loops or function calls into smaller commands with explicit public paths, then recheck each command."
+    },
+    {
+      "kind": "ExecutorDivergence",
+      "sentence": "The agent guard cannot inspect this unsupported or unresolved operation. Replace the unsupported construct with a Bash-compatible command naming an explicit public path, then recheck it."
+    },
+    {
+      "kind": "UnsupportedDialectConstruct",
+      "sentence": "The agent guard cannot inspect this unsupported or unresolved operation. Replace the unsupported construct with a Bash-compatible command naming an explicit public path, then recheck it."
+    }
+  ],
+  "shell_fault": {
+    "reason": "guard failed",
+    "alternative": "Split the work into smaller calls naming explicit public targets",
+    "owner_step": "ask the checker owner to run agent-guard --version"
+  },
+  "limits": {
+    "relative": {
+      "reason": "absolute cwd",
+      "alternative": "Use an absolute cwd"
+    },
+    "bytes": {
+      "reason": "input byte limit",
+      "alternative": "Split the call into smaller requests"
+    },
+    "nesting": {
+      "reason": "nesting",
+      "alternative": "Shorten the nesting or split the command"
+    },
+    "encoding": {
+      "reason": "UTF-8",
+      "alternative": "Encode the request as UTF-8"
+    }
+  }
+}

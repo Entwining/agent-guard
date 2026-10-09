@@ -4,7 +4,7 @@
  {"id":"aws-loop-redirect","partition":"protected","expected":"D","input":{"command":"for f in ~/.aws/*; do cat <\"$f\"; done"}},
  {"id":"aws-loop-function","partition":"protected","expected":"D","input":{"command":"read_item(){ cat \"$1\"; }; for f in ~/.aws/*; do read_item \"$f\"; done"}},
  {"id":"aws-fixed-dir","partition":"protected","expected":"D","input":{"command":"for d in ~/.aws; do cat \"$d\"/*; done"}},
- {"id":"public-loop","partition":"public","expected":"N","input":{"command":"for f in ~/project/*; do cat \"$f\"; done"}},
+ {"id":"public-loop","partition":"public","expected":"D","input":{"command":"for f in ~/project/*; do cat \"$f\"; done"},"wire_reason":"credential-file"},
  {"id":"public-list","partition":"public","expected":"N","input":{"command":"for f in ~/.aws/*; do ls \"$f\"; done"}},
  {"id":"public-loop-cd","partition":"cwd","expected":"N","input":{"command":"for d in ~/Code/GitHub/*/; do cd \"$d\" && git config --get remote.origin.url; done"}},
  {"id":"public-loop-subshell-cd","partition":"cwd","expected":"N","input":{"command":"for d in */; do (cd \"$d\" && cat config); done"}},
@@ -15,5 +15,6 @@
  {"id":"unused-relative-glob-cwd","partition":"cwd","expected":"N","input":{"command":"for d in */; do cd /tmp; ls; done"}},
  {"id":"isolated-relative-glob-and-fixed-cwd","partition":"cwd","expected":"N","input":{"command":"for d in */; do (cd \"$d\"; ls); cd /tmp; ls; done"}},
  {"id":"conditional-carried-relative-glob-cwd","partition":"cwd","expected":"UR","input":{"command":"for d in public*/; do if printf public; then cd \"$d\"; fi; ls; done"}},
- {"id":"logical-carried-relative-glob-cwd","partition":"cwd","expected":"UR","input":{"command":"for d in public*/; do printf public && cd \"$d\"; ls; done"}}
+ {"id":"logical-carried-relative-glob-cwd","partition":"cwd","expected":"UR","input":{"command":"for d in public*/; do printf public && cd \"$d\"; ls; done"}},
+ {"id":"public-loop-text","partition":"public","expected":"N","input":{"command":"for f in ~/project/*.txt; do cat \"$f\"; done"}}
 ]}

@@ -2,7 +2,7 @@
 # PreToolUse entry for the agent guard:
 #   agent-guard --runtime claude|codex|pi < event.json
 fail() {
-    printf '%s\n' "The agent guard could not complete its check ($1), so this call is blocked. Inspect the guard installation, repair the reported failure, then retry the call." >&2
+    printf '%s\n' "The agent guard could not complete its check ($1), so this call is blocked. Split the work into smaller calls naming explicit public targets and recheck each call. If a single public-file call still fails, ask the checker owner to run agent-guard --version and repair the reported fault before rechecking the call." >&2
     exit 2
 }
 

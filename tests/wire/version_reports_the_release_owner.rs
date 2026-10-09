@@ -143,7 +143,7 @@ fn native_advice_matches_go_text_and_json_bytes() {
 }
 
 #[test]
-fn native_protocol_does_not_fall_through_to_raw_consumer_envelopes() {
+fn native_protocol_checks_codex_shell_and_rejects_other_raw_envelopes() {
     use std::{fs, io::Write, process::Stdio};
     let home = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("native-schema-{}", std::process::id()));
@@ -152,7 +152,7 @@ fn native_protocol_does_not_fall_through_to_raw_consumer_envelopes() {
         (
             "codex",
             r#"{"name":"exec_command","arguments":{"cmd":"true"}}"#,
-            1,
+            0,
         ),
         ("pi", r#"{"toolName":"bash","input":{"command":"true"}}"#, 1),
         ("claude", r#"{"tool_input":{"command":"true"}}"#, 0),
@@ -160,7 +160,7 @@ fn native_protocol_does_not_fall_through_to_raw_consumer_envelopes() {
         (
             "codex",
             r#"{"tool_name":"exec_command","tool_input":{"cmd":"("}}"#,
-            0,
+            2,
         ),
     ] {
         let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))

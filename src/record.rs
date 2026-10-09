@@ -162,7 +162,7 @@ pub enum Role {
     Precommand,
     Namespace,
     Program,
-    Code,
+    ObservedShellCode,
     Pattern,
     Path,
     PatternFile,
@@ -225,6 +225,7 @@ pub struct Items {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stdin {
     None,
+    Inherited,
     Data(Vec<usize>),
     Shell,
     Code,
@@ -286,6 +287,7 @@ pub struct Script {
 pub enum Effect {
     Read,
     Write,
+    Change,
     Name,
     Meta,
     List,

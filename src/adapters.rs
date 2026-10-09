@@ -85,14 +85,23 @@ pub(crate) fn decode_protocol(
     if !value.is_object() {
         return Err(malformed());
     }
+    let normalized = value.get("tool_input").is_some();
+    let raw_codex_shell = consumer == Consumer::Codex
+        && !normalized
+        && value.get("arguments").is_some()
+        && value
+            .get("tool_name")
+            .or_else(|| value.get("name"))
+            .and_then(Value::as_str)
+            .is_some_and(|name| ["exec_command", "functions.exec_command"].contains(&name));
     if protocol == Protocol::Native
+        && !raw_codex_shell
         && value.get("tool_input").is_none_or(Value::is_null)
         && value.get("cwd").and_then(Value::as_str).is_none()
     {
         return Err(malformed());
     }
-    let normalized = value.get("tool_input").is_some();
-    let (name, input) = if normalized || protocol == Protocol::Native {
+    let (name, input) = if normalized || protocol == Protocol::Native && !raw_codex_shell {
         (
             if protocol == Protocol::Native {
                 value
@@ -168,8 +177,7 @@ pub(crate) fn decode_protocol(
             Operation::Shell(field(&input, "command")?)
         }
         (Consumer::Codex, "exec_command" | "functions.exec_command")
-            if protocol == Protocol::Tool
-                && ["exec_command", "functions.exec_command"].contains(&name) =>
+            if ["exec_command", "functions.exec_command"].contains(&name) =>
         {
             Operation::Shell(field(&input, "cmd")?)
         }

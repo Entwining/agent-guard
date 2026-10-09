@@ -2,6 +2,8 @@
 
 `agent-guard` is a macOS pre-tool hook for Claude Code, Codex, and Pi. It blocks supported tool calls that would scan broad filesystem roots or read protected App Data and credential material. An unscoped `rg`, `fd`, `ag`, `ack`, or `tree` run from the home directory is denied; pass an explicit project path.
 
+Hidden recursive content searches are refused when an operand is or may be a directory. A named public file, including a resolved link to one, does not traverse hidden files and remains permitted with recursive flags. The guard checks lexical protection and resolves links before using file metadata to distinguish that file from a directory; metadata failures remain failed checks.
+
 ## Prerequisites
 
 - Apple Silicon macOS with a local Claude Code, Codex, or Pi session.
@@ -119,6 +121,8 @@ brew uninstall loophubs/tap/agent-guard
 
 The guard denies a call when its own check fails or times out because it cannot establish that the call is safe. Exit code `0` means the guard found no objection; it does not override the runtime's own permission rules.
 
+Inspection-budget and deadline refusals ask for smaller calls with explicit public targets. Bounded or cyclic aliases require an ordinary absolute path. Invalid events require complete UTF-8 JSON with documented tool fields and an absolute working directory. If a single public-file check still fails, the checker owner can run `agent-guard --version` and repair the reported fault; none of these steps authorizes the blocked operation.
+
 The serialized event is limited to 262,144 bytes, and shell substitutions/groups to 64 simultaneous nested delimiters. Excess input or nesting, a relative working directory, and invalid UTF-8 produce completed refusals: native checker status `2`, native runner status `3`, and hook status `2`. The reason asks the caller to shorten or split the request, supply an absolute working directory, or encode UTF-8. Malformed events, filesystem probe faults and other operational errors remain failed checks; the hook blocks them too. The checker deadline is 2.5 seconds, the runner deadline 2.8 seconds, and the shell entry deadline 3 seconds, below the example consumer timeout of 5 seconds. Cancellation must complete and reap children.
 
 The byte cap was measured on release builds using public literal arguments, data-heavy Git pathspec substitutions and repeated statements from 64 KiB through 8 MiB. The substitution shape took 0.318 seconds at 256 KiB, 0.631 at 512 KiB and 1.286 at 1 MiB. 256 KiB was the largest measured warm size below 0.5 seconds; its serialized envelope was 262,286 bytes, so the cap is 262,144. The first cold literal launch took 0.988 seconds. These finite measurements describe those shapes on that host, not a universal latency guarantee. Depth bounds simultaneous nesting, not statement count or list position.
@@ -141,6 +145,14 @@ The guard is a bounded preflight check. It decides from the targets it infers un
 **State and resource identity** is which file a path names when the command runs, compared with when the guard checked it. App Data traversal checks lexical protection before each probe and uses readlink alone. SSH identity comparisons additionally use stat/inode metadata after lexical checks; private-key spellings are decided without stat. For an unresolved shell operand or redirect, the fixed prefix may be resolved while the uncertain suffix is judged lexically. Working directories and iterator roots with an unresolved leading expansion, such as `cd "$d/app-link"; cat public` or `find "$d/app-link" -type f`, can lack a fixed path to probe. An earlier command that moves or links a file does not update the preflight model (`mv .env public-moved; cat public-moved`). Child links followed by a recursive program (`rg -L CANARY .`) and a wildcard that expands to a link (`cat da*/x` when `data-link` leads elsewhere) are not exhaustively resolved; a literal link operand can still be resolved and denied.
 
 The following retained boundaries were checked as event data with a synthetic HOME and public fixture files. The examples describe limits; they are not instructions to access real protected material.
+
+macOS `/.nofollow` and `/.resolve/<device>` path prefixes are checked using the remaining absolute path, including when a symlink names one of these aliases. Inode-addressed `/.vol` paths are refused without probing them; name the file by its ordinary path and recheck the call.
+
+Removing, moving, linking or copying a credential, environment file or `.ssh` resource is denied for both source and destination operands. Metadata maintenance (`chmod`, `chown`, `touch`, `stat`) remains permitted on credential paths; App Data protection still applies independently. This distinction does not widen the guard's existing content-editing or client-use roles.
+
+Private `.ssh` material is protected at any location, including aliases of the home SSH directory. Listing or reading the whole directory is refused because that scope includes private material. Exact public files (`config`, `config.*`, `*.pub`, `allowed_signers`, `known_hosts*`) remain permitted. For the home SSH directory and its aliases, a directory with one of those names is still a private search scope.
+
+`/dev/fd/N` paths belong to the executing process, not the checker. They remain unknown inherited inputs with limited preflight, without probing the checker's descriptors. File redirections in the same command are checked independently, so a protected redirection is still denied. Descriptor-number bindings are not retained in the shell records.
 
 | Boundary | Reproducer and observed scope |
 | --- | --- |

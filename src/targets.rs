@@ -199,10 +199,10 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             | "typeset" | "declare" | "local" | "cd" | "curl" | "wget" | "docker" | "ssh" => {
                 Effect::Name
             }
-            "stat" | "test" | "[" | "chmod" | "chown" | "chgrp" | "chflags" | "touch" | "rm"
-            | "rmdir" | "mkdir" | "mv" | "ln" | "wc" | "file" | "shasum" | "sha1sum"
-            | "sha256sum" | "md5" | "md5sum" | "cksum" | "realpath" | "readlink" | "basename"
-            | "dirname" => Effect::Meta,
+            "rm" | "mv" | "ln" => Effect::Change,
+            "stat" | "test" | "[" | "chmod" | "chown" | "chgrp" | "chflags" | "touch" | "rmdir"
+            | "mkdir" | "wc" | "file" | "shasum" | "sha1sum" | "sha256sum" | "md5" | "md5sum"
+            | "cksum" | "realpath" | "readlink" | "basename" | "dirname" => Effect::Meta,
             "ls" | "tree" | "du" | "find" | "fd" => Effect::List,
             "pushd" | "popd" => Effect::Enter,
             "tee" => Effect::Write,
@@ -296,12 +296,11 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             }));
         }
         "df" | "stat" | "test" | "[" | "chmod" | "chown" | "chgrp" | "chflags" | "touch"
-        | "rmdir" | "mkdir" | "mv" | "ln" | "wc" | "file" | "shasum" | "sha1sum" | "sha256sum"
-        | "md5" | "md5sum" | "cksum" | "realpath" | "readlink" | "basename" | "dirname" => {
+        | "rmdir" | "mkdir" | "wc" | "file" | "shasum" | "sha1sum" | "sha256sum" | "md5"
+        | "md5sum" | "cksum" | "realpath" | "readlink" | "basename" | "dirname" => {
             // Metadata and content-read roles have different credential decisions;
             // visible walks still check protected App Data ownership.
-            let walk = if ["df", "stat", "test", "[", "mkdir", "mv", "readlink"].contains(&program)
-            {
+            let walk = if ["df", "stat", "test", "[", "mkdir", "readlink"].contains(&program) {
                 Walk::None
             } else {
                 Walk::Visible
@@ -314,6 +313,7 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
         }
         "read"
             if command.pipeline.is_some()
+                || command.stdin == crate::record::Stdin::Inherited
                 || command.redirects.iter().any(|redirect| {
                     matches!(
                         redirect.direction,
@@ -339,6 +339,15 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
                     ));
                 }
             }
+        }
+        "hash"
+            if command.shell
+                && args.iter().any(|arg| {
+                    arg.strip_prefix('-')
+                        .is_some_and(|flags| flags.contains('d'))
+                }) =>
+        {
+            effects.independent_arguments = true;
         }
         "setopt" | "unsetopt" | "emulate" => {
             effects.gaps.push(
@@ -442,12 +451,22 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
             }
             generic_walk = Some(Walk::Visible);
         }
-        "rm" => {
-            effects.targets.extend(
-                args.iter()
-                    .filter(|word| !word.starts_with('-'))
-                    .map(|word| Target::from_word(word, cwd, host, Effect::Meta, Walk::Visible)),
-            );
+        "rm" | "mv" | "ln" => {
+            effects.targets.extend(args.iter().filter_map(|word| {
+                operand_value(word).map(|value| {
+                    Target::from_word(
+                        &word.with_text(value.into()),
+                        cwd,
+                        host,
+                        Effect::Change,
+                        if program == "mv" {
+                            Walk::None
+                        } else {
+                            Walk::Visible
+                        },
+                    )
+                })
+            }));
         }
         "git" => {
             // Environment-supplied locations keep the corresponding option
@@ -543,7 +562,9 @@ fn infer_at(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, depth: usiz
                     && s.contains('c')
             }) {
                 if let Some(code) = args.get(index + 1) {
-                    effects.code.push(code.text.clone());
+                    if code.role != crate::record::Role::ObservedShellCode {
+                        effects.code.push(code.text.clone());
+                    }
                     claimed.push(index + 1);
                 }
             } else if command.stdin != crate::record::Stdin::Shell {
@@ -876,6 +897,7 @@ fn infer_wrapper(
 ) {
     let mut index = 0;
     let mut cwd = cwd.to_owned();
+    let mut environment = command.environment.clone();
     while let Some(arg) = args.get(index) {
         if program == "env" && arg == "-S" {
             if let Some(code) = args.get(index + 1) {
@@ -886,6 +908,17 @@ fn infer_wrapper(
         if arg == "--" {
             index += 1;
             break;
+        }
+        if program == "env" {
+            if arg == "-i" || arg == "--ignore-environment" {
+                crate::shell::EnvironmentChange::Clear.apply(&mut environment);
+            } else if arg == "-u"
+                && let Some(name) = args.get(index + 1)
+            {
+                crate::shell::EnvironmentChange::Unset(name.text.clone()).apply(&mut environment);
+            } else if let Some(change) = crate::shell::EnvironmentChange::assignment(arg) {
+                change.apply(&mut environment);
+            }
         }
         if !arg.starts_with('-') && !(program == "env" && arg.contains('=')) {
             break;
@@ -936,7 +969,8 @@ fn infer_wrapper(
     if program == "env" && args.iter().any(|arg| arg == "-i") {
         effects.dump = true;
     }
-    let nested = child(command, &args[index..], &cwd);
+    let mut nested = child(command, &args[index..], &cwd);
+    nested.environment = environment;
     let mut result = infer_at(&nested, &cwd, host, depth + 1);
     #[cfg(test)]
     {
@@ -967,6 +1001,57 @@ fn infer_wrapper(
     effects.replace_advice |= result.replace_advice;
     effects.include_advice |= result.include_advice;
     effects.bre_advice |= result.bre_advice;
+}
+
+#[cfg(test)]
+mod wrapper_environment_tests {
+    #[test]
+    fn env_adapter_keeps_assignment_operands() {
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/rust-review-shell.json")).unwrap();
+        let row = data["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == "env-git-adapter")
+            .unwrap();
+        let command = crate::record::Command {
+            environment: Vec::new(),
+            function: false,
+            argv: row["argv"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| crate::record::Word::literal(value.as_str().unwrap().into()))
+                .collect(),
+            redirects: Vec::new(),
+            cwd: "/synthetic/project".into(),
+            program: Some(0),
+            wrappers: Vec::new(),
+            shell: false,
+            flags: Vec::new(),
+            items: None,
+            stdin: crate::record::Stdin::None,
+            pipeline: None,
+            nested: false,
+        };
+        let effects = super::infer(
+            &command,
+            &command.cwd,
+            crate::record::HostFacts {
+                home: "/synthetic/home",
+                user: Some("synthetic"),
+            },
+        );
+        assert!(
+            effects.targets.iter().any(|target| target
+                .path
+                .ends_with(row["target"].as_str().unwrap())
+                && target.effect == crate::record::Effect::Read),
+            "{:?}",
+            effects.targets
+        );
+    }
 }
 
 fn at(path: &str, base: &str) -> String {
@@ -1886,8 +1971,8 @@ fn infer_search(
         operands.push(Word::literal(cwd.to_owned()));
     }
     effects.hidden_listing = names && hidden;
-    effects.hidden_content = hidden && !names;
     let hidden_walk = recursive || matches!(program, "rg" | "ag") && hidden;
+    effects.hidden_content = hidden && !names && !hidden_walk;
     for root in operands {
         let mut target = Target::from_word(
             &root,
@@ -1898,7 +1983,9 @@ fn infer_search(
             } else {
                 Effect::Read
             },
-            if program != "grep" || hidden {
+            if hidden_walk && !names {
+                Walk::Hidden
+            } else if program != "grep" || hidden {
                 Walk::Visible
             } else {
                 Walk::None

@@ -1,4 +1,4 @@
-//! Lexical checks precede identity probes. Stat is confined to SSH identity.
+//! Lexical checks precede identity and public search file-kind probes.
 
 mod glob;
 mod lexical;
@@ -62,6 +62,8 @@ pub enum Identity {
     Public(String),
     Protected(Protection),
     Bound,
+    InodeAlias,
+    InheritedInput,
 }
 
 pub fn normalize(path: &str, cwd: &str, home: &str) -> String {
@@ -76,7 +78,7 @@ pub fn normalize(path: &str, cwd: &str, home: &str) -> String {
             part => clean.push(part.as_os_str()),
         }
     }
-    unfirmlink(clean.to_str().unwrap_or(""))
+    unfirmlink(strip_path_aliases(clean.to_str().unwrap_or("")))
 }
 
 pub(crate) fn absolute_input(path: &str, cwd: &str, home: &str) -> String {
@@ -87,7 +89,7 @@ pub(crate) fn absolute_input(path: &str, cwd: &str, home: &str) -> String {
     } else {
         path.to_owned()
     };
-    let expanded = strip_file_url(&expanded);
+    let expanded = strip_path_aliases(strip_file_url(&expanded));
     if expanded.starts_with('/') {
         expanded.to_owned()
     } else {
@@ -99,8 +101,34 @@ pub(crate) fn shell_pattern(text: &str, quoted: &[std::ops::Range<usize>]) -> St
     glob::shell_pattern(text, quoted)
 }
 
+pub(crate) fn strip_path_aliases(mut path: &str) -> &str {
+    loop {
+        if let Some(rest) = path.strip_prefix("/.nofollow")
+            && rest.starts_with('/')
+        {
+            path = rest;
+        } else if let Some(rest) = path.strip_prefix("/.resolve/")
+            && let Some((device, _)) = rest.split_once('/')
+            && !device.is_empty()
+            && device.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            path = &rest[device.len()..];
+        } else {
+            return path;
+        }
+    }
+}
+
 pub(crate) fn literal_shell_pattern(text: &str) -> String {
     shell_pattern(text, &std::iter::once(0..text.len()).collect::<Vec<_>>())
+}
+
+pub(crate) fn descriptor_path(path: &str) -> bool {
+    let path = strip_path_aliases(path);
+    path.strip_prefix("/dev/fd/").is_some_and(|tail| {
+        let number = tail.split('/').next().unwrap_or("");
+        !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+    })
 }
 
 pub(crate) fn absolute_pattern(path: &str, cwd: &str) -> String {
@@ -109,6 +137,10 @@ pub(crate) fn absolute_pattern(path: &str, cwd: &str) -> String {
     } else {
         format!("{}/{path}", literal_shell_pattern(cwd))
     }
+}
+
+pub(crate) fn parameter_pattern_matches(pattern: &str, value: &str) -> bool {
+    glob::component(pattern, value)
 }
 
 pub(crate) fn strip_file_url(path: &str) -> &str {
@@ -123,15 +155,21 @@ pub(crate) fn strip_file_url(path: &str) -> &str {
 }
 
 fn unfirmlink(path: &str) -> String {
+    unfirmlink_path(path).to_owned()
+}
+
+fn unfirmlink_path(path: &str) -> &str {
     let prefix = "/system/volumes/data";
     if path.eq_ignore_ascii_case(prefix) {
-        "/".to_owned()
-    } else if path.to_ascii_lowercase().starts_with(prefix)
+        "/"
+    } else if path
+        .get(..prefix.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
         && path.as_bytes().get(prefix.len()) == Some(&b'/')
     {
-        path[prefix.len()..].to_owned()
+        &path[prefix.len()..]
     } else {
-        path.to_owned()
+        path
     }
 }
 
@@ -143,6 +181,15 @@ pub fn expand_home(path: &str, home: &str, user: Option<&str>) -> String {
     for prefix in ["~".to_owned(), format!("~{}", user.unwrap_or("unknown"))] {
         if path == prefix || path.starts_with(&format!("{prefix}/")) {
             return format!("{home}{}", &path[prefix.len()..]);
+        }
+    }
+    if let Some((name, tail)) = path.strip_prefix('~').and_then(|tail| tail.split_once('/'))
+        && !name.is_empty()
+        && name != user.unwrap_or("unknown")
+    {
+        let candidate = format!("{home}/{tail}");
+        if lexical_literal(&candidate, home).is_some() {
+            return candidate;
         }
     }
     path.to_owned()
@@ -308,24 +355,26 @@ fn lexical_candidate(
         .then(|| glob::literal_prefix(path))
         .and_then(|(prefix, rest)| rest.is_empty().then_some(prefix));
     let spelling = literal.as_deref().unwrap_or(path);
-    let path = spelling.to_lowercase();
     let patterned = patterned && literal.is_none();
+    let state = lexical::LiteralState::path(spelling, &domain.library_parts);
+    if !patterned {
+        return state.protection();
+    }
+    let path = spelling.to_lowercase();
     let parts: Vec<_> = path.split('/').collect();
-    for root in &domain.roots {
-        if path == root.path
-            || path.starts_with(&root.prefix)
-            || patterned
-                && (matcher.path(&path, &root.path)
-                    || parts.len() > root.parts.len()
-                        && root.parts.iter().enumerate().all(|(index, part)| {
-                            parts[index] == "**" || matcher.component(parts[index], part)
-                        }))
-        {
-            return Some(Protection::AppData);
-        }
+    if state.appdata
+        || domain.roots.iter().any(|root| {
+            matcher.path(&path, &root.path)
+                || parts.len() > root.parts.len()
+                    && root.parts.iter().enumerate().all(|(index, part)| {
+                        parts[index] == "**" || matcher.component(parts[index], part)
+                    })
+        })
+    {
+        return Some(Protection::AppData);
     }
     if let Some(index) = parts.iter().position(|part| {
-        *part == ".ssh" || patterned && part.starts_with('.') && matcher.component(part, ".ssh")
+        *part == ".ssh" || part.starts_with('.') && matcher.component(part, ".ssh")
     }) {
         let original: Vec<_> = spelling.split('/').collect();
         let tail = &original[index + 1..];
@@ -337,47 +386,23 @@ fn lexical_candidate(
     if base == ".env.example" || base == ".env.age" {
         return None;
     }
-    if parts.iter().any(|part| {
-        *part == ".env"
-            || part.starts_with(".env.")
-            || patterned
-                && !part.trim_matches(['*', '?']).is_empty()
+    if state.environment
+        || parts.iter().any(|part| {
+            !part.trim_matches(['*', '?']).is_empty()
                 && (matcher.component(part, ".env") || matcher.component(part, ".env.x"))
-    }) {
+        })
+    {
         return Some(Protection::Environment);
     }
-    // Credential files are protected by spelling; reading a credential root
-    // is checked by the resolver. Public children may use the root's metadata.
-    if parts.iter().any(|part| {
-        *part == "private-keys-v1.d"
-            || patterned && part.contains('\\') && {
+    if state.credential
+        || parts.iter().any(|part| {
+            part.contains('\\') && {
                 let (literal, rest) = glob::literal_prefix(part);
                 rest.is_empty() && literal == "private-keys-v1.d"
             }
-    }) || base.starts_with("credentials")
-        && path
-            .rsplit_once('/')
-            .is_some_and(|(parent, _)| parent.ends_with("/.aws"))
-        || [".npmrc", ".netrc", ".git-credentials", ".pypirc", ".pgpass"].contains(&base)
-        || base.starts_with(".zprofile")
-        || base.starts_with(".zsh_history")
-        || base.starts_with("auth.json")
-        || base.starts_with(".credentials.json")
-        || base.ends_with(".pem")
-        || base.ends_with(".key")
-        || [
-            "/.docker/config.json",
-            "/.kube/config",
-            "/.config/gh/hosts.yml",
-        ]
-        .iter()
-        .any(|suffix| path.ends_with(suffix))
-        || path.contains("/.cargo/credentials")
+        })
     {
         return Some(Protection::Credential);
-    }
-    if !patterned {
-        return None;
     }
     if base.trim_matches(['*', '?']).is_empty() {
         let parent = path.rsplit_once('/').map_or("", |(parent, _)| parent);
@@ -395,16 +420,13 @@ fn lexical_candidate(
             return Some(Protection::Credential);
         }
         let tail = &listed.tail;
-        if tail.len() > parts.len()
-            || tail[tail.len() - 1].trim_matches('*').is_empty()
-            || base.trim_matches(['*', '?']).is_empty()
-        {
+        if tail.len() > parts.len() || tail[tail.len() - 1].trim_matches('*').is_empty() {
             continue;
         }
         let offset = parts.len() - tail.len();
         if tail[..tail.len() - 1].iter().enumerate().all(|(index, _)| {
             matcher.visible_component(parts[offset + index], &listed.witnesses[index], hidden)
-        }) && if tail.len() > 1 {
+        }) && if tail.len() > 1 || tail[0].starts_with('*') {
             glob::visible_intersects(base, tail[tail.len() - 1], hidden)
         } else {
             matcher.visible_component(base, &listed.witnesses[0], hidden)
@@ -565,6 +587,8 @@ impl<'a> Resolver<'a> {
             Resolution::Public(path) => Identity::Public(normalize(&path, self.home, self.home)),
             Resolution::Protected(kind, _) => Identity::Protected(kind),
             Resolution::Bound => Identity::Bound,
+            Resolution::InodeAlias => Identity::InodeAlias,
+            Resolution::InheritedInput => Identity::InheritedInput,
         };
         self.resolved_home = Some(home.clone());
         Ok(home)
@@ -577,6 +601,26 @@ impl<'a> Resolver<'a> {
         patterned: bool,
     ) -> Result<bool, CheckError> {
         self.lexical.broad(path, home, patterned)
+    }
+
+    pub(crate) fn may_traverse(
+        &mut self,
+        target: &crate::record::Target,
+        resolved_home: &str,
+        probe: &mut dyn Probe,
+    ) -> Result<bool, CheckError> {
+        if target.glob || target.expands || target.runtime_unknown {
+            return Ok(true);
+        }
+        let kind = checked_stat(
+            &target.path,
+            self.home,
+            resolved_home,
+            probe,
+            &mut self.lexical,
+        )?
+        .map(|metadata| metadata.kind);
+        Ok(matches!(kind, None | Some(FileKind::Directory)))
     }
 
     pub(crate) fn credential(
@@ -644,6 +688,12 @@ impl<'a> Resolver<'a> {
         use crate::record::{Effect, Via, Walk};
         let raw = absolute_input(&target.unresolved, cwd, self.home);
         let path = normalize(&raw, cwd, self.home);
+        if descriptor_path(&path) {
+            return Ok(Identity::InheritedInput);
+        }
+        if path == "/.vol" || path.starts_with("/.vol/") {
+            return Ok(Identity::InodeAlias);
+        }
         if path.ends_with("/.ssh") {
             return Ok(Identity::Protected(Protection::SshPrivate));
         }
@@ -652,10 +702,13 @@ impl<'a> Resolver<'a> {
             self.home,
             target.glob,
             target.glob_hidden,
-        )? {
+        )? && !(target.glob
+            && kind == Protection::Credential
+            && !matches!(target.effect, Effect::Read | Effect::Change))
+        {
             return Ok(Identity::Protected(kind));
         }
-        if target.effect == Effect::Read
+        if matches!(target.effect, Effect::Read | Effect::Change)
             && !target.glob
             && (target.via != Via::Cwd || target.search)
             && sensitive_root(&path, self.home)
@@ -696,6 +749,8 @@ impl<'a> Resolver<'a> {
                 return Ok(Identity::Protected(kind));
             }
             Resolution::Bound => return Ok(Identity::Bound),
+            Resolution::InodeAlias => return Ok(Identity::InodeAlias),
+            Resolution::InheritedInput => return Ok(Identity::InheritedInput),
         };
         if let Some(kind) = self
             .lexical
@@ -714,7 +769,7 @@ impl<'a> Resolver<'a> {
         {
             return Ok(Identity::Protected(kind));
         }
-        if target.effect == Effect::Read
+        if matches!(target.effect, Effect::Read | Effect::Change)
             && !target.glob
             && (target.via != Via::Cwd || target.search)
             && sensitive_root(&resolved, &resolved_home)
@@ -730,7 +785,10 @@ impl<'a> Resolver<'a> {
         {
             return Ok(Identity::Public(resolved));
         }
-        if matches!(target.effect, Effect::Read | Effect::Write | Effect::List) {
+        if matches!(
+            target.effect,
+            Effect::Read | Effect::Write | Effect::Change | Effect::List
+        ) {
             match self.ssh_denied(&path, &resolved, cwd, &resolved_home, target.search, probe)? {
                 Some(true) => return Ok(Identity::Protected(Protection::SshPrivate)),
                 None => return Ok(Identity::Bound),
@@ -766,7 +824,7 @@ mod pattern_roots {
         ))
         .unwrap();
         let rows = packet["rows"].as_array().unwrap();
-        let targets: Vec<_> = ["same-cooked-quoted-group", "unquoted-group-suffix-local"]
+        let targets: Vec<_> = ["same-cooked-quoted-brace", "same-cooked-unquoted-brace"]
             .iter()
             .map(|id| {
                 let row = rows.iter().find(|row| row["id"] == *id).unwrap();
@@ -813,7 +871,7 @@ mod pattern_roots {
         for width in [2, 4, 8, 16] {
             for depth in [1, 2, 4, 8] {
                 let groups = format!("({})", vec!["public"; width].join("|"));
-                let source = format!("cat 'public{}'*", groups.repeat(depth));
+                let source = format!("cat 'public{}'*.txt", groups.repeat(depth));
                 let observation = crate::shell::observe(
                     &source,
                     crate::shell::Arm::Brush,
@@ -1029,7 +1087,7 @@ fn checked_stat(
     // The caller has already decided protected spellings; keep that stop at the
     // probe boundary too, including aliases under a resolved HOME.
     if lexical
-        .check_both(path, home, Some(resolved_home), true)?
+        .check_both(path, home, Some(resolved_home), false)?
         .is_some()
     {
         return Err(CheckError {
@@ -1078,7 +1136,9 @@ impl Resolver<'_> {
         )? {
             Resolution::Public(root) => (root, false),
             Resolution::Protected(_, root) => (root, true),
-            Resolution::Bound => return Ok(None),
+            Resolution::Bound | Resolution::InodeAlias | Resolution::InheritedInput => {
+                return Ok(None);
+            }
         };
         let roots = if root == ssh {
             vec![ssh.as_str()]
@@ -1184,6 +1244,8 @@ enum Resolution {
     Public(String),
     Protected(Protection, String),
     Bound,
+    InodeAlias,
+    InheritedInput,
 }
 
 fn resolve(
@@ -1389,7 +1451,11 @@ mod tests {
             lexical_pattern("/h/Library/Containers/x", "/h", false),
             Some(Protection::AppData)
         );
-        assert_eq!(lexical_pattern("/b*", "/h", true), None);
+        assert_eq!(
+            lexical_pattern("/b*", "/h", true),
+            Some(Protection::Credential)
+        );
+        assert_eq!(lexical_pattern("/b*.txt", "/h", true), None);
         assert_eq!(
             lexical_pattern(".aws/c*", "/h", true),
             Some(Protection::Credential)
@@ -1500,17 +1566,17 @@ mod tests {
         let table = FirmlinkTable::from_text("");
         let mut resolver = Resolver::new("/h", &table);
         let mut probe = Mock::default();
-        for (effect, via, glob) in [
-            (Effect::Name, Via::Operand, false),
-            (Effect::Read, Via::Tool, true),
+        for (path, effect, via, glob) in [
+            ("/public/link/*", Effect::Name, Via::Operand, false),
+            ("/public/link/*.txt", Effect::Read, Via::Tool, true),
         ] {
-            let mut target = Target::new("/public/link/*".into(), effect, Walk::None, via);
+            let mut target = Target::new(path.into(), effect, Walk::None, via);
             target.glob = glob;
             assert_eq!(
                 resolver
                     .target(&mut target, "/project", &mut probe)
                     .unwrap(),
-                Identity::Public("/public/link/*".into())
+                Identity::Public(path.into())
             );
         }
         assert!(probe.calls.is_empty());

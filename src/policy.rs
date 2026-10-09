@@ -23,12 +23,15 @@ const KEYCHAIN: &str = "This extracts a password from the macOS Keychain. State 
 const SECRET_PRINT: &str = "This prints a stored secret or access token. Run the command that uses the credential without printing it, or ask the user to run it in their own terminal and share only the non-secret fact needed.";
 const TRACE: &str = "curl verbose or trace output can print HTTP headers including Authorization. Drop -v and --trace; use a normal curl request for the needed result.";
 const UPLOAD: &str = "This sends the contents of a credential file. Send only the required non-sensitive fields explicitly, and let the client obtain authentication from its normal credential source.";
-const SSH: &str = "This reads private material under ~/.ssh. Search public material in the project or request the exact public key or client-config path; ask the user to inspect private material locally if a specific non-sensitive fact is needed.";
-const GREP_SSH: &str = "Grep would search private ~/.ssh material. Narrow the search to a project directory or an exact public key, client config, allowed_signers, or known_hosts file.";
+const SSH: &str = "This reads private material in the named .ssh directory or its filesystem alias. Search public material in the project or request the exact public key or client-config path; ask the user to inspect private material locally if a specific non-sensitive fact is needed.";
+const GREP_SSH: &str = "Grep would search private material in the named .ssh directory or its filesystem alias. Narrow the search to a project directory or an exact public key, client config, allowed_signers, or known_hosts file.";
 
 impl DenialRule {
     pub fn message(self) -> &'static str {
         match self {
+            Self::ResourceChange => {
+                "This changes a protected credential, environment or SSH resource. Use a non-sensitive source and destination, or ask the user to perform the change in their own terminal and share only the non-sensitive result."
+            }
             Self::AppData => APPDATA,
             Self::Broad => BROAD,
             Self::File => FILE,
@@ -49,6 +52,15 @@ impl DenialRule {
 
 pub(crate) fn refusal_message(cause: &CoverageGap) -> &'static str {
     match cause {
+        CoverageGap::InodeAlias => {
+            "The guard cannot inspect an inode-addressed /.vol path. Name the file by its ordinary file path, then recheck the call."
+        }
+        CoverageGap::InspectionBudget => {
+            "This command exceeds the guard's inspection budget. Split loops or function calls into smaller commands with explicit public paths, then recheck each command."
+        }
+        CoverageGap::IdentityBound => {
+            "The guard cannot resolve this path through bounded or cyclic aliases. Name the file by an ordinary absolute path without the cyclic or deep alias chain, then recheck the call."
+        }
         CoverageGap::InputByteLimit => {
             "This event exceeds the input byte limit. Split the call into smaller requests, then recheck each request."
         }
@@ -249,7 +261,7 @@ fn evaluate_with_catalog_loader(
             inspection.target(&target, &decoded.cwd, EffectSource::Operand)?;
             if !glob.is_empty() && !glob.starts_with('!') {
                 let mut target = Target::new(
-                    format!("{root}/{}", glob.rsplit('/').next().unwrap_or(glob)),
+                    format!("{}/{glob}", filesystem::literal_glob_root(&root)),
                     Effect::Read,
                     Walk::None,
                     Via::Tool,
@@ -317,12 +329,14 @@ fn evaluate_with_catalog_loader(
                 | CoverageGap::UnsupportedDialectConstruct
                 | CoverageGap::UnsupportedShellSyntax
                 | CoverageGap::IdentityBound
+                | CoverageGap::InodeAlias
                 | CoverageGap::InspectionBudget
         )
     }) {
         let mut recovery = recovery(context, &decoded.cwd, "unsupported");
         recovery.excluded_scope.push(
             match cause {
+                CoverageGap::InodeAlias => "unresolved inode-addressed resource identity",
                 CoverageGap::IdentityBound => {
                     "unresolved resource identity from bounded or cyclic alias traversal"
                 }
@@ -392,6 +406,13 @@ struct Inspection<'a> {
 }
 
 impl Inspection<'_> {
+    fn hidden_search(&mut self) {
+        self.effect(EffectRecord::HiddenContent);
+        self.denial.get_or_insert_with(|| Reason {
+            effect: "hidden recursive content search reaches protected environment files".into(),
+            rule: DenialRule::HiddenSearch,
+        });
+    }
     fn effect(&mut self, effect: EffectRecord) {
         if !self.effects.contains(&effect) {
             self.effects.push(effect);
@@ -436,7 +457,7 @@ impl Inspection<'_> {
         // runtime-derived suffix. Its link aliases still need normal resolution.
         let relative_tilde = target.unresolved.starts_with(&format!("{cwd}/~/"));
         let identity = if target.via == Via::Items {
-            if target.effect != Effect::Read {
+            if !matches!(target.effect, Effect::Read | Effect::Change) {
                 return Ok(());
             }
             let Some(kind) =
@@ -459,9 +480,12 @@ impl Inspection<'_> {
                 let touches = match kind {
                     Protection::AppData => target.effect != Effect::Name || target.glob,
                     Protection::SshPrivate => {
-                        matches!(target.effect, Effect::Read | Effect::Write | Effect::List)
+                        matches!(
+                            target.effect,
+                            Effect::Read | Effect::Write | Effect::Change | Effect::List
+                        )
                     }
-                    _ => target.effect == Effect::Read,
+                    _ => matches!(target.effect, Effect::Read | Effect::Change),
                 };
                 if touches {
                     let rule = target_rule(&target, kind, &self.context.home, &mut self.resolver)?;
@@ -470,11 +494,13 @@ impl Inspection<'_> {
                     }
                     self.effect(EffectRecord::ProtectedTarget {
                         protection: kind,
-                        write: target.effect == Effect::Write,
+                        write: matches!(target.effect, Effect::Write | Effect::Change),
                         source,
                     });
                     self.denial.get_or_insert_with(|| Reason {
-                        effect: if target.effect == Effect::Write {
+                        effect: if target.effect == Effect::Change {
+                            format!("change protected {kind:?} resource")
+                        } else if target.effect == Effect::Write {
                             format!("write protected location; {} is excluded", kind.effect())
                         } else {
                             kind.effect().to_owned()
@@ -484,11 +510,26 @@ impl Inspection<'_> {
                 }
             }
             Identity::Bound => self.gap(CoverageGap::IdentityBound),
+            Identity::InodeAlias => self.gap(CoverageGap::InodeAlias),
+            Identity::InheritedInput => {
+                self.gap(CoverageGap::UnresolvedTarget);
+                if target.walk == Walk::Hidden && target.effect == Effect::Read {
+                    self.hidden_search();
+                }
+            }
             Identity::Public(path) => {
                 let resolved_home = match self.resolver.home(self.probe)? {
                     Identity::Public(path) => path,
                     Identity::Bound => {
                         self.gap(CoverageGap::IdentityBound);
+                        return Ok(());
+                    }
+                    Identity::InodeAlias => {
+                        self.gap(CoverageGap::InodeAlias);
+                        return Ok(());
+                    }
+                    Identity::InheritedInput => {
+                        self.gap(CoverageGap::UnresolvedTarget);
                         return Ok(());
                     }
                     Identity::Protected(_) => self.context.home.clone(),
@@ -517,6 +558,15 @@ impl Inspection<'_> {
                         ),
                         rule: DenialRule::Broad,
                     });
+                }
+                if !resolved_broad
+                    && target.walk == Walk::Hidden
+                    && target.effect == Effect::Read
+                    && self
+                        .resolver
+                        .may_traverse(&target, &resolved_home, self.probe)?
+                {
+                    self.hidden_search();
                 }
             }
         }
@@ -550,6 +600,8 @@ impl Inspection<'_> {
                 });
             }
             Identity::Bound => self.gap(CoverageGap::IdentityBound),
+            Identity::InodeAlias => self.gap(CoverageGap::InodeAlias),
+            Identity::InheritedInput => self.gap(CoverageGap::UnresolvedTarget),
             Identity::Public(_) => {}
         }
         self.context
@@ -642,12 +694,7 @@ impl Inspection<'_> {
                 self.denial.get_or_insert_with(|| Reason { effect: "curl verbose or trace output can print authentication headers; drop -v and --trace and use a normal request".into(), rule: DenialRule::Trace });
             }
             if effects.hidden_content {
-                self.effect(EffectRecord::HiddenContent);
-                self.denial.get_or_insert_with(|| Reason {
-                    effect: "hidden recursive content search reaches protected environment files"
-                        .into(),
-                    rule: DenialRule::HiddenSearch,
-                });
+                self.hidden_search();
             }
             // Advice has shared public wording and cannot override protection.
             for (applies, advice) in [
@@ -725,6 +772,8 @@ fn target_rule(
         } else {
             DenialRule::AppData
         }
+    } else if target.effect == Effect::Change {
+        DenialRule::ResourceChange
     } else if target.effect == Effect::Write {
         DenialRule::Ssh
     } else if target.walk == Walk::Hidden && target.effect == Effect::Read {
@@ -878,13 +927,8 @@ mod tests {
             inspection.shell("true", &context.cwd, 65).unwrap_err().kind,
             CheckErrorKind::ResourceLimit
         );
-        assert_eq!(
-            inspection
-                .shell("sh -c true", &context.cwd, 64)
-                .unwrap_err()
-                .kind,
-            CheckErrorKind::ResourceLimit
-        );
+        inspection.shell("sh -c true", &context.cwd, 64).unwrap();
+        assert_eq!(context.shell_observation_entries.get(), 2);
     }
 
     #[test]

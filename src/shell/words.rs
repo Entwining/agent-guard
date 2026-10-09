@@ -6,6 +6,9 @@ use brush_parser::{
 };
 use std::collections::BTreeMap;
 
+mod modifiers;
+mod parameters;
+
 #[cfg(test)]
 mod tests;
 
@@ -162,13 +165,30 @@ pub(super) fn single_literal(raw: &str) -> Option<String> {
         .then(|| raw.to_owned())
 }
 
+#[derive(Clone, Copy)]
 pub(super) struct ExpansionContext<'a> {
+    pub named_dirs: &'a BTreeMap<String, Option<String>>,
+    pub zsh: bool,
+    pub assignments: &'a [(String, String)],
     pub variables: &'a BTreeMap<String, String>,
+    pub unknown_variables: &'a std::collections::BTreeSet<String>,
+    pub deadline: Option<std::time::Instant>,
     pub runtime_variables: &'a std::collections::BTreeSet<String>,
     pub pattern_variables: &'a BTreeMap<String, Vec<std::ops::Range<usize>>>,
     pub host: crate::record::HostFacts<'a>,
     pub cwd: &'a str,
     pub tilde_assigned: bool,
+}
+
+impl ExpansionContext<'_> {
+    fn get(&self, name: &str) -> Option<&String> {
+        self.assignments
+            .iter()
+            .rev()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value)
+            .or_else(|| self.variables.get(name))
+    }
 }
 
 // The seed remains live while nested sources are observed. Return its payload
@@ -189,6 +209,9 @@ pub(super) fn expand(
     if matches!(syntax, super::WordSyntax::Literal) {
         let word = Word::literal(raw.to_owned());
         return Ok(Expanded {
+            named_tildes: std::collections::BTreeSet::new(),
+            modifiers: false,
+            unset_parameters: std::collections::BTreeSet::new(),
             unknown_splitting: false,
             positional: false,
             split: vec![word.clone()],
@@ -196,6 +219,7 @@ pub(super) fn expand(
             nested: Vec::new(),
             arithmetic: Vec::new(),
             references: Vec::new(),
+            assignments: Vec::new(),
             tilde: false,
             parameters: Vec::new(),
             unsupported: false,
@@ -211,6 +235,9 @@ pub(super) fn expand(
         brace_text(raw)?
     };
     let mut out = Expanded {
+        named_tildes: std::collections::BTreeSet::new(),
+        modifiers: false,
+        unset_parameters: std::collections::BTreeSet::new(),
         unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
@@ -218,6 +245,7 @@ pub(super) fn expand(
         nested: Vec::new(),
         arithmetic: Vec::new(),
         references: Vec::new(),
+        assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
@@ -508,8 +536,12 @@ fn fragment(
     raw: &str,
     context: super::lexer::Context,
     expansion: &ExpansionContext<'_>,
+    parameter_word: bool,
 ) -> Result<Expanded, CheckError> {
     let mut out = Expanded {
+        named_tildes: std::collections::BTreeSet::new(),
+        modifiers: false,
+        unset_parameters: std::collections::BTreeSet::new(),
         unknown_splitting: false,
         positional: false,
         word: Word::literal(String::new()),
@@ -517,6 +549,7 @@ fn fragment(
         nested: Vec::new(),
         arithmetic: Vec::new(),
         references: Vec::new(),
+        assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
@@ -547,7 +580,25 @@ fn fragment(
         word::parse(&parser_input, &ParserOptions::default())
     };
     match pieces {
-        Ok(pieces) => fill(raw, &pieces, &lexical, expansion, &mut out, &mut false)?,
+        Ok(mut pieces) => {
+            // A default/alternative word has its own initial tilde expansion,
+            // even when the surrounding parameter expression is double quoted.
+            // Keep the surrounding quote context for every other piece.
+            if parameter_word
+                && raw.starts_with('~')
+                && let Ok(unquoted) = word::parse(raw, &ParserOptions::default())
+                && let Some(prefix) = unquoted.first()
+                && matches!(prefix.piece, WordPiece::TildeExpansion(_))
+                && let Some(first) = pieces.first_mut()
+                && let WordPiece::Text(text) = &mut first.piece
+                && let Some(tail) = text.strip_prefix(&raw[..prefix.end_index])
+            {
+                *text = tail.into();
+                first.start_index = prefix.end_index;
+                pieces.insert(0, prefix.clone());
+            }
+            fill(raw, &pieces, &lexical, expansion, &mut out, &mut false)?;
+        }
         Err(_) => out.unsupported = true,
     }
     out.unsupported |= out.parameters.iter().any(|r| !r.supported);
@@ -577,11 +628,21 @@ fn merge_fragment(out: &mut Expanded, inner: Expanded, offset: usize) {
             parent.supported = region.supported;
         }
     }
+    out.modifiers |= inner.modifiers;
+    out.named_tildes.extend(inner.named_tildes);
+    out.unset_parameters.extend(inner.unset_parameters);
     out.word.vars.extend(inner.word.vars);
     out.nested.extend(inner.nested);
     out.arithmetic.extend(inner.arithmetic);
     out.references.extend(inner.references);
     out.tilde |= inner.tilde;
+}
+
+fn push_tilde(out: &mut Expanded, value: &str) {
+    let start = out.word.text.len();
+    out.word.text.push_str(value);
+    out.lexical_ranges.push(start..out.word.text.len());
+    out.word.quoted_ranges.push(start..out.word.text.len());
 }
 
 fn fill(
@@ -609,9 +670,15 @@ fn fill(
         }
         if piece.start_index < covered {
             if matches!(piece.piece, WordPiece::Text(_)) {
+                let start = out.word.text.len();
                 out.word
                     .text
                     .push_str(&raw[covered..piece.end_index].replace("\\\n", ""));
+                if quoted {
+                    out.word.quoted_ranges.push(start..out.word.text.len());
+                } else {
+                    out.word.globs |= raw[covered..piece.end_index].contains(['*', '?', '[', '(']);
+                }
             } else {
                 out.unsupported = true;
             }
@@ -639,6 +706,33 @@ fn fill(
                 }
             }
             WordPiece::TildeExpansion(tilde) => {
+                if let TildeExpr::UserHome(user) = tilde {
+                    out.named_tildes.insert(user.clone());
+                    if expansion.zsh {
+                        if let Some(value) = expansion.named_dirs.get(user) {
+                            if let Some(value) = value {
+                                push_tilde(out, value.trim_end_matches('/'));
+                            } else {
+                                out.word.text.push_str(spelling);
+                                out.word.expands = true;
+                            }
+                            continue;
+                        }
+                        out.word.vars.push(user.clone());
+                        if let Some(value) =
+                            expansion.get(user).filter(|value| value.starts_with('/'))
+                            && !expansion.unknown_variables.contains(user)
+                        {
+                            push_tilde(out, value.trim_end_matches('/'));
+                            continue;
+                        }
+                        if expansion.unknown_variables.contains(user) {
+                            out.word.expands = true;
+                        }
+                    } else {
+                        out.word.vars.push(user.clone());
+                    }
+                }
                 let value = match tilde {
                     TildeExpr::Home => {
                         out.word.vars.push("HOME".into());
@@ -665,9 +759,55 @@ fn fill(
                     }
                     _ => None,
                 };
-                out.word.text.push_str(value.unwrap_or(spelling));
+                push_tilde(out, value.unwrap_or(spelling));
             }
             WordPiece::ParameterExpansion(expr) => {
+                let modifier =
+                    modifiers::chain(raw, expr, lexical, piece.start_index, piece.end_index);
+                out.modifiers |= modifier.is_some();
+                if expansion.zsh
+                    && let Some(modifier) = modifier
+                {
+                    out.word.vars.push(modifier.name.clone());
+                    let value = out
+                        .assignments
+                        .iter()
+                        .rev()
+                        .find(|(name, _)| name == &modifier.name)
+                        .map(|(_, value)| value.as_str())
+                        .or_else(|| expansion.get(&modifier.name).map(String::as_str))
+                        .or_else(|| (modifier.name == "PWD").then_some(expansion.cwd));
+                    if !expansion.unknown_variables.contains(&modifier.name)
+                        && let Some(value) = value
+                    {
+                        if let Some(value) = modifier.apply(value.into(), expansion)? {
+                            out.word.globs |= !quoted && value.contains(['*', '?', '[']);
+                            out.word.text.push_str(&value);
+                            *splitting |= !quoted;
+                        } else {
+                            out.unsupported = true;
+                        }
+                    } else {
+                        out.word
+                            .text
+                            .push_str(&raw[piece.start_index..modifier.end]);
+                        out.word.expands = true;
+                        out.unknown_splitting |= !quoted;
+                    }
+                    if let Some(region) = out
+                        .parameters
+                        .iter_mut()
+                        .find(|region| region.range.start == piece.start_index)
+                    {
+                        region.supported = true;
+                    }
+                    if quoted {
+                        out.word.quoted_ranges.push(start..out.word.text.len());
+                        out.lexical_ranges.push(start..out.word.text.len());
+                    }
+                    covered = modifier.end;
+                    continue;
+                }
                 if let Some(Parameter::NamedWithIndex { index, .. }) = parameter(expr) {
                     out.references.push(index.clone());
                 }
@@ -698,6 +838,14 @@ fn fill(
                     _ => None,
                 };
                 if let Some(name) = parameter_name(expr) {
+                    if matches!(
+                        expr,
+                        ParameterExpr::UseDefaultValues { .. }
+                            | ParameterExpr::AssignDefaultValues { .. }
+                            | ParameterExpr::UseAlternativeValue { .. }
+                    ) {
+                        out.unset_parameters.insert(name.clone());
+                    }
                     out.word.vars.push(name);
                 }
                 if let Some(name) = &plain
@@ -715,9 +863,23 @@ fn fill(
                 {
                     region.supported = true;
                 }
+                let mut fragments = Vec::new();
+                let mut fragment_assignments = expansion.assignments.to_vec();
+                fragment_assignments.extend(out.assignments.clone());
                 for body in parameter_fragments(expr) {
                     let context = super::lexer::Context {
-                        quote: if matches!(expr, ParameterExpr::ReplaceSubstring { .. }) {
+                        quote: if matches!(
+                            expr,
+                            ParameterExpr::ReplaceSubstring { .. }
+                                | ParameterExpr::RemoveSmallestPrefixPattern { .. }
+                                | ParameterExpr::RemoveLargestPrefixPattern { .. }
+                                | ParameterExpr::RemoveSmallestSuffixPattern { .. }
+                                | ParameterExpr::RemoveLargestSuffixPattern { .. }
+                                | ParameterExpr::UppercaseFirstChar { .. }
+                                | ParameterExpr::UppercasePattern { .. }
+                                | ParameterExpr::LowercaseFirstChar { .. }
+                                | ParameterExpr::LowercasePattern { .. }
+                        ) {
                             super::lexer::Quote::Unquoted
                         } else {
                             context.quote
@@ -743,16 +905,64 @@ fn fill(
                             kind: CheckErrorKind::GuardFault,
                         })?
                     };
-                    let inner =
-                        fragment(&spelling[offset..offset + body.len()], context, expansion)?;
+                    let inner = fragment(
+                        &spelling[offset..offset + body.len()],
+                        context,
+                        &ExpansionContext {
+                            assignments: &fragment_assignments,
+                            ..*expansion
+                        },
+                        matches!(
+                            expr,
+                            ParameterExpr::UseDefaultValues { .. }
+                                | ParameterExpr::AssignDefaultValues { .. }
+                                | ParameterExpr::UseAlternativeValue { .. }
+                        ),
+                    )?;
+                    fragment_assignments.extend(inner.assignments.clone());
+                    fragments.push((
+                        body,
+                        parameters::Fragment {
+                            value: (!inner.word.expands
+                                && !inner.word.runtime_unknown
+                                && !inner.unsupported
+                                && !inner
+                                    .word
+                                    .vars
+                                    .iter()
+                                    .any(|name| expansion.unknown_variables.contains(name)))
+                            .then(|| inner.word.text.clone()),
+                            pattern: crate::filesystem::shell_pattern(
+                                &inner.word.text,
+                                &inner.word.quoted_ranges,
+                            ),
+                            assignments: inner.assignments.clone(),
+                        },
+                    ));
                     merge_fragment(out, inner, piece.start_index + offset);
                 }
-                if let Some(value) = plain.as_deref().and_then(|name| {
-                    variables
-                        .get(name)
-                        .map(String::as_str)
-                        .or_else(|| (name == "HOME").then_some(host.home))
-                        .or_else(|| (name == "PWD").then_some(expansion.cwd))
+                let computed = if plain.is_none() {
+                    parameters::value(expr, expansion, &fragments, out)?
+                } else {
+                    None
+                };
+                if let Some(value) = computed {
+                    out.word.text.push_str(&value);
+                    *splitting |= !quoted;
+                    out.word.globs |= !quoted && value.contains(['*', '?', '[']);
+                } else if let Some(value) = plain.as_deref().and_then(|name| {
+                    out.assignments
+                        .iter()
+                        .rev()
+                        .find(|(key, _)| key == name)
+                        .map(|(_, value)| value.as_str())
+                        .or_else(|| {
+                            expansion
+                                .get(name)
+                                .map(String::as_str)
+                                .or_else(|| (name == "HOME").then_some(host.home))
+                                .or_else(|| (name == "PWD").then_some(expansion.cwd))
+                        })
                 }) {
                     if let Some(ranges) = plain
                         .as_ref()
@@ -841,6 +1051,7 @@ fn fill(
                         ..super::lexer::Context::default()
                     },
                     expansion,
+                    false,
                 )?;
                 let offset = spelling.find(&expr.value).ok_or(CheckError {
                     kind: CheckErrorKind::GuardFault,

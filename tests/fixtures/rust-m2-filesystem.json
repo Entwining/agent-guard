@@ -61,6 +61,7 @@
     {"id":"eight-links","path":"/l1/item","links":{"/l1":"/l2","/l2":"/l3","/l3":"/l4","/l4":"/l5","/l5":"/l6","/l6":"/l7","/l7":"/l8","/l8":"/public"},"public":"/public/item"},
     {"id":"nine-links","path":"/l1/item","links":{"/l1":"/l2","/l2":"/l3","/l3":"/l4","/l4":"/l5","/l5":"/l6","/l6":"/l7","/l7":"/l8","/l8":"/l9","/l9":"/public"},"bound":true},
     {"id":"cycle","path":"/l1/item","links":{"/l1":"/l2","/l2":"/l1"},"bound":true},
-    {"id":"public-readlink-fault","path":"/public/fault","fault":"/public/fault","error":"ProbeFault"}
+    {"id":"public-readlink-fault","path":"/public/fault","fault":"/public/fault","error":"ProbeFault"},
+    {"id":"projected-link-stop","path":"/public/link/file","links":{"/public/link":"/System/Volumes/Data/h/Library/Containers"},"protected":"AppData","last_probe":"/System/Volumes/Data/h/Library"}
   ]
 }

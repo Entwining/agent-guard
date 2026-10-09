@@ -254,7 +254,7 @@
   {
     "id": "g8-plain-literal",
     "source": "cat ${v:-.env*}",
-    "expected": "UC",
+    "expected": "D",
     "owner": "coverage"
   },
   {

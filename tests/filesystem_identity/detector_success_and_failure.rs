@@ -59,7 +59,7 @@ fn identity_depth_bound_is_not_syntax_or_success() {
         assert!(
             render(ctx.consumer, &result)
                 .stderr
-                .contains("explicit public path")
+                .contains("ordinary absolute path")
         );
         assert!(matches!(
             result,

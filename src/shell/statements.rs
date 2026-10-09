@@ -5,10 +5,78 @@ use crate::{
     limits::MAX_NESTING,
     record::{Command, Role, Stdin},
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+};
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum HeaderValue {
+    Unknown,
+    Literal(String),
+    Pattern(String, Vec<(usize, usize)>),
+}
+
+#[derive(Clone)]
+struct HeaderKey {
+    value: HeaderValue,
+    #[cfg(test)]
+    comparisons: std::rc::Rc<std::cell::Cell<usize>>,
+}
+impl HeaderKey {
+    fn binding(self) -> BindingValue {
+        match self.value {
+            HeaderValue::Unknown => BindingValue::RuntimeUnknown(None),
+            HeaderValue::Literal(value) => BindingValue::Known(value),
+            HeaderValue::Pattern(text, ranges) => BindingValue::ShellMatches(ShellValue {
+                text,
+                quoted_ranges: ranges.into_iter().map(|(start, end)| start..end).collect(),
+            }),
+        }
+    }
+}
+impl PartialEq for HeaderKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other).is_eq()
+    }
+}
+impl Eq for HeaderKey {}
+impl PartialOrd for HeaderKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for HeaderKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        #[cfg(test)]
+        {
+            self.comparisons.set(self.comparisons.get() + 1);
+        }
+        self.value.cmp(&other.value)
+    }
+}
 
 #[cfg(test)]
 mod loop_cost {
+    #[test]
+    fn header_membership_work_grows_subquadratically() {
+        let counts = [128, 256, 512].map(|width| {
+            let items = (0..width)
+                .map(|n| format!("public{n}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let source = format!("for f in {items}; do printf public; done");
+            let output =
+                crate::shell::observe(&source, crate::shell::Arm::Brush, "/h", "/h/p", true)
+                    .unwrap();
+            assert!(output.header_comparisons > 0);
+            output.header_comparisons
+        });
+        println!("header comparisons: {counts:?}");
+        for pair in counts.windows(2) {
+            assert!(pair[1] < pair[0] * 3, "{counts:?}");
+        }
+    }
     #[test]
     fn unconditional_literal_append_keeps_exact_string() {
         for width in [4, 8, 16] {
@@ -280,12 +348,15 @@ impl BindingValue {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Binding {
     pub values: Vec<BindingValue>,
+    // A tied Zsh update replaces its view without replacing Bash's independent value.
+    pub(super) bash_values: Option<std::rc::Rc<Vec<BindingValue>>>,
     exported: bool,
     arithmetic: bool,
 }
 
 #[derive(Clone)]
 pub(super) struct Scope {
+    pub(super) named_dirs: std::rc::Rc<BTreeMap<String, Vec<BindingValue>>>,
     pub directory: Directory,
     pub bindings: BTreeMap<String, Binding>,
     frames: Vec<BTreeMap<String, Option<Binding>>>,
@@ -305,11 +376,37 @@ pub(super) struct Scope {
 
 #[derive(Clone, PartialEq, Eq)]
 struct BindingState {
+    named_dirs: std::rc::Rc<BTreeMap<String, Vec<BindingValue>>>,
     bindings: BTreeMap<String, Binding>,
     frames: Vec<BTreeMap<String, Option<Binding>>>,
 }
 
 impl Scope {
+    pub(super) fn named_contexts(
+        &self,
+        names: &BTreeSet<String>,
+    ) -> (Vec<BTreeMap<String, Option<String>>>, bool) {
+        let mut contexts = vec![BTreeMap::new()];
+        for name in names {
+            if let Some(values) = self.named_dirs.get(name) {
+                let mut next = Vec::new();
+                for context in &contexts {
+                    for value in values {
+                        let mut context = context.clone();
+                        context.insert(name.clone(), value.known().cloned());
+                        if !next.contains(&context) {
+                            if next.len() == 512 {
+                                return (next, true);
+                            }
+                            next.push(context);
+                        }
+                    }
+                }
+                contexts = next;
+            }
+        }
+        (contexts, false)
+    }
     pub(super) fn in_function(&self) -> bool {
         !self.frames.is_empty()
     }
@@ -327,10 +424,12 @@ impl Scope {
     }
     pub fn new(home: &str, cwd: &str) -> Self {
         Self {
+            named_dirs: std::rc::Rc::new(BTreeMap::new()),
             directory: Directory::new(cwd),
             bindings: BTreeMap::from([(
                 "HOME".into(),
                 Binding {
+                    bash_values: None,
                     values: vec![BindingValue::Known(home.into())],
                     exported: false,
                     arithmetic: false,
@@ -370,12 +469,14 @@ impl Scope {
     }
     fn state(&self) -> BindingState {
         BindingState {
+            named_dirs: self.named_dirs.clone(),
             bindings: self.bindings.clone(),
             frames: self.frames.clone(),
         }
     }
     fn with_state(&self, state: BindingState) -> Self {
         let mut scope = self.clone();
+        scope.named_dirs = state.named_dirs;
         scope.bindings = state.bindings;
         scope.frames = state.frames;
         scope
@@ -462,6 +563,23 @@ impl Scope {
                 }
                 Some((name.clone(), ranges))
             })
+            .collect()
+    }
+
+    pub(super) fn unknown_parameters(
+        &self,
+        context: &BTreeMap<String, String>,
+    ) -> BTreeSet<String> {
+        self.bindings
+            .iter()
+            .filter(|(name, binding)| {
+                binding.values.iter().any(|value| {
+                    value.known().is_none()
+                        && (value.lexical() == context.get(*name)
+                            || matches!(value, BindingValue::Array(_)))
+                })
+            })
+            .map(|(name, _)| name.clone())
             .collect()
     }
     fn repeated_word(&self, word: &crate::record::Word) -> bool {
@@ -648,7 +766,40 @@ impl Scope {
     }
     pub(super) fn assign(&mut self, name: String, mut values: Vec<BindingValue>) {
         super::arrays::update(self, &name, &mut values);
-        self.assign_binding(name, values);
+        let tied = self.zsh.then(|| cdpath_alias(&name)).flatten();
+        let mirror = tied.map(|alias| (alias, super::arrays::tied_cdpath(&name, &values)));
+        if let Some((alias, mut mirrored)) = mirror {
+            let prior = self.bindings.get(alias).cloned();
+            if let Some(frame) = self
+                .frames
+                .iter_mut()
+                .rev()
+                .find(|frame| frame.contains_key(&name))
+            {
+                frame.entry(alias.into()).or_insert_with(|| prior.clone());
+            }
+            let bash = prior.map_or_else(
+                || vec![BindingValue::RuntimeUnknown(Some(String::new()))],
+                |binding| {
+                    binding.bash_values.map_or_else(
+                        || super::arrays::bash_only(binding.values),
+                        |values| values.as_ref().clone(),
+                    )
+                },
+            );
+            for value in &bash {
+                if !mirrored.contains(value) {
+                    mirrored.push(value.clone());
+                }
+            }
+            self.assign_binding(name, values);
+            self.assign_binding(alias.into(), mirrored);
+            if let Some(binding) = self.bindings.get_mut(alias) {
+                binding.bash_values = Some(std::rc::Rc::new(bash));
+            }
+        } else {
+            self.assign_binding(name, values);
+        }
     }
     pub(super) fn assign_binding(&mut self, name: String, values: Vec<BindingValue>) {
         if let Some((base, _)) = name.split_once('[')
@@ -673,6 +824,7 @@ impl Scope {
         self.bindings.insert(
             name,
             Binding {
+                bash_values: None,
                 values,
                 exported,
                 arithmetic,
@@ -694,12 +846,56 @@ impl Scope {
         }
     }
     fn join(&mut self, branches: &[Scope]) -> bool {
+        let shared = branches.first().filter(|first| {
+            branches
+                .iter()
+                .all(|branch| std::rc::Rc::ptr_eq(&first.named_dirs, &branch.named_dirs))
+        });
+        let keys: BTreeSet<_> = branches
+            .iter()
+            .filter(|_| shared.is_none())
+            .flat_map(|scope| scope.named_dirs.keys())
+            .collect();
+        let mut named_dirs = BTreeMap::new();
+        let mut named_bound = false;
+        for name in keys {
+            let mut values = Vec::new();
+            for branch in branches {
+                let candidates = branch
+                    .named_dirs
+                    .get(name)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[BindingValue::RuntimeUnknown(None)]);
+                for value in candidates {
+                    if !values.contains(value) {
+                        if values.len() == 512 {
+                            named_bound = true;
+                        } else {
+                            values.push(value.clone());
+                        }
+                    }
+                }
+            }
+            named_dirs.insert(name.clone(), values);
+        }
+        self.named_dirs = shared.map_or_else(
+            || std::rc::Rc::new(named_dirs),
+            |scope| scope.named_dirs.clone(),
+        );
+        self.pipeline_input = branches.iter().try_fold(Vec::new(), |mut inputs, branch| {
+            for input in branch.pipeline_input.as_ref()? {
+                if !inputs.contains(input) {
+                    inputs.push(input.clone());
+                }
+            }
+            Some(inputs)
+        });
         let keys = branches
             .iter()
             .flat_map(|s| s.bindings.keys())
             .cloned()
             .collect::<BTreeSet<_>>();
-        let mut bounded = false;
+        let mut bounded = named_bound;
         self.bindings.clear();
         for name in keys {
             let (value, bound) = join_values(branches.iter().map(|s| s.bindings.get(&name)));
@@ -751,13 +947,47 @@ impl Scope {
     }
 }
 
+fn cdpath_alias(name: &str) -> Option<&'static str> {
+    match name {
+        "CDPATH" => Some("cdpath"),
+        "cdpath" => Some("CDPATH"),
+        _ => None,
+    }
+}
+
 fn join_values<'a>(values: impl Iterator<Item = Option<&'a Binding>>) -> (Option<Binding>, bool) {
+    let values: Vec<_> = values.collect();
     let mut joined = Vec::new();
+    let mut bash = Vec::new();
+    let tied = values
+        .iter()
+        .flatten()
+        .any(|binding| binding.bash_values.is_some());
     let mut present = false;
     let mut bounded = false;
     let mut exported = false;
     let mut arithmetic = false;
     for binding in values {
+        if tied {
+            for value in binding.map_or_else(
+                || vec![BindingValue::RuntimeUnknown(Some(String::new()))],
+                |binding| {
+                    binding
+                        .bash_values
+                        .as_deref()
+                        .unwrap_or(&binding.values)
+                        .clone()
+                },
+            ) {
+                if !bash.contains(&value) {
+                    if bash.len() == 512 {
+                        bounded = true;
+                    } else {
+                        bash.push(value);
+                    }
+                }
+            }
+        }
         present |= binding.is_some();
         exported |= binding.is_some_and(|binding| binding.exported);
         arithmetic |= binding.is_some_and(|binding| binding.arithmetic);
@@ -825,6 +1055,7 @@ fn join_values<'a>(values: impl Iterator<Item = Option<&'a Binding>>) -> (Option
     joined.retain(|value| !matches!(value, BindingValue::Known(text) if empty.contains(text)));
     (
         present.then_some(Binding {
+            bash_values: tied.then(|| std::rc::Rc::new(bash)),
             values: joined,
             exported,
             arithmetic,
@@ -1043,7 +1274,12 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             &tail,
             &raw.syntax,
             &super::words::ExpansionContext {
+                named_dirs: &BTreeMap::new(),
+                zsh: false,
+                assignments: &[],
                 variables: &variables,
+                unknown_variables: &scope.unknown_parameters(&variables),
+                deadline: self.deadline,
                 runtime_variables: &BTreeSet::new(),
                 pattern_variables: &scope.pattern_contexts(&variables),
                 host: self.frontend.host,
@@ -1321,9 +1557,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             )
             .independent_arguments;
         let mut alternatives = if independent {
-            vec![initial.clone()]
+            vec![ArgumentAlternative::new(initial.clone())]
         } else {
-            vec![prefixes]
+            vec![ArgumentAlternative::new(prefixes)]
         };
         for (index, choices) in arguments.iter().enumerate() {
             if independent {
@@ -1332,27 +1568,49 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 for choice in choices.iter().skip(1) {
                     let mut candidate = initial.clone();
                     candidate[index] = choice[0].clone();
-                    alternatives.push(candidate);
+                    alternatives.push(ArgumentAlternative::new(candidate));
                 }
                 continue;
             }
             let mut next = Vec::new();
-            for previous in &alternatives {
+            for mut previous in alternatives {
+                let remaining = 512 - next.len();
+                let mut viable = Vec::new();
                 for choice in choices {
                     #[cfg(test)]
                     {
                         self.output.candidate_pairs += 1;
                     }
-                    if !compatible_arguments(previous, choice) {
+                    if !previous.compatible(
+                        choice,
+                        #[cfg(test)]
+                        &mut self.output.argument_compatibility_checks,
+                    ) {
                         continue;
                     }
-                    if next.len() == 512 {
+                    if viable.len() == remaining {
                         self.output.gap(CoverageGap::InspectionBudget);
                         break;
                     }
-                    let mut argv = previous.clone();
-                    argv.extend(choice.clone());
-                    next.push(argv);
+                    viable.push(choice);
+                }
+                if let [choice] = viable.as_slice() {
+                    previous.extend(
+                        choice,
+                        #[cfg(test)]
+                        &mut self.output.argv_prefix_word_copies,
+                    );
+                    next.push(previous);
+                } else {
+                    for choice in viable {
+                        let mut candidate = previous.clone();
+                        candidate.extend(
+                            choice,
+                            #[cfg(test)]
+                            &mut self.output.argv_prefix_word_copies,
+                        );
+                        next.push(candidate);
+                    }
                 }
             }
             alternatives = next;
@@ -1374,7 +1632,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
         let entry = scope.clone();
         let mut exits = Vec::new();
-        for mut argv in alternatives {
+        for alternative in alternatives {
+            let mut argv = alternative.into_words();
             let mut branch = entry.clone();
             let scope = &mut branch;
             let resolved = super::argv::resolve(
@@ -1388,7 +1647,16 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             }
             let prior = command_bindings
                 .keys()
-                .map(|name| (name.clone(), scope.bindings.get(name).cloned()))
+                .flat_map(|name| {
+                    std::iter::once(name.clone()).chain(
+                        scope
+                            .zsh
+                            .then(|| cdpath_alias(name))
+                            .flatten()
+                            .map(String::from),
+                    )
+                })
+                .map(|name| (name.clone(), scope.bindings.get(&name).cloned()))
                 .collect::<BTreeMap<_, _>>();
             let return_start = scope.returns.len();
             for (name, values) in &command_bindings {
@@ -1547,13 +1815,14 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     "read" => {
                         self.read(&argv[index + 1..], &targets, scope);
                     }
+                    "hash" => self.named_directory_changes(&argv[index + 1..], scope),
                     "mapfile" | "readarray" => {
                         self.read_array_lines(&argv[index + 1..], &targets, scope);
                     }
                     _ => {}
                 }
             }
-            let shell_source = program
+            let code_argument = program
                 .filter(|index| {
                     matches!(
                         argv[*index].rsplit('/').next(),
@@ -1564,14 +1833,22 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     (index + 1..argv.len().saturating_sub(1))
                         .find(|at| super::argv::shell_code_flag(&argv[*at]))
                 })
-                .and_then(|at| {
-                    scope
-                        .repetition_source(&argv[at + 1])
-                        .map(|source| Box::new((at + 1, source)))
-                });
+                .map(|at| at + 1);
+            let shell_source = code_argument.and_then(|at| {
+                scope
+                    .repetition_source(&argv[at])
+                    .map(|source| Box::new((at, source)))
+            });
             if let Some(source) = &shell_source {
                 argv[source.0].cardinality_unknown = false;
                 argv[source.0].field_count_unknown = false;
+            }
+            if let Some(at) =
+                code_argument.filter(|at| !argv[*at].expands && !argv[*at].cardinality_unknown)
+            {
+                // The child scope below observes this source with effective
+                // exports and wrapper overrides; empty-environment replay loses them.
+                argv[at].role = Role::ObservedShellCode;
             }
             let command = Command {
                 environment: Vec::new(),
@@ -1585,7 +1862,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 shell: resolved.shell,
                 flags: Vec::new(),
                 items: None,
-                stdin: Stdin::None,
+                stdin: if scope.piped {
+                    Stdin::Inherited
+                } else {
+                    Stdin::None
+                },
                 pipeline: pipeline.map(|id| (source_id, id)),
                 nested,
             };
@@ -1601,6 +1882,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 .find(|pair| super::argv::shell_code_flag(&pair[0]))
             {
                 let mut child = Scope::new(self.frontend.host.home, &command.cwd);
+                child.zsh = self.frontend.zsh;
                 child.bindings.extend(
                     scope
                         .bindings
@@ -1621,12 +1903,35 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         .bindings
                         .entry(name.clone())
                         .or_insert_with(|| Binding {
+                            bash_values: None,
                             values: Vec::new(),
                             exported: true,
                             arithmetic: false,
                         });
                     if !binding.values.contains(&value) {
                         binding.values.push(value);
+                    }
+                }
+                for change in &resolved.environment {
+                    match change {
+                        super::argv::EnvironmentChange::Clear => child.bindings.clear(),
+                        super::argv::EnvironmentChange::Unset(name) => {
+                            child.bindings.remove(name);
+                            if child.zsh
+                                && let Some(alias) = cdpath_alias(name)
+                            {
+                                child.bindings.remove(alias);
+                            }
+                        }
+                        super::argv::EnvironmentChange::Set(name, value) => {
+                            child.assign(
+                                name.clone(),
+                                vec![scope.expanded_binding(value, &value.text)],
+                            );
+                            if let Some(binding) = child.bindings.get_mut(name) {
+                                binding.exported = true;
+                            }
+                        }
                     }
                 }
                 let functions = self.functions.clone();
@@ -1825,9 +2130,13 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             Statement::Group(body) => self.run(body, scope, depth + 1, source_id, nested)?,
             Statement::Subshell(body) | Statement::Async(body) | Statement::Substitution(body) => {
                 let functions = self.functions.clone();
+                let mut child = scope.isolated();
+                if matches!(statement, Statement::Subshell(_)) {
+                    child.pipeline_input = scope.pipeline_input.clone();
+                }
                 let result = self.run(
                     body,
-                    &mut scope.isolated(),
+                    &mut child,
                     depth + 1,
                     source_id,
                     nested || matches!(statement, Statement::Substitution(_)),
@@ -1876,6 +2185,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 self.logical_list(statement, scope, depth, source_id, nested)?;
             }
             Statement::Binary(Operator::Pipe, left, right) => {
+                let inherited_input = scope.pipeline_input.clone();
                 let before = scope.isolated();
                 let start = self.output.script.commands.len();
                 let mut producer = before.isolated();
@@ -1884,21 +2194,26 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 let middle = self.output.script.commands.len();
                 let mut rhs = before.isolated();
                 rhs.piped = true;
-                if let Statement::Command {
+                let pipeline = if let Statement::Command {
                     pipeline: Some(id), ..
                 } = right.as_ref()
                 {
-                    rhs.pipeline_input = super::pipeline::read_input(
-                        &self.output.script.commands[start..middle],
-                        (source_id, *id),
-                        |word| {
-                            producer
-                                .expanded_binding(word, &word.text)
-                                .known()
-                                .is_some()
-                        },
-                    );
-                }
+                    Some((source_id, *id))
+                } else {
+                    self.output.script.commands[start..middle]
+                        .last()
+                        .and_then(|command| command.pipeline)
+                };
+                rhs.pipeline_input = super::pipeline::read_input(
+                    &self.output.script.commands[start..middle],
+                    pipeline,
+                    |word| {
+                        producer
+                            .expanded_binding(word, &word.text)
+                            .known()
+                            .is_some()
+                    },
+                );
                 self.statement(right, &mut rhs, depth, source_id, nested)?;
                 let (left, right) =
                     self.output.script.commands[start..].split_at_mut(middle - start);
@@ -1915,6 +2230,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 let lhs = scope.clone();
                 self.merge_bindings(scope, &[lhs, rhs.clone()]);
                 self.merge_directories(scope, &[rhs]);
+                scope.pipeline_input = inherited_input;
             }
             Statement::Conditional {
                 condition,
@@ -1973,6 +2289,33 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 let mut inner = scope.branch();
                 inner.directory.failures = None;
                 let mut values = Vec::new();
+                #[cfg_attr(
+                    test,
+                    expect(
+                        clippy::mutable_key_type,
+                        reason = "Only the test comparison counter mutates; HeaderValue alone determines key order."
+                    )
+                )]
+                let mut seen = BTreeSet::new();
+                #[cfg(test)]
+                let comparisons = std::rc::Rc::new(std::cell::Cell::new(0));
+                let key = |word: crate::record::Word| HeaderKey {
+                    value: if word.expands {
+                        HeaderValue::Unknown
+                    } else if word.globs {
+                        HeaderValue::Pattern(
+                            word.text,
+                            word.quoted_ranges
+                                .into_iter()
+                                .map(|r| (r.start, r.end))
+                                .collect(),
+                        )
+                    } else {
+                        HeaderValue::Literal(word.text)
+                    },
+                    #[cfg(test)]
+                    comparisons: comparisons.clone(),
+                };
                 let mut literal = variable.is_some() && !header.is_empty();
                 let mut literal_values = Vec::new();
                 let mut finite = true;
@@ -2007,31 +2350,25 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         {
                             count = None;
                         }
-                        for w in expanded.split {
-                            let value = if w.expands {
-                                BindingValue::RuntimeUnknown(None)
-                            } else if w.globs {
-                                BindingValue::ShellMatches(ShellValue::from_word(&w))
-                            } else {
-                                BindingValue::Known(w.text)
-                            };
-                            if !values.contains(&value) {
-                                values.push(value);
+                        for word in expanded.split {
+                            let value = key(word);
+                            if seen.insert(value.clone()) {
+                                values.push(value.binding());
                             }
                         }
-                        let unsplit = if expanded.word.expands {
-                            BindingValue::RuntimeUnknown(None)
-                        } else if expanded.word.globs {
-                            BindingValue::ShellMatches(ShellValue::from_word(&expanded.word))
-                        } else {
-                            BindingValue::Known(expanded.word.text)
-                        };
-                        if !expanded.positional && !values.contains(&unsplit) {
-                            values.push(unsplit);
+                        if !expanded.positional {
+                            let value = key(expanded.word);
+                            if seen.insert(value.clone()) {
+                                values.push(value.binding());
+                            }
                         }
                     }
                     count = count.map(|n| n + width);
                     self.word_use(word, scope, depth, nested)?;
+                }
+                #[cfg(test)]
+                {
+                    self.output.header_comparisons += comparisons.get();
                 }
                 inner.bounded_loop = variable.is_some() && finite && count.is_some();
                 inner.conditional_append = false;
@@ -2050,6 +2387,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         completed += 1;
                         if !root
                             || inner.bindings == prior.bindings
+                                && inner.pipeline_input == prior.pipeline_input
+                                && inner.named_dirs == prior.named_dirs
                             || count.is_some_and(|count| completed >= count)
                         {
                             break;
@@ -2169,6 +2508,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     completed += 1;
                     branches.push(inner.clone());
                     if inner.bindings == prior.bindings
+                        && inner.pipeline_input == prior.pipeline_input
+                        && inner.named_dirs == prior.named_dirs
                         && inner.directory.current == prior.directory.current
                         && inner.directory.alternatives == prior.directory.alternatives
                     {
@@ -2321,7 +2662,12 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             &word.raw,
             &word.syntax,
             &super::words::ExpansionContext {
+                named_dirs: &BTreeMap::new(),
+                zsh: false,
+                assignments: &[],
                 variables: &variables,
+                unknown_variables: &scope.unknown_parameters(&variables),
+                deadline: self.deadline,
                 runtime_variables: &BTreeSet::new(),
                 pattern_variables: &scope.pattern_contexts(&variables),
                 cwd: &cwd,
@@ -2569,6 +2915,61 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
         Ok(true)
     }
+    fn named_directory_changes(&mut self, args: &[crate::record::Word], scope: &mut Scope) {
+        if !scope.zsh
+            || !args.iter().any(|arg| {
+                arg.strip_prefix('-')
+                    .is_some_and(|flags| flags.contains('d'))
+            })
+        {
+            return;
+        }
+        if args.iter().any(|arg| {
+            arg.expands
+                || arg.cardinality_unknown
+                || arg.globs
+                || arg.shell_matches
+                || arg.runtime_unknown
+        }) {
+            self.output.gap(CoverageGap::UnsupportedShellSyntax);
+            return;
+        }
+        if args.iter().any(|arg| {
+            arg.strip_prefix('-')
+                .is_some_and(|flags| flags.contains('f'))
+        }) {
+            self.output.gap(CoverageGap::IdentityBound);
+            return;
+        }
+        if args.iter().any(|arg| {
+            arg.strip_prefix('-')
+                .is_some_and(|flags| flags.contains('r'))
+        }) {
+            scope.named_dirs = std::rc::Rc::new(BTreeMap::new());
+        }
+        for arg in args.iter().filter(|arg| !arg.starts_with('-')) {
+            if let Some((name, value)) = arg.split_once('=') {
+                if name.is_empty()
+                    || !name
+                        .bytes()
+                        .all(|ch| ch.is_ascii_alphanumeric() || b"_.-".contains(&ch))
+                {
+                    self.output.gap(CoverageGap::UnsupportedShellSyntax);
+                    continue;
+                }
+                if !scope.named_dirs.get(name).is_some_and(|values| {
+                    matches!(values.as_slice(), [BindingValue::Known(old)] if old == value)
+                }) {
+                    std::rc::Rc::make_mut(&mut scope.named_dirs)
+                        .insert(name.into(), vec![BindingValue::Known(value.into())]);
+                }
+            } else if !scope.named_dirs.contains_key(&arg.text) {
+                std::rc::Rc::make_mut(&mut scope.named_dirs)
+                    .insert(arg.text.clone(), vec![BindingValue::RuntimeUnknown(None)]);
+            }
+        }
+    }
+
     fn unset(&mut self, argv: &[crate::record::Word], scope: &mut Scope) {
         let mut functions = false;
         let mut options = true;
@@ -2595,6 +2996,21 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     self.functions.remove(&word.text);
                 }
             } else {
+                if scope.zsh
+                    && let Some(alias) = cdpath_alias(&word.text)
+                    && let Some(binding) = scope.bindings.get_mut(alias)
+                {
+                    binding.values = super::arrays::bash_only(
+                        binding
+                            .bash_values
+                            .as_deref()
+                            .cloned()
+                            .unwrap_or_else(|| binding.values.clone()),
+                    );
+                    binding
+                        .values
+                        .push(BindingValue::RuntimeUnknown(Some(String::new())));
+                }
                 let prefix = format!("{}[", word.text);
                 scope
                     .bindings
@@ -2735,6 +3151,47 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             rejected = true;
         }
         let known_input = modeled && !rejected && input_fd == 0;
+        if known_input
+            && !targets.iter().any(|target| {
+                matches!(
+                    target.direction,
+                    crate::record::Direction::In
+                        | crate::record::Direction::Heredoc
+                        | crate::record::Direction::Herestring
+                )
+            })
+        {
+            scope.pipeline_input = input.as_ref().map(|values| {
+                let mut remaining = Vec::new();
+                for value in values {
+                    let boundary = value.find(delimiter).unwrap_or(value.len());
+                    let prefix = &value[..boundary];
+                    let consumed = if let Some(count) =
+                        count.filter(|count| *count <= prefix.chars().count())
+                    {
+                        value
+                            .char_indices()
+                            .nth(count)
+                            .map_or(value.len(), |(at, _)| at)
+                    } else {
+                        boundary
+                            + if boundary < value.len() {
+                                delimiter.len_utf8()
+                            } else {
+                                0
+                            }
+                    };
+                    let rest = value[consumed..].to_owned();
+                    if !remaining.contains(&rest) {
+                        remaining.push(rest);
+                    }
+                    if count.is_some() && !remaining.contains(value) {
+                        remaining.push(value.clone());
+                    }
+                }
+                remaining
+            });
+        }
         if let Some(name) = array_name.filter(|_| !rejected) {
             let values = input.as_ref().filter(|_| known_input).map(|values| {
                 values
@@ -2918,6 +3375,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     .bindings
                     .entry(word.text.clone())
                     .or_insert_with(|| Binding {
+                        bash_values: None,
                         values: vec![BindingValue::RuntimeUnknown(None)],
                         exported,
                         arithmetic: false,
@@ -2968,6 +3426,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                         .bindings
                         .entry(name.into())
                         .or_insert_with(|| Binding {
+                            bash_values: None,
                             values: vec![BindingValue::RuntimeUnknown(None)],
                             exported: false,
                             arithmetic: false,
@@ -3286,6 +3745,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }) {
             scope.relative_glob_moves += 1;
         }
+        let mut home_targets = Vec::new();
         let target = if let Some(operand) = operand {
             args[operand].text.clone()
         } else if program == "cd"
@@ -3296,7 +3756,22 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     })
             })
         {
-            self.frontend.host.home.into()
+            let Some(binding) = scope.bindings.get("HOME") else {
+                return;
+            };
+            for value in &binding.values {
+                if let BindingValue::Known(value) = value {
+                    if !home_targets.contains(value) {
+                        home_targets.push(value.clone());
+                    }
+                } else {
+                    self.output.gap(CoverageGap::IdentityBound);
+                }
+            }
+            let Some(target) = home_targets.first() else {
+                return;
+            };
+            target.clone()
         } else {
             return;
         };
@@ -3312,7 +3787,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let physical = modes.contains(&b'P')
             && operand.is_none_or(|i| !args[i].expands && !args[i].globs && !args[i].shell_matches);
         let disputed = physical && modes.last() == Some(&b'L');
-        let mut targets = vec![target.clone()];
+        let mut targets = if home_targets.is_empty() {
+            vec![target.clone()]
+        } else {
+            home_targets
+        };
         let oldpwd = program == "cd" && target == "-";
         if oldpwd {
             targets.clear();
@@ -3390,6 +3869,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                             targets.push(path);
                         }
                     }
+                } else if binding.bash_values.is_some()
+                    && !matches!(value, BindingValue::RuntimeUnknown(Some(value)) if value.is_empty())
+                {
+                    self.output.gap(CoverageGap::IdentityBound);
                 } else if matches!(
                     value,
                     BindingValue::RepeatedFields(_) | BindingValue::Undetermined
@@ -3582,24 +4065,185 @@ pub(super) fn identifier(name: &str) -> bool {
             .all(|(i, b)| b == b'_' || b.is_ascii_alphabetic() || i > 0 && b.is_ascii_digit())
 }
 
-fn compatible_arguments(previous: &[crate::record::Word], choice: &[crate::record::Word]) -> bool {
-    previous
-        .iter()
-        .filter(|word| !matches!(word.role, Role::Assign | Role::Precommand))
-        .all(|left| {
-            choice.iter().all(|right| {
-                left.binding_candidates.iter().all(|(name, value)| {
-                    right
-                        .binding_candidates
-                        .get(name)
-                        .is_none_or(|other| other == value)
-                })
+#[derive(Clone)]
+struct ArgumentAlternative {
+    words: Rc<Vec<crate::record::Word>>,
+    bindings: Rc<BTreeMap<String, BTreeSet<String>>>,
+}
+
+impl ArgumentAlternative {
+    fn new(words: Vec<crate::record::Word>) -> Self {
+        let mut alternative = Self {
+            words: Rc::new(words),
+            bindings: Rc::default(),
+        };
+        let words = alternative.words.clone();
+        alternative.include_bindings(&words);
+        alternative
+    }
+
+    fn include_bindings(&mut self, words: &[crate::record::Word]) {
+        // A multi-field expansion can carry different values for the same
+        // binding. Later choices must agree with every preceding value.
+        for word in words
+            .iter()
+            .filter(|word| !matches!(word.role, Role::Assign | Role::Precommand))
+        {
+            for (name, value) in &word.binding_candidates {
+                if !self
+                    .bindings
+                    .get(name)
+                    .is_some_and(|values| values.contains(value))
+                {
+                    Rc::make_mut(&mut self.bindings)
+                        .entry(name.clone())
+                        .or_default()
+                        .insert(value.clone());
+                }
+            }
+        }
+    }
+
+    fn compatible(&self, choice: &[crate::record::Word], #[cfg(test)] checks: &mut usize) -> bool {
+        choice.iter().all(|word| {
+            #[cfg(test)]
+            {
+                *checks += 1;
+            }
+            word.binding_candidates.iter().all(|(name, value)| {
+                self.bindings
+                    .get(name)
+                    .is_none_or(|values| values.iter().all(|previous| previous == value))
             })
         })
+    }
+
+    fn extend(&mut self, choice: &[crate::record::Word], #[cfg(test)] copies: &mut usize) {
+        #[cfg(test)]
+        {
+            *copies += choice.len();
+            if Rc::strong_count(&self.words) > 1 {
+                *copies += self.words.len();
+            }
+        }
+        self.include_bindings(choice);
+        Rc::make_mut(&mut self.words).extend(choice.iter().cloned());
+    }
+
+    fn into_words(self) -> Vec<crate::record::Word> {
+        Rc::try_unwrap(self.words).unwrap_or_else(|shared| shared.as_ref().clone())
+    }
 }
 
 #[cfg(test)]
 mod candidate_cost {
+    #[test]
+    fn single_choice_argv_copies_grow_linearly() {
+        for prefix in ["cat", "F=public cat", "env F=public cat", "cat -n"] {
+            let counts = [64, 128, 256].map(|width| {
+                let source = format!("{prefix} {}", vec!["pub.txt"; width].join(" "));
+                let output = crate::shell::observe(
+                    &source,
+                    crate::shell::Arm::Brush,
+                    "/synthetic/home",
+                    "/synthetic/project",
+                    true,
+                )
+                .unwrap();
+                assert!(output.gaps.is_empty(), "{prefix}: {:?}", output.gaps);
+                let copies = output.argv_prefix_word_copies;
+                println!("{prefix}: width={width}, argv word copies={copies}");
+                assert!(
+                    copies > 0 && copies <= 4 * (width + 4),
+                    "{prefix}: {copies}"
+                );
+                copies
+            });
+            for pair in counts.windows(2) {
+                assert!(pair[1] <= pair[0] * 3, "{prefix}: {counts:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn literal_argv_compatibility_checks_grow_linearly() {
+        for width in [64, 128, 256] {
+            let source = format!("cat {}", vec!["pub.txt"; width].join(" "));
+            let output = crate::shell::observe(
+                &source,
+                crate::shell::Arm::Brush,
+                "/synthetic/home",
+                "/synthetic/project",
+                true,
+            )
+            .unwrap();
+            let checks = output.argument_compatibility_checks;
+            println!("width={width}, argv compatibility checks={checks}");
+            assert!(checks <= 2 * (width + 1), "{checks}");
+        }
+    }
+
+    #[test]
+    fn compatible_bound_argv_extensions_grow_linearly() {
+        for width in [64, 128, 256] {
+            let source = format!(
+                "if true; then p=public; else p=other; fi; cat {}",
+                vec!["\"$p\""; width].join(" ")
+            );
+            let output = crate::shell::observe(
+                &source,
+                crate::shell::Arm::Brush,
+                "/synthetic/home",
+                "/synthetic/project",
+                true,
+            )
+            .unwrap();
+            assert!(output.gaps.is_empty(), "{:?}", output.gaps);
+            let commands = output
+                .script
+                .commands
+                .iter()
+                .filter(|command| command.argv.first().is_some_and(|word| word == "cat"))
+                .collect::<Vec<_>>();
+            assert_eq!(commands.len(), 2);
+            for (command, value) in commands.iter().zip(["public", "other"]) {
+                assert_eq!(command.argv.len(), width + 1);
+                assert!(command.argv[1..].iter().all(|word| word == value));
+            }
+            println!(
+                "bound width={width}, copies={}, checks={}",
+                output.argv_prefix_word_copies, output.argument_compatibility_checks
+            );
+            assert!(output.argv_prefix_word_copies <= 12 * (width + 4));
+            assert!(output.argument_compatibility_checks <= 12 * (width + 4));
+        }
+    }
+
+    #[test]
+    fn argument_compatibility_retains_every_prior_binding_value() {
+        let word = |value: &str, role| {
+            let mut word = crate::record::Word::literal(value.into());
+            word.role = role;
+            word.binding_candidates.insert("p".into(), value.into());
+            word
+        };
+        let prefix = super::ArgumentAlternative::new(vec![
+            word("public", crate::record::Role::Arg),
+            word("other", crate::record::Role::Arg),
+        ]);
+        let mut checks = 0;
+        assert!(
+            !prefix.compatible(&[word("other", crate::record::Role::Arg)], &mut checks),
+            "a choice must agree with both prior values, not only the last"
+        );
+        assert!(prefix.compatible(&[crate::record::Word::literal("plain".into())], &mut checks));
+        let ignored = super::ArgumentAlternative::new(vec![
+            word("public", crate::record::Role::Assign),
+            word("public", crate::record::Role::Precommand),
+        ]);
+        assert!(ignored.compatible(&[word("other", crate::record::Role::Arg)], &mut checks));
+    }
+
     #[test]
     fn unknown_loop_candidates_converge_before_nested_branching() {
         let count = |width, depth| {

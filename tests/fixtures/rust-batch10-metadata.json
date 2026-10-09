@@ -3,7 +3,7 @@
  {"id":"credential-stat","partition":"control","expected":"N","input":{"command":"stat .npmrc"}},
  {"id":"credential-wc","partition":"control","expected":"N","input":{"command":"wc -c .npmrc"}},
  {"id":"private-file-metadata","partition":"control","expected":"N","input":{"command":"file $H/.ssh/id_example"}},
- {"id":"private-file-move","partition":"control","expected":"N","input":{"command":"mv $H/.ssh/id_example $H/.ssh/id_second"}},
+ {"id":"private-file-move","partition":"protected","expected":"D","input":{"command":"mv $H/.ssh/id_example $H/.ssh/id_second"}},
  {"id":"appdata-metadata","partition":"protected","expected":"D","input":{"command":"stat $C/x"}},
  {"id":"credential-read","partition":"protected","expected":"D","input":{"command":"cat .npmrc"}}
 ]}

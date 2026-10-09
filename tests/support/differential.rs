@@ -495,11 +495,11 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                 let excluded = recovery["excluded_scope"].to_string();
                 changed_contract_match &= match contract["expected_coverage"]["cause"].as_str() {
                     Some("identity_bound") => {
-                        wire.stderr.contains("unresolved operation")
+                        wire.stderr.contains("ordinary absolute path")
                             && excluded.contains("unresolved resource identity")
                     }
                     Some("inspection_budget") => {
-                        wire.stderr.contains("unsupported or unresolved operation")
+                        wire.stderr.contains("inspection budget")
                             && excluded.contains("over-budget function expansion")
                     }
                     Some("unsupported_shell_syntax") => {

@@ -5,6 +5,8 @@ use std::{
 
 #[test]
 fn native_limits_are_completed_refusals() {
+    let advice: serde_json::Value =
+        serde_json::from_str(include_str!("../fixtures/rust-refusal-advice.json")).unwrap();
     let fixture = crate::support::Fixture::new();
     let event = |command: String, cwd: &str| {
         serde_json::to_vec(
@@ -13,13 +15,13 @@ fn native_limits_are_completed_refusals() {
         .unwrap()
     };
     let cases = [
-        (event("true".into(), "relative"), "absolute cwd", 2),
+        (event("true".into(), "relative"), "relative", 2),
         (
             event(
                 "printf public".repeat(agent_guard_rust::limits::MAX_INPUT_BYTES),
                 &fixture.project,
             ),
-            "input byte limit",
+            "bytes",
             2,
         ),
         (
@@ -30,7 +32,7 @@ fn native_limits_are_completed_refusals() {
             "nesting",
             2,
         ),
-        (vec![0xff], "UTF-8", 2),
+        (vec![0xff], "encoding", 2),
         (
             event(format!("printf '{}'", "p".repeat(80_000)), &fixture.project),
             "",
@@ -68,7 +70,12 @@ fn native_limits_are_completed_refusals() {
                 if *status == 0 {
                     assert!(text.is_empty());
                 } else {
-                    assert!(text.contains(reason), "{consumer} {mode}: {text}");
+                    for field in ["reason", "alternative"] {
+                        assert!(
+                            text.contains(advice["limits"][reason][field].as_str().unwrap()),
+                            "{consumer} {mode}: {text}"
+                        );
+                    }
                     assert!(text.contains("recheck"));
                     assert!(!text.contains("repair the failed check"));
                 }

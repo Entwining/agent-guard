@@ -22,6 +22,8 @@ fn metadata_roles_preserve_appdata_and_content_read_protection() {
                 reason.rule,
                 if row["id"] == "appdata-metadata" {
                     DenialRule::AppData
+                } else if row["id"] == "private-file-move" {
+                    DenialRule::ResourceChange
                 } else {
                     DenialRule::File
                 }

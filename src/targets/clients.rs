@@ -6,7 +6,7 @@ struct Spec {
     walk: Walk,
     options: &'static [(&'static str, Effect)],
     remote: bool,
-    destination: bool,
+    destination: Option<Effect>,
 }
 
 fn spec(program: &str) -> Spec {
@@ -15,13 +15,23 @@ fn spec(program: &str) -> Spec {
         walk: Walk::Visible,
         options: &[],
         remote: false,
-        destination: false,
+        destination: None,
     };
     match program {
         "cp" | "install" => {
-            // A copy destination is written, not read for its existing contents.
-            spec.destination = true;
-            spec.options = &[("-t", Effect::Write), ("--target-directory", Effect::Write)];
+            spec.destination = Some(if program == "cp" {
+                Effect::Change
+            } else {
+                Effect::Write
+            });
+            spec.options = if program == "cp" {
+                &[
+                    ("-t", Effect::Change),
+                    ("--target-directory", Effect::Change),
+                ]
+            } else {
+                &[("-t", Effect::Write), ("--target-directory", Effect::Write)]
+            };
             if program == "cp" {
                 spec.walk = Walk::None;
             }
@@ -133,7 +143,7 @@ impl<'a> Context<'a> {
         })
     }
     fn fallback(&mut self) {
-        let into = self.spec.destination
+        let into = self.spec.destination.is_some()
             && self.words.iter().any(|word| {
                 word.role != Role::Path
                     && (word.starts_with("--t")
@@ -188,11 +198,11 @@ impl<'a> Context<'a> {
                 continue;
             };
             let mut effect = self.option_effect(index).unwrap_or(self.spec.operand);
-            if (self.spec.remote || self.spec.destination && !into)
+            if (self.spec.remote || self.spec.destination.is_some() && !into)
                 && Some(index) == last
                 && !word.globs
             {
-                effect = Effect::Write;
+                effect = self.spec.destination.unwrap_or(Effect::Write);
             }
             if self.spec.remote && remote(&word.value) {
                 effect = Effect::Name;

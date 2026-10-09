@@ -7,6 +7,8 @@ use agent_guard_rust::{
 
 #[test]
 fn check_failures_block_each_consumer() {
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../fixtures/rust-refusal-advice.json")).unwrap();
     for consumer in [Consumer::Claude, Consumer::Codex, Consumer::Pi] {
         for kind in [
             CheckErrorKind::MalformedInput,
@@ -17,10 +19,18 @@ fn check_failures_block_each_consumer() {
             CheckErrorKind::Deadline,
             CheckErrorKind::Cancelled,
             CheckErrorKind::BrokenEnrollment,
+            CheckErrorKind::RelativeCwd,
+            CheckErrorKind::InvalidEncoding,
         ] {
             let wire = render(consumer, &Err(CheckError { kind }));
             assert_eq!(wire.exit, 2, "{consumer:?} {kind:?}");
-            let sentence = "The agent guard could not complete this check, so the call is blocked. Have the checker owner repair the failed check, then recheck the call before running it.";
+            let row = fixture["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["kind"] == format!("{kind:?}"))
+                .unwrap();
+            let sentence = row["sentence"].as_str().unwrap();
             let expected = if consumer == Consumer::Claude {
                 format!(
                     "DENIED: {sentence} Do NOT bypass this restriction or retry the same blocked command.\n"
@@ -45,6 +55,8 @@ fn check_failures_block_each_consumer() {
 #[test]
 fn unresolved_operations_offer_an_explicit_public_path() {
     use agent_guard_rust::{Coverage, CoverageGap, Disposition, Evaluation, Outcome};
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../fixtures/rust-refusal-advice.json")).unwrap();
     for consumer in [Consumer::Claude, Consumer::Codex, Consumer::Pi] {
         for cause in [
             CoverageGap::IdentityBound,
@@ -58,11 +70,17 @@ fn unresolved_operations_offer_an_explicit_public_path() {
                     disposition: Disposition::RejectUnsupportedSyntax,
                     recovery: None,
                 },
-                coverage: Coverage::LimitedPreflight(vec![cause]),
+                coverage: Coverage::LimitedPreflight(vec![cause.clone()]),
                 effects: Vec::new(),
             });
             let wire = render(consumer, &result);
-            let sentence = "The agent guard cannot inspect this unsupported or unresolved operation. Replace the unsupported construct with a Bash-compatible command naming an explicit public path, then recheck it.";
+            let row = fixture["refusals"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["kind"] == format!("{cause:?}"))
+                .unwrap();
+            let sentence = row["sentence"].as_str().unwrap();
             let expected = if consumer == Consumer::Claude {
                 format!(
                     "DENIED: {sentence} Do NOT bypass this restriction or retry the same blocked command.\n"

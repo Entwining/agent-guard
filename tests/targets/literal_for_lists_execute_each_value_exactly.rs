@@ -18,7 +18,7 @@ fn tar_exclude_is_a_pattern_name() {
 }
 
 #[test]
-fn rm_operand_is_metadata() {
+fn rm_environment_operand_is_a_resource_change() {
     contract_rows(&["shell[0]"]);
 }
 

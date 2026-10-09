@@ -106,14 +106,15 @@ fn pwd_word_semantics() {
 }
 
 #[test]
-fn unresolved_word_fragments() {
+fn word_fragments_distinguish_unset_from_runtime_values() {
     let words = argv(
         r#"ls "$ROOT/Library/Containers" "${D:+~/Library/Containers/x}" "${value:-$API_KEY}""#,
     );
     assert_eq!(words[1].text, "$ROOT/Library/Containers");
     assert!(words[1].expands);
     assert_eq!(words[1].vars, ["ROOT"]);
-    assert!(words[2].expands);
+    assert_eq!(words[2].text, "");
+    assert!(!words[2].expands && !words[2].globs);
     assert_eq!(words[3].vars, ["value", "API_KEY"]);
     let children = argv(
         r#"echo $((1+$COUNT)) "${v/$PATTERN/$REPLACEMENT}" "${v:$OFFSET:$LENGTH}" "${a[$INDEX]}" "$@" "$1""#,
