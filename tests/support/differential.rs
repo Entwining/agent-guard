@@ -1,4 +1,7 @@
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "Each test binary that includes this module uses a different subset of it."
+)]
 #![expect(
     clippy::disallowed_methods,
     reason = "This fixture manages synthetic link identities and verifies their metadata without reading contents."

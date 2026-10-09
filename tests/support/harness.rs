@@ -1,4 +1,7 @@
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "Each test binary that includes this module uses a different subset of it."
+)]
 
 use agent_guard_rust::{
     CheckError, CheckErrorKind, Context, Coverage, CoverageGap, Disposition, Evaluation, Event,
