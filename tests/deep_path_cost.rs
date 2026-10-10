@@ -25,7 +25,8 @@ fn command(form: &str, depth: usize, basename: &str) -> String {
     match form {
         "literal" => format!("cat {}{basename}", "p/".repeat(depth)),
         "parameter-prefix" => format!("cat $PWD/{}{basename}", "p/".repeat(depth)),
-        "repeated-parameter" => format!("cat {}/{basename}", "$PWD".repeat(depth)),
+        // A fixed value keeps the expanded depth equal to `depth`; `$PWD` would multiply it by the host's temporary root.
+        "repeated-parameter" => format!("p=p/; cat {}{basename}", "${p}".repeat(depth)),
         _ => panic!("unknown deep-path form {form}"),
     }
 }
