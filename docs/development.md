@@ -4,7 +4,7 @@ This guide is for maintainers who change, check or release `agent-guard`. Instal
 
 ## Toolchain
 
-Use the Rust toolchain pinned in `rust-toolchain.toml` (1.98.1) for the production runner, development tools and runtime harnesses. Cargo's exact parser pins preserve policy semantics, and `Cargo.lock` binds dependency resolution.
+Use the Rust toolchain pinned in `rust-toolchain.toml` (1.99.0) for the production runner, development tools and runtime harnesses. Cargo's exact parser pins preserve policy semantics, and `Cargo.lock` binds dependency resolution.
 
 Install cargo-deny 0.20.2 and cargo-about 0.9.2 before running the checks:
 
