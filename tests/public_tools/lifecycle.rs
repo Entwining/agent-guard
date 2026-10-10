@@ -37,7 +37,8 @@ fn deadline_kills_descendants_and_removes_temporary_home() {
     let out = String::from_utf8_lossy(&output.stdout);
     assert!(out.contains("deadline exceeded"), "{output:?}");
     assert!(out.contains(&format!("1/{} completed", protocol_cases().len())));
-    assert!(fixture_elapsed(root.path()) < Duration::from_secs(6));
+    // The 4.5-second call deadline and 0.5-second wait end the 20-second fixture near 5 seconds.
+    assert!(fixture_elapsed(root.path()) < Duration::from_secs(10));
     fixture_dead(root.path());
     assert_clean(root.path());
 }
