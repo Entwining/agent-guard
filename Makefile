@@ -16,6 +16,7 @@ define validate_external_directory
 	done
 endef
 
+# Everything the package ships is staged here, so that a packaging change ships with its release once the tap's formula installs this package.
 build:
 	$(call validate_external_directory,$(OUT),OUT)
 	$(call validate_external_directory,$(package_target),CARGO_TARGET_DIR)
@@ -24,6 +25,10 @@ build:
 	install -m 755 "$(package_target)/release/agent-guard-native" "$(OUT)/bin/agent-guard-native"
 	install -m 755 bin/agent-guard "$(OUT)/bin/agent-guard"
 	install -m 644 VERSION LICENSE README.md "$(OUT)/"
+# cargo metadata needs every target's crates, which no build fetches; cargo-about only logs a dropped notice, such as a clarification whose checksum no longer matches, so any warning or error fails.
+	$(CARGO) fetch --locked
+	$(CARGO) about generate --frozen --fail --output-file "$(OUT)/LICENSE-THIRD-PARTY.md" about.hbs 2> "$(package_target)/cargo-about.log" || { cat "$(package_target)/cargo-about.log" >&2; exit 1; }
+	@cat "$(package_target)/cargo-about.log" >&2; ! grep -Eq 'WARN|ERROR' "$(package_target)/cargo-about.log"
 
 check: rust-check
 
@@ -34,8 +39,3 @@ rust-check:
 	CARGO_BUILD_WARNINGS=deny $(CARGO) clippy --locked --all-targets
 	$(CARGO) test --locked
 	$(CARGO) deny --locked check
-# The Homebrew formula renders these notices into each bottle; cargo metadata needs every target's crates, which no build fetches.
-# cargo-about only logs a dropped notice, such as a clarification whose checksum no longer matches, so any warning or error fails.
-	$(CARGO) fetch --locked
-	$(CARGO) about generate --frozen --fail --output-file "$(CARGO_TARGET_DIR)/LICENSE-THIRD-PARTY.md" about.hbs 2> "$(CARGO_TARGET_DIR)/cargo-about.log" || { cat "$(CARGO_TARGET_DIR)/cargo-about.log" >&2; exit 1; }
-	@cat "$(CARGO_TARGET_DIR)/cargo-about.log" >&2; ! grep -Eq 'WARN|ERROR' "$(CARGO_TARGET_DIR)/cargo-about.log"

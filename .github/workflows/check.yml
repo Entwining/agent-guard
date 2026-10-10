@@ -46,11 +46,13 @@ jobs:
           echo "$RUNNER_TEMP/cargo-about" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/cargo-about/cargo-about" --version
       - name: Check the implementation and development tools
-        # cargo-deny fetches the RustSec advisory database and cargo fetches every target's crates; this check requires network access.
+        # cargo-deny fetches the RustSec advisory database; this check requires network access.
         run: make check CARGO_TARGET_DIR="$RUNNER_TEMP/cargo-target"
       - name: Build and verify the Rust package
+        # The build fetches every target's crates to render the license notices; it requires network access.
         run: |
           test "$(uname -m)" = arm64
           make build OUT="$RUNNER_TEMP/package" CARGO_TARGET_DIR="$RUNNER_TEMP/cargo-target"
           test "$("$RUNNER_TEMP/package/bin/agent-guard" --version)" = "agent-guard $(cat VERSION)"
           cargo run --locked --bin agent-guard-verify -- "$RUNNER_TEMP/package/bin/agent-guard"
+          test -s "$RUNNER_TEMP/package/LICENSE-THIRD-PARTY.md"
