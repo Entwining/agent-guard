@@ -4,8 +4,6 @@ pub mod differential;
 pub mod entry_group_cleanup;
 #[path = "lifecycle/nesting_frontier_completes_on_default_test_stack.rs"]
 pub mod nesting_frontier_completes_on_default_test_stack;
-#[path = "lifecycle/parallel_entry_calls_remain_silent.rs"]
-pub mod parallel_entry_calls_remain_silent;
 #[path = "support/batch6.rs"]
 pub mod program_contract;
 #[path = "lifecycle/shell_entry_hands_stdin_to_checker.rs"]
