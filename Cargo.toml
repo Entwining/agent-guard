@@ -61,6 +61,11 @@ rustix = { version = "=1.1.5", features = ["process", "fs"] }
 [profile.dev]
 # Tests run the checker under its production deadline, and an unoptimized build runs it about ten times slower than the package.
 opt-level = 1
+# Panics keep file and line; full debuginfo only slows the build and grows the target directory.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
 
 [profile.release]
 # Keep the tests' overflow panic, which fails closed, instead of deciding on a wrapped value.
