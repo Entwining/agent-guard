@@ -23,10 +23,10 @@ build:
 	install -m 755 "$(CARGO_TARGET_DIR)/release/agent-guard-native" "$(OUT)/bin/agent-guard-native"
 	install -m 755 bin/agent-guard "$(OUT)/bin/agent-guard"
 	install -m 644 VERSION LICENSE README.md "$(OUT)/"
-# cargo metadata needs every target's crates, which no build fetches; cargo-about only logs a dropped notice, such as a clarification whose checksum no longer matches, so any warning or error fails.
+# cargo metadata needs every target's crates, which no build fetches; cargo-about only logs a dropped notice, such as a clarification whose checksum no longer matches, so any warning or error fails, and so does an unreadable log, because grep reports a read error as status 2.
 	$(CARGO) fetch --locked
 	$(CARGO) about generate --frozen --fail --output-file "$(OUT)/LICENSE-THIRD-PARTY.md" about.hbs 2> "$(CARGO_TARGET_DIR)/cargo-about.log" || { cat "$(CARGO_TARGET_DIR)/cargo-about.log" >&2; exit 1; }
-	@cat "$(CARGO_TARGET_DIR)/cargo-about.log" >&2; ! grep -Eq 'WARN|ERROR' "$(CARGO_TARGET_DIR)/cargo-about.log"
+	@cat "$(CARGO_TARGET_DIR)/cargo-about.log" >&2 && { grep -Eq 'WARN|ERROR' "$(CARGO_TARGET_DIR)/cargo-about.log"; test $$? -eq 1; }
 
 check: rust-check
 
