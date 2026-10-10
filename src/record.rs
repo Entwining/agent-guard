@@ -20,6 +20,9 @@ pub struct Word {
     // Quoting fixes argv width while the value's repetition count stays unknown.
     pub cardinality_unknown: bool,
     pub field_count_unknown: bool,
+    // Every source word up to this one expands to a known number of argv words,
+    // so its argv position is exact.
+    pub fixed_position: bool,
     pub vars: Vec<String>,
     pub role: Role,
     pub value: String,
@@ -49,6 +52,7 @@ impl Word {
             binding_candidates: std::collections::BTreeMap::new(),
             cardinality_unknown: false,
             field_count_unknown: false,
+            fixed_position: false,
             vars: Vec::new(),
             role: Role::Arg,
             pwd: false,

@@ -183,8 +183,9 @@ fn substitution_piece(
     } else {
         out.word.text.push_str(&raw[piece.start_index..right + 1]);
         out.word.expands = true;
-        out.unknown_splitting |= !quoted;
     }
+    // Substituted output is not field-split here, even when its text is known.
+    out.unknown_splitting |= !quoted;
     Ok((covered, true))
 }
 

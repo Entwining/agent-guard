@@ -45,6 +45,20 @@ pub(super) fn infer_listing(
     };
     for (start, end) in children {
         let mut nested = child(command, &args[start..end], &base);
+        // A batch placeholder becomes one argument per match, so the arguments
+        // from it onward lose their written positions.
+        if program == "fd" && ["-X", "--exec-batch"].contains(&args[start - 1].as_str()) {
+            let placeholders = ["{}", "{/}", "{//}", "{.}", "{/.}"];
+            if let Some(first) = nested.argv.iter().position(|word| {
+                placeholders
+                    .iter()
+                    .any(|placeholder| word.contains(placeholder))
+            }) {
+                for word in &mut nested.argv[first..] {
+                    word.fixed_position = false;
+                }
+            }
+        }
         if program == "fd" {
             nested.items = Some(crate::record::Items {
                 root: item_root.clone(),

@@ -9,6 +9,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         depth: usize,
     ) -> Result<Vec<Vec<Vec<crate::record::Word>>>, CheckError> {
         let mut arguments = Vec::new();
+        let mut fixed = true;
         for raw in argv {
             let declaration = argv.first().is_some_and(|w| {
                 matches!(w.raw.as_str(), "export" | "local" | "declare" | "typeset")
@@ -36,11 +37,25 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 }
             } else {
                 for expanded in self.expand(raw, scope, depth)? {
+                    // Known field splitting reaches inference as the split and
+                    // unsplit choices below. Unknown splitting, list expansion and
+                    // pathname expansion do not, and can move every later argument.
+                    fixed &= !expanded.unknown_splitting
+                        && !expanded.positional
+                        && expanded.split.iter().chain([&expanded.word]).all(|word| {
+                            !(word.globs
+                                || word.shell_matches
+                                || word.cardinality_unknown
+                                || word.field_count_unknown)
+                        });
                     choices.push(expanded.split);
                     if !expanded.positional {
                         choices.push(vec![expanded.word]);
                     }
                 }
+            }
+            for word in choices.iter_mut().flatten() {
+                word.fixed_position = fixed;
             }
             choices.dedup();
             arguments.push(choices);

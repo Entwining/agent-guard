@@ -111,6 +111,7 @@ pub(in crate::shell) fn expand(
     if splitting && context.runtime_variables.contains("IFS") {
         out.word.expands = true;
         out.word.runtime_unknown = true;
+        out.unknown_splitting = true;
     }
     out.split = split_fields(&mut out, context, splitting);
     Ok(out)

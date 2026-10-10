@@ -69,6 +69,11 @@ pub(super) fn infer(
             claimed = readers::filter(program, args);
             generic_walk = Some(Walk::Visible);
         }
+        "gh" | "aws" => {
+            readers::unknown(program, args, effects);
+            claimed = readers::output_query(program, args);
+            generic_walk = Some(Walk::Visible);
+        }
         "rm" | "mv" | "ln" => effects
             .targets
             .extend(resource_changes::infer(program, args, cwd, host)),
