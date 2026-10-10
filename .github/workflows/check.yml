@@ -25,7 +25,12 @@ jobs:
         run: rustup toolchain install
       - name: Share one Cargo target directory
         # make reads it from the environment, and so does every direct cargo call, such as the verifier's.
-        run: echo "CARGO_TARGET_DIR=$RUNNER_TEMP/cargo-target" >> "$GITHUB_ENV"
+        # It sits beside the checkout because the cache step only accepts a target relative to the workspace.
+        run: echo "CARGO_TARGET_DIR=${GITHUB_WORKSPACE%/*}/cargo-target" >> "$GITHUB_ENV"
+      - name: Cache dependency builds
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: ". -> ../cargo-target"
       - name: Install cargo-deny 0.20.2
         shell: bash
         run: |
