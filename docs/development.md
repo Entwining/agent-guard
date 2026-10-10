@@ -10,7 +10,7 @@ Install cargo-deny 0.20.2 and cargo-about 0.9.2 before running the checks:
 
 ```sh
 cargo install --locked --version 0.20.2 cargo-deny
-cargo install --locked --version 0.9.2 cargo-about
+cargo install --locked --version 0.9.2 --features cli cargo-about
 ```
 
 Keep Cargo's executable directory on `PATH` so `cargo deny --version` reports `cargo-deny 0.20.2` and `cargo about --version` reports `cargo-about 0.9.2`. `cargo deny --locked check` fetches the RustSec advisory database and requires network access; advisory, license, ban and source checks remain enabled. CI installs the same versions from the official arm64 macOS release archives and verifies their pinned SHA-256 before extraction.
