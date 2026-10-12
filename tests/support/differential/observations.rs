@@ -65,6 +65,7 @@ pub(super) fn observe_contract(
         cwd: fixture.expand(row["cwd"].as_str().unwrap()),
         zsh_executor: consumer != Consumer::Pi,
         require_execution_owner: false,
+        config_dirs: Vec::new(),
         shell_observation_entries: Cell::new(0),
     };
     let body = serde_json::to_vec(&json!({"tool_name":tool,"tool_input":input})).unwrap();

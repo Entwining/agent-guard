@@ -238,21 +238,30 @@ pub fn observe_with_user(
     user: Option<&str>,
     zsh: bool,
 ) -> Result<Observation, CheckError> {
-    observe_with_deadline(source, arm, home, cwd, user, zsh, None)
+    observe_with_deadline(
+        source,
+        arm,
+        crate::record::HostFacts {
+            home,
+            user,
+            config_dirs: &[],
+        },
+        cwd,
+        zsh,
+        None,
+    )
 }
 
 pub(crate) fn observe_with_deadline(
     source: &str,
     arm: Arm,
-    home: &str,
+    host: crate::record::HostFacts<'_>,
     cwd: &str,
-    user: Option<&str>,
     zsh: bool,
     deadline: Option<std::time::Instant>,
 ) -> Result<Observation, CheckError> {
-    let host = crate::record::HostFacts { home, user };
     let mut observation = Observation::default();
-    let mut scope = statements::Scope::new(home, cwd);
+    let mut scope = statements::Scope::for_host(host, cwd);
     let mut evaluator = statements::Evaluator::new(Frontend { arm, zsh, host }, &mut observation);
     evaluator.deadline = deadline;
     evaluator.source(source, &mut scope, 0)?;

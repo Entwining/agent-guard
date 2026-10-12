@@ -44,6 +44,7 @@ fn probe_fault_stays_fault_with_independently_observed_denial() {
         user: None,
         zsh_executor: true,
         require_execution_owner: false,
+        config_dirs: Vec::new(),
         shell_observation_entries: std::cell::Cell::new(0),
     };
     let bytes =

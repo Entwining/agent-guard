@@ -6,6 +6,7 @@ mod message_roles {
         let host = crate::record::HostFacts {
             home: "/synthetic/home",
             user: None,
+            config_dirs: &[],
         };
         let observation = crate::shell::observe(
             "git commit -m 'public message'",
@@ -61,6 +62,7 @@ mod process_arguments {
                 HostFacts {
                     home: "/synthetic/home",
                     user: None,
+                    config_dirs: &[],
                 },
             );
             assert!(!effects.gaps.contains(&CoverageGap::UnsupportedShellSyntax));
@@ -94,6 +96,7 @@ mod process_arguments {
                     HostFacts {
                         home: "/synthetic/home",
                         user: None,
+                        config_dirs: &[],
                     },
                 );
                 assert!(!effects.gaps.contains(&CoverageGap::InterpreterChosenRead));
@@ -120,6 +123,7 @@ mod record_tests {
         let host = HostFacts {
             home: "/h",
             user: None,
+            config_dirs: &[],
         };
         for source in ["break", "continue", "return", "D=public true"] {
             let observation =
@@ -152,6 +156,7 @@ mod record_tests {
         let host = HostFacts {
             home: "/h",
             user: None,
+            config_dirs: &[],
         };
         let rows: Vec<_> = packet["rows"]
             .as_array()
@@ -206,6 +211,7 @@ mod record_tests {
         let host = HostFacts {
             home: "/h",
             user: Some("fixture-user"),
+            config_dirs: &[],
         };
         let script = crate::shell::observe_with_user(
             source,

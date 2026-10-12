@@ -130,8 +130,22 @@ impl Fixture {
             cwd: self.expand(text(row, "cwd")),
             zsh_executor: consumer != Consumer::Pi,
             require_execution_owner: row["provenance_form"] == "required_execution_domain",
+            config_dirs: self.config_dirs(row),
             shell_observation_entries: Cell::new(0),
         }
+    }
+    /// The row's synthetic config-location environment.
+    pub fn config_dirs(&self, row: &Value) -> Vec<agent_guard_rust::record::ConfigDir> {
+        agent_guard_rust::record::ConfigVariable::ALL
+            .into_iter()
+            .filter_map(|variable| {
+                let path = row["config_dirs"][variable.name()].as_str()?;
+                Some(agent_guard_rust::record::ConfigDir {
+                    variable,
+                    path: self.expand(path),
+                })
+            })
+            .collect()
     }
     pub fn body(&self, row: &Value) -> Vec<u8> {
         if let Some(raw) = row["input"]["raw_event_bytes"].as_str() {

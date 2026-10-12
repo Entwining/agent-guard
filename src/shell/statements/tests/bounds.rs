@@ -46,6 +46,7 @@ fn word_context_product_has_a_finite_bound() {
         host: HostFacts {
             home: "/h",
             user: None,
+            config_dirs: &[],
         },
     };
     let expanded = Evaluator::new(frontend, &mut output)

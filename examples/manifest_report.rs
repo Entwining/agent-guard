@@ -55,6 +55,7 @@ fn main() {
             user: Some("fixture-user".into()),
             zsh_executor: consumer != "pi",
             require_execution_owner: false,
+            config_dirs: Vec::new(),
             shell_observation_entries: std::cell::Cell::new(0),
         };
         for row in &rows {

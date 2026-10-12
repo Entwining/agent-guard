@@ -187,6 +187,7 @@ fn target_preserves_raw_input_and_updates_both_linked_fields() {
         HostFacts {
             home: "/h",
             user: None,
+            config_dirs: &[],
         },
         Effect::Use,
         Walk::Visible,
@@ -289,6 +290,7 @@ fn expands_without_glob_follows_only_public_prefix() {
         HostFacts {
             home: "/h",
             user: None,
+            config_dirs: &[],
         },
         Effect::Use,
         Walk::None,

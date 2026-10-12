@@ -27,6 +27,7 @@ fn observe(source: &str, scope: &mut Scope) -> Observation {
     let host = crate::record::HostFacts {
         home: "/synthetic/home",
         user: None,
+        config_dirs: &[],
     };
     let mut evaluator = Evaluator::new(
         Frontend {
@@ -223,6 +224,7 @@ fn isolated_sources_share_function_tables_and_bodies() {
     let host = crate::record::HostFacts {
         home: "/synthetic/home",
         user: None,
+        config_dirs: &[],
     };
     let mut evaluator = Evaluator::new(
         Frontend {

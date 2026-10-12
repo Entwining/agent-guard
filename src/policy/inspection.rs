@@ -240,9 +240,12 @@ impl Inspection<'_> {
         let observation = shell::observe_with_deadline(
             source,
             self.arm,
-            &self.context.home,
+            crate::record::HostFacts {
+                home: &self.context.home,
+                user: self.context.user.as_deref(),
+                config_dirs: &self.context.config_dirs,
+            },
             cwd,
-            self.context.user.as_deref(),
             self.context.zsh_executor,
             self.deadline,
         )?;
@@ -275,6 +278,7 @@ impl Inspection<'_> {
             crate::record::HostFacts {
                 home: &self.context.home,
                 user: self.context.user.as_deref(),
+                config_dirs: &self.context.config_dirs,
             },
         );
         self.pipeline_content(command.pipeline, &effects, hidden_listings);

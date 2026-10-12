@@ -1,4 +1,5 @@
 use super::{CheckError, Protection, glob};
+use crate::record::{ConfigDir, ConfigVariable};
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -55,6 +56,30 @@ pub(super) fn catalog() -> &'static Catalog {
     })
 }
 
+/// The credential file each client reads from a directory the environment
+/// names, following its own precedence. gh reads `GH_CONFIG_DIR`, then
+/// `XDG_CONFIG_HOME/gh`; glab reads `GLAB_CONFIG_DIR`, then its legacy
+/// `~/.config/glab-cli`, then `XDG_CONFIG_HOME/glab-cli`. The catalog keeps
+/// the default locations.
+fn config_files(dirs: &[ConfigDir]) -> Vec<String> {
+    let path = |variable| {
+        dirs.iter()
+            .find(|dir| dir.variable == variable)
+            .map(|dir| dir.path.trim_end_matches('/'))
+    };
+    let config_home = path(ConfigVariable::XdgConfigHome);
+    let gh = path(ConfigVariable::GhConfigDir)
+        .map(|dir| format!("{dir}/hosts.yml"))
+        .or_else(|| config_home.map(|dir| format!("{dir}/gh/hosts.yml")));
+    let glab = path(ConfigVariable::GlabConfigDir)
+        .map(|dir| format!("{dir}/config.yml"))
+        .or_else(|| config_home.map(|dir| format!("{dir}/glab-cli/config.yml")));
+    gh.into_iter()
+        .chain(glab)
+        .map(|file| super::fold(&file))
+        .collect()
+}
+
 pub(super) struct Domain {
     pub home: String,
     pub library: String,
@@ -105,6 +130,8 @@ pub(super) struct Lexical {
     domains: BTreeMap<String, Domain>,
     matcher: glob::Matcher,
     pub(super) deadline: Option<std::time::Instant>,
+    /// Folded credential files in directories the hook's environment names.
+    config_files: Vec<String>,
     #[cfg(test)]
     pub candidate_evaluations: usize,
     #[cfg(test)]
@@ -123,11 +150,12 @@ struct PathResults {
 }
 
 impl Lexical {
-    pub fn new(deadline: Option<std::time::Instant>) -> Self {
+    pub fn new(deadline: Option<std::time::Instant>, config_dirs: &[ConfigDir]) -> Self {
         Self {
             domains: BTreeMap::new(),
             matcher: glob::Matcher::default(),
             deadline,
+            config_files: config_files(config_dirs),
             #[cfg(test)]
             candidate_evaluations: 0,
             #[cfg(test)]
@@ -137,6 +165,27 @@ impl Lexical {
             #[cfg(test)]
             classified_bytes: 0,
         }
+    }
+
+    /// Whether a search from `path` reaches a config file the environment
+    /// names through visible directories. HOME and its ancestors belong to the
+    /// broad-root rule.
+    pub fn config_root(&self, path: &str, home: &str) -> bool {
+        let path = super::fold(path);
+        let path = path.trim_end_matches('/');
+        if format!("{}/", super::fold(home)).starts_with(&format!("{path}/")) {
+            return false;
+        }
+        self.config_files.iter().any(|file| {
+            file.strip_prefix(path)
+                .and_then(|rest| rest.strip_prefix('/'))
+                .is_some_and(|rest| {
+                    rest.split('/')
+                        .rev()
+                        .skip(1)
+                        .all(|dir| !dir.starts_with('.'))
+                })
+        })
     }
 
     pub fn literal_walk(&mut self, home: &str, resolved_home: Option<&str>) -> LiteralWalk {
@@ -196,6 +245,7 @@ impl Lexical {
                 let result = super::lexical_candidate(
                     &candidate,
                     domain,
+                    &self.config_files,
                     candidate_patterned,
                     hidden,
                     &mut self.matcher,

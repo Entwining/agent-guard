@@ -18,6 +18,7 @@ pub struct Context {
     pub consumer: Consumer,
     pub home: String,
     pub user: Option<String>,
+    pub config_dirs: Vec<crate::record::ConfigDir>,
     pub cwd: String,
     pub zsh_executor: bool,
     pub require_execution_owner: bool,
@@ -152,7 +153,12 @@ fn evaluate_with_catalog_loader(
     let mut inspection = Inspection {
         context,
         probe,
-        resolver: filesystem::Resolver::with_deadline(&context.home, &catalog, deadline),
+        resolver: filesystem::Resolver::with_deadline(
+            &context.home,
+            &catalog,
+            deadline,
+            &context.config_dirs,
+        ),
         arm,
         gaps: Vec::new(),
         denial: None,

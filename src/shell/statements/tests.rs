@@ -29,6 +29,7 @@ fn observation(source: &str, scope: &mut Scope) -> Observation {
         host: HostFacts {
             home: "/h",
             user: None,
+            config_dirs: &[],
         },
     };
     let mut evaluator = Evaluator::new(frontend, &mut output);

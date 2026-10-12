@@ -24,7 +24,7 @@ fn literal_walk_checks_deadline_after_each_probe() {
     }
     let deadline = std::time::Instant::now() + std::time::Duration::from_millis(25);
     let mut probe = Expiring { deadline, calls: 0 };
-    let mut lexical = Lexical::new(Some(deadline));
+    let mut lexical = Lexical::new(Some(deadline), &[]);
     let result = follow(
         "/public/next",
         "/synthetic/home",

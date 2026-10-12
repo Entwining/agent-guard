@@ -4,7 +4,7 @@ use super::*;
 fn repeated_paths_and_prefixes_prepare_once_per_domain() {
     for width in [2, 4, 8, 16] {
         for depth in [1, 2, 4, 8] {
-            let mut owner = Lexical::new(None);
+            let mut owner = Lexical::new(None, &[]);
             let mut paths = vec!["/".to_owned()];
             for _ in 0..depth {
                 paths.push(format!(
@@ -41,7 +41,7 @@ fn repeated_paths_and_prefixes_prepare_once_per_domain() {
 fn overlapping_patterns_prepare_common_candidates_once() {
     for width in [2, 4, 8, 16] {
         for depth in [1, 2, 4, 8] {
-            let mut owner = Lexical::new(None);
+            let mut owner = Lexical::new(None, &[]);
             for index in 0..width {
                 let prefix = format!("/{}", vec!["public"; depth].join("/"));
                 let path = format!("{prefix}/{{public{index},plain}}");
@@ -61,7 +61,7 @@ fn overlapping_patterns_prepare_common_candidates_once() {
 fn distinct_paths_reuse_components_and_bound_cache_storage() {
     for width in [2, 4, 8, 16] {
         for depth in [1, 2, 4, 8] {
-            let mut owner = Lexical::new(None);
+            let mut owner = Lexical::new(None, &[]);
             for index in 0..width {
                 let path = format!(
                     "/h/{}/public{index}*/report*.txt",
@@ -109,7 +109,7 @@ fn cache_domains_preserve_spelling_visibility_and_deadlines() {
         .strip_prefix("ssh audit.invalid ")
         .unwrap()
         .replace("$H", "/h");
-    let mut owner = Lexical::new(None);
+    let mut owner = Lexical::new(None, &[]);
     for home in ["/other", "/h"] {
         assert_eq!(
             owner.check(&path, home, true, false).unwrap(),

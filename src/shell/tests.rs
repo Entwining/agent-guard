@@ -7,6 +7,7 @@ fn identical_sources_share_syntax_but_observe_each_context() {
         let host = crate::record::HostFacts {
             home: "/synthetic/home",
             user: None,
+            config_dirs: &[],
         };
         let mut evaluator = statements::Evaluator::new(
             Frontend {
@@ -44,6 +45,7 @@ fn alternative_environments_store_only_binding_deltas() {
         let host = crate::record::HostFacts {
             home: "/synthetic/home",
             user: None,
+            config_dirs: &[],
         };
         let mut evaluator = statements::Evaluator::new(
             Frontend {
@@ -94,6 +96,7 @@ fn syntax_cache_hits_keep_depth_deadline_and_failure_checks() {
     let host = crate::record::HostFacts {
         home: "/synthetic/home",
         user: None,
+        config_dirs: &[],
     };
     let mut evaluator = statements::Evaluator::new(
         Frontend {

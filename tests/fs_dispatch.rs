@@ -40,7 +40,8 @@ fn partition(name: &str) {
                 continue;
             }
             evaluated += 1;
-            let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
+            let context = fixture
+                .context(&json!({"consumer":consumer,"cwd":"$P","config_dirs":row["config_dirs"]}));
             let mut event: Value = if let Some(event) = row.get("event") {
                 fixture.expand_value(event)
             } else {
@@ -92,6 +93,11 @@ fn partition(name: &str) {
 #[test]
 fn wildcard_basenames_require_credential_identifying_text() {
     partition("wildcard");
+}
+
+#[test]
+fn config_location_variables_extend_credential_paths() {
+    partition("config-location");
 }
 
 #[test]
@@ -150,10 +156,20 @@ fn assert_native_dispatch(
         io::Write,
         process::{Command, Stdio},
     };
-    let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"));
+    command
         .args(["--checker", "--runtime", consumer, "--cwd"])
         .arg(&fixture.project)
-        .env("HOME", &fixture.home)
+        .env("HOME", &fixture.home);
+    // The checker reads config locations from its environment; the invoker's
+    // own values must not reach the fixture.
+    for variable in agent_guard_rust::record::ConfigVariable::ALL {
+        command.env_remove(variable.name());
+    }
+    for dir in fixture.config_dirs(row) {
+        command.env(dir.variable.name(), dir.path);
+    }
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

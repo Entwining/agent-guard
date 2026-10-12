@@ -20,6 +20,7 @@ fn expand_candidates(
                 host: HostFacts {
                     home: "/h",
                     user: None,
+                    config_dirs: &[],
                 },
             },
             &mut output,
@@ -82,6 +83,7 @@ fn independently_detected_code_obeys_the_source_recursion_frontier() {
             host: HostFacts {
                 home: "/h",
                 user: None,
+                config_dirs: &[],
             },
         },
         &mut output,
@@ -151,6 +153,7 @@ fn assigned_pwd_does_not_duplicate_non_tilde_words() {
             host: HostFacts {
                 home: "/h",
                 user: None,
+                config_dirs: &[],
             },
         },
         &mut output,

@@ -118,6 +118,7 @@ fn injected_host_catalog_reaches_all_consumer_boundaries() {
                 cwd: row["cwd"].as_str().unwrap_or("/project").into(),
                 zsh_executor: consumer != Consumer::Pi,
                 require_execution_owner: false,
+                config_dirs: Vec::new(),
                 shell_observation_entries: std::cell::Cell::new(0),
             };
             let input = if row["operation"] == "shell" {

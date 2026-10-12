@@ -71,10 +71,23 @@ pub fn check(
         let home = home
             .to_str()
             .ok_or_else(|| io::Error::other("HOME is not UTF-8"))?;
+        // The command inherits the hook's environment, so these name where
+        // its clients keep credentials; a relative value names nothing fixed.
+        let config_dirs = crate::record::ConfigVariable::ALL
+            .into_iter()
+            .filter_map(|variable| {
+                let value = std::env::var(variable.name()).ok()?;
+                value.starts_with('/').then(|| crate::record::ConfigDir {
+                    variable,
+                    path: crate::filesystem::normalize(&value, "/", home),
+                })
+            })
+            .collect();
         let context = Context {
             consumer,
             home: home.to_owned(),
             user: std::env::var("USER").ok(),
+            config_dirs,
             cwd,
             zsh_executor: consumer != Consumer::Pi,
             require_execution_owner: false,

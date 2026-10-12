@@ -159,7 +159,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     for input in shell::pipeline::xargs_here_input(command, output) {
                         self.source(
                             &input.source,
-                            &mut Scope::new(self.frontend.host.home, &input.cwd),
+                            &mut Scope::for_host(self.frontend.host, &input.cwd),
                             depth + 1,
                         )?;
                     }
@@ -173,7 +173,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     for input in shell::pipeline::xargs_here_input(command, &redirect.target) {
                         self.source(
                             &input.source,
-                            &mut Scope::new(self.frontend.host.home, &input.cwd),
+                            &mut Scope::for_host(self.frontend.host, &input.cwd),
                             depth + 1,
                         )?;
                     }

@@ -4,6 +4,26 @@ impl Scope {
     pub(in crate::shell) fn in_function(&self) -> bool {
         !self.frames.is_empty()
     }
+    /// A shell started with the hook's environment, which includes HOME and
+    /// any config-location variables.
+    pub fn for_host(host: crate::record::HostFacts<'_>, cwd: &str) -> Self {
+        let mut scope = Self::new(host.home, cwd);
+        let bindings = Rc::make_mut(&mut scope.bindings);
+        for dir in host.config_dirs {
+            bindings.insert(
+                dir.variable.name().into(),
+                Binding {
+                    #[cfg(test)]
+                    copies: EntryCopies::default(),
+                    origins: None,
+                    values: Rc::new(vec![BindingValue::Known(dir.path.clone())]),
+                    exported: false,
+                    arithmetic: false,
+                },
+            );
+        }
+        scope
+    }
     pub fn new(home: &str, cwd: &str) -> Self {
         Self {
             directory: Directory::new(cwd),

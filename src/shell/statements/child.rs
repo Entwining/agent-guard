@@ -41,7 +41,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         prefixes: &BTreeMap<String, Option<Binding>>,
         environment: &[shell::argv::EnvironmentChange],
     ) -> Scope {
-        let mut child = Scope::new(self.frontend.host.home, &command.cwd);
+        let mut child = Scope::for_host(self.frontend.host, &command.cwd);
         child.pipeline_input = scope.pipeline_input.clone();
         child.input_fds = scope.input_fds.clone();
         child.stdin_id = scope.stdin_id;

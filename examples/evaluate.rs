@@ -101,6 +101,7 @@ pub(crate) fn request(value: &Value) -> Result<Request, &'static str> {
             cwd,
             zsh_executor: boolean(metadata, "zsh_executor", consumer != Consumer::Pi)?,
             require_execution_owner: false,
+            config_dirs: Vec::new(),
             shell_observation_entries: Cell::new(0),
         },
         bytes,

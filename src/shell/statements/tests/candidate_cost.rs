@@ -165,6 +165,7 @@ fn substitution_body_is_observed_once_per_candidate_union() {
         let host = crate::record::HostFacts {
             home: "/synthetic/home",
             user: None,
+            config_dirs: &[],
         };
         let mut evaluator = super::Evaluator::new(
             super::Frontend {

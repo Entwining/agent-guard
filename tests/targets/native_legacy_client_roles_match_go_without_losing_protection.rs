@@ -25,6 +25,7 @@ fn native_legacy_client_roles_match_go_without_losing_protection() {
                 cwd: fixture.project.clone(),
                 zsh_executor: consumer != Consumer::Pi,
                 require_execution_owner: false,
+                config_dirs: Vec::new(),
                 shell_observation_entries: Cell::new(0),
             };
             let bytes = serde_json::to_vec(&json!({"tool_name":"Bash", "tool_input":{"command":fixture.expand(row["command"].as_str().unwrap())}})).unwrap();

@@ -101,7 +101,7 @@ pub(super) fn lexical_pattern_checked(
     hidden: bool,
     deadline: Option<std::time::Instant>,
 ) -> Result<Option<Protection>, CheckError> {
-    lexical_state::Lexical::new(deadline).check(path, home, patterned, hidden)
+    lexical_state::Lexical::new(deadline, &[]).check(path, home, patterned, hidden)
 }
 
 pub fn broad_root(path: &str, home: &str, patterned: bool) -> bool {
@@ -117,7 +117,7 @@ pub(crate) fn broad_root_checked(
     patterned: bool,
     deadline: Option<std::time::Instant>,
 ) -> Result<bool, CheckError> {
-    lexical_state::Lexical::new(deadline).broad(path, home, patterned)
+    lexical_state::Lexical::new(deadline, &[]).broad(path, home, patterned)
 }
 
 pub(super) fn broad_prepared(
@@ -168,6 +168,7 @@ pub(super) fn broad_prepared(
 pub(super) fn lexical_candidate(
     path: &str,
     domain: &lexical_state::Domain,
+    config_files: &[String],
     patterned: bool,
     hidden: bool,
     matcher: &mut glob::Matcher,
@@ -181,7 +182,11 @@ pub(super) fn lexical_candidate(
     let patterned = patterned && literal.is_none();
     let state = lexical_state::LiteralState::path(spelling, &domain.library_parts);
     if !patterned {
-        return state.protection();
+        return state.protection().or_else(|| {
+            config_files
+                .contains(&super::fold(spelling))
+                .then_some(Protection::Credential)
+        });
     }
     let path = glob::fold_pattern(spelling);
     let parts: Vec<_> = path.split('/').collect();
@@ -225,6 +230,9 @@ pub(super) fn lexical_candidate(
             }
         })
     {
+        return Some(Protection::Credential);
+    }
+    if config_files.iter().any(|file| matcher.path(&path, file)) {
         return Some(Protection::Credential);
     }
     if base.trim_matches(['*', '?']).is_empty() {

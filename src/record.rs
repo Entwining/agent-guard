@@ -6,6 +6,34 @@ pub mod stream;
 pub struct HostFacts<'a> {
     pub home: &'a str,
     pub user: Option<&'a str>,
+    pub config_dirs: &'a [ConfigDir],
+}
+
+/// Environment variables that move a credential-holding client's config.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConfigVariable {
+    XdgConfigHome,
+    GhConfigDir,
+    GlabConfigDir,
+}
+
+impl ConfigVariable {
+    pub const ALL: [Self; 3] = [Self::XdgConfigHome, Self::GhConfigDir, Self::GlabConfigDir];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::XdgConfigHome => "XDG_CONFIG_HOME",
+            Self::GhConfigDir => "GH_CONFIG_DIR",
+            Self::GlabConfigDir => "GLAB_CONFIG_DIR",
+        }
+    }
+}
+
+/// An absolute config-location value from the hook's own environment.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConfigDir {
+    pub variable: ConfigVariable,
+    pub path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

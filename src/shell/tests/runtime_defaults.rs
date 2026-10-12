@@ -7,6 +7,7 @@ fn unknown_defaults_use_one_context_as_parameter_count_grows() {
         let host = crate::record::HostFacts {
             home: "/synthetic/home",
             user: None,
+            config_dirs: &[],
         };
         let mut evaluator = statements::Evaluator::new(
             Frontend {
@@ -55,6 +56,7 @@ fn opaque_default_representatives_do_not_split_into_known_runtime_fields() {
     let host = crate::record::HostFacts {
         home: "/synthetic/home",
         user: None,
+        config_dirs: &[],
     };
     let mut evaluator = statements::Evaluator::new(
         Frontend {

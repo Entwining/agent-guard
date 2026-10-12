@@ -35,6 +35,7 @@ fn equal_cooked_paths_with_different_quotes_keep_distinct_identities() {
                 crate::record::HostFacts {
                     home: "/h",
                     user: None,
+                    config_dirs: &[],
                 },
                 crate::record::Effect::Read,
                 crate::record::Walk::None,
@@ -80,6 +81,7 @@ fn quoted_pattern_width_does_not_multiply_local_candidates() {
                 crate::record::HostFacts {
                     home: "/synthetic/home",
                     user: None,
+                    config_dirs: &[],
                 },
                 crate::record::Effect::Read,
                 crate::record::Walk::None,
@@ -94,6 +96,7 @@ fn quoted_pattern_width_does_not_multiply_local_candidates() {
                     super::super::lexical_candidate(
                         &candidate,
                         &super::super::lexical::Domain::new("/synthetic/home"),
+                        &[],
                         true,
                         false,
                         &mut matcher
@@ -123,6 +126,7 @@ fn repeated_pattern_components_share_match_work() {
                 super::super::lexical_candidate(
                     "/h/project/public[a-z]/nested/public.json",
                     &super::super::lexical::Domain::new("/h"),
+                    &[],
                     true,
                     false,
                     &mut matcher

@@ -31,21 +31,26 @@ struct TargetIdentity {
 
 impl<'a> Resolver<'a> {
     pub(crate) fn new(home: &'a str, table: &'a FirmlinkTable) -> Self {
-        Self::with_deadline(home, table, None)
+        Self::with_deadline(home, table, None, &[])
     }
     pub(crate) fn with_deadline(
         home: &'a str,
         table: &'a FirmlinkTable,
         deadline: Option<std::time::Instant>,
+        config_dirs: &[crate::record::ConfigDir],
     ) -> Self {
         Self {
             home,
             table,
             deadline,
             resolved_home: None,
-            lexical: lexical::Lexical::new(deadline),
+            lexical: lexical::Lexical::new(deadline, config_dirs),
             targets: std::collections::BTreeMap::new(),
         }
+    }
+
+    fn credential_root(&self, path: &str, home: &str) -> bool {
+        sensitive_root(path, home) || self.lexical.config_root(path, home)
     }
 
     pub(crate) fn home(&mut self, probe: &mut dyn Probe) -> Result<Identity, CheckError> {
@@ -112,7 +117,7 @@ impl<'a> Resolver<'a> {
             .check(path, home, patterned, true)?
             .filter(|kind| *kind != Protection::AppData)
             .or_else(|| {
-                (!patterned && sensitive_root(path, home)).then_some(Protection::Credential)
+                (!patterned && self.credential_root(path, home)).then_some(Protection::Credential)
             }))
     }
 
@@ -243,7 +248,7 @@ impl<'a> Resolver<'a> {
         if matches!(target.effect, Effect::Read | Effect::Change)
             && !target.glob
             && (target.via != Via::Cwd || target.search)
-            && sensitive_root(&path, self.home)
+            && self.credential_root(&path, self.home)
         {
             return Ok(Identity::Protected(Protection::Credential));
         }
@@ -316,7 +321,7 @@ impl<'a> Resolver<'a> {
         if matches!(target.effect, Effect::Read | Effect::Change)
             && !target.glob
             && (target.via != Via::Cwd || target.search)
-            && sensitive_root(&resolved, resolved_home)
+            && self.credential_root(&resolved, resolved_home)
         {
             return Ok(Identity::Protected(Protection::Credential));
         }

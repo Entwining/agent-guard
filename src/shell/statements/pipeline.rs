@@ -70,7 +70,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             for input in sources {
                 self.source(
                     &input.source,
-                    &mut Scope::new(self.frontend.host.home, &input.cwd),
+                    &mut Scope::for_host(self.frontend.host, &input.cwd),
                     depth + 1,
                 )?;
             }

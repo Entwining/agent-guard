@@ -23,6 +23,7 @@ fn unchanged_resource_domains_share_broad_root_checks() {
         user: None,
         zsh_executor: true,
         require_execution_owner: false,
+        config_dirs: Vec::new(),
         shell_observation_entries: std::cell::Cell::new(0),
     };
     let table = filesystem::FirmlinkTable::from_text("");
@@ -60,6 +61,7 @@ fn inspection_recursion_frontier_is_independent_of_delimiter_depth() {
         user: None,
         zsh_executor: true,
         require_execution_owner: false,
+        config_dirs: Vec::new(),
         shell_observation_entries: std::cell::Cell::new(0),
     };
     let table = filesystem::FirmlinkTable::from_text("");
@@ -98,6 +100,7 @@ fn literal_eval_bodies_are_observed_once_in_their_scope() {
         cwd: "/project".into(),
         zsh_executor: true,
         require_execution_owner: false,
+        config_dirs: Vec::new(),
         shell_observation_entries: std::cell::Cell::new(0),
     };
     for n in [2, 4, 8, 16, 24] {
@@ -148,6 +151,7 @@ fn catalog_initialization_fault_blocks_supported_request() {
         cwd: "/project".into(),
         zsh_executor: true,
         require_execution_owner: false,
+        config_dirs: Vec::new(),
         shell_observation_entries: std::cell::Cell::new(0),
     };
     let mut probe = NoProbe { calls: 0 };

@@ -142,6 +142,7 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
             host: crate::record::HostFacts {
                 home: "/synthetic/home",
                 user: None,
+                config_dirs: &[],
             },
             cwd: "/synthetic/home/project",
             tilde_assigned: true,
@@ -167,6 +168,7 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
         cwd: "/synthetic/home/project".into(),
         zsh_executor: true,
         require_execution_owner: false,
+        config_dirs: Vec::new(),
         shell_observation_entries: std::cell::Cell::new(0),
     };
     let bytes =
@@ -222,6 +224,7 @@ fn brush_accepted_word_lexer_refusal_is_unsupported() {
             host: crate::record::HostFacts {
                 home: "/synthetic/home",
                 user: None,
+                config_dirs: &[],
             },
             cwd: "/synthetic/home/project",
             tilde_assigned: true,
@@ -251,6 +254,7 @@ fn outer_early_closer_has_its_own_unsupported_region() {
             host: crate::record::HostFacts {
                 home: "/synthetic/home",
                 user: None,
+                config_dirs: &[],
             },
             cwd: "/synthetic/home/project",
             tilde_assigned: true,
@@ -306,6 +310,7 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
             host: crate::record::HostFacts {
                 home: "/synthetic/home",
                 user: None,
+                config_dirs: &[],
             },
             cwd: "/synthetic/home/project",
             tilde_assigned: true,
@@ -360,6 +365,7 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
             host: crate::record::HostFacts {
                 home: "/synthetic/home",
                 user: None,
+                config_dirs: &[],
             },
             cwd: "/synthetic/home/project",
             tilde_assigned: true,
@@ -413,6 +419,7 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
             host: crate::record::HostFacts {
                 home: "/synthetic/home",
                 user: None,
+                config_dirs: &[],
             },
             cwd: "/synthetic/home/project",
             tilde_assigned: true,

@@ -217,6 +217,7 @@ fn target_tilde_uses_lexical_prefix_context() {
             HostFacts {
                 home: &fixture.home,
                 user: None,
+                config_dirs: &[],
             },
             Effect::Read,
             Walk::None,

@@ -36,6 +36,7 @@ fn glob_probe_oracle_uses_word_provenance() {
     let host = HostFacts {
         home: &fixture.home,
         user: Some("fixture-user"),
+        config_dirs: &[],
     };
     for (source, patterned) in [
         ("cat $HOME/Library/{Containers,CloudStorage}/x", true),
