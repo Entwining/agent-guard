@@ -243,22 +243,14 @@ pub(super) fn lexical_candidate(
             return Some(Protection::Credential);
         }
         let tail = &listed.tail;
-        if tail.len() > parts.len()
-            || tail[tail.len() - 1].trim_matches('*').is_empty()
+        if tail[tail.len() - 1].trim_matches('*').is_empty()
             || base.trim_matches(['*', '?']).is_empty()
         {
             continue;
         }
-        let offset = parts.len() - tail.len();
-        if tail[..tail.len() - 1].iter().enumerate().all(|(index, _)| {
-            matcher.visible_component(parts[offset + index], &listed.witnesses[index], hidden)
-        }) && if tail.len() > 1 {
-            // Recursive directory wildcards alone do not identify a credential.
-            parts[offset..offset + listed.identifying]
-                .iter()
-                .zip(&tail[..listed.identifying])
-                .any(|(pattern, protected)| matcher.identifies_component(pattern, protected))
-                && glob::visible_intersects(base, tail[tail.len() - 1], hidden)
+        if if tail.len() > 1 {
+            glob::visible_intersects(base, tail[tail.len() - 1], hidden)
+                && spells_listed_directory(&parts[..parts.len() - 1], listed, hidden, matcher)
         } else {
             // A witness fills a trailing `*` with text, which `*auth.json`
             // misses although it selects `auth.json` itself.
@@ -270,6 +262,53 @@ pub(super) fn lexical_candidate(
         }
     }
     None
+}
+
+/// Whether pattern directories can end in a catalog entry's directories, with
+/// `**` spanning any number of them, while a component spells one of them.
+/// Generic names such as `config.json` identify a credential only with their
+/// directory: a positive search glob only narrows its root, so
+/// `*/config.json` reaches nothing the root alone does not. A dot-leading
+/// component spells a hidden directory, as in `.*/*/config.yml`.
+fn spells_listed_directory(
+    pattern: &[&str],
+    entry: &lexical_state::Sensitive,
+    hidden: bool,
+    matcher: &mut glob::Matcher,
+) -> bool {
+    // States are unmatched pattern and entry components, matched from the
+    // end, and whether a component spelled a directory so far. Components
+    // left before the match fall under the entry's leading `**/`.
+    let mut seen = std::collections::BTreeSet::new();
+    let mut pending = vec![(pattern.len(), entry.tail.len() - 1, false)];
+    while let Some(state) = pending.pop() {
+        if !seen.insert(state) {
+            continue;
+        }
+        let (unmatched, remaining, spelled) = state;
+        if remaining == 0 {
+            if spelled {
+                return true;
+            }
+            continue;
+        }
+        let Some(&part) = unmatched.checked_sub(1).map(|at| &pattern[at]) else {
+            continue;
+        };
+        let protected = entry.tail[remaining - 1];
+        if part == "**" {
+            pending.push((unmatched - 1, remaining, spelled));
+            if hidden || !protected.starts_with('.') {
+                pending.push((unmatched, remaining - 1, spelled));
+            }
+        } else if matcher.visible_component(part, &entry.witnesses[remaining - 1], hidden) {
+            let spells = protected.starts_with('.')
+                && (part.starts_with('.') || part.starts_with("\\."))
+                || matcher.identifies_component(part, protected);
+            pending.push((unmatched - 1, remaining - 1, spelled || spells));
+        }
+    }
+    false
 }
 
 pub(super) const SENSITIVE: &[&str] = &[

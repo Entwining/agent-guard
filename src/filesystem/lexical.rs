@@ -13,8 +13,6 @@ pub(super) struct Sensitive {
     pub pattern: &'static str,
     pub tail: Vec<&'static str>,
     pub witnesses: Vec<String>,
-    /// Leading `tail` components of which a pattern must spell one.
-    pub identifying: usize,
 }
 
 pub(super) struct Catalog {
@@ -32,21 +30,10 @@ pub(super) fn catalog() -> &'static Catalog {
             .map(|pattern| {
                 let tail: Vec<_> = pattern.trim_start_matches("**/").split('/').collect();
                 let witnesses = tail.iter().map(|part| part.replace('*', "x")).collect();
-                // Plain wildcards reach visible directories in any project, so
-                // under those the file name alone (`*/*/config.yml`) does not
-                // identify a credential; a hidden directory is reached only
-                // when hidden names are in scope.
-                let directories = &tail[..tail.len() - 1];
-                let identifying = if directories.iter().any(|dir| dir.starts_with('.')) {
-                    tail.len()
-                } else {
-                    directories.len()
-                };
                 Sensitive {
                     pattern,
                     tail,
                     witnesses,
-                    identifying,
                 }
             })
             .collect();

@@ -18,13 +18,44 @@ pub(super) fn infer_search(
     // ripgrep skips a hidden entry unless `--hidden` is given or a positive
     // glob matches that entry, so hidden names are reachable only when some
     // glob's last component can match a dot name.
-    let reaches_hidden = program == "grep"
-        || hidden
-        || selecting.iter().any(|glob| {
+    let entering: Vec<_> = selecting
+        .iter()
+        .filter(|glob| {
             glob.rsplit('/')
                 .next()
                 .is_some_and(|last| last.starts_with(['.', '*', '?', '[', '{']))
-        });
+        })
+        .collect();
+    let reaches_hidden = program == "grep" || hidden || !entering.is_empty();
+    let mut filters: Vec<_> = selecting.iter().map(|glob| (*glob).clone()).collect();
+    if program != "grep" && !hidden {
+        // A file that one glob selects is searched below a hidden directory
+        // that another glob enters, as `.aws` does for `credentials`. The
+        // entered directories are the dot names the last component matches,
+        // so `*` enters `.*` and `?aws` enters `.aws`; spelling them that way
+        // identifies the hidden directory a credential needs.
+        for directory in &entering {
+            let (parent, last) = directory
+                .rsplit_once('/')
+                .map_or(("**", directory.as_str()), |(parent, last)| (parent, last));
+            let last = if let Some(rest) = last.strip_prefix('?') {
+                format!(".{rest}")
+            } else if last.starts_with('*') {
+                format!(".*{}", last.trim_start_matches('*'))
+            } else {
+                last.to_owned()
+            };
+            let directory = format!("{parent}/{last}");
+            for glob in &selecting {
+                let name = glob.rsplit('/').next().unwrap_or(glob);
+                // A name matching every file reaches what its own glob does,
+                // and hidden files below a public root are not checked.
+                if !name.trim_matches('*').is_empty() {
+                    filters.push(format!("{directory}/**/{name}"));
+                }
+            }
+        }
+    }
     let implicit = operands.is_empty() && (program != "grep" || hidden);
     if implicit {
         operands.push(Word::literal(cwd.to_owned()));
@@ -53,7 +84,7 @@ pub(super) fn infer_search(
         target.search = implicit && !args.iter().any(|arg| arg == "--help" || arg == "-h");
         effects.targets.push(target);
         if !names {
-            for glob in &selecting {
+            for glob in &filters {
                 let mut target = Target::new(
                     crate::filesystem::absolute_input(
                         &crate::filesystem::search_glob(

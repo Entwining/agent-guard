@@ -31,10 +31,10 @@
  ,{"id":"grep-public-glob","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"**/src/*.txt"},"expected":"N"}
  ,{"id":"grep-exclusion-glob","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"!**/.aws/credentials"},"expected":"N"}
  ,{"id":"grep-literal-root","partition":"grep-glob","tool":"Grep","input":{"path":"$H/Libr*/Containers/project","glob":"**/src/*.txt"},"expected":"N","native":true}
- ,{"id":"grep-literal-root-recursive-basename","partition":"grep-glob","tool":"Grep","input":{"path":"$P/*","glob":"credentials.ts"},"expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file"}
- ,{"id":"grep-basename-credentials","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"credentials"},"synthetic_setup":{"files":{"$P/.aws/credentials":"SYNTHETIC_CANARY\n"}},"expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file","native":true}
+ ,{"id":"grep-literal-root-recursive-basename","partition":"grep-glob","tool":"Grep","input":{"path":"$P/.*","glob":"credentials.ts"},"expected":"N"}
+ ,{"id":"grep-basename-credentials","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"credentials"},"synthetic_setup":{"files":{"$P/.aws/credentials":"SYNTHETIC_CANARY\n"}},"expected":"N","native":true}
  ,{"id":"grep-basename-source-extension","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"*.ts"},"expected":"N","native":true}
- ,{"id":"grep-basename-config","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"config"},"expected":"D","reason":"credential or environment file","alternative":"pass it through that program's own option"}
+ ,{"id":"grep-basename-config","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"config"},"expected":"N"}
  ,{"id":"grep-basename-public","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"public.txt"},"expected":"N","native":true}
  ,{"id":"grep-anchored-public-name","partition":"grep-glob","tool":"Grep","input":{"path":"$P","glob":"src/credentials"},"expected":"N"}
  ,{"id":"exec-command-key","partition":"codex-native","consumer":"codex","native":true,"tool":"exec_command","input":{"cmd":"cat $H/.ssh/id_rsa"},"expected":"D","reason":"credential or environment file","alternative":"ssh -i"}

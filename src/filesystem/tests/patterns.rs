@@ -254,13 +254,16 @@ fn lexical_candidates_observe_the_evaluation_deadline() {
 }
 #[test]
 fn literal_api_root_does_not_expand_into_a_hidden_directory() {
-    let path = format!("{}/credentials.ts", super::super::literal_glob_root("a/*"));
+    let path = format!(
+        "{}/credentials.ts",
+        super::super::literal_glob_root("a/.a*")
+    );
     assert_eq!(
         super::super::lexical_pattern_mode(&path, "/h", true, true),
         None
     );
     assert_eq!(
-        super::super::lexical_pattern_mode("a/*/credentials.ts", "/h", true, true),
+        super::super::lexical_pattern_mode("a/.a*/credentials.ts", "/h", true, true),
         Some(super::super::Protection::Credential)
     );
 }
