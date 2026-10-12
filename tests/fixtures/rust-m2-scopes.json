@@ -92,7 +92,5 @@
   {"id":"prefix-order-fallback","source":"D=/tmp; f() { :; }; D=/tmp E=$D f; ls \"$E\"","expected":"N","scope":"ordered prefix RHS is modeled and the temporary binding is restored","partition":"prefix-order"},
   {"id":"function-shadow-declaration-fallback","source":"D=/tmp; declare() { :; }; declare D=~/Library/Containers/x; ls \"$D\"","expected":"UR","scope":"dialect-dependent declaration precedence conservatively refuses","partition":"function-shadow"},
   {"id":"eval-inert-control","source":"eval 'printf public'","expected":"N","scope":"known eval without binding mutation preserves existing support","partition":"binding"},
-  {"id":"assignment-data-control","source":"D=~/Library/Containers/x; printf public","expected":"N","scope":"assignment data alone is not a compound word-use target","partition":"binding"},
-  {"id":"case-word-use","source":"case ~/Library/Containers/x in public) :;; esac","expected":"D","scope":"case value is an independently observed Use word","partition":"use"},
-  {"id":"case-word-control","source":"case /tmp in public) :;; esac","expected":"N","scope":"public case value remains benign","partition":"use"}
+  {"id":"assignment-data-control","source":"D=~/Library/Containers/x; printf public","expected":"N","scope":"assignment data alone is not a compound word-use target","partition":"binding"}
 ]}

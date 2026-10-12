@@ -274,14 +274,44 @@ fn test_words(
         ExtendedTestExpr::Not(e) | ExtendedTestExpr::Parenthesized(e) => {
             test_words(source, e, output)?
         }
-        ExtendedTestExpr::UnaryTest(_, w) => output.push(Statement::Use(word(source, w)?)),
+        // `[[ ]]` operands undergo no pathname expansion. Only file tests use
+        // them as paths; strings, patterns and names are data whose command
+        // substitutions still run.
+        ExtendedTestExpr::UnaryTest(predicate, w) => {
+            let value = word(source, w)?;
+            output.push(
+                if matches!(
+                    predicate,
+                    UnaryPredicate::ShellOptionEnabled
+                        | UnaryPredicate::ShellVariableIsSetAndAssigned
+                        | UnaryPredicate::ShellVariableIsSetAndNameRef
+                        | UnaryPredicate::StringHasZeroLength
+                        | UnaryPredicate::StringHasNonZeroLength
+                        | UnaryPredicate::FdIsOpenTerminal
+                ) {
+                    Statement::Expansion(value)
+                } else {
+                    Statement::Use(value)
+                },
+            );
+        }
         ExtendedTestExpr::BinaryTest(predicate, a, b) => {
+            let files = matches!(
+                predicate,
+                BinaryPredicate::FilesReferToSameDeviceAndInodeNumbers
+                    | BinaryPredicate::LeftFileIsNewerOrExistsWhenRightDoesNot
+                    | BinaryPredicate::LeftFileIsOlderOrDoesNotExistWhenRightDoes
+            );
             for w in [a, b] {
                 let mut value = word(source, w)?;
                 if matches!(predicate, BinaryPredicate::ArithmeticEqualTo) {
                     value.syntax = super::WordSyntax::Arithmetic;
                 }
-                output.push(Statement::Use(value));
+                output.push(if files {
+                    Statement::Use(value)
+                } else {
+                    Statement::Expansion(value)
+                });
             }
         }
     }

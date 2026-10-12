@@ -24,6 +24,8 @@ pub mod nested_parameter_flags_refuse_without_checker_faults;
 pub mod nul_command_bytes_follow_go_lexer;
 #[path = "shell_syntax/parser_corpus_evaluates_inputs_and_preserves_valid_spans.rs"]
 pub mod parser_corpus_evaluates_inputs_and_preserves_valid_spans;
+#[path = "shell_syntax/pattern_operands_are_data_and_file_tests_are_paths.rs"]
+pub mod pattern_operands_are_data_and_file_tests_are_paths;
 #[path = "shell_syntax/prefix_assignments_use_prior_prefix_values.rs"]
 pub mod prefix_assignments_use_prior_prefix_values;
 #[path = "support/batch6.rs"]

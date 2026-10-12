@@ -322,8 +322,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
     ) -> Result<Output, CheckError> {
         let (depth, source_id, nested) = context;
 
+        // The subject and patterns are compared as strings without pathname
+        // expansion; only their command substitutions run.
         for word in words {
-            self.word_use(word, scope, depth, nested)?;
+            self.expand(word, scope, depth)?;
         }
         let mut exits = Vec::new();
         let mut branch_outputs = Vec::new();

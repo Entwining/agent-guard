@@ -1,0 +1,19 @@
+{"rows":[
+{"id":"case-tilde-pattern","partition":"pattern-data","input":{"command":"case \"$x\" in ~/*) echo home;; esac"},"expected":"N"},
+{"id":"case-home-pattern","partition":"pattern-data","input":{"command":"case \"$x\" in \"$HOME\"/*) echo home;; esac"},"expected":"N"},
+{"id":"case-app-data-subject","partition":"pattern-data","input":{"command":"case ~/Library/Containers/x in public) :;; esac"},"expected":"N"},
+{"id":"case-tilde-subject","partition":"pattern-data","input":{"command":"case ~/* in x) echo home;; esac"},"expected":"N"},
+{"id":"test-tilde-pattern","partition":"pattern-data","input":{"command":"[[ $x == ~/* ]] && echo home"},"expected":"N"},
+{"id":"test-home-pattern","partition":"pattern-data","input":{"command":"[[ $x = \"$HOME\"/* ]] && echo home"},"expected":"N"},
+{"id":"test-negated-pattern","partition":"pattern-data","input":{"command":"[[ $x != ~/* ]] && echo other"},"expected":"N"},
+{"id":"test-string-length","partition":"pattern-data","input":{"command":"[[ -n ~/* ]] && echo set"},"expected":"N"},
+{"id":"case-subject-substitution","partition":"pattern-data","input":{"command":"case $(cat ~/.ssh/id_ed25519) in x) echo y;; esac"},"expected":"D","wire_text":"This reads a credential or environment file."},
+{"id":"case-pattern-substitution","partition":"pattern-data","input":{"command":"case x in $(cat ~/.ssh/id_ed25519)) echo y;; esac"},"expected":"D","wire_text":"This reads a credential or environment file."},
+{"id":"test-operand-substitution","partition":"pattern-data","input":{"command":"[[ $(cat ~/.ssh/id_ed25519) == x ]] && echo y"},"expected":"D","wire_text":"This reads a credential or environment file."},
+{"id":"test-length-substitution","partition":"pattern-data","input":{"command":"[[ -n $(cat ~/.ssh/id_ed25519) ]] && echo y"},"expected":"D","wire_text":"This reads a credential or environment file."},
+{"id":"file-test-home-glob","partition":"file-test","input":{"command":"[[ -r ~/* ]] && echo readable"},"expected":"D","wire_text":"A scan rooted at the home directory"},
+{"id":"file-comparison-home-glob","partition":"file-test","input":{"command":"[[ ~/* -nt x ]] && echo newer"},"expected":"D","wire_text":"A scan rooted at the home directory"},
+{"id":"file-test-app-data","partition":"file-test","input":{"command":"[[ -f ~/Library/Containers/com.example/data ]] && echo present"},"expected":"D","wire_text":"protected macOS app"},
+{"id":"echo-home-glob","partition":"file-test","input":{"command":"echo ~/*"},"expected":"D","wire_text":"A scan rooted at the home directory"},
+{"id":"bracket-command-home-glob","partition":"file-test","input":{"command":"[ \"$x\" = ~/* ] && echo home"},"expected":"D","wire_text":"A scan rooted at the home directory"}
+]}
