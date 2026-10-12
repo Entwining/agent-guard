@@ -14,7 +14,7 @@ define validate_external_directory
 	done
 endef
 
-# Everything the package ships is staged here, so that a packaging change ships with its release once the tap's formula installs this package.
+# Everything the package ships is staged here; the tap's formula installs this package, so a packaging change ships with its release.
 build:
 	$(call validate_external_directory,$(OUT),OUT)
 	$(call validate_external_directory,$(CARGO_TARGET_DIR),CARGO_TARGET_DIR)

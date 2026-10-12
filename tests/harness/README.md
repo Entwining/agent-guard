@@ -1,6 +1,6 @@
 # Synthetic hook evaluation
 
-The Rust development harness runs the Rust package on Apple Silicon macOS. Build an assembled package as described in [the development guide](../../docs/development.md#development-checks). All evidence directories must be new and outside Git checkouts. The harness uses temporary homes, synthetic files, and scripted model servers bound to loopback. It does not use live model credentials or change the user's runtime configuration.
+The development harness runs the assembled package on Apple Silicon macOS. Build an assembled package as described in [the development guide](../../docs/development.md#development-checks). All evidence directories must be new and outside Git checkouts. The harness uses temporary homes, synthetic files, and scripted model servers bound to loopback. It does not use live model credentials or change the user's runtime configuration.
 
 ## Runtime registration and attribution
 
@@ -10,7 +10,7 @@ Run the runtime driver from the checkout root; it selects the installed Claude C
 cargo run --locked --bin agent-guard-runtime -- --source "$PWD" --entry "$out/package/bin/agent-guard" --output "$out/runtime" --runtimes claude,pi,codex
 ```
 
-Each selected runtime has ten synthetic cases, repeated three times. The driver records the client's resolved path, executable hash and version, the copied guard entry and native binary hashes, and the source manifest. `records.jsonl` retains each completed attempt; `report.json` contains the summary and records. Hook status and output are separate from the runtime tool result. Missing hooks, mismatched commands, missing execution witnesses and conflicting evidence prevent a complete result. If startup fails before the first model request or hook, the driver stops that runtime and reports the attempted count separately from the planned 30 calls.
+The driver runs each synthetic case three times per selected runtime and records the client's resolved path, executable hash and version, the copied guard entry and native binary hashes, and the source manifest. `records.jsonl` retains each completed attempt; `report.json` contains the summary and records. Hook status and output are separate from the runtime tool result. An unverified call, a verdict or command mismatch, a missing hook or execution witness, or conflicting evidence makes the run incomplete, and the driver exits unsuccessfully. If startup fails before the first model request or hook, the driver stops that runtime and reports the attempted count separately from the planned calls.
 
 The Claude Code and Pi drivers use an Anthropic Messages loopback server. Pi's JavaScript extension is generated only inside the synthetic home and invokes the Rust harness adapter, which forwards the event to the assembled Rust package. Codex uses a Responses loopback server and synthetic hook configuration. A runtime failure before hooks remains unverified, not a guard denial.
 
@@ -22,7 +22,7 @@ cargo run --locked --bin agent-guard-runtime -- --source "$PWD" --entry "$out/pa
 
 Every control case must execute, including the synthetic protected canaries. Compare the recorded identities before comparing reports. The measured hook duration excludes runtime startup; cold runtime durations include startup variability. These reports observe the entry PID only. They do not establish cleanup of runner, checker or other descendants.
 
-Before runtime acceptance, require 30 verified, matched calls per selected client in both runs, record client versions and executable hashes, and count `child setpgid` lines in recorded stdout/stderr. The count must be zero; a nonzero count requires investigation of the wrapper. A missing executable or failure before hooks does not establish a zero-warning result for that client. Keep host process-group or loopback refusals with the exact command and error, and rerun on an authorized host into fresh evidence directories; do not modify the harness to avoid the operation.
+Runtime acceptance needs both runs to succeed and zero `child setpgid` lines in the recorded stdout/stderr; a nonzero count requires investigation of the wrapper. A missing executable or failure before hooks does not establish a zero-warning result for that client. Keep host process-group or loopback refusals with the exact command and error, and rerun on an authorized host into fresh evidence directories; do not modify the harness to avoid the operation.
 
 ## Instrumented lifecycle
 
@@ -32,7 +32,7 @@ The lifecycle driver copies the Rust source into its evidence directory and inje
 cargo run --locked --bin agent-guard-lifecycle -- --source "$PWD" --cargo "$(rustup which cargo)" --output "$out/lifecycle"
 ```
 
-Fifteen faults run three times each: pipe input, delayed startup, startup stall, large stdout/stderr denial reasons, slow or absent reasons, checker failure and panic, partial output before panic, hung descendants, stalled or failed supervisor, leftover child, and filesystem dependency failure. Instrumented children record their own PID and process group. The driver samples survivors before its cleanup, records full output, verifies the large-output producer independently, and requires the guard's total deadline and failure contract.
+Each fault in `FAULTS` ([lifecycle.rs](lifecycle.rs)) runs three times. Instrumented children record their own PID and process group. The driver samples survivors before its cleanup, records full output, verifies the large-output producer independently, and requires the guard's total deadline and failure contract.
 
 The native runner makes itself the leader of its process group before it reads input or starts a child, and kills that group at the three-second total deadline. The shell entry kills the same group after the runner exits. The `deadline` control alters the runner's deadline in the copied source and `cleanup` removes the entry's post-exit group kill.
 
@@ -42,6 +42,6 @@ The following negative controls must each exit unsuccessfully with three contrac
 cargo run --locked --bin agent-guard-lifecycle -- --source "$PWD" --cargo "$(rustup which cargo)" --output "$out/control-drain" --control drain
 ```
 
-Available controls are `drain`, `stderr-drain`, `failclosed`, `deadline`, `cleanup`, and `dependency`. `results.jsonl` records each observation and its violations; `summary.json` binds the source and counts failures. Rerun the unmodified lifecycle driver into a new directory after the controls to establish recovery. These instrumented copies prove the named lifecycle contracts, not all possible runtime descendants.
+`--help` lists the controls. `results.jsonl` records each observation and its violations; `summary.json` binds the source and counts failures. Rerun the unmodified lifecycle driver into a new directory after the controls to establish recovery. These instrumented copies prove the named lifecycle contracts, not all possible runtime descendants.
 
 The local Rust harness contracts run with `cargo test --locked --test harness`. They exercise the HTTP protocols and CLI boundary with scripted clients, byte-preserving hook forwarding, timeout cleanup, report path isolation, full runtime case counts and missing-evidence failures. Actual client acceptance requires the separate runtime invocation above.
