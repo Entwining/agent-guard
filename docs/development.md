@@ -33,7 +33,7 @@ The [synthetic runtime and lifecycle harnesses](../tests/harness/README.md) cove
 
 ## Release
 
-This project remains in `0.x`; do not prepare `1.0.0` under the current policy. Use patch for internal, fix, dependency and documentation changes that leave user-visible behavior unchanged, and minor only for a real contract change such as a widened or narrowed scope of what the guard blocks or allows. The [release workflow](../.agents/skills/release/SKILL.md) owns authorization, version selection, preparation folding and tag safety.
+This project remains in `0.x` until the maintainer explicitly prepares `1.0.0`. Until then every release raises the patch version, including one that widens or narrows the scope of what the guard blocks or allows. The [release workflow](../.agents/skills/release/SKILL.md) owns authorization, version selection, preparation folding and tag safety.
 
 `VERSION` is the single version owner. From a validated default-branch checkout, update it and write `docs/releases/<version>.md`, then create an annotated `v<version>` tag and push it only after the release gate clears. The notes become the GitHub Release body, where a relative link does not resolve, so link to repository files through URLs pinned to the tag.
 
