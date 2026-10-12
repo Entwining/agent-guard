@@ -254,9 +254,9 @@ pub(super) fn lexical_candidate(
             matcher.visible_component(parts[offset + index], &listed.witnesses[index], hidden)
         }) && if tail.len() > 1 {
             // Recursive directory wildcards alone do not identify a credential.
-            parts[offset..]
+            parts[offset..offset + listed.identifying]
                 .iter()
-                .zip(tail)
+                .zip(&tail[..listed.identifying])
                 .any(|(pattern, protected)| matcher.identifies_component(pattern, protected))
                 && glob::visible_intersects(base, tail[tail.len() - 1], hidden)
         } else {
@@ -289,6 +289,10 @@ pub(super) const SENSITIVE: &[&str] = &[
     "**/.pgpass",
     "**/.cargo/credentials*",
     "**/.config/gh/hosts.yml",
+    "**/.config/glab-cli/config.yml",
+    // Naming `library` would make `~/Library` a credential root, and a bare
+    // `glab-cli` parent would let a project search for `config.yml` match it.
+    "**/application support/glab-cli/config.yml",
     "**/private-keys-v1.d",
     "**/private-keys-v1.d/**",
 ];

@@ -26,6 +26,8 @@ pub mod git_config_values_keep_fallback_read_role;
 pub mod git_environment_reaches_wrappers_and_child_shells;
 #[path = "targets/git_owns_quoted_pathspec_globs.rs"]
 pub mod git_owns_quoted_pathspec_globs;
+#[path = "targets/glab_token_keys_and_config_file_are_credentials.rs"]
+pub mod glab_token_keys_and_config_file_are_credentials;
 #[path = "targets/global_option_values_never_consume_an_option.rs"]
 pub mod global_option_values_never_consume_an_option;
 #[path = "targets/global_pattern_names_follow_the_generic_owner.rs"]

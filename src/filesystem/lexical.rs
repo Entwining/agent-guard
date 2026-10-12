@@ -13,6 +13,8 @@ pub(super) struct Sensitive {
     pub pattern: &'static str,
     pub tail: Vec<&'static str>,
     pub witnesses: Vec<String>,
+    /// Leading `tail` components of which a pattern must spell one.
+    pub identifying: usize,
 }
 
 pub(super) struct Catalog {
@@ -30,10 +32,21 @@ pub(super) fn catalog() -> &'static Catalog {
             .map(|pattern| {
                 let tail: Vec<_> = pattern.trim_start_matches("**/").split('/').collect();
                 let witnesses = tail.iter().map(|part| part.replace('*', "x")).collect();
+                // Plain wildcards reach visible directories in any project, so
+                // under those the file name alone (`*/*/config.yml`) does not
+                // identify a credential; a hidden directory is reached only
+                // when hidden names are in scope.
+                let directories = &tail[..tail.len() - 1];
+                let identifying = if directories.iter().any(|dir| dir.starts_with('.')) {
+                    tail.len()
+                } else {
+                    directories.len()
+                };
                 Sensitive {
                     pattern,
                     tail,
                     witnesses,
+                    identifying,
                 }
             })
             .collect();
@@ -288,6 +301,7 @@ enum Parent {
     Kube,
     Cargo,
     Config,
+    GlabCli,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -344,7 +358,8 @@ impl LiteralState {
             || part.ends_with(".key")
             || self.parts > 1
                 && (self.parent == Parent::Docker && part == "config.json"
-                    || self.parent == Parent::Kube && part == "config")
+                    || self.parent == Parent::Kube && part == "config"
+                    || self.parent == Parent::GlabCli && part == "config.yml")
             || self.config_gh && part == "hosts.yml";
         self.config_gh = self.parts > 1 && self.parent == Parent::Config && part == "gh";
         self.parent = match part.as_str() {
@@ -353,6 +368,7 @@ impl LiteralState {
             ".kube" => Parent::Kube,
             ".cargo" => Parent::Cargo,
             ".config" => Parent::Config,
+            "glab-cli" => Parent::GlabCli,
             _ => Parent::Other,
         };
         self.parts += 1;

@@ -16,7 +16,8 @@ pub(super) fn infer(program: &str, args: &[Word], effects: &mut Effects) {
                         || arg.strip_prefix('-').is_some_and(|flags| {
                             flags.chars().take_while(|c| *c != '-').any(|c| c == 't')
                         })
-                });
+                })
+                || glab_config_gets_token(args);
         }
         "security" => {
             effects.keychain = ["dump-keychain", "export"].contains(&arg(0))
@@ -53,6 +54,31 @@ pub(super) fn infer(program: &str, args: &[Word], effects: &mut Effects) {
             .any(|arg| ["--export-secret-keys", "--export-secret-subkeys"].contains(&arg.as_str())),
         _ => false,
     };
+}
+
+// Cobra accepts `-g` and `--host` before `config`, between `config` and
+// `get`, or after `get`; only `--host` takes a separate value. Every glab
+// token key and alias names `token`, and no other key does.
+fn glab_config_gets_token(args: &[Word]) -> bool {
+    let mut words = args.iter().map(Word::as_str);
+    let mut operands = std::iter::from_fn(|| {
+        loop {
+            match words.next()? {
+                "--host" => {
+                    words.next();
+                }
+                word if word.starts_with('-') => {}
+                word => return Some(word),
+            }
+        }
+    });
+    operands
+        .next()
+        .is_some_and(|command| command == "config" || command == "conf")
+        && operands.next() == Some("get")
+        && operands
+            .next()
+            .is_some_and(|key| key.to_ascii_lowercase().contains("token"))
 }
 
 fn gh_shows_token(args: &[Word]) -> bool {
