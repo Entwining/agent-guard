@@ -31,7 +31,7 @@ fn unsupported_invocations_fail_without_stdout() {
 }
 
 #[test]
-fn entry_modes_check_events_and_separate_rejections_from_faults() {
+fn entry_modes_report_rendered_refusals_and_failures_as_rejections() {
     use std::{fs, io::Write, process::Stdio};
     let home = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("entry-{}", std::process::id()));
@@ -44,7 +44,7 @@ fn entry_modes_check_events_and_separate_rejections_from_faults() {
                     r#"{"tool_name":"Bash","tool_input":{"command":"printenv"}}"#,
                     2,
                 ),
-                ("{", 1),
+                ("{", 2),
             ] {
                 let mut command = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"));
                 if !mode.is_empty() {
@@ -154,9 +154,9 @@ fn native_protocol_checks_codex_shell_and_rejects_other_raw_envelopes() {
             r#"{"name":"exec_command","arguments":{"cmd":"true"}}"#,
             0,
         ),
-        ("pi", r#"{"toolName":"bash","input":{"command":"true"}}"#, 1),
+        ("pi", r#"{"toolName":"bash","input":{"command":"true"}}"#, 2),
         ("claude", r#"{"tool_input":{"command":"true"}}"#, 0),
-        ("claude", r#"{"tool_name":"Outside","tool_input":null}"#, 1),
+        ("claude", r#"{"tool_name":"Outside","tool_input":null}"#, 2),
         (
             "codex",
             r#"{"tool_name":"exec_command","tool_input":{"cmd":"("}}"#,

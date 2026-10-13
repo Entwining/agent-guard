@@ -230,7 +230,7 @@ pub fn violations(fault: &str, result: &LifecycleResult) -> Vec<String> {
         _ => {
             if process.status != 2
                 || !process.stdout.is_empty()
-                || !process.stderr.contains("so this call is blocked")
+                || !process.stderr.contains("could not complete")
             {
                 problems.push("operational failure did not deny".into());
             }
