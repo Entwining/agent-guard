@@ -157,7 +157,7 @@ pub fn inject_fault(
                 ".stderr(Stdio::null())",
             )?
         }
-        "failclosed" => entry = replace(&entry, "(*) fail 'guard failed'", "(*) exit 0")?,
+        "failclosed" => entry = replace(&entry, "(*) fail checker_incomplete", "(*) exit 0;")?,
         "deadline" => runner = replace(&runner, "from_secs(3)", "from_secs(6)")?,
         "cleanup" => {
             entry = replace(
@@ -230,7 +230,7 @@ pub fn violations(fault: &str, result: &LifecycleResult) -> Vec<String> {
         _ => {
             if process.status != 2
                 || !process.stdout.is_empty()
-                || !process.stderr.contains("could not complete")
+                || !process.stderr.starts_with("[error:agent-guard/")
             {
                 problems.push("operational failure did not deny".into());
             }

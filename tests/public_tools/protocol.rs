@@ -39,6 +39,7 @@ fn protocol_faults_are_reported_as_failed_acceptance() {
         ("missing-advice", "invalid Claude advice JSON"),
         ("changed-advice", "missing Claude advice"),
         ("non-claude-advice", "unexpected advice on allow"),
+        ("missing-marker", "missing reason marker"),
         ("missing-prefix", "missing Claude denial prefix"),
         ("allow-stderr", "unexpected stderr on allow"),
         ("advice-scalar", "invalid Claude advice JSON"),

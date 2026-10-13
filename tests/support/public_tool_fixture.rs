@@ -57,7 +57,12 @@ fn fixture(args: &[String]) -> Result<u8, Box<dyn std::error::Error>> {
         }
         if fault != "empty-reason" {
             eprintln!(
-                "{}{reason}",
+                "{}{}{reason}",
+                if fault == "missing-marker" {
+                    ""
+                } else {
+                    "[policy:agent-guard/fixture] "
+                },
                 if runtime == "claude" && fault != "missing-prefix" {
                     "DENIED: "
                 } else {

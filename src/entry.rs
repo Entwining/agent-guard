@@ -60,7 +60,11 @@ pub fn check(
 ) -> i32 {
     let deadline = Instant::now() + CHECKER_TIMEOUT;
     let Some((consumer, cwd)) = options(args) else {
-        let _ = error.write_all(USAGE.as_bytes());
+        // A misregistered hook blocks every call with this text as its reason.
+        let _ = writeln!(
+            error,
+            "[error:agent-guard/usage] The hook command is not a supported agent-guard invocation, so this call is blocked. Ask the checker owner to register the hook as `agent-guard --runtime claude|codex|pi`, then recheck the call."
+        );
         return 2;
     };
     let mut bytes = Vec::new();

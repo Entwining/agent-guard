@@ -16,17 +16,25 @@ fn version_reports_the_release_owner() {
 
 #[test]
 fn unsupported_invocations_fail_without_stdout() {
-    for arguments in [vec!["--checker"], vec!["--version", "extra"]] {
+    // A checker invocation's usage failure becomes a hook's blocking reason, so it
+    // carries a marker and a recovery; `--version` misuse never reaches a consumer.
+    for (arguments, stderr) in [
+        (
+            vec!["--checker"],
+            "[error:agent-guard/usage] The hook command is not a supported agent-guard invocation, so this call is blocked. Ask the checker owner to register the hook as `agent-guard --runtime claude|codex|pi`, then recheck the call.\n",
+        ),
+        (
+            vec!["--version", "extra"],
+            "usage: agent-guard --runtime claude|codex|pi < event.json\n",
+        ),
+    ] {
         let output = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
             .args(&arguments)
             .output()
             .unwrap_or_else(|error| panic!("offline binary should start: {error}"));
         assert_eq!(output.status.code(), Some(2), "arguments: {arguments:?}");
         assert!(output.stdout.is_empty(), "arguments: {arguments:?}");
-        assert_eq!(
-            output.stderr,
-            b"usage: agent-guard --runtime claude|codex|pi < event.json\n"
-        );
+        assert_eq!(String::from_utf8_lossy(&output.stderr), stderr);
     }
 }
 

@@ -111,11 +111,11 @@ fn shell_entry_keeps_outcomes_hook_cwd_and_version() {
     )
     .unwrap();
     for consumer in ["claude", "codex", "pi"] {
-        for (event, status, reason) in [
-            (br#"{"tool_name":"Bash","tool_input":{"command":"true"}}"#.as_slice(), 0, ""),
-            (br#"{"tool_name":"Read","tool_input":{"file_path":"Library/Containers/synthetic/data"}}"#.as_slice(), 2, "protected macOS app-data"),
-            (br#"{"tool_name":"Bash","tool_input":{"command":"printenv"}}"#.as_slice(), 2, "dumps environment"),
-            (b"{", 2, "update the guard for this runtime's hook event"),
+        for (event, status, marker, reason) in [
+            (br#"{"tool_name":"Bash","tool_input":{"command":"true"}}"#.as_slice(), 0, "", ""),
+            (br#"{"tool_name":"Read","tool_input":{"file_path":"Library/Containers/synthetic/data"}}"#.as_slice(), 2, "[policy:agent-guard/app_data] ", "protected macOS app-data"),
+            (br#"{"tool_name":"Bash","tool_input":{"command":"printenv"}}"#.as_slice(), 2, "[policy:agent-guard/variable_dump] ", "dumps environment"),
+            (b"{", 2, "[error:agent-guard/malformed_input] ", "update the guard for this runtime's hook event"),
         ] {
             for trailing_newline in [false, true] {
                 let mut bytes = event.to_vec();
@@ -128,7 +128,9 @@ fn shell_entry_keeps_outcomes_hook_cwd_and_version() {
                 if status == 0 {
                     assert!(output.stderr.is_empty());
                 } else {
-                    assert!(String::from_utf8_lossy(&output.stderr).contains(reason));
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    assert!(stderr.starts_with(marker), "{consumer}: {stderr}");
+                    assert!(stderr.contains(reason));
                 }
             }
         }
@@ -169,6 +171,10 @@ fn shell_entry_only_accepts_completed_runner_statuses() {
             }
             _ => {
                 assert!(output.stdout.is_empty());
+                assert!(
+                    String::from_utf8_lossy(&output.stderr)
+                        .starts_with("[error:agent-guard/checker_incomplete] ")
+                );
                 assert!(String::from_utf8_lossy(&output.stderr).contains("guard failed"));
                 assert!(!String::from_utf8_lossy(&output.stderr).contains("fixture reason"));
                 for field in ["reason", "alternative", "owner_step"] {
@@ -180,4 +186,55 @@ fn shell_entry_only_accepts_completed_runner_statuses() {
             }
         }
     }
+}
+
+#[test]
+fn shell_entry_failures_name_their_condition() {
+    let markers: serde_json::Value =
+        serde_json::from_str(include_str!("../fixtures/rust-reason-markers.json")).unwrap();
+    let blocked = |output: Output, id: &str| {
+        let detail = markers["shell_entry"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == id)
+            .unwrap()["detail"]
+            .as_str()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{id}: {stderr}");
+        assert!(output.stdout.is_empty(), "{id}");
+        assert!(
+            stderr.starts_with(&format!("[error:agent-guard/{id}] ")),
+            "{id}: {stderr}"
+        );
+        assert!(stderr.contains(&format!("({detail})")), "{id}: {stderr}");
+    };
+
+    let package = Package::new("missing-runner");
+    blocked(package.event("claude", b"{}"), "runner_missing");
+
+    package.script_runner("#!/bin/bash -p\nexit 3\n");
+    blocked(package.event("claude", b"{}"), "reason_missing");
+
+    // Bash reading its script from stdin sets $0 to this argv[0], which names no file.
+    let mut entry = Command::new("/bin/bash");
+    std::os::unix::process::CommandExt::arg0(&mut entry, "no-such-entry");
+    let mut child = entry
+        .args(["-p", "-s"])
+        .current_dir(package.root.join("home"))
+        .env("HOME", package.root.join("home"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let written = child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(&fs::read("bin/agent-guard").unwrap());
+    let output = child.wait_with_output().unwrap();
+    written.unwrap();
+    blocked(output, "entry_unreadable");
 }

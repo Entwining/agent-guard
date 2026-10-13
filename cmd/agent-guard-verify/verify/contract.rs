@@ -193,8 +193,16 @@ pub(super) fn mismatches(
         if !result.stderr.contains(row.reason) {
             problems.push("wrong denial reason".into());
         }
-        if runtime == "claude" && !result.stderr.starts_with("DENIED: ") {
-            problems.push("missing Claude denial prefix".into());
+        match result
+            .stderr
+            .strip_prefix("[policy:agent-guard/")
+            .and_then(|rest| rest.split_once("] "))
+        {
+            None => problems.push("missing reason marker".into()),
+            Some((_, text)) if runtime == "claude" && !text.starts_with("DENIED: ") => {
+                problems.push("missing Claude denial prefix".into());
+            }
+            Some(_) => {}
         }
         if !result.stdout.trim().is_empty() {
             problems.push("denial emitted advice or unexpected stdout".into());
