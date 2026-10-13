@@ -2,22 +2,23 @@
 # PreToolUse entry for the agent guard:
 #   agent-guard --runtime claude|codex|pi < event.json
 fail() {
-    printf '%s\n' "The agent guard could not complete its check ($1), so this call is blocked. Split the work into smaller calls naming explicit public targets and recheck each call. If a single public-file call still fails, ask the checker owner to run agent-guard --version and repair the reported fault before rechecking the call." >&2
+    printf '%s\n' "[error:agent-guard/$1] The agent guard could not complete its check ($2), so this call is blocked. Split the work into smaller calls naming explicit public targets and recheck each call. If a single public-file call still fails, ask the checker owner to run agent-guard --version and repair the reported fault before rechecking the call." >&2
     exit 2
 }
 
-[[ $HOME == /* ]] || fail 'HOME is not an absolute path'
-entry=$(/bin/realpath "$0") || fail 'entry path unreadable'
+[[ $HOME == /* ]] || fail relative_home 'HOME is not an absolute path'
+# The marker must lead stderr, so a failing step's own diagnostic is dropped.
+# Under Bash 3.2 a redirection inside the substitution adds about 0.4 ms per call.
+{ entry=$(/bin/realpath "$0"); } 2>/dev/null || fail entry_unreadable 'entry path unreadable'
 pkg=${entry%/*}
 pkg=${pkg%/*}
 runner=$pkg/bin/agent-guard-native
-[[ -x $runner ]] || fail 'native runner missing'
+# The package owns the native executable; the hook directory owns relative targets.
+hook_cwd=$PWD
+cd "$pkg" 2>/dev/null && [[ -x $runner ]] || fail runner_missing 'native runner missing'
 if [[ $# == 1 && $1 == --version ]]; then
     exec "$runner" --version
 fi
-# The package owns the native executable; the hook directory owns relative targets.
-hook_cwd=$PWD
-cd "$pkg" || fail 'package directory unreadable'
 
 # The runner makes itself the leader of group $pid before it starts any child and
 # kills that group at the three-second deadline. Bash job control would race its
@@ -36,8 +37,8 @@ rc=$?
 case $rc in
     (0) [[ -n $reason ]] && printf '%s\n' "$reason"; exit 0 ;;
     (3) ;;
-    (*) fail 'guard failed' ;;
+    (*) fail checker_incomplete 'guard failed' ;;
 esac
-[[ -n $reason ]] || fail 'guard gave no reason'
+[[ -n $reason ]] || fail reason_missing 'guard gave no reason'
 printf '%s\n' "$reason" >&2
 exit 2

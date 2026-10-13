@@ -97,12 +97,18 @@ export default function (pi: ExtensionAPI) {
       timeout: 4500,
     });
     if (result.status === 0) return;
-    return { block: true, reason: result.stderr?.trim() || result.error?.message || "agent-guard failed" };
+    const failure = result.error?.message ?? (result.signal ? `signal ${result.signal}` : `exit ${result.status}`);
+    return {
+      block: true,
+      reason:
+        result.stderr?.trim() ||
+        `[error:agent-guard/guard_unavailable] The agent guard did not complete its check (${failure}), so this call is blocked. Ask the checker owner to run agent-guard --version and repair the installation before rechecking the call.`,
+    };
   });
 }
 ```
 
-A failed, missing, or timed-out guard check blocks the Pi tool call.
+A failed, missing, or timed-out guard check blocks the Pi tool call. When the guard gives no reason, for example because it could not start, the extension's own reason carries the `guard_unavailable` marker described under [Reason markers](#reason-markers).
 
 ## Verify
 
@@ -138,6 +144,60 @@ Moving or hard-linking a protected file to an unprotected name is refused: the r
 Each refusal names what to do instead. Inspection-budget and deadline refusals ask for smaller calls with explicit public targets. Bounded or cyclic aliases require an ordinary absolute path. A malformed event sends the checker owner to update the guard for the runtime's hook event. If a single public-file check still fails, the checker owner can run `agent-guard --version` and repair the reported fault; none of these steps authorizes the blocked operation.
 
 The serialized event is limited to 262,144 bytes, and shell substitutions/groups to 64 simultaneous nested delimiters. Excess input or nesting, a relative working directory, and invalid UTF-8 are refused with a reason that asks the caller to shorten or split the request, supply an absolute working directory, or encode UTF-8. Malformed events, filesystem probe faults and other operational errors remain failed checks; the hook blocks both kinds with exit status `2`. The entry deadline is 3 seconds, below the example consumer timeout of 5 seconds. A cancelled check stops and reaps its child processes before the hook returns.
+
+## Reason markers
+
+Every blocking reason starts with a marker that names who blocked the call and why, so a session log or index can attribute the decision without matching its wording:
+
+```text
+[policy:agent-guard/app_data] DENIED: This reads a protected macOS app-data directory. …
+```
+
+The marker is `[<class>:agent-guard/<id>]`, followed by one space and the reason. For Claude Code, a reason the checker gives after reading the event keeps its `DENIED:` prefix after the marker; every other reason, such as a usage or shell entry failure, follows the marker directly. The class is the disposition:
+
+- `policy`: the call reaches protected material; the reason names a safe alternative.
+- `coverage`: the guard cannot inspect the call completely enough to permit it; rewriting the call can make it checkable.
+- `error`: the check itself failed or ran out of time; the call is blocked without a verdict.
+
+The ID names the checked condition. A condition that can block in more than one class keeps one ID, so a class and ID pair identifies a reason. An ID stays the same when only the wording changes; a materially different condition or recovery receives a new ID, and a retired ID is never reused. Advice that does not block a call carries no marker.
+
+| ID | Class | Condition |
+| --- | --- | --- |
+| `resource_change` | policy | Moving or hard-linking protected content to an unprotected name |
+| `app_data` | policy | Reading a protected macOS app-data directory |
+| `broad_scan` | policy | A scan rooted at the home directory or `~/Library` |
+| `credential_file` | policy | Reading a credential or environment file |
+| `inline_credential_file` | policy | Inline code naming a credential or environment file |
+| `hidden_search` | policy | A recursive search that includes hidden files |
+| `variable_dump` | policy | Dumping environment or shell variables |
+| `credential_variable` | policy | Printing a credential variable |
+| `git_hosting_token` | policy | Printing a Git hosting token |
+| `keychain` | policy | Extracting a password from the macOS Keychain |
+| `stored_secret` | policy | Printing a stored secret or access token |
+| `curl_trace` | policy | curl verbose or trace output that can print request headers |
+| `credential_upload` | policy | Sending a credential file's contents |
+| `ssh_private` | policy | Reading private material in an `.ssh` directory or its alias |
+| `grep_ssh_private` | policy | A Grep tool search over private `.ssh` material |
+| `input_byte_limit` | coverage | The event exceeds the input byte limit |
+| `nesting_limit` | coverage | Shell nesting exceeds 64 levels |
+| `absolute_cwd_required` | coverage | The event has no absolute working directory |
+| `invalid_encoding` | coverage | The event is not valid UTF-8 |
+| `unsupported_shell_syntax` | coverage | Shell syntax the guard cannot inspect |
+| `executor_divergence` | coverage | Syntax or shell options that a shell the consumer may run would read differently from the guard's model |
+| `identity_bound` | coverage | A path reached through bounded or cyclic aliases |
+| `inode_alias` | coverage | An inode-addressed `/.vol` path |
+| `inspection_budget` | coverage | A command that exceeds the inspection budget |
+| `malformed_input` | error | An event that is not a complete JSON event with the documented tool fields |
+| `probe_fault` | error | A filesystem metadata check failed |
+| `guard_fault` | error | An internal checker fault |
+| `deadline` | error | The check did not finish before its deadline |
+| `usage` | error | The hook command line is not a supported invocation |
+| `relative_home` | error | `HOME` is not an absolute path |
+| `entry_unreadable` | error | The entry cannot resolve its own path |
+| `runner_missing` | error | The package directory or its native runner is missing or not usable |
+| `checker_incomplete` | error | The checker ended without a verdict |
+| `reason_missing` | error | The checker blocked the call without a reason |
+| `guard_unavailable` | error | The [Pi extension](#register-pi) received no reason from the guard |
 
 ## Known limits
 

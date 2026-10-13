@@ -1,0 +1,58 @@
+{
+  "rendered": [
+    {"class": "policy", "kind": "ResourceChange", "id": "resource_change", "entry": true},
+    {"class": "policy", "kind": "AppData", "id": "app_data", "entry": true},
+    {"class": "policy", "kind": "Broad", "id": "broad_scan", "entry": true},
+    {"class": "policy", "kind": "File", "id": "credential_file", "entry": true},
+    {"class": "policy", "kind": "CodeFile", "id": "inline_credential_file", "entry": true},
+    {"class": "policy", "kind": "HiddenSearch", "id": "hidden_search", "entry": true},
+    {"class": "policy", "kind": "Dump", "id": "variable_dump", "entry": true},
+    {"class": "policy", "kind": "Variable", "id": "credential_variable", "entry": true},
+    {"class": "policy", "kind": "Token", "id": "git_hosting_token", "entry": true},
+    {"class": "policy", "kind": "Keychain", "id": "keychain", "entry": true},
+    {"class": "policy", "kind": "StoredSecret", "id": "stored_secret", "entry": true},
+    {"class": "policy", "kind": "Trace", "id": "curl_trace", "entry": true},
+    {"class": "policy", "kind": "Upload", "id": "credential_upload", "entry": true},
+    {"class": "policy", "kind": "Ssh", "id": "ssh_private", "entry": true},
+    {"class": "policy", "kind": "GrepSsh", "id": "grep_ssh_private", "entry": true},
+    {"class": "coverage", "kind": "InputByteLimit", "id": "input_byte_limit", "entry": true},
+    {"class": "coverage", "kind": "NestingLimit", "id": "nesting_limit", "entry": true},
+    {"class": "coverage", "kind": "AbsoluteCwdRequired", "id": "absolute_cwd_required", "entry": true},
+    {"class": "coverage", "kind": "InvalidEncoding", "id": "invalid_encoding", "entry": true},
+    {"class": "coverage", "kind": "UnsupportedShellSyntax", "id": "unsupported_shell_syntax", "entry": true},
+    {"class": "coverage", "kind": "ExecutorDivergence", "id": "executor_divergence", "entry": true},
+    {"class": "coverage", "kind": "UnsupportedDialectConstruct", "id": "executor_divergence", "entry": true},
+    {"class": "coverage", "kind": "IdentityBound", "id": "identity_bound", "entry": true},
+    {"class": "coverage", "kind": "InodeAlias", "id": "inode_alias", "entry": true},
+    {"class": "coverage", "kind": "InspectionBudget", "id": "inspection_budget", "entry": true},
+    {"class": "coverage", "kind": "ExecutionOwnerUnavailable", "id": "execution_owner_unavailable", "entry": false},
+    {"class": "coverage", "kind": "UnknownProgram", "id": "unknown_program", "entry": false},
+    {"class": "coverage", "kind": "UnresolvedTarget", "id": "unresolved_target", "entry": false},
+    {"class": "coverage", "kind": "OutsideObservedTool", "id": "outside_observed_tool", "entry": false},
+    {"class": "coverage", "kind": "InterpreterChosenRead", "id": "interpreter_chosen_read", "entry": false},
+    {"class": "error", "kind": "MalformedInput", "id": "malformed_input", "entry": true},
+    {"class": "error", "kind": "ProbeFault", "id": "probe_fault", "entry": true},
+    {"class": "error", "kind": "GuardFault", "id": "guard_fault", "entry": true},
+    {"class": "error", "kind": "Deadline", "id": "deadline", "entry": true},
+    {"class": "error", "kind": "RelativeCwd", "id": "absolute_cwd_required", "entry": false},
+    {"class": "error", "kind": "InvalidEncoding", "id": "invalid_encoding", "entry": false},
+    {"class": "error", "kind": "ResourceLimit", "id": "resource_limit", "entry": false},
+    {"class": "error", "kind": "InspectionBudget", "id": "inspection_budget", "entry": false},
+    {"class": "error", "kind": "InputFailure", "id": "input_failure", "entry": false},
+    {"class": "error", "kind": "Cancelled", "id": "cancelled", "entry": false},
+    {"class": "error", "kind": "BrokenEnrollment", "id": "broken_enrollment", "entry": false}
+  ],
+  "checker": [
+    {"id": "usage"}
+  ],
+  "shell_entry": [
+    {"id": "relative_home", "detail": "HOME is not an absolute path"},
+    {"id": "entry_unreadable", "detail": "entry path unreadable"},
+    {"id": "runner_missing", "detail": "native runner missing"},
+    {"id": "checker_incomplete", "detail": "guard failed"},
+    {"id": "reason_missing", "detail": "guard gave no reason"}
+  ],
+  "pi_extension": [
+    {"id": "guard_unavailable"}
+  ]
+}

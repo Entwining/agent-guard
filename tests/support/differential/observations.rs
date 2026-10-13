@@ -112,7 +112,12 @@ pub(super) fn observe_contract(
     } else {
         format!("{old_reason}\n")
     };
-    let consumer_text_match = wire.stderr == expected_text;
+    // Legacy rows pin the wording; the reason-marker fixture pins each marker.
+    let consumer_text_match = wire
+        .stderr
+        .strip_prefix('[')
+        .and_then(|rest| rest.split_once("] "))
+        .is_some_and(|(marker, text)| marker.contains(":agent-guard/") && text == expected_text);
     let reason_match = if same_denial_rule {
         consumer_text_match
     } else if expected == "D" && item["verdict"] == "RETAIN" {

@@ -66,6 +66,7 @@ fn stalled_check_reports_the_checker_deadline_and_reaps() {
     let output = fixture.fault("check-stall");
     let elapsed = started.elapsed();
     assert_eq!(output.status.code(), Some(3));
+    assert!(String::from_utf8_lossy(&output.stdout).starts_with("[error:agent-guard/deadline] "));
     assert!(String::from_utf8_lossy(&output.stdout).contains("could not complete this check"));
     assert!(output.stderr.is_empty());
     let child_elapsed = Duration::from_micros(
@@ -140,7 +141,7 @@ fn unknown_runtime_never_reaches_the_checker() {
     assert_eq!(output.status.code(), Some(3));
     assert_eq!(
         output.stdout,
-        b"usage: agent-guard --runtime claude|codex|pi < event.json\n"
+        b"[error:agent-guard/usage] The hook command is not a supported agent-guard invocation, so this call is blocked. Ask the checker owner to register the hook as `agent-guard --runtime claude|codex|pi`, then recheck the call.\n"
     );
 }
 
@@ -172,5 +173,8 @@ fn shell_entry_rejects_even_an_existing_relative_home() {
         .unwrap();
     let output = child.wait_with_output().unwrap();
     assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).starts_with("[error:agent-guard/relative_home] ")
+    );
     assert!(String::from_utf8_lossy(&output.stderr).contains("HOME is not an absolute path"));
 }

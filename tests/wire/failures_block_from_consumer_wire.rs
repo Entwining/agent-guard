@@ -31,12 +31,13 @@ fn check_failures_block_each_consumer() {
                 .find(|row| row["kind"] == format!("{kind:?}"))
                 .unwrap();
             let sentence = row["sentence"].as_str().unwrap();
+            let marker = format!("[error:agent-guard/{}]", kind.id());
             let expected = if consumer == Consumer::Claude {
                 format!(
-                    "DENIED: {sentence} Do NOT bypass this restriction or retry the same blocked command.\n"
+                    "{marker} DENIED: {sentence} Do NOT bypass this restriction or retry the same blocked command.\n"
                 )
             } else {
-                format!("{sentence}\n")
+                format!("{marker} {sentence}\n")
             };
             assert_eq!(wire.stderr, expected, "{consumer:?} {kind:?}");
             assert!(wire.stdout.is_empty());
@@ -81,12 +82,13 @@ fn unresolved_operations_offer_an_explicit_public_path() {
                 .find(|row| row["kind"] == format!("{cause:?}"))
                 .unwrap();
             let sentence = row["sentence"].as_str().unwrap();
+            let marker = format!("[coverage:agent-guard/{}]", cause.id());
             let expected = if consumer == Consumer::Claude {
                 format!(
-                    "DENIED: {sentence} Do NOT bypass this restriction or retry the same blocked command.\n"
+                    "{marker} DENIED: {sentence} Do NOT bypass this restriction or retry the same blocked command.\n"
                 )
             } else {
-                format!("{sentence}\n")
+                format!("{marker} {sentence}\n")
             };
             assert_eq!(wire.exit, 2);
             assert_eq!(wire.stderr, expected);

@@ -129,6 +129,31 @@ pub enum DenialRule {
     GrepSsh,
 }
 
+/// Reason IDs name the checked condition in each blocking reason's marker;
+/// `docs/setup.md` lists them with their stability rules, so never reuse or
+/// rename one when only the wording changes.
+impl DenialRule {
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::ResourceChange => "resource_change",
+            Self::AppData => "app_data",
+            Self::Broad => "broad_scan",
+            Self::File => "credential_file",
+            Self::CodeFile => "inline_credential_file",
+            Self::HiddenSearch => "hidden_search",
+            Self::Dump => "variable_dump",
+            Self::Variable => "credential_variable",
+            Self::Token => "git_hosting_token",
+            Self::Keychain => "keychain",
+            Self::StoredSecret => "stored_secret",
+            Self::Trace => "curl_trace",
+            Self::Upload => "credential_upload",
+            Self::Ssh => "ssh_private",
+            Self::GrepSsh => "grep_ssh_private",
+        }
+    }
+}
+
 /// Event scope survives rendering; choosing and proving a continuation belongs to the agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Recovery {
@@ -188,6 +213,29 @@ pub enum CoverageGap {
     UnsupportedDialectConstruct,
 }
 
+impl CoverageGap {
+    pub const fn id(&self) -> &'static str {
+        match self {
+            Self::InodeAlias => "inode_alias",
+            Self::InputByteLimit => "input_byte_limit",
+            Self::NestingLimit => "nesting_limit",
+            Self::AbsoluteCwdRequired => "absolute_cwd_required",
+            Self::InvalidEncoding => "invalid_encoding",
+            Self::UnknownProgram { .. } => "unknown_program",
+            Self::UnresolvedTarget => "unresolved_target",
+            Self::UnsupportedShellSyntax => "unsupported_shell_syntax",
+            // The executor set only selects which name the gap carries; the
+            // refusal and its recovery are the same.
+            Self::ExecutorDivergence | Self::UnsupportedDialectConstruct => "executor_divergence",
+            Self::OutsideObservedTool { .. } => "outside_observed_tool",
+            Self::ExecutionOwnerUnavailable => "execution_owner_unavailable",
+            Self::IdentityBound => "identity_bound",
+            Self::InspectionBudget => "inspection_budget",
+            Self::InterpreterChosenRead => "interpreter_chosen_read",
+        }
+    }
+}
+
 /// Entry owners must block on this error; it is not a completed no-objection decision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CheckError {
@@ -208,6 +256,25 @@ pub enum CheckErrorKind {
     Deadline,
     Cancelled,
     BrokenEnrollment,
+}
+
+impl CheckErrorKind {
+    /// A kind that shares its condition with a coverage refusal shares its ID.
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::RelativeCwd => "absolute_cwd_required",
+            Self::InvalidEncoding => "invalid_encoding",
+            Self::MalformedInput => "malformed_input",
+            Self::InputFailure => "input_failure",
+            Self::GuardFault => "guard_fault",
+            Self::ProbeFault => "probe_fault",
+            Self::ResourceLimit => "resource_limit",
+            Self::InspectionBudget => "inspection_budget",
+            Self::Deadline => "deadline",
+            Self::Cancelled => "cancelled",
+            Self::BrokenEnrollment => "broken_enrollment",
+        }
+    }
 }
 
 impl CheckError {

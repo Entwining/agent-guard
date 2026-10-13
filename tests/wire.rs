@@ -20,6 +20,8 @@ pub mod native_limits_are_completed_refusals;
 pub mod non_object_tool_inputs_fail_the_check;
 #[path = "support/batch6.rs"]
 pub mod program_contract;
+#[path = "wire/reason_markers_follow_the_public_table.rs"]
+pub mod reason_markers_follow_the_public_table;
 #[path = "wire/shell.rs"]
 pub mod shell;
 pub(crate) mod support;

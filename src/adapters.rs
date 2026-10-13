@@ -216,12 +216,8 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
         stdout: String::new(),
         stderr: String::new(),
     };
-    let reason = match result {
-        Err(error) => {
-            wire.exit = 2;
-            wire.stderr = denial_text(consumer, error.consumer_message());
-            return wire;
-        }
+    let (class, id, reason) = match result {
+        Err(error) => ("error", error.kind.id(), error.consumer_message()),
         Ok(evaluation) => match &evaluation.outcome {
             Outcome::NoObjection => return wire,
             Outcome::SoftAdvice(advice) => {
@@ -239,28 +235,34 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
                 }
                 return wire;
             }
-            Outcome::ProtectedDenial { reason, .. } => reason.rule.message().to_owned(),
+            Outcome::ProtectedDenial { reason, .. } => {
+                ("policy", reason.rule.id(), reason.rule.message())
+            }
             Outcome::CoverageInsufficient {
                 disposition: Disposition::ContinueLimitedPreflight,
                 ..
             } => return wire,
-            Outcome::CoverageInsufficient { cause, .. } => {
-                crate::policy::refusal_message(cause).to_owned()
-            }
+            Outcome::CoverageInsufficient { cause, .. } => (
+                "coverage",
+                cause.id(),
+                crate::policy::refusal_message(cause),
+            ),
         },
     };
     wire.exit = 2;
-    wire.stderr = denial_text(consumer, &reason);
+    wire.stderr = denial_text(consumer, class, id, reason);
     wire
 }
 
-fn denial_text(consumer: Consumer, reason: &str) -> String {
+// The marker is the first token of the hook's reason, ahead of `DENIED:`, so a
+// session index can attribute the block without matching its wording.
+fn denial_text(consumer: Consumer, class: &str, id: &str, reason: &str) -> String {
     if consumer == Consumer::Claude {
         format!(
-            "DENIED: {reason} Do NOT bypass this restriction or retry the same blocked command.\n"
+            "[{class}:agent-guard/{id}] DENIED: {reason} Do NOT bypass this restriction or retry the same blocked command.\n"
         )
     } else {
-        format!("{reason}\n")
+        format!("[{class}:agent-guard/{id}] {reason}\n")
     }
 }
 
