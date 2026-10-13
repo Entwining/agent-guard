@@ -104,7 +104,9 @@ pub fn check(
         let wire = adapters::render(consumer, &result);
         output.write_all(wire.stdout.as_bytes())?;
         error.write_all(wire.stderr.as_bytes())?;
-        Ok(if result.is_err() { 1 } else { wire.exit })
+        // A rendered check failure exits like a denial so the shell entry
+        // forwards its reason; only an unrendered fault exits 1 and is dropped.
+        Ok(wire.exit)
     })();
     match result {
         Ok(status) => status,

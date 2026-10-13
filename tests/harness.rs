@@ -190,7 +190,9 @@ fn lifecycle_rejects_panic_and_partial_output_leaks() {
             let result = LifecycleResult {
                 process: ProcessResult {
                     status: 2,
-                    stderr: format!("agent-guard failed, so this call is blocked\n{trace}"),
+                    stderr: format!(
+                        "The agent guard could not complete its check (guard failed), so this call is blocked.\n{trace}"
+                    ),
                     ..ProcessResult::default()
                 },
                 processes: vec![ProcessRecord {

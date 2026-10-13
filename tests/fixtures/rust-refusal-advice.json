@@ -14,15 +14,15 @@
     },
     {
       "kind": "InvalidEncoding",
-      "sentence": "The agent guard could not complete this check, so the call is blocked. Send a complete UTF-8 JSON event with the documented tool fields and an absolute cwd, then recheck the call."
+      "sentence": "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and update the guard for this runtime's hook event, then recheck the call."
     },
     {
       "kind": "MalformedInput",
-      "sentence": "The agent guard could not complete this check, so the call is blocked. Send a complete UTF-8 JSON event with the documented tool fields and an absolute cwd, then recheck the call."
+      "sentence": "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and update the guard for this runtime's hook event, then recheck the call."
     },
     {
       "kind": "InputFailure",
-      "sentence": "The agent guard could not complete this check, so the call is blocked. Send a complete UTF-8 JSON event with the documented tool fields and an absolute cwd, then recheck the call."
+      "sentence": "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and update the guard for this runtime's hook event, then recheck the call."
     },
     {
       "kind": "GuardFault",

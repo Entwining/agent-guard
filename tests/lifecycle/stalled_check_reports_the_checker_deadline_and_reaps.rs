@@ -65,7 +65,7 @@ fn stalled_check_reports_the_checker_deadline_and_reaps() {
     let started = Instant::now();
     let output = fixture.fault("check-stall");
     let elapsed = started.elapsed();
-    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(output.status.code(), Some(3));
     assert!(String::from_utf8_lossy(&output.stdout).contains("could not complete this check"));
     assert!(output.stderr.is_empty());
     let child_elapsed = Duration::from_micros(
@@ -113,7 +113,7 @@ fn malformed_input_fails_as_an_operational_error() {
         fixture.root.join("home").to_str().unwrap(),
         b"{",
     );
-    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(output.status.code(), Some(3));
     assert!(String::from_utf8_lossy(&output.stdout).contains("could not complete this check"));
 }
 

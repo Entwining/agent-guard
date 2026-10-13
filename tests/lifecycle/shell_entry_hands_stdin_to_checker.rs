@@ -94,7 +94,10 @@ fn shell_entry_hands_stdin_to_checker_byte_exactly() {
         if status == 0 {
             assert!(output.stderr.is_empty(), "{name}");
         } else {
-            assert!(String::from_utf8_lossy(&output.stderr).contains("guard failed"));
+            assert!(
+                String::from_utf8_lossy(&output.stderr)
+                    .contains("update the guard for this runtime's hook event")
+            );
         }
     }
 }
@@ -112,7 +115,7 @@ fn shell_entry_keeps_outcomes_hook_cwd_and_version() {
             (br#"{"tool_name":"Bash","tool_input":{"command":"true"}}"#.as_slice(), 0, ""),
             (br#"{"tool_name":"Read","tool_input":{"file_path":"Library/Containers/synthetic/data"}}"#.as_slice(), 2, "protected macOS app-data"),
             (br#"{"tool_name":"Bash","tool_input":{"command":"printenv"}}"#.as_slice(), 2, "dumps environment"),
-            (b"{", 2, "could not complete its check (guard failed)"),
+            (b"{", 2, "update the guard for this runtime's hook event"),
         ] {
             for trailing_newline in [false, true] {
                 let mut bytes = event.to_vec();

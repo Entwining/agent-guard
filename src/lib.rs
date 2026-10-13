@@ -225,7 +225,7 @@ impl CheckError {
             CheckErrorKind::InvalidEncoding
             | CheckErrorKind::MalformedInput
             | CheckErrorKind::InputFailure => {
-                "The agent guard could not complete this check, so the call is blocked. Send a complete UTF-8 JSON event with the documented tool fields and an absolute cwd, then recheck the call."
+                "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and update the guard for this runtime's hook event, then recheck the call."
             }
             _ => {
                 "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and check a single public file, repair the reported fault, then recheck the call before running it."
