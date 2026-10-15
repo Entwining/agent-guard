@@ -31,14 +31,6 @@
     {
       "kind": "ProbeFault",
       "sentence": "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and check a single public file, repair the reported fault, then recheck the call before running it."
-    },
-    {
-      "kind": "Cancelled",
-      "sentence": "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and check a single public file, repair the reported fault, then recheck the call before running it."
-    },
-    {
-      "kind": "BrokenEnrollment",
-      "sentence": "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and check a single public file, repair the reported fault, then recheck the call before running it."
     }
   ],
   "refusals": [

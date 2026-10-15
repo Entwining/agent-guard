@@ -121,8 +121,6 @@ pub fn run(row: &Value, arm: Arm) -> Value {
         Some("offline checker lifecycle" | "offline checker worker") => {
             let kind = if text(row, "id").contains("deadline") {
                 CheckErrorKind::Deadline
-            } else if text(row, "id").contains("cancelled") {
-                CheckErrorKind::Cancelled
             } else {
                 CheckErrorKind::GuardFault
             };

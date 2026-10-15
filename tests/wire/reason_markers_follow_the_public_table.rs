@@ -49,8 +49,7 @@ fn blocking_results() -> Vec<(&'static str, &'static str, Result<Evaluation, Che
         ExecutionOwnerUnavailable, IdentityBound, InspectionBudget, InterpreterChosenRead,
         UnsupportedDialectConstruct);
     let errors = every_variant!(E: RelativeCwd, InvalidEncoding, MalformedInput, InputFailure,
-        GuardFault, ProbeFault, ResourceLimit, InspectionBudget, Deadline, Cancelled,
-        BrokenEnrollment);
+        GuardFault, ProbeFault, ResourceLimit, InspectionBudget, Deadline);
     let denial = |rule| {
         evaluation(Outcome::ProtectedDenial {
             reason: Reason {

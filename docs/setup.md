@@ -38,14 +38,14 @@ brew upgrade entwining/tap/agent-guard
 
 ## Register Claude Code
 
-Merge the following [Claude Code `PreToolUse` hook](https://code.claude.com/docs/en/hooks) into your existing `~/.claude/settings.json`; retain other settings and hook entries. A hook exit code of `2` blocks the call.
+Merge the following [Claude Code `PreToolUse` hook](https://code.claude.com/docs/en/hooks) into your existing `~/.claude/settings.json`; retain other settings and hook entries. This registration requires Claude Code 2.1.295 or later. A hook exit code of `2` blocks the call; `onFailure: "block"` also blocks it if the guard cannot start, reaches the hook timeout, or exits with an unexpected code.
 
 ```json
 {
   "hooks": {
     "PreToolUse": [{
       "matcher": "Bash|Read|Edit|Write|Grep",
-      "hooks": [{ "type": "command", "command": "/opt/homebrew/bin/agent-guard --runtime claude", "timeout": 5 }]
+      "hooks": [{ "type": "command", "command": "/opt/homebrew/bin/agent-guard --runtime claude", "timeout": 5, "onFailure": "block" }]
     }]
   }
 }
@@ -147,11 +147,13 @@ The serialized event is limited to 262,144 bytes, and shell substitutions/groups
 
 ## Reason markers
 
-Every blocking reason starts with a marker that names who blocked the call and why, so a session log or index can attribute the decision without matching its wording:
+Every blocking reason produced by the guard or the documented Pi extension starts with a marker that names who blocked the call and why, so a session log or index can attribute the decision without matching its wording:
 
 ```text
 [policy:agent-guard/app_data] DENIED: This reads a protected macOS app-data directory. …
 ```
+
+Hook failures blocked by Claude Code's `onFailure` setting use Claude Code's own diagnostic, outside the guard's marker contract.
 
 The marker is `[<class>:agent-guard/<id>]`, followed by one space and the reason. For Claude Code, a reason the checker gives after reading the event keeps its `DENIED:` prefix after the marker; every other reason, such as a usage or shell entry failure, follows the marker directly. The class is the disposition:
 
@@ -205,7 +207,7 @@ The guard is a bounded preflight check: it decides from the targets it infers un
 
 ### Calls that reach the guard
 
-A disabled, skipped, or unregistered hook cannot inspect a call, and a runtime that treats a hook launch failure or its own hook timeout as non-blocking lets the call proceed unchecked. Custom tools and processes outside the registered runtime are not checked, and `Glob` is covered by neither the example matchers nor the guard's input handlers.
+A disabled, skipped, or unregistered hook cannot inspect a call. The documented Claude Code registration and Pi extension block guard launch failures and timeouts; a runtime that treats those failures as non-blocking lets the call proceed unchecked. Custom tools and processes outside the registered runtime are not checked, and `Glob` is covered by neither the example matchers nor the guard's input handlers.
 
 Tool paths are checked as the consumer resolves them: Claude Code reads a Grep `file_path` as its `path` when `path` is absent and trims surrounding whitespace, and Pi replaces Unicode spaces and drops a leading `@`. A Claude Code Write with only `path` is refused as malformed input. A `file:` spelling in a Claude Code or Pi tool path is checked as a relative name; Pi itself decodes a lowercase `file://` URL into the path it names, so such a Pi tool path is not checked as that path. Codex's hook input omits the `workdir` an `exec_command` call runs in ([openai/codex#33986](https://github.com/openai/codex/issues/33986)), so relative paths in Codex Bash calls are checked against the session `cwd`.
 
