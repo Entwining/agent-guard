@@ -33,9 +33,7 @@ pub(super) fn worker_fault(fixture: &Fixture, kind: CheckErrorKind) -> Value {
         panic!("worker failed to become ready within fixture deadline");
     }
     if kind != CheckErrorKind::GuardFault {
-        if kind == CheckErrorKind::Deadline {
-            std::thread::sleep(Duration::from_millis(20));
-        }
+        std::thread::sleep(Duration::from_millis(20));
         child.kill().unwrap();
     }
     let status = child.wait().unwrap();

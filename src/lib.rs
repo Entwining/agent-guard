@@ -254,8 +254,6 @@ pub enum CheckErrorKind {
     /// Policy turns this into an inspection-budget refusal before rendering.
     InspectionBudget,
     Deadline,
-    Cancelled,
-    BrokenEnrollment,
 }
 
 impl CheckErrorKind {
@@ -271,8 +269,6 @@ impl CheckErrorKind {
             Self::ResourceLimit => "resource_limit",
             Self::InspectionBudget => "inspection_budget",
             Self::Deadline => "deadline",
-            Self::Cancelled => "cancelled",
-            Self::BrokenEnrollment => "broken_enrollment",
         }
     }
 }
@@ -324,8 +320,6 @@ impl fmt::Display for CheckError {
             CheckErrorKind::ResourceLimit => "checker resource limit exceeded",
             CheckErrorKind::InspectionBudget => "checker inspection budget exceeded",
             CheckErrorKind::Deadline => "checker deadline exceeded",
-            CheckErrorKind::Cancelled => "check cancelled",
-            CheckErrorKind::BrokenEnrollment => "consumer enrollment is unavailable",
         };
         formatter.write_str(message)
     }

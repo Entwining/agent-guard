@@ -38,9 +38,7 @@
     {"class": "error", "kind": "InvalidEncoding", "id": "invalid_encoding", "entry": false},
     {"class": "error", "kind": "ResourceLimit", "id": "resource_limit", "entry": false},
     {"class": "error", "kind": "InspectionBudget", "id": "inspection_budget", "entry": false},
-    {"class": "error", "kind": "InputFailure", "id": "input_failure", "entry": false},
-    {"class": "error", "kind": "Cancelled", "id": "cancelled", "entry": false},
-    {"class": "error", "kind": "BrokenEnrollment", "id": "broken_enrollment", "entry": false}
+    {"class": "error", "kind": "InputFailure", "id": "input_failure", "entry": false}
   ],
   "checker": [
     {"id": "usage"}

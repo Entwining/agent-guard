@@ -17,8 +17,6 @@ fn check_failures_block_each_consumer() {
             CheckErrorKind::ProbeFault,
             CheckErrorKind::ResourceLimit,
             CheckErrorKind::Deadline,
-            CheckErrorKind::Cancelled,
-            CheckErrorKind::BrokenEnrollment,
             CheckErrorKind::RelativeCwd,
             CheckErrorKind::InvalidEncoding,
         ] {

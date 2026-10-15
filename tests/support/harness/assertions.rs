@@ -120,7 +120,7 @@ pub(super) fn assert_observers(row: &Value, actual: &Value) {
             }
         }
     }
-    if id.contains("deadline") || id.contains("cancelled") {
+    if id.contains("deadline") {
         assert_eq!(actual["lifecycle"]["ready_receipt"], true);
         assert_eq!(actual["lifecycle"]["reaped"], true);
         assert_eq!(actual["lifecycle"]["completion_observed_by_wait"], true);
