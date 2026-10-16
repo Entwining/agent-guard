@@ -30,3 +30,7 @@ A finding changes the implementation when it is a regression against the previou
 Keep the root README focused on purpose and capabilities; installation, registration, removal and verification commands belong in `docs/setup.md`.
 
 Release actions follow the [repository-local release skill](.agents/skills/release/SKILL.md) and the workflow that owns publication. Runtime acceptance does not authorize changing machine permissions. Use type-prefixed commit subjects (`type: summary` or `type(scope): summary`).
+
+## Dependency updates
+
+Before changing `.github/renovate.json`, or deciding how a dependency's updates are grouped, delayed, or merged, read the shared Renovate policy in full: `gh repo read-file skills/renovate/SKILL.md -R Entwining/renovate-config`.
