@@ -1,0 +1,22 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>Entwining/renovate-config"],
+  "description": [
+    "This repository writes type-prefixed commit subjects itself, so Renovate follows the same convention."
+  ],
+  "semanticCommits": "enabled",
+  "packageRules": [
+    {
+      "description": "With warnings denied, a new Clippy or rustfmt in the pinned toolchain can fail CI.",
+      "matchDepNames": ["rust"],
+      "groupName": "Rust toolchain and linters"
+    },
+    {
+      "description": "Parser output is policy semantics, which no check fully covers; review parser upgrades separately.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["brush-parser", "tree-sitter", "tree-sitter-bash"],
+      "groupName": null,
+      "automerge": false
+    }
+  ]
+}
