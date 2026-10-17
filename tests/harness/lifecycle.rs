@@ -303,11 +303,7 @@ pub fn execute_fault(entry: &Path, home: &Path, body: &[u8]) -> Result<Lifecycle
     );
     let cleanup = (|| -> Result<()> {
         for record in &result.processes {
-            if let Err(e) = kill_group(record.pgid)
-                && e.downcast_ref::<rustix::io::Errno>() != Some(&rustix::io::Errno::PERM)
-            {
-                return Err(e);
-            }
+            kill_group(record.pgid, None)?;
             kill_pid(record.pid)?;
         }
         Ok(())

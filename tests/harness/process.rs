@@ -14,7 +14,7 @@ use std::{
         process::CommandExt,
     },
     path::{Component, Path, PathBuf},
-    process::{Command, Stdio},
+    process::{Child, Command, Stdio},
     thread,
     time::{Duration, Instant},
 };
@@ -57,11 +57,22 @@ impl Default for ProcessResult {
     }
 }
 
-pub fn kill_group(pid: i32) -> Result<()> {
+/// `leader` is the caller's own child leading the group, which only the caller can reap.
+pub fn kill_group(pid: i32, mut leader: Option<&mut Child>) -> Result<()> {
     let pid = Pid::from_raw(pid).ok_or("invalid process group")?;
-    match kill_process_group(pid, Signal::KILL) {
-        Ok(()) | Err(rustix::io::Errno::SRCH) => Ok(()),
-        Err(e) => Err(e.into()),
+    // Darwin answers EPERM, not ESRCH, while every member has exited but is
+    // unreaped. Reaping the leader, and launchd reaping orphans, ends such a
+    // group within the deadline; a refusal that outlasts it is the host's.
+    let deadline = Instant::now() + Duration::from_secs(1);
+    loop {
+        match kill_process_group(pid, Signal::KILL) {
+            Ok(()) | Err(rustix::io::Errno::SRCH) => return Ok(()),
+            Err(rustix::io::Errno::PERM) if Instant::now() < deadline => {
+                leader.as_deref_mut().map(Child::try_wait).transpose()?;
+                thread::sleep(Duration::from_millis(5));
+            }
+            Err(e) => return Err(e.into()),
+        }
     }
 }
 pub fn kill_pid(pid: i32) -> Result<()> {
@@ -84,7 +95,7 @@ struct Group(i32);
 impl Drop for Group {
     fn drop(&mut self) {
         if self.0 > 0 {
-            let _ = kill_group(self.0);
+            let _ = kill_group(self.0, None);
         }
     }
 }
@@ -186,7 +197,7 @@ where
             let err_done = drain(&mut stderr, &mut err)?;
             if !result.timed_out && !deadline.is_zero() && started.elapsed() >= deadline {
                 result.timed_out = true;
-                kill_group(result.pid)?;
+                kill_group(result.pid, Some(&mut child))?;
             }
             if exited.is_none()
                 && let Some(status) = child.try_wait()?
@@ -211,7 +222,7 @@ where
         observe(&result)
     })();
     // On errors too, terminate first and wait for the direct child before returning.
-    let cleanup = kill_group(result.pid);
+    let cleanup = kill_group(result.pid, Some(&mut child));
     let wait = child.wait();
     group.0 = 0;
     let mut failures = Vec::new();

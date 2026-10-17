@@ -2,12 +2,13 @@
 pub mod harness;
 
 use harness::{lifecycle::*, model::*, process::*, registration::*, runtime::*, runtime_driver::*};
+use rustix::process::{Pid, WaitId, WaitIdOptions, waitid};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeSet,
     fs,
     io::Write,
-    os::unix::fs::symlink,
+    os::unix::{fs::symlink, process::CommandExt},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     time::{Duration, Instant},
@@ -266,6 +267,25 @@ fn timeout_reaps_group_and_inherited_pipes_are_bounded() {
         std::thread::sleep(Duration::from_millis(10));
     }
     fs::remove_dir_all(home).unwrap();
+}
+#[test]
+fn kill_group_ends_a_group_of_unreaped_exits_by_reaping_and_keeps_a_lasting_refusal() {
+    let mut child = Command::new("/usr/bin/true")
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    waitid(
+        WaitId::Pid(Pid::from_child(&child)),
+        WaitIdOptions::EXITED | WaitIdOptions::NOWAIT,
+    )
+    .unwrap();
+    let refusal = kill_group(child.id() as i32, None).unwrap_err();
+    assert_eq!(
+        refusal.downcast_ref::<rustix::io::Errno>(),
+        Some(&rustix::io::Errno::PERM)
+    );
+    kill_group(child.id() as i32, Some(&mut child)).unwrap();
+    assert!(child.try_wait().unwrap().is_some());
 }
 #[test]
 fn output_rejects_checkouts_aliases_protected_paths_and_existing_evidence() {
