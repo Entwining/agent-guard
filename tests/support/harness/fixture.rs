@@ -26,6 +26,12 @@ impl Fixture {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir_all(&root).unwrap();
+        // The checker follows a symlinked ancestor such as macOS /tmp, while probe doubles match its calls by spelling.
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "The fixture resolves the scratch directory it just created, which holds no protected data."
+        )]
+        let root = fs::canonicalize(&root).unwrap();
         let home = root.join("home").to_str().unwrap().to_owned();
         let project = format!("{home}/project");
         let container = format!("{home}/Library/Containers/com.example.fixture");
