@@ -39,11 +39,14 @@ impl Fixture {
         );
         eprintln!("child_pid={pid} reaped=true");
     }
+    fn native_command(&self, args: &[&str], home: &str) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"));
+        command.args(args).current_dir(&self.root).env("HOME", home);
+        command
+    }
     fn native(&self, args: &[&str], home: &str, event: &[u8]) -> Output {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_agent-guard-native"))
-            .args(args)
-            .current_dir(&self.root)
-            .env("HOME", home)
+        let mut child = self
+            .native_command(args, home)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -133,11 +136,14 @@ fn unresolved_relative_home_fails_before_evaluation() {
 #[test]
 fn unknown_runtime_never_reaches_the_checker() {
     let fixture = Fixture::new("runtime");
-    let output = fixture.native(
-        &["--runtime", "unknown", "--cwd", "/project"],
-        fixture.root.join("home").to_str().unwrap(),
-        b"{}",
-    );
+    // The usage check precedes reading the event, so writing one would race the exit.
+    let output = fixture
+        .native_command(
+            &["--runtime", "unknown", "--cwd", "/project"],
+            fixture.root.join("home").to_str().unwrap(),
+        )
+        .output()
+        .unwrap();
     assert_eq!(output.status.code(), Some(3));
     assert_eq!(
         output.stdout,
@@ -156,22 +162,13 @@ fn shell_entry_rejects_even_an_existing_relative_home() {
         fixture.root.join("bin/agent-guard-native"),
     )
     .unwrap();
-    let mut child = Command::new(wrapper)
+    // The entry rejects HOME before anything reads the event, so writing one would race its exit.
+    let output = Command::new(wrapper)
         .args(["--runtime", "claude"])
         .current_dir(&fixture.root)
         .env("HOME", "home")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(br#"{"tool_name":"Bash","tool_input":{"command":"true"}}"#)
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
     assert_eq!(output.status.code(), Some(2));
     assert!(
         String::from_utf8_lossy(&output.stderr).starts_with("[error:agent-guard/relative_home] ")
