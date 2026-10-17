@@ -47,6 +47,8 @@ jobs:
       - name: Check the implementation and development tools
         # cargo-deny fetches the RustSec advisory database; this check requires network access.
         run: make check
+        env:
+          NEXTEST_PROFILE: ci
       - name: Build and verify the Rust package
         # The build fetches every target's crates to render the license notices; it requires network access.
         run: |

@@ -1,0 +1,3 @@
+[profile.ci]
+# Finding the next failure in CI costs another full run, so CI reports every failing test; local runs keep stopping at the first.
+fail-fast = false
