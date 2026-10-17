@@ -62,7 +62,7 @@ fn driver(
 #[test]
 fn runtime_driver_observes_all_cases_bindings_controls_and_missing_hooks() {
     let home = scratch("driver-");
-    let (bin,entry) = fixtures(&home,b"#!/bin/sh\nbody=$(cat)\ncase \"$body\" in *Library*|*.ssh*|*find*) printf 'DENIED: synthetic rule\\n' >&2; exit 2;; esac\n");
+    let (bin,entry) = fixtures(&home,b"#!/bin/sh\nbody=$(cat)\ncase \"$body\" in *Library/Containers*|*.ssh*|*find*) printf 'DENIED: synthetic rule\\n' >&2; exit 2;; esac\n");
     for name in ["missing", "other"] {
         let selected = entry.with_file_name(name);
         if name == "other" {
@@ -138,7 +138,7 @@ fn runtime_driver_observes_all_cases_bindings_controls_and_missing_hooks() {
     assert_eq!(report["records"][0]["id"], CORPUS[0].id);
     assert_eq!(report["records"][0]["runtime"], "codex");
     assert_eq!(report["records"][0]["verdict"], "unverified");
-    assert_eq!(report["summary"][0]["plannedCalls"], CORPUS.len() * 3);
+    assert_eq!(report["summary"][0]["plannedCalls"], planned("codex"));
     assert_eq!(report["summary"][0]["verified"], 0);
     assert!(
         report["summary"][0]["falseAllow"].is_null() && report["summary"][0]["falseDeny"].is_null()
@@ -146,24 +146,27 @@ fn runtime_driver_observes_all_cases_bindings_controls_and_missing_hooks() {
     fs::remove_dir_all(home).unwrap();
 }
 
+fn planned(runtime: &str) -> usize {
+    CORPUS.iter().filter(|case| case.applies(runtime)).count() * 3
+}
 fn assert_runtime_records(report: &Value, ablate: bool) {
     let rows: Vec<RuntimeRow> = serde_json::from_value(report["records"].clone()).unwrap();
     let summaries: Vec<RuntimeSummary> = serde_json::from_value(report["summary"].clone()).unwrap();
     let mut expected = BTreeSet::new();
     for runtime in ["claude", "pi", "codex"] {
         for run in 0..3 {
-            for case in CORPUS {
+            for case in CORPUS.iter().filter(|case| case.applies(runtime)) {
                 expected.insert((runtime.to_owned(), run, case.id.to_owned()));
             }
         }
     }
     for row in rows {
         assert!(
-            expected.remove(&(row.runtime, row.run, row.id.clone())),
+            expected.remove(&(row.runtime.clone(), row.run, row.id.clone())),
             "duplicate or unknown case"
         );
         let case = CORPUS.iter().find(|case| case.id == row.id).unwrap();
-        assert_eq!(row.command, case.command);
+        assert_eq!(row.tool, case.tool_call(&row.runtime, Path::new("/")).0);
         assert_eq!(row.expected, case.expected);
         assert_eq!(
             row.verdict.runtime,
@@ -177,8 +180,8 @@ fn assert_runtime_records(report: &Value, ablate: bool) {
     assert_eq!(summaries.len(), 3);
     for summary in summaries {
         assert!(summary.complete);
-        assert_eq!(summary.verified, CORPUS.len() * 3);
-        assert_eq!(summary.matched, CORPUS.len() * 3);
+        assert_eq!(summary.verified, planned(&summary.runtime));
+        assert_eq!(summary.matched, planned(&summary.runtime));
     }
 }
 

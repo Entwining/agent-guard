@@ -34,6 +34,7 @@ struct ResponseInput {
 }
 #[derive(Deserialize)]
 struct MessageInput {
+    role: Option<String>,
     #[serde(default)]
     content: Value,
 }
@@ -52,15 +53,17 @@ struct TextPart {
 #[derive(Default)]
 pub struct ScriptedModel {
     pub runtime: String,
-    pub command: String,
+    pub tool: String,
+    pub input: Value,
     pub result: Option<ToolResult>,
     pub requests: usize,
     pub error: String,
 }
 impl ScriptedModel {
-    pub fn begin(&mut self, runtime: &str, command: &str) {
+    pub fn begin(&mut self, runtime: &str, tool: &str, input: Value) {
         self.runtime = runtime.into();
-        self.command = command.into();
+        self.tool = tool.into();
+        self.input = input;
         self.result = None;
         self.requests = 0;
         self.error.clear();
@@ -78,10 +81,13 @@ impl ScriptedModel {
         if !path.contains("/messages") {
             return Ok(("application/json".into(), "{\"input_tokens\":10}".into()));
         }
-        if let Some(Some(last)) = request
+        // Claude Code can follow the tool results with a system message.
+        if let Some(last) = request
             .messages
-            .as_ref()
-            .and_then(|messages| messages.last())
+            .iter()
+            .flatten()
+            .flatten()
+            .rfind(|message| message.role.as_deref() == Some("user"))
             && let Some(parts) = last.content.as_array()
         {
             for raw in parts {
@@ -109,14 +115,9 @@ impl ScriptedModel {
                 });
             }
         }
-        let name = if self.runtime == "claude" {
-            "Bash"
-        } else {
-            "bash"
-        };
         let (content, stop) = if self.result.is_none() {
             (
-                json!({"type":"tool_use","id":"tool_harness","name":name,"input":{"command":self.command}}),
+                json!({"type":"tool_use","id":"tool_harness","name":self.tool,"input":self.input}),
                 "tool_use",
             )
         } else {
@@ -131,7 +132,7 @@ impl ScriptedModel {
         start["stop_reason"] = Value::Null;
         let (block, delta) = if self.result.is_none() {
             (
-                json!({"type":"tool_use","id":"tool_harness","name":name,"input":{}}),
+                json!({"type":"tool_use","id":"tool_harness","name":self.tool,"input":{}}),
                 json!({"type":"input_json_delta","partial_json":content["input"].to_string()}),
             )
         } else {
@@ -170,7 +171,7 @@ impl ScriptedModel {
             }
         }
         let item = if self.result.is_none() {
-            json!({"type":"function_call","id":"fc_harness","call_id":"call_harness","name":"exec_command","arguments":json!({"cmd":self.command,"yield_time_ms":1000,"max_output_tokens":1000}).to_string(),"status":"completed"})
+            json!({"type":"function_call","id":"fc_harness","call_id":"call_harness","name":self.tool,"arguments":self.input.to_string(),"status":"completed"})
         } else {
             json!({"type":"message","id":"msg_harness","role":"assistant","status":"completed","content":[{"type":"output_text","text":"done","annotations":[]}]})
         };

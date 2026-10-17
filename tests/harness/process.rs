@@ -336,6 +336,7 @@ pub fn source_bindings(root: &Path) -> Result<Vec<Binding>> {
         "VERSION",
         "Makefile",
         "bin/agent-guard",
+        "docs/setup.md",
         "src",
         "examples",
         "cmd",

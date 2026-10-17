@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 use std::{
-    env,
+    env, fs,
     io::{Read, Write},
     net::TcpStream,
     process::{Command, Stdio},
@@ -67,55 +67,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         json!({"model":"synthetic","stream":true,"messages":[{"role":"user","content":"Run"}]})
     };
     let first = post(&url, &request)?;
-    let mut command = None;
+    let (mut name, mut input) = (String::new(), None);
     for line in first.lines().filter_map(|line| line.strip_prefix("data: ")) {
         let event: Value = serde_json::from_str(line)?;
-        if runtime == "codex" {
-            if let Some(args) = event["item"]["arguments"].as_str() {
-                command = serde_json::from_str::<Value>(args)?["cmd"]
-                    .as_str()
-                    .map(String::from);
-            }
+        if let Some(tool) = event["content_block"]["name"].as_str() {
+            name = tool.into();
+        }
+        if let Some(arguments) = event["item"]["arguments"].as_str() {
+            input = Some(serde_json::from_str::<Value>(arguments)?);
         } else if let Some(partial) = event["delta"]["partial_json"].as_str() {
-            command = serde_json::from_str::<Value>(partial)?["command"]
-                .as_str()
-                .map(String::from);
+            input = Some(serde_json::from_str::<Value>(partial)?);
         }
     }
-    let command = command.ok_or("model did not supply command")?;
+    let input = input.ok_or("model did not supply a tool call")?;
+    let body = if runtime == "codex" {
+        json!({"tool_name":"Bash","tool_input":{"command":input["cmd"]}})
+    } else {
+        json!({"tool_name":name,"tool_input":input})
+    };
     let mut hook = Command::new(env::var("AGENT_GUARD_TEST_HELPER")?)
-        .args(["--hook", &runtime])
+        .args(["--runtime", &runtime])
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()?;
-    let body = json!({"tool_name":"Bash","tool_input":{"command":command}}).to_string();
     hook.stdin
         .take()
         .ok_or("missing hook stdin")?
-        .write_all(body.as_bytes())?;
+        .write_all(body.to_string().as_bytes())?;
     let result = hook.wait_with_output()?;
     let is_error = !result.status.success();
-    let text = if is_error {
-        format!(
-            "{}{}",
-            if runtime == "codex" {
-                "Command blocked by PreToolUse hook: "
-            } else {
-                ""
-            },
-            String::from_utf8(result.stderr)?
-        )
-    } else {
-        let output = Command::new("/bin/sh").args(["-c", &command]).output()?;
-        if !output.status.success() {
-            return Err("synthetic command failed".into());
+    let stderr = String::from_utf8(result.stderr)?;
+    let text = match runtime.as_str() {
+        _ if !is_error => execute(&name, &input)?,
+        "codex" => format!("Command blocked by PreToolUse hook: {stderr}"),
+        "pi" if stderr.trim().is_empty() => "[error:agent-guard/guard_unavailable] stand-in".into(),
+        "claude" if result.status.code() != Some(2) => {
+            "stand-in hook error: failed; blocking because onFailure is \"block\"".into()
         }
-        format!(
-            "{}{}",
-            String::from_utf8(output.stdout)?,
-            String::from_utf8(output.stderr)?
-        )
+        _ => stderr,
     };
     if runtime == "codex" {
         request["input"] = json!([{"type":"function_call_output","output":text}]);
@@ -126,4 +116,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("model did not complete".into());
     }
     Ok(())
+}
+
+/// Performs the call the way the client's tool would, reporting only what that
+/// tool returns to the model.
+fn execute(name: &str, input: &Value) -> Result<String, Box<dyn std::error::Error>> {
+    let field = |key: &str| input[key].as_str().ok_or(format!("missing {key}"));
+    let path = || field("file_path").or_else(|_| field("path"));
+    let argv = match name {
+        "Read" | "read" => return Ok(fs::read_to_string(path()?)?),
+        "Write" | "write" => {
+            fs::write(path()?, field("content")?)?;
+            return Ok("written".into());
+        }
+        "Edit" | "edit" => {
+            let path = path()?;
+            let (old, new) = match name {
+                "Edit" => (&input["old_string"], &input["new_string"]),
+                _ => (&input["edits"][0]["oldText"], &input["edits"][0]["newText"]),
+            };
+            let content = fs::read_to_string(path)?;
+            fs::write(
+                path,
+                content.replace(
+                    old.as_str().ok_or("missing old text")?,
+                    new.as_str().ok_or("missing new text")?,
+                ),
+            )?;
+            return Ok("edited".into());
+        }
+        "Grep" | "grep" => vec!["/usr/bin/grep", "-r", field("pattern")?, path()?],
+        _ => vec!["/bin/sh", "-c", field("command").or_else(|_| field("cmd"))?],
+    };
+    let output = Command::new(argv[0]).args(&argv[1..]).output()?;
+    if !output.status.success() {
+        return Err("synthetic command failed".into());
+    }
+    Ok(format!(
+        "{}{}",
+        String::from_utf8(output.stdout)?,
+        String::from_utf8(output.stderr)?
+    ))
 }

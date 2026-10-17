@@ -22,7 +22,7 @@ fn flags(runtime: bool) -> BTreeMap<&'static str, Flag> {
             "source",
             ".",
             if runtime {
-                "source checkout for the evidence manifest"
+                "source checkout for the setup guide and evidence manifest"
             } else {
                 "source checkout; faults run only in an external copy"
             },
@@ -41,15 +41,15 @@ fn flags(runtime: bool) -> BTreeMap<&'static str, Flag> {
     if runtime {
         for (name, value, description) in [
             (
-                "hook",
+                "runtime",
                 "",
-                "run the synthetic hook adapter for claude, pi, or codex",
+                "act as the registered guard for claude, pi, or codex and record the hook",
             ),
             ("entry", "", "absolute assembled bin/agent-guard path"),
             (
                 "runtimes",
                 "claude,pi,codex",
-                "comma-separated runtimes; each runs all ten cases three times",
+                "comma-separated runtimes; each runs its applicable cases three times",
             ),
         ] {
             flags.insert(
@@ -168,9 +168,9 @@ pub fn main(runtime: bool) -> i32 {
             .map(|flag| flag.value.clone())
             .unwrap_or_default()
     };
-    if runtime && !value("hook").is_empty() {
+    if runtime && !value("runtime").is_empty() {
         return hook_main(
-            &value("hook"),
+            &value("runtime"),
             &mut io::stdin().lock(),
             &mut io::stdout().lock(),
             &mut stderr,

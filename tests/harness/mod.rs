@@ -4,6 +4,7 @@ pub mod cli;
 pub mod lifecycle;
 pub mod model;
 pub mod process;
+pub mod registration;
 pub mod runtime;
 pub mod runtime_driver;
 

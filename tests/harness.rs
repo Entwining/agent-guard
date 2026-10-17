@@ -1,7 +1,7 @@
 #[path = "harness/mod.rs"]
 pub mod harness;
 
-use harness::{lifecycle::*, model::*, process::*, runtime::*, runtime_driver::*};
+use harness::{lifecycle::*, model::*, process::*, registration::*, runtime::*, runtime_driver::*};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeSet,
@@ -31,7 +31,7 @@ fn hook(status: i32, stderr: &str) -> HookObservation {
             stderr: stderr.into(),
             ..ProcessResult::default()
         },
-        input: json!({"tool_input":{"command":CORPUS[0].command}}),
+        input: json!({"tool_name":"Bash","tool_input":CORPUS[0].tool_call("claude", Path::new("/")).1}),
         survivors: vec![],
         observation_error: String::new(),
     }
@@ -59,6 +59,7 @@ fn runtime_verdict_requires_matching_hook_and_execution_evidence() {
             &[hook(status, "DENIED: synthetic")],
             result.as_ref(),
             &CORPUS[0],
+            Path::new("/"),
         );
         assert_eq!(
             (verdict.runtime.as_str(), verdict.conflict),
@@ -71,15 +72,121 @@ fn runtime_verdict_requires_matching_hook_and_execution_evidence() {
         raw: Value::Null,
     };
     assert_eq!(
-        runtime_verdict("claude", &[], Some(&result), &CORPUS[0]).runtime,
+        runtime_verdict("claude", &[], Some(&result), &CORPUS[0], Path::new("/")).runtime,
         "unverified"
     );
-    let mut wrong = hook(0, "");
-    wrong.input["tool_input"]["command"] = json!("other");
+    for field in ["/tool_name", "/tool_input/command"] {
+        let mut wrong = hook(0, "");
+        *wrong.input.pointer_mut(field).unwrap() = json!("other");
+        assert_eq!(
+            runtime_verdict(
+                "claude",
+                &[wrong],
+                Some(&result),
+                &CORPUS[0],
+                Path::new("/")
+            )
+            .runtime,
+            "unverified"
+        );
+    }
+}
+#[test]
+fn runtime_verdict_takes_write_execution_from_a_fresh_target() {
+    let home = scratch("write-witness-");
+    fs::create_dir(home.join("workspace")).unwrap();
+    let case = CORPUS.iter().find(|case| case.id == "file-write").unwrap();
+    let mut observed = hook(0, "");
+    let (tool, input) = case.tool_call("pi", &home);
+    observed.input = json!({"tool_name":tool,"tool_input":input});
+    let result = ToolResult {
+        text: case.witness.into(),
+        is_error: false,
+        raw: Value::Null,
+    };
+    let verdict = || {
+        runtime_verdict(
+            "pi",
+            std::slice::from_ref(&observed),
+            Some(&result),
+            case,
+            &home,
+        )
+        .runtime
+    };
+    assert_eq!(verdict(), "unverified");
+    write_file(
+        &home.join("workspace/written.txt"),
+        b"WRITE_CANARY\n",
+        0o600,
+    )
+    .unwrap();
+    assert_eq!(verdict(), "allow");
+    case.prepare(&home).unwrap();
+    assert_eq!(verdict(), "unverified");
+    fs::remove_dir_all(home).unwrap();
+}
+#[test]
+fn runtime_verdict_requires_each_consumer_block_for_a_silent_guard() {
+    let case = CORPUS.iter().find(|case| case.silent_guard).unwrap();
     assert_eq!(
-        runtime_verdict("claude", &[wrong], Some(&result), &CORPUS[0]).runtime,
-        "unverified"
+        ["claude", "pi", "codex"].map(|runtime| case.applies(runtime)),
+        [true, true, false]
     );
+    for (runtime, reason) in [
+        (
+            "pi",
+            format!("{GUARD_UNAVAILABLE} The agent guard did not complete its check (exit 1)"),
+        ),
+        (
+            "claude",
+            format!("PreToolUse:Bash hook error: [guard]: failed; {CLAUDE_ON_FAILURE}"),
+        ),
+    ] {
+        let mut observed = hook(1, "");
+        let (tool, input) = case.tool_call(runtime, Path::new("/"));
+        observed.input = json!({"tool_name":tool,"tool_input":input});
+        for (text, expected) in [
+            (reason, "deny"),
+            ("PreToolUse:Bash hook error: exit 1".into(), "unverified"),
+        ] {
+            let result = ToolResult {
+                text,
+                is_error: true,
+                raw: Value::Null,
+            };
+            let verdict = runtime_verdict(
+                runtime,
+                std::slice::from_ref(&observed),
+                Some(&result),
+                case,
+                Path::new("/"),
+            );
+            assert_eq!(
+                (
+                    verdict.runtime.as_str(),
+                    verdict.guard.as_str(),
+                    verdict.conflict
+                ),
+                (expected, "unavailable", false)
+            );
+        }
+    }
+}
+#[test]
+fn registration_replaces_only_the_documented_guard_path() {
+    let guide = "# Guide\n\n## Register Claude Code\n\n```json\n{\"command\": \"/opt/homebrew/bin/agent-guard --runtime claude\"}\n```\n\n## Register Pi\n\n```ts\nconst guard = \"/opt/homebrew/bin/agent-guard\";\n```\n\n## Remove\n\n```json\n{}\n```\n";
+    assert_eq!(
+        registration(guide, "Register Claude Code", "json", "'/a b/\"h\"'").unwrap(),
+        "{\"command\": \"'/a b/\\\"h\\\"' --runtime claude\"}"
+    );
+    assert_eq!(
+        registration(guide, "Register Pi", "ts", "/a b/h").unwrap(),
+        "const guard = \"/a b/h\";"
+    );
+    assert!(registration(guide, "Register Codex", "json", "/h").is_err());
+    assert!(registration(guide, "Register Pi", "json", "/h").is_err());
+    assert!(registration(guide, "Remove", "json", "/h").is_err());
 }
 #[test]
 fn hook_observation_preserves_input_streams_and_failure_status() {
@@ -219,7 +326,8 @@ fn lifecycle_rejects_panic_and_partial_output_leaks() {
 fn scripted_models_preserve_messages_and_responses_protocols() {
     for runtime in ["claude", "pi", "codex"] {
         let mut model = ScriptedModel::default();
-        model.begin(runtime, "printf public");
+        let (tool, input) = CORPUS[0].tool_call(runtime, Path::new("/"));
+        model.begin(runtime, tool, input);
         let request = if runtime == "codex" {
             json!({"model":"synthetic","input":[]})
         } else {
@@ -236,18 +344,12 @@ fn scripted_models_preserve_messages_and_responses_protocols() {
                 request.to_string().as_bytes(),
             )
             .unwrap();
-        assert!(body.contains(if runtime == "codex" {
-            "exec_command"
-        } else if runtime == "claude" {
-            "Bash"
-        } else {
-            "bash"
-        }));
-        assert!(body.contains("printf public"));
+        assert!(body.contains(&format!("\"name\":\"{tool}\"")));
+        assert!(body.contains("cat ./public.txt"));
         let result = if runtime == "codex" {
             json!({"model":"synthetic","input":[{"type":"function_call_output","output":"public"}]})
         } else {
-            json!({"model":"synthetic","stream":false,"messages":[{"content":[{"type":"tool_result","is_error":true,"content":[{"text":"pub"},{"text":"lic"}]}]}]})
+            json!({"model":"synthetic","stream":false,"messages":[{"role":"user","content":[{"type":"tool_result","is_error":true,"content":[{"text":"pub"},{"text":"lic"}]}]},{"role":"system","content":[{"type":"text","text":"reminder"}]}]})
         };
         let (_, body) = model
             .response(
@@ -283,7 +385,7 @@ fn hook_cli_forwards_bytes_and_errors_without_success_coercion() {
     let input = b" { \"tool_input\": {\"command\": \"public\"} }\n";
     let mut command = Command::new(env!("CARGO_BIN_EXE_agent-guard-runtime"));
     command
-        .args(["--hook", "pi"])
+        .args(["--runtime", "pi"])
         .current_dir(&home)
         .env("AGENT_GUARD_TEST_ENTRY", &entry)
         .env("AGENT_GUARD_TEST_HOOK_TRACE", &trace)

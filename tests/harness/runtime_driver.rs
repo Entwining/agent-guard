@@ -2,10 +2,11 @@ use super::{
     Result,
     model::{ModelServer, ToolResult},
     process::*,
+    registration::*,
     runtime::*,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
 use std::os::unix::fs::OpenOptionsExt;
 use std::{
     env,
@@ -39,7 +40,8 @@ pub struct RuntimeRow {
     pub runtime: String,
     pub run: usize,
     pub id: String,
-    pub command: String,
+    pub tool: String,
+    pub input: Value,
     pub expected: String,
     #[serde(flatten)]
     pub verdict: Verdict,
@@ -94,7 +96,7 @@ pub fn runtime_summaries(
         .map(|runtime| {
             let mut summary = RuntimeSummary {
                 runtime: runtime.clone(),
-                planned: CORPUS.len() * 3,
+                planned: CORPUS.iter().filter(|case| case.applies(runtime)).count() * 3,
                 attempted: 0,
                 verified: 0,
                 matched: 0,
@@ -130,15 +132,15 @@ pub fn runtime_summaries(
                     && row.process.wait_error.is_empty()
                     && row.model_error.is_empty()
                     && row.trace_error.is_empty()
-                    && row.hooks.len() == 1;
+                    && row.hooks.len() == 1
+                    && row.verdict.guard != "unverified";
                 for hook in &row.hooks {
                     times.push(hook.process.milliseconds);
                     valid &= !hook.process.timed_out
                         && hook.process.spawn_error.is_empty()
                         && hook.process.wait_error.is_empty()
                         && hook.observation_error.is_empty()
-                        && hook.survivors.is_empty()
-                        && matches!(hook.process.status, 0 | 2);
+                        && hook.survivors.is_empty();
                 }
             }
             times.sort_by(f64::total_cmp);
@@ -185,6 +187,7 @@ pub fn run_runtime(options: &RuntimeOptions) -> Result<()> {
     }
     let output = new_output(&options.output)?;
     let source = source_bindings(&options.source)?;
+    let guide = fs::read_to_string(options.source.join("docs/setup.md"))?;
     let synthetic = SyntheticHome(synthetic_home(&output)?);
     let home = &synthetic.0;
     let manifest = copy_installation(&entry, home)?;
@@ -201,10 +204,11 @@ pub fn run_runtime(options: &RuntimeOptions) -> Result<()> {
         .mode(0o600)
         .open(output.join("records.jsonl"))?;
     for runtime in &options.runtimes {
-        let (identity, client) = runtime_client(runtime, home, &options.helper, url, &environment)?;
+        let (identity, client) =
+            runtime_client(runtime, home, &options.helper, url, &guide, &environment)?;
         clients.push(identity);
         'runtime_calls: for repeat in 0..3 {
-            for fixture in CORPUS {
+            for fixture in CORPUS.iter().filter(|case| case.applies(runtime)) {
                 let row = runtime_call(
                     runtime,
                     repeat,
@@ -254,94 +258,6 @@ pub fn run_runtime(options: &RuntimeOptions) -> Result<()> {
     }
     Ok(())
 }
-pub fn runtime_args(runtime: &str, client: &Path, home: &Path) -> Vec<String> {
-    let args: Vec<String> = match runtime {
-        "pi" => vec![
-            "--no-extensions".into(),
-            "--no-session".into(),
-            "-e".into(),
-            home.join("runtime-pi.mjs").to_string_lossy().into(),
-            "--provider".into(),
-            "harness".into(),
-            "--model".into(),
-            "synthetic".into(),
-            "--mode".into(),
-            "json".into(),
-            "-p".into(),
-            "Run the requested tool.".into(),
-        ],
-        "claude" => [
-            "-p",
-            "Run the requested tool.",
-            "--model",
-            "claude-sonnet-4-5",
-            "--output-format",
-            "stream-json",
-            "--verbose",
-            "--dangerously-skip-permissions",
-        ]
-        .map(String::from)
-        .to_vec(),
-        _ => [
-            "--dangerously-bypass-hook-trust",
-            "exec",
-            "--skip-git-repo-check",
-            "--json",
-            "Run the requested tool.",
-        ]
-        .map(String::from)
-        .to_vec(),
-    };
-    std::iter::once(client.to_string_lossy().into_owned())
-        .chain(args)
-        .collect()
-}
-pub fn runtime_config(
-    home: &Path,
-    runtime: &str,
-    client: &Path,
-    helper: &Path,
-    url: &str,
-) -> Result<()> {
-    match runtime {
-        "claude" | "codex" => {
-            let config = json!({"hooks":{"PreToolUse":[{"matcher":if runtime == "codex" {"^Bash$"} else {"Bash"},"hooks":[{"type":"command","command":format!("{} --hook {runtime}",quote(&helper.to_string_lossy())),"timeout":5}]}]}});
-            write_json(
-                &home.join(if runtime == "codex" {
-                    ".codex/hooks.json"
-                } else {
-                    ".claude/settings.json"
-                }),
-                &config,
-            )?;
-            if runtime == "claude" {
-                return Ok(());
-            }
-            let mut reads = format!(
-                "{} = \"read\"\n",
-                serde_json::to_string(&helper.to_string_lossy())?
-            );
-            if client.is_absolute() {
-                reads += &format!(
-                    "{} = \"read\"\n",
-                    serde_json::to_string(&client.to_string_lossy())?
-                );
-            }
-            let config = format!(
-                "model = \"synthetic\"\nmodel_provider = \"harness\"\napproval_policy = \"on-request\"\napprovals_reviewer = \"auto_review\"\ndefault_permissions = \"development\"\n[features]\nhooks = true\n[permissions.development.filesystem]\n\":minimal\" = \"read\"\n{} = \"write\"\n{reads}[permissions.development.network]\nenabled = true\n[model_providers.harness]\nname = \"Synthetic local harness\"\nbase_url = {}\nwire_api = \"responses\"\nrequires_openai_auth = false\n",
-                serde_json::to_string(&home.to_string_lossy())?,
-                serde_json::to_string(&format!("{url}/v1"))?
-            );
-            write_file(&home.join(".codex/config.toml"), config.as_bytes(), 0o600)
-        }
-        _ => write_file(
-            &home.join("runtime-pi.mjs"),
-            include_bytes!("testdata/pi.mjs"),
-            0o600,
-        ),
-    }
-}
-
 fn runtime_environment(
     options: &RuntimeOptions,
     home: &Path,
@@ -353,10 +269,6 @@ fn runtime_environment(
         ("PATH", env::var("PATH").unwrap_or_default()),
         ("TMPDIR", home.to_string_lossy().into()),
         ("CODEX_HOME", home.join(".codex").to_string_lossy().into()),
-        (
-            "PI_CODING_AGENT_DIR",
-            home.join(".pi").to_string_lossy().into(),
-        ),
         (
             "CLAUDE_CONFIG_DIR",
             home.join(".claude").to_string_lossy().into(),
@@ -394,6 +306,7 @@ fn runtime_client(
     home: &Path,
     helper: &Path,
     url: &str,
+    guide: &str,
     environment: &[(String, String)],
 ) -> Result<(RuntimeClient, PathBuf)> {
     let mut identity = RuntimeClient {
@@ -421,7 +334,7 @@ fn runtime_client(
             PathBuf::from(runtime)
         }
     };
-    runtime_config(home, runtime, &client, helper, url)?;
+    runtime_config(home, runtime, &client, helper, url, guide)?;
     identity.version = run(
         &[client.to_string_lossy().into(), "--version".into()],
         &[],
@@ -442,17 +355,23 @@ fn runtime_call(
     server: &ModelServer,
 ) -> Result<RuntimeRow> {
     let trace = home.join("trace.jsonl");
+    let (tool, input) = fixture.tool_call(runtime, home);
     server
         .model
         .lock()
         .map_err(|_| "model lock poisoned")?
-        .begin(runtime, fixture.command);
+        .begin(runtime, tool, input.clone());
     write_file(&trace, &[], 0o600)?;
+    fixture.prepare(home)?;
+    let mut environment = environment.to_vec();
+    if fixture.silent_guard {
+        environment.push(("AGENT_GUARD_TEST_ENTRY".into(), "/usr/bin/false".into()));
+    }
     let process = run(
         &runtime_args(runtime, client, home),
         &[],
         &home.join("workspace"),
-        environment,
+        &environment,
         Duration::from_secs(20),
     )?;
     let (hooks, trace_error) = match read_hooks(&trace) {
@@ -464,9 +383,10 @@ fn runtime_call(
         runtime: runtime.into(),
         run: repeat,
         id: fixture.id.into(),
-        command: fixture.command.into(),
+        tool: tool.into(),
+        input,
         expected: fixture.expected.into(),
-        verdict: runtime_verdict(runtime, &hooks, state.result.as_ref(), fixture),
+        verdict: runtime_verdict(runtime, &hooks, state.result.as_ref(), fixture, home),
         process,
         hooks,
         result: state.result.clone(),
