@@ -6,41 +6,51 @@ rust-version = "1.99.0"
 publish = false
 license = "MIT"
 
+# Binary behavior is covered by integration tests; enable a target's tests before adding unit tests to it.
 [[bin]]
 name = "agent-guard-native"
 path = "src/main.rs"
+test = false
 
 [[bin]]
 name = "agent-guard-rust-fixture-worker"
 path = "tests/support/fixture_worker.rs"
+test = false
 
 [[bin]]
 name = "agent-guard-verify"
 path = "cmd/agent-guard-verify/main.rs"
+test = false
 
 [[bin]]
 name = "agent-guard-profile"
 path = "cmd/agent-guard-profile/main.rs"
+test = false
 
 [[bin]]
 name = "agent-guard-public-tool-fixture"
 path = "tests/support/public_tool_fixture.rs"
+test = false
 
 [[bin]]
 name = "agent-guard-lifecycle"
 path = "cmd/agent-guard-lifecycle/main.rs"
+test = false
 
 [[bin]]
 name = "agent-guard-runtime"
 path = "cmd/agent-guard-runtime/main.rs"
+test = false
 
 [[bin]]
 name = "agent-guard-harness-client"
 path = "tests/harness/testdata/client.rs"
+test = false
 
 [[bin]]
 name = "agent-guard-structure"
 path = "cmd/agent-guard-structure/main.rs"
+test = false
 
 [[example]]
 name = "evaluate"

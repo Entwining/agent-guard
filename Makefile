@@ -35,5 +35,7 @@ rust-check:
 	$(CARGO) fmt -- --check
 	$(CARGO) run --locked --bin agent-guard-structure -- "$(CURDIR)"
 	CARGO_BUILD_WARNINGS=deny $(CARGO) clippy --locked --all-targets
-	$(CARGO) test --locked
+	$(CARGO) nextest run --locked
+# nextest does not run doctests.
+	$(CARGO) test --locked --doc
 	$(CARGO) deny --locked check

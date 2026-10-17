@@ -4,9 +4,10 @@ This guide is for maintainers who change, check or release `agent-guard`. Instal
 
 ## Toolchain
 
-rustup selects the Rust toolchain from `rust-toolchain.toml`. `make check` also needs cargo-deny and `make build` needs cargo-about, both on `PATH`:
+rustup selects the Rust toolchain from `rust-toolchain.toml`. `make check` also needs cargo-nextest and cargo-deny, and `make build` needs cargo-about, all on `PATH`:
 
 ```sh
+cargo install --locked cargo-nextest
 cargo install --locked cargo-deny
 cargo install --locked --features cli cargo-about
 ```

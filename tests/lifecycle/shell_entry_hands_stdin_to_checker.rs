@@ -211,11 +211,19 @@ fn shell_entry_failures_name_their_condition() {
         assert!(stderr.contains(&format!("({detail})")), "{id}: {stderr}");
     };
 
+    // Nothing reads the event on these failures, so writing one would race the entry's exit.
     let package = Package::new("missing-runner");
-    blocked(package.event("claude", b"{}"), "runner_missing");
+    let entry = || {
+        package
+            .command()
+            .args(["--runtime", "claude"])
+            .output()
+            .unwrap()
+    };
+    blocked(entry(), "runner_missing");
 
     package.script_runner("#!/bin/bash -p\nexit 3\n");
-    blocked(package.event("claude", b"{}"), "reason_missing");
+    blocked(entry(), "reason_missing");
 
     // Bash reading its script from stdin sets $0 to this argv[0], which names no file.
     let mut entry = Command::new("/bin/bash");
