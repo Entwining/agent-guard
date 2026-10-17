@@ -355,11 +355,6 @@ pub fn source_bindings(root: &Path) -> Result<Vec<Binding>> {
     ] {
         bindings(root, &root.join(name), &mut output)?;
     }
-    for name in ["go.mod", "go.sum"] {
-        if root.join(name).try_exists()? {
-            bindings(root, &root.join(name), &mut output)?;
-        }
-    }
     output.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(output)
 }
