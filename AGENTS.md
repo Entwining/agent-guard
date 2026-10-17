@@ -31,6 +31,8 @@ Keep the root README focused on purpose and capabilities; installation, registra
 
 Release actions follow the [repository-local release skill](.agents/skills/release/SKILL.md) and the workflow that owns publication. Runtime acceptance does not authorize changing machine permissions. Use type-prefixed commit subjects (`type: summary` or `type(scope): summary`).
 
+Prefer merging a pull request by fast-forwarding `main` to its head (`git merge --ff-only`) and pushing, which GitHub records as the pull request's merge and which keeps the commits CI checked, signatures included; when `main` has moved past the branch's base, rebase the branch, push it, and wait for its checks first. GitHub's merge buttons are also fine, but rebase merge drops the signatures.
+
 ## Dependency updates
 
 Before changing `.github/renovate.json`, or deciding how a dependency's updates are grouped, delayed, or merged, read the shared Renovate policy in full: `gh repo read-file skills/renovate/SKILL.md -R Entwining/renovate-config`.
