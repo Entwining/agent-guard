@@ -12,6 +12,17 @@
       "groupName": "Rust toolchain and linters"
     },
     {
+      "description": "These tools change what the checks report, and install-action installs only the releases its own release lists, so a new tool minor line has to arrive with the action release that lists it.",
+      "matchPackageNames": ["taiki-e/install-action", "cargo-nextest", "cargo-deny", "cargo-about"],
+      "groupName": "Cargo check tools"
+    },
+    {
+      "description": "install-action lists a tool release one to a few days after it appears, and that action release then waits its own seven days, so the tool waits two weeks to find an action release that lists it. The update types leave out the age-less ones the preset exempts from every age.",
+      "matchPackageNames": ["cargo-nextest", "cargo-deny", "cargo-about"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "minimumReleaseAge": "14 days"
+    },
+    {
       "description": "Parser output is policy semantics, which no check fully covers; review parser upgrades separately.",
       "matchManagers": ["cargo"],
       "matchPackageNames": ["brush-parser", "tree-sitter", "tree-sitter-bash"],

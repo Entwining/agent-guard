@@ -12,7 +12,7 @@ cargo install --locked cargo-deny
 cargo install --locked --features cli cargo-about
 ```
 
-The [check workflow](../.github/workflows/check.yml) pins the versions CI uses; install those with `--version` when a local result differs from CI. `cargo deny` fetches the RustSec advisory database, so `make check` needs network access.
+The install step of the [check workflow](../.github/workflows/check.yml) prints the versions CI uses; install those with `--version` when a local result differs from CI. `cargo deny` fetches the RustSec advisory database, so `make check` needs network access.
 
 ## Development checks
 
