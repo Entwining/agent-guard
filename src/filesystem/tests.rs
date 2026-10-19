@@ -59,27 +59,69 @@ fn item_credentials_exclude_appdata_from_the_credential_partition() {
 #[test]
 fn credential_root_reads_remain_protected_before_public_alias_resolution() {
     let table = FirmlinkTable::from_text("");
-    for (effect, via, expected) in [
-        (Effect::Read, Via::Operand, true),
-        (Effect::Use, Via::Operand, false),
-        (Effect::Read, Via::Cwd, false),
+    for root in ["/h/.docker", "/h/.cargo"] {
+        for (path, glob, effect, via, expected) in [
+            (root.to_owned(), false, Effect::Read, Via::Operand, true),
+            (root.to_owned(), false, Effect::Use, Via::Operand, false),
+            (root.to_owned(), false, Effect::Read, Via::Cwd, false),
+            (format!("{root}/*"), true, Effect::Read, Via::Operand, true),
+        ] {
+            let mut probe = Mock {
+                links: BTreeMap::from([(root.into(), "/public".into())]),
+                calls: Vec::new(),
+            };
+            let mut resolver = Resolver::new("/h", &table);
+            let mut target = Target::new(path, effect, Walk::None, via);
+            target.glob = glob;
+            assert_eq!(
+                matches!(
+                    resolver.target(&mut target, "/p", &mut probe).unwrap(),
+                    Identity::Protected(Protection::Credential)
+                ),
+                expected
+            );
+            if expected {
+                assert!(probe.calls.is_empty());
+            }
+        }
+    }
+}
+
+#[test]
+fn a_linked_cargo_home_is_a_credential_root_under_its_target() {
+    let table = FirmlinkTable::from_text("");
+    for (path, glob, expected) in [
+        ("/s/cargo-home", false, true),
+        ("/p/link", false, true),
+        ("/s/cargo-home/*", true, true),
+        ("/s/cargo-home/config.toml", false, false),
+        ("/p/.cargo", false, false),
     ] {
         let mut probe = Mock {
-            links: BTreeMap::from([("/h/.docker".into(), "/public".into())]),
+            links: BTreeMap::from([
+                ("/h/.cargo".into(), "/s/cargo-home".into()),
+                ("/p/link".into(), "/h/.cargo".into()),
+            ]),
             calls: Vec::new(),
         };
         let mut resolver = Resolver::new("/h", &table);
-        let mut target = Target::new("/h/.docker".into(), effect, Walk::None, via);
+        let mut target = Target::new(path.into(), Effect::Read, Walk::None, Via::Operand);
+        target.glob = glob;
+        let identity = resolver.target(&mut target, "/p", &mut probe).unwrap();
         assert_eq!(
-            matches!(
-                resolver.target(&mut target, "/p", &mut probe).unwrap(),
-                Identity::Protected(Protection::Credential)
-            ),
-            expected
+            identity == Identity::Protected(Protection::Credential),
+            expected,
+            "{path}"
         );
-        if expected {
-            assert!(probe.calls.is_empty());
-        }
+        // The denial reason reads the same identity after resolution.
+        assert_eq!(
+            resolver
+                .credential(&target.path, "/h", glob)
+                .unwrap()
+                .is_some(),
+            expected,
+            "{path}"
+        );
     }
 }
 

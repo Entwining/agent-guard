@@ -256,6 +256,7 @@ pub(super) fn lexical_candidate(
                 .directory_suffixes
                 .iter()
                 .any(|suffix| parent.ends_with(suffix))
+            || glob::literal_prefix(parent) == (format!("{}/{CARGO_STORE}", domain.home), "")
         {
             return Some(Protection::Credential);
         }
@@ -399,6 +400,12 @@ pub(super) const SENSITIVE: &[&str] = &[
     "**/private-keys-v1.d/**",
 ];
 
+/// Cargo reads `.cargo/config.toml` from the working directory and its
+/// ancestors, but credentials only from its home, so only `~/.cargo` is a
+/// credential root; the file names above still identify credentials in any
+/// other `.cargo`.
+pub(super) const CARGO_STORE: &str = ".cargo";
+
 fn listed_directories() -> impl Iterator<Item = &'static str> {
     lexical_state::catalog().directories.iter().copied()
 }
@@ -406,7 +413,8 @@ fn listed_directories() -> impl Iterator<Item = &'static str> {
 pub(super) fn sensitive_root(path: &str, home: &str) -> bool {
     let path = super::fold(path);
     let home = super::fold(home);
-    [".aws", ".gnupg"].contains(&path.rsplit('/').next().unwrap_or(""))
+    path == format!("{home}/{CARGO_STORE}")
+        || [".aws", ".gnupg"].contains(&path.rsplit('/').next().unwrap_or(""))
         || listed_directories().any(|dir| {
             path.ends_with(&format!("/{dir}"))
                 || dir

@@ -1,0 +1,9 @@
+{"rows":[
+ {"id":"rg-project-cargo","partition":"project-cargo","expected":"N","input":{"command":"rg -n foo src .cargo"}},
+ {"id":"cat-project-cargo-children","partition":"project-cargo","expected":"N","input":{"command":"cat .cargo/*"}},
+ {"id":"find-xargs-walked-project-cargo","partition":"project-cargo","expected":"N","input":{"command":"find . -name .cargo | xargs rg foo"}},
+ {"id":"cat-project-cargo-credentials","partition":"project-cargo-file-name","expected":"D","input":{"command":"cat .cargo/credentials.toml"},"wire_text":"agent-guard/credential_file]"},
+ {"id":"cat-project-cargo-toml-glob","partition":"project-cargo-file-name","expected":"D","input":{"command":"cat .cargo/*.toml"},"wire_text":"agent-guard/credential_file]"},
+ {"id":"rg-project-docker","partition":"store-outside-home","expected":"D","input":{"command":"rg -n foo .docker"},"wire_text":"agent-guard/credential_file]"},
+ {"id":"cat-project-kube-children","partition":"store-outside-home","expected":"D","input":{"command":"cat .kube/*"},"wire_text":"agent-guard/credential_file]"}
+]}

@@ -44,7 +44,7 @@ pub(super) fn catalog() -> &'static Catalog {
                 path.trim_start_matches("**/")
                     .rsplit_once('/')
                     .map(|(dir, _)| dir)
-                    .filter(|dir| !dir.contains('*'))
+                    .filter(|dir| !dir.contains('*') && *dir != super::CARGO_STORE)
             })
             .collect();
         let directory_suffixes = directories.iter().map(|dir| format!("/{dir}")).collect();

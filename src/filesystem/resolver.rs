@@ -1,3 +1,5 @@
+mod cargo;
+
 use super::{
     CheckError, FileKind, FirmlinkTable, Identity, Probe, Protection, Resolution, absolute_input,
     checked_stat, descriptor_path, lexical, near, normalize, rebase_pattern, resolve,
@@ -10,6 +12,7 @@ pub(crate) struct Resolver<'a> {
     table: &'a FirmlinkTable,
     deadline: Option<std::time::Instant>,
     resolved_home: Option<Identity>,
+    cargo_home: Option<Option<String>>,
     pub(super) lexical: lexical::Lexical,
     targets: std::collections::BTreeMap<TargetIdentity, (Identity, String, String, Option<String>)>,
 }
@@ -44,6 +47,7 @@ impl<'a> Resolver<'a> {
             table,
             deadline,
             resolved_home: None,
+            cargo_home: None,
             lexical: lexical::Lexical::new(deadline, config_dirs),
             targets: std::collections::BTreeMap::new(),
         }
@@ -117,7 +121,9 @@ impl<'a> Resolver<'a> {
             .check(path, home, patterned, true)?
             .filter(|kind| *kind != Protection::AppData)
             .or_else(|| {
-                (!patterned && self.credential_root(path, home)).then_some(Protection::Credential)
+                (!patterned && self.credential_root(path, home)
+                    || self.cargo_home_read(path, patterned))
+                .then_some(Protection::Credential)
             }))
     }
 
@@ -323,11 +329,20 @@ impl<'a> Resolver<'a> {
             return Ok(Identity::Protected(kind));
         }
         if matches!(target.effect, Effect::Read | Effect::Change)
-            && !target.glob
             && (target.via != Via::Cwd || target.search)
-            && self.credential_root(&resolved, resolved_home)
         {
-            return Ok(Identity::Protected(Protection::Credential));
+            if !target.glob && self.credential_root(&resolved, resolved_home) {
+                return Ok(Identity::Protected(Protection::Credential));
+            }
+            self.resolve_cargo_home(resolved_home, probe)?;
+            let read = if target.glob {
+                target.pattern_path()
+            } else {
+                resolved.as_str().into()
+            };
+            if self.cargo_home_read(&read, target.glob) {
+                return Ok(Identity::Protected(Protection::Credential));
+            }
         }
         // The broad-root owner wins before subordinate SSH metadata comparisons.
         let search = target.walk != Walk::None;

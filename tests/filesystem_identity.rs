@@ -1,3 +1,5 @@
+#[path = "filesystem_identity/cargo_home_is_the_only_cargo_store.rs"]
+pub mod cargo_home_is_the_only_cargo_store;
 #[path = "filesystem_identity/credential_globs_and_roots_follow_the_lexical_owner.rs"]
 pub mod credential_globs_and_roots_follow_the_lexical_owner;
 #[path = "filesystem_identity/detector_success_and_failure.rs"]
