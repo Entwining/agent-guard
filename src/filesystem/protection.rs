@@ -374,7 +374,6 @@ fn spells_listed_directory(
 
 pub(super) const SENSITIVE: &[&str] = &[
     "**/.npmrc",
-    "**/.zprofile*",
     "**/.zsh_history*",
     "**/*.pem",
     "**/*.key",

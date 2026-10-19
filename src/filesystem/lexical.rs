@@ -406,7 +406,6 @@ impl LiteralState {
             || self.parts > 1 && self.parent == Parent::Aws && part.starts_with("credentials")
             || [".npmrc", ".netrc", ".git-credentials", ".pypirc", ".pgpass"]
                 .contains(&part.as_str())
-            || part.starts_with(".zprofile")
             || part.starts_with(".zsh_history")
             || part.starts_with("auth.json")
             || part.starts_with(".credentials.json")

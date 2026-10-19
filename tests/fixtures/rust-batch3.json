@@ -241,6 +241,13 @@
       "expected": "N"
     },
     {
+      "id": "shell-profile-glob-control",
+      "partition": "credential",
+      "source": "cat ~/.zprof*",
+      "cwd": "$H/project",
+      "expected": "N"
+    },
+    {
       "id": "fd-name-control",
       "partition": "fd",
       "source": "fd x public -x printf done",
