@@ -5,6 +5,7 @@ use crate::{CoverageGap, DenialRule};
 const APPDATA: &str = "This reads a protected macOS app-data directory. Name a specific non-sensitive file under ~/Library/Application Support instead, or ask the user to inspect the protected file and share the needed fact.";
 const BROAD: &str = "A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path.";
 const FILE: &str = "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.";
+const STORE: &str = "This searches a directory that holds a client's credential store, such as `~/.config/gh`. Search the subdirectory you need, such as `~/.config/nvim`, restrict the search to file names that select no credential file, such as `-g '*.lua'`, `--include='*.lua'` or a Grep `glob` of `*.lua`, or ask the user to inspect the store and share only the fact needed.";
 const CODE_FILE: &str = "This inline code names a credential or environment file. To write text that mentions the file, use the Write or Edit tool; to run code that needs its values, pass the file through a modelled runtime's option, such as `node --env-file=.env`, though the guard does not control what the runtime does with the contents; otherwise ask the user to inspect the file and share only the fact needed.";
 const HIDDEN_SEARCH: &str = "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.";
 const DUMP: &str = "This dumps environment or shell variables, including secrets. Name the non-sensitive variable needed and read only that variable.";
@@ -26,6 +27,7 @@ impl DenialRule {
             Self::AppData => APPDATA,
             Self::Broad => BROAD,
             Self::File => FILE,
+            Self::Store => STORE,
             Self::CodeFile => CODE_FILE,
             Self::HiddenSearch => HIDDEN_SEARCH,
             Self::Dump => DUMP,

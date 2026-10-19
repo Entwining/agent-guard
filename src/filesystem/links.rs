@@ -97,7 +97,10 @@ pub(super) fn follow(
         if projected == "/.vol" || projected.starts_with("/.vol/") {
             return Ok(Resolution::InodeAlias);
         }
-        if let Some(kind) = literal.protection() {
+        if let Some(kind) = literal
+            .protection()
+            .or_else(|| lexical.moved_store(super::unfirmlink_path(&lower_prefix)))
+        {
             return Ok(Resolution::Protected(kind, projected.to_owned()));
         }
         let target = probe

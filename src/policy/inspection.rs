@@ -92,10 +92,7 @@ impl Inspection<'_> {
             if !matches!(target.effect, Effect::Read | Effect::Change) {
                 return Ok(());
             }
-            let Some(kind) =
-                self.resolver
-                    .credential(&target.path, &self.context.home, target.glob)?
-            else {
+            let Some(kind) = self.resolver.credential(&target, &self.context.home)? else {
                 return Ok(());
             };
             Identity::Protected(kind)
@@ -452,13 +449,11 @@ fn target_rule(
         DenialRule::ResourceChange
     } else if target.effect == Effect::Write {
         DenialRule::Ssh
+    } else if target.effect == Effect::Read && resolver.reads_store(target, home) {
+        DenialRule::Store
     } else if target.walk == Walk::Hidden && target.effect == Effect::Read {
         DenialRule::HiddenSearch
-    } else if target.effect == Effect::Read
-        && resolver
-            .credential(&target.path, home, target.glob)?
-            .is_some()
-    {
+    } else if target.effect == Effect::Read && resolver.credential(target, home)?.is_some() {
         if target.via == Via::Code {
             DenialRule::CodeFile
         } else if target.sends {

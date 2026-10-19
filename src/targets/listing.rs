@@ -105,19 +105,21 @@ pub(super) fn infer_listing(
 }
 
 /// Narrowed walks whose names a consumer reads as it reads its own operands:
-/// a recursive consumer walks below each name it is handed.
+/// a recursive consumer walks below each name it is handed, so the names no
+/// longer bound the files it reads.
 pub(super) fn handed(mut walks: Vec<Target>, consumer: &[Target]) -> Vec<Target> {
     let walk = consumer
         .iter()
         .map(|target| target.walk)
         .max()
         .unwrap_or(Walk::None);
-    for read in walks
-        .iter_mut()
-        .filter_map(|walk| walk.narrowed.as_mut())
-        .flatten()
-    {
-        read.walk = walk;
+    for target in &mut walks {
+        if walk != Walk::None {
+            target.bounds = None;
+        }
+        for read in target.narrowed.iter_mut().flatten() {
+            read.walk = walk;
+        }
     }
     walks
 }

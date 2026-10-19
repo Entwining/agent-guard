@@ -1,5 +1,6 @@
+use super::stores::{self, Location};
 use super::{CheckError, Protection, Reach, glob};
-use crate::record::{ConfigDir, ConfigVariable};
+use crate::record::ConfigDir;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -18,7 +19,6 @@ pub(super) struct Sensitive {
 
 pub(super) struct Catalog {
     pub sensitive: Vec<Sensitive>,
-    pub directories: Vec<&'static str>,
     pub directory_suffixes: Vec<String>,
 }
 
@@ -38,7 +38,7 @@ pub(super) fn catalog() -> &'static Catalog {
                 }
             })
             .collect();
-        let directories: Vec<_> = super::SENSITIVE
+        let directory_suffixes = super::SENSITIVE
             .iter()
             .filter_map(|path| {
                 path.trim_start_matches("**/")
@@ -46,38 +46,13 @@ pub(super) fn catalog() -> &'static Catalog {
                     .map(|(dir, _)| dir)
                     .filter(|dir| !dir.contains('*') && *dir != super::CARGO_STORE)
             })
+            .map(|dir| format!("/{dir}"))
             .collect();
-        let directory_suffixes = directories.iter().map(|dir| format!("/{dir}")).collect();
         Catalog {
             sensitive,
-            directories,
             directory_suffixes,
         }
     })
-}
-
-/// The credential file each client reads from a directory the environment
-/// names, following its own precedence. gh reads `GH_CONFIG_DIR`, then
-/// `XDG_CONFIG_HOME/gh`; glab reads `GLAB_CONFIG_DIR`, then its legacy
-/// `~/.config/glab-cli`, then `XDG_CONFIG_HOME/glab-cli`. The catalog keeps
-/// the default locations.
-fn config_files(dirs: &[ConfigDir]) -> Vec<String> {
-    let path = |variable| {
-        dirs.iter()
-            .find(|dir| dir.variable == variable)
-            .map(|dir| dir.path.trim_end_matches('/'))
-    };
-    let config_home = path(ConfigVariable::XdgConfigHome);
-    let gh = path(ConfigVariable::GhConfigDir)
-        .map(|dir| format!("{dir}/hosts.yml"))
-        .or_else(|| config_home.map(|dir| format!("{dir}/gh/hosts.yml")));
-    let glab = path(ConfigVariable::GlabConfigDir)
-        .map(|dir| format!("{dir}/config.yml"))
-        .or_else(|| config_home.map(|dir| format!("{dir}/glab-cli/config.yml")));
-    gh.into_iter()
-        .chain(glab)
-        .map(|file| super::fold(&file))
-        .collect()
 }
 
 pub(super) struct Domain {
@@ -86,6 +61,7 @@ pub(super) struct Domain {
     pub library_parts: Rc<[String]>,
     pub roots: Vec<Root>,
     pub broad_witnesses: Vec<String>,
+    pub stores: Vec<Location>,
     paths: BTreeMap<String, PathResults>,
     candidates: BTreeMap<String, [Option<Option<Protection>>; 6]>,
 }
@@ -115,6 +91,9 @@ impl Domain {
             broad_witnesses.push(format!("{}/x", root.path));
         }
         Self {
+            stores: stores::defaults(&home)
+                .map(|(_, location)| location)
+                .collect(),
             home,
             library_parts: library.split('/').map(str::to_owned).collect(),
             library,
@@ -130,8 +109,8 @@ pub(super) struct Lexical {
     domains: BTreeMap<String, Domain>,
     matcher: glob::Matcher,
     pub(super) deadline: Option<std::time::Instant>,
-    /// Folded credential files in directories the hook's environment names.
-    config_files: Vec<String>,
+    /// Stores the hook's environment names, then stores HOME links elsewhere.
+    locations: Vec<Location>,
     #[cfg(test)]
     pub candidate_evaluations: usize,
     #[cfg(test)]
@@ -155,7 +134,7 @@ impl Lexical {
             domains: BTreeMap::new(),
             matcher: glob::Matcher::default(),
             deadline,
-            config_files: config_files(config_dirs),
+            locations: stores::from_environment(config_dirs),
             #[cfg(test)]
             candidate_evaluations: 0,
             #[cfg(test)]
@@ -167,25 +146,67 @@ impl Lexical {
         }
     }
 
-    /// Whether a search from `path` reaches a config file the environment
-    /// names through visible directories. HOME and its ancestors belong to the
-    /// broad-root rule.
-    pub fn config_root(&self, path: &str, home: &str) -> bool {
-        let path = super::fold(path);
+    /// Whether walking `path`, or each directory its pattern names, reads a
+    /// store, reading only files that `names` match when it bounds the walk.
+    /// HOME, its ancestors and `~/Library` belong to the broad-root rule.
+    pub fn store_root(
+        &mut self,
+        path: &str,
+        home: &str,
+        patterned: bool,
+        names: Option<&[String]>,
+    ) -> bool {
+        self.prepare(home);
+        let domain = &self.domains[home];
+        let path = if patterned {
+            glob::fold_pattern(path)
+        } else {
+            super::fold(path)
+        };
         let path = path.trim_end_matches('/');
-        if format!("{}/", super::fold(home)).starts_with(&format!("{path}/")) {
-            return false;
+        let names: Option<Vec<_>> =
+            names.map(|names| names.iter().map(|name| glob::fold_pattern(name)).collect());
+        let matcher = &mut self.matcher;
+        stores::reached(
+            domain.stores.iter().chain(&self.locations),
+            names.as_deref(),
+            |dir| {
+                let broad = dir == domain.library
+                    || domain
+                        .home
+                        .strip_prefix(dir)
+                        .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'));
+                !broad
+                    && if patterned {
+                        matcher.visible_path(path, dir, false)
+                    } else {
+                        dir == path
+                    }
+            },
+        )
+    }
+
+    /// Protects a folded path to, or inside, a credential file of a store that
+    /// a variable or link moved, where no name identifies it.
+    pub fn moved_store(&self, path: &str) -> Option<Protection> {
+        stores::holds(self.locations.iter(), path).then_some(Protection::Credential)
+    }
+
+    /// Adds where HOME's store directories resolve. Earlier results were
+    /// decided without them, so a new location clears every cached result.
+    pub fn relocate(&mut self, moved: Vec<Location>) {
+        let before = self.locations.len();
+        for location in moved {
+            if !self.locations.contains(&location) {
+                self.locations.push(location);
+            }
         }
-        self.config_files.iter().any(|file| {
-            file.strip_prefix(path)
-                .and_then(|rest| rest.strip_prefix('/'))
-                .is_some_and(|rest| {
-                    rest.split('/')
-                        .rev()
-                        .skip(1)
-                        .all(|dir| !dir.starts_with('.'))
-                })
-        })
+        if self.locations.len() > before {
+            for domain in self.domains.values_mut() {
+                domain.paths.clear();
+                domain.candidates.clear();
+            }
+        }
     }
 
     pub fn literal_walk(&mut self, home: &str, resolved_home: Option<&str>) -> LiteralWalk {
@@ -264,7 +285,7 @@ impl Lexical {
                 let result = super::lexical_candidate(
                     &candidate,
                     domain,
-                    &self.config_files,
+                    &self.locations,
                     candidate_patterned,
                     reach,
                     &mut self.matcher,

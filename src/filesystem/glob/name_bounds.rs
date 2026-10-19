@@ -1,5 +1,15 @@
 use super::{alternatives, class_end, literal_prefix};
 
+/// The basename patterns that bound every file some positive filter selects,
+/// or `None` when there is no filter or one selects any name.
+pub(crate) fn filter_bounds<'a>(filters: impl IntoIterator<Item = &'a str>) -> Option<Vec<String>> {
+    let mut bounds = Vec::new();
+    for filter in filters {
+        bounds.extend(name_bounds(filter)?);
+    }
+    (!bounds.is_empty()).then_some(bounds)
+}
+
 /// The basename patterns that bound every file a name filter selects, or
 /// `None` when some alternative selects any name. BSD grep and `find -path`
 /// match the whole path, where a wildcard crosses `/` and a leading dot, so

@@ -72,6 +72,17 @@ pub(super) fn infer_at(
     match hidden_items_read {
         Some(Some(walks)) => {
             let walks = listing::handed(walks, &effects.targets[consumer..]);
+            // The consumer reads its items only through these walks.
+            if let Some(items) = effects.targets[..consumer]
+                .iter_mut()
+                .find(|target| target.via == Via::Items)
+            {
+                items.bounds = walks
+                    .iter()
+                    .map(|walk| walk.bounds.clone())
+                    .collect::<Option<Vec<_>>>()
+                    .map(|bounds| bounds.concat());
+            }
             effects.targets.extend(walks);
         }
         Some(None) => effects.hidden_content = true,

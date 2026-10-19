@@ -221,6 +221,7 @@ fn filter_target(
 fn narrowed_walk(root: &Word, names: &[String], cwd: &str, host: HostFacts<'_>) -> Target {
     let mut walk = Target::from_word(root, cwd, host, Effect::Read, Walk::Hidden);
     walk.narrowed = Some(narrowed_reads(root, names, cwd, host));
+    walk.bounds = Some(names.to_vec());
     walk
 }
 

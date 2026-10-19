@@ -44,13 +44,14 @@ fn broad_patterns_fold_after_brace_expansion() {
 fn item_credentials_exclude_appdata_from_the_credential_partition() {
     let table = FirmlinkTable::from_text("");
     let mut resolver = Resolver::new("/h", &table);
+    let item = |path: &str| Target::new(path.to_owned(), Effect::Read, Walk::None, Via::Items);
     assert_eq!(
-        resolver.credential("/p/.env", "/h", false).unwrap(),
+        resolver.credential(&item("/p/.env"), "/h").unwrap(),
         Some(Protection::Environment)
     );
     assert_eq!(
         resolver
-            .credential("/h/Library/Containers/x", "/h", false)
+            .credential(&item("/h/Library/Containers/x"), "/h")
             .unwrap(),
         None
     );
@@ -88,41 +89,47 @@ fn credential_root_reads_remain_protected_before_public_alias_resolution() {
 }
 
 #[test]
-fn a_linked_cargo_home_is_a_credential_root_under_its_target() {
+fn every_store_is_a_credential_root_where_its_link_leads() {
     let table = FirmlinkTable::from_text("");
-    for (path, glob, expected) in [
-        ("/s/cargo-home", false, true),
-        ("/p/link", false, true),
-        ("/s/cargo-home/*", true, true),
-        ("/s/cargo-home/config.toml", false, false),
-        ("/p/.cargo", false, false),
+    for store in [
+        ".aws",
+        ".docker",
+        ".kube",
+        ".gnupg",
+        ".cargo",
+        ".config/gh",
+        ".config/glab-cli",
+        "Library/Application Support/glab-cli",
     ] {
         let mut probe = Mock {
-            links: BTreeMap::from([
-                ("/h/.cargo".into(), "/s/cargo-home".into()),
-                ("/p/link".into(), "/h/.cargo".into()),
-            ]),
+            links: BTreeMap::from([(format!("/h/{store}"), "/s/store".into())]),
             calls: Vec::new(),
         };
         let mut resolver = Resolver::new("/h", &table);
-        let mut target = Target::new(path.into(), Effect::Read, Walk::None, Via::Operand);
-        target.glob = glob;
-        let identity = resolver.target(&mut target, "/p", &mut probe).unwrap();
+        let mut target = Target::new("/s/store".into(), Effect::Read, Walk::None, Via::Operand);
         assert_eq!(
-            identity == Identity::Protected(Protection::Credential),
-            expected,
-            "{path}"
-        );
-        // The denial reason reads the same identity after resolution.
-        assert_eq!(
-            resolver
-                .credential(&target.path, "/h", glob)
-                .unwrap()
-                .is_some(),
-            expected,
-            "{path}"
+            resolver.target(&mut target, "/p", &mut probe).unwrap(),
+            Identity::Protected(Protection::Credential),
+            "{store}"
         );
     }
+}
+
+#[test]
+fn a_linked_store_names_its_files_before_they_are_probed() {
+    let table = FirmlinkTable::from_text("");
+    let mut probe = Mock {
+        links: BTreeMap::from([("/h/.cargo".into(), "/s/cargo-home".into())]),
+        calls: Vec::new(),
+    };
+    let mut resolver = Resolver::new("/h", &table);
+    let path = "/s/cargo-home/credentials.toml";
+    let mut target = Target::new(path.into(), Effect::Read, Walk::None, Via::Operand);
+    assert_eq!(
+        resolver.target(&mut target, "/p", &mut probe).unwrap(),
+        Identity::Protected(Protection::Credential)
+    );
+    assert!(!probe.calls.iter().any(|call| call == path));
 }
 
 #[test]

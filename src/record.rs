@@ -9,22 +9,29 @@ pub struct HostFacts<'a> {
     pub config_dirs: &'a [ConfigDir],
 }
 
-/// Environment variables that move a credential-holding client's config.
+/// Environment variables that move a client's credential store.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConfigVariable {
     XdgConfigHome,
     GhConfigDir,
     GlabConfigDir,
+    CargoHome,
 }
 
 impl ConfigVariable {
-    pub const ALL: [Self; 3] = [Self::XdgConfigHome, Self::GhConfigDir, Self::GlabConfigDir];
+    pub const ALL: [Self; 4] = [
+        Self::XdgConfigHome,
+        Self::GhConfigDir,
+        Self::GlabConfigDir,
+        Self::CargoHome,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::XdgConfigHome => "XDG_CONFIG_HOME",
             Self::GhConfigDir => "GH_CONFIG_DIR",
             Self::GlabConfigDir => "GLAB_CONFIG_DIR",
+            Self::CargoHome => "CARGO_HOME",
         }
     }
 }
@@ -420,6 +427,9 @@ pub struct Target {
     pub search: bool,
     pub command: Option<usize>,
     pub relocation_destination: Option<std::rc::Rc<Target>>,
+    /// For a walk, the basename patterns that bound every file it reads;
+    /// `None` when it reads any name.
+    pub bounds: Option<Vec<String>>,
     /// For a hidden walk, the reads of the files that name bounds let it
     /// handle; `None` when it handles every file.
     pub narrowed: Option<Vec<Target>>,
@@ -501,6 +511,7 @@ impl Target {
             search: false,
             command: None,
             relocation_destination: None,
+            bounds: None,
             narrowed: None,
         }
     }

@@ -64,27 +64,28 @@ pub(super) fn infer_search(
     effects.hidden_listing = names && hidden;
     let hidden_walk = recursive || matches!(program, "rg" | "ag") && hidden;
     effects.hidden_content = hidden && !names && !hidden_walk;
+    let walk = if hidden_walk && !names {
+        Walk::Hidden
+    } else if program != "grep" || hidden {
+        Walk::Visible
+    } else {
+        Walk::None
+    };
     // Grep and ripgrep read only files that match some positive filter, so
-    // the filters bound a walk through hidden directories when every one of
-    // them bounds the basename. A glob the shell fills in at run time selects
-    // unknown names, and grep matches a `..` glob against the operand's path.
+    // the filters bound a walk when every one of them bounds the basename. A
+    // glob the shell fills in at run time selects unknown names, and grep
+    // matches a `..` glob against the operand's path.
     let positive: Vec<_> = glob_words
         .iter()
         .filter(|glob| !glob.starts_with('!'))
         .collect();
-    let bounds = (hidden_walk && !names && !positive.is_empty())
-        .then(|| {
-            positive
-                .iter()
-                .map(|glob| {
-                    (!glob.expands && !glob.runtime_unknown)
-                        .then(|| crate::filesystem::name_bounds(glob))
-                        .flatten()
-                })
-                .collect::<Option<Vec<_>>>()
-        })
-        .flatten()
-        .map(|bounds| bounds.concat());
+    let bounds = (walk != Walk::None
+        && !names
+        && positive
+            .iter()
+            .all(|glob| !glob.expands && !glob.runtime_unknown))
+    .then(|| crate::filesystem::filter_bounds(positive.iter().map(|glob| glob.text.as_str())))
+    .flatten();
     for root in operands {
         let mut target = Target::from_word(
             &root,
@@ -95,18 +96,15 @@ pub(super) fn infer_search(
             } else {
                 Effect::Read
             },
-            if hidden_walk && !names {
-                Walk::Hidden
-            } else if program != "grep" || hidden {
-                Walk::Visible
-            } else {
-                Walk::None
-            },
+            walk,
         );
         target.search = implicit && !args.iter().any(|arg| arg == "--help" || arg == "-h");
-        target.narrowed = bounds
-            .as_ref()
-            .map(|names| narrowed_reads(&root, names, cwd, host));
+        if walk == Walk::Hidden {
+            target.narrowed = bounds
+                .as_ref()
+                .map(|names| narrowed_reads(&root, names, cwd, host));
+        }
+        target.bounds.clone_from(&bounds);
         effects.targets.push(target);
         if !names {
             for glob in &filters {

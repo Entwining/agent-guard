@@ -183,7 +183,7 @@ fn pattern_state_walk_observes_its_deadline() {
     let expired = std::time::Instant::now() - std::time::Duration::from_secs(1);
     assert_eq!(
         super::Matcher::default()
-            .path_checked("*public", "x", Some(expired))
+            .path_checked("*public", "x", true, Some(expired))
             .unwrap_err()
             .kind,
         crate::CheckErrorKind::Deadline

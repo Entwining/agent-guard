@@ -4,6 +4,7 @@
     {"class": "policy", "kind": "AppData", "id": "app_data", "entry": true},
     {"class": "policy", "kind": "Broad", "id": "broad_scan", "entry": true},
     {"class": "policy", "kind": "File", "id": "credential_file", "entry": true},
+    {"class": "policy", "kind": "Store", "id": "credential_store", "entry": true},
     {"class": "policy", "kind": "CodeFile", "id": "inline_credential_file", "entry": true},
     {"class": "policy", "kind": "HiddenSearch", "id": "hidden_search", "entry": true},
     {"class": "policy", "kind": "Dump", "id": "variable_dump", "entry": true},

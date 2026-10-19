@@ -101,6 +101,21 @@ fn config_location_variables_extend_credential_paths() {
 }
 
 #[test]
+fn stores_home_links_elsewhere_are_protected_where_they_lead() {
+    partition("linked-store");
+}
+
+#[test]
+fn reading_a_directory_that_holds_a_store_reads_the_store() {
+    partition("store-ancestor");
+}
+
+#[test]
+fn name_filters_bound_walks_of_directories_that_hold_a_store() {
+    partition("store-filter");
+}
+
+#[test]
 fn macos_aliases_keep_lexical_protection_before_probes() {
     partition("aliases");
 }

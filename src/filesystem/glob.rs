@@ -1,7 +1,7 @@
 mod alternatives;
 mod name_bounds;
 pub(super) use alternatives::alternatives;
-pub(crate) use name_bounds::name_bounds;
+pub(crate) use name_bounds::{filter_bounds, name_bounds};
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -59,7 +59,13 @@ impl Matcher {
     }
 
     pub(super) fn path(&mut self, pattern: &str, subject: &str) -> bool {
-        match self.path_checked(pattern, subject, None) {
+        self.visible_path(pattern, subject, true)
+    }
+
+    /// Whether a pattern matches a path whose dot components it reaches
+    /// only when `hidden` or by spelling the dot.
+    pub(super) fn visible_path(&mut self, pattern: &str, subject: &str, hidden: bool) -> bool {
+        match self.path_checked(pattern, subject, hidden, None) {
             Ok(result) => result,
             Err(_) => unreachable!("a match without a deadline cannot expire"),
         }
@@ -473,6 +479,7 @@ impl Matcher {
         &mut self,
         pattern: &str,
         subject: &str,
+        hidden: bool,
         deadline: Option<std::time::Instant>,
     ) -> Result<bool, crate::CheckError> {
         crate::check_deadline(deadline)?;
@@ -502,10 +509,10 @@ impl Matcher {
             }
             if p[i] == "**" {
                 pending.push((i + 1, j));
-                if j < s.len() {
+                if j < s.len() && (hidden || !s[j].starts_with('.')) {
                     pending.push((i, j + 1));
                 }
-            } else if j < s.len() && self.component(p[i], s[j]) {
+            } else if j < s.len() && self.visible_component(p[i], s[j], hidden) {
                 pending.push((i + 1, j + 1));
             }
         }

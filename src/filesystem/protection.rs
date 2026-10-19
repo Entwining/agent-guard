@@ -1,4 +1,5 @@
 use super::lexical as lexical_state;
+use super::stores::{self, Location};
 use super::{CheckError, Protection, glob, ssh_public};
 
 pub fn lexical(path: &str, home: &str) -> Option<Protection> {
@@ -150,7 +151,7 @@ pub(super) fn broad_prepared(
         let (prefix, _) = glob::literal_prefix(&pattern);
         let prefix = prefix.trim_end_matches('/');
         for candidate in &domain.broad_witnesses {
-            if matcher.path_checked(&pattern, candidate, deadline)? {
+            if matcher.path_checked(&pattern, candidate, true, deadline)? {
                 return Ok(true);
             }
         }
@@ -182,12 +183,13 @@ pub(crate) enum Reach {
 pub(super) fn lexical_candidate(
     path: &str,
     domain: &lexical_state::Domain,
-    config_files: &[String],
+    locations: &[Location],
     patterned: bool,
     reach: Reach,
     matcher: &mut glob::Matcher,
 ) -> Option<Protection> {
     let hidden = reach != Reach::Visible;
+    let stores = || domain.stores.iter().chain(locations);
     // Brace expansion can leave only encoded literals. Root and filename
     // comparisons then need the same text the matcher would compare.
     let literal = patterned
@@ -198,9 +200,7 @@ pub(super) fn lexical_candidate(
     let state = lexical_state::LiteralState::path(spelling, &domain.library_parts);
     if !patterned {
         return state.protection().or_else(|| {
-            config_files
-                .contains(&super::fold(spelling))
-                .then_some(Protection::Credential)
+            stores::holds(stores(), &super::fold(spelling)).then_some(Protection::Credential)
         });
     }
     let path = glob::fold_pattern(spelling);
@@ -246,20 +246,13 @@ pub(super) fn lexical_candidate(
     {
         return Some(Protection::Credential);
     }
-    if config_files.iter().any(|file| matcher.path(&path, file)) {
+    if stores::selects(stores(), &path, hidden, matcher) {
         return Some(Protection::Credential);
     }
-    if base.trim_matches(['*', '?']).is_empty() {
-        let parent = path.rsplit_once('/').map_or("", |(parent, _)| parent);
-        if [".ssh", ".aws", ".gnupg"].contains(&parent.rsplit('/').next().unwrap_or(""))
-            || lexical_state::catalog()
-                .directory_suffixes
-                .iter()
-                .any(|suffix| parent.ends_with(suffix))
-            || glob::literal_prefix(parent) == (format!("{}/{CARGO_STORE}", domain.home), "")
-        {
-            return Some(Protection::Credential);
-        }
+    if base.trim_matches(['*', '?']).is_empty()
+        && sensitive_root(path.rsplit_once('/').map_or("", |(parent, _)| parent))
+    {
+        return Some(Protection::Credential);
     }
     for listed in &lexical_state::catalog().sensitive {
         if matcher.path(listed.pattern, &path) {
@@ -393,32 +386,25 @@ pub(super) const SENSITIVE: &[&str] = &[
     "**/.cargo/credentials.toml",
     "**/.config/gh/hosts.yml",
     "**/.config/glab-cli/config.yml",
-    // Naming `library` would make `~/Library` a credential root, and a bare
-    // `glab-cli` parent would let a project search for `config.yml` match it.
+    // A bare `glab-cli` parent would let a project search for `config.yml`
+    // match it.
     "**/application support/glab-cli/config.yml",
     "**/private-keys-v1.d",
     "**/private-keys-v1.d/**",
 ];
 
 /// Cargo reads `.cargo/config.toml` from the working directory and its
-/// ancestors, but credentials only from its home, so only `~/.cargo` is a
-/// credential root; the file names above still identify credentials in any
-/// other `.cargo`.
+/// ancestors, but credentials only from its home, so a `.cargo` directory is
+/// not a credential directory by name; `stores` locates the home, and the
+/// file names above still identify credentials in any `.cargo`.
 pub(super) const CARGO_STORE: &str = ".cargo";
 
-fn listed_directories() -> impl Iterator<Item = &'static str> {
-    lexical_state::catalog().directories.iter().copied()
-}
-
-pub(super) fn sensitive_root(path: &str, home: &str) -> bool {
+/// A credential directory by name, wherever it is.
+pub(super) fn sensitive_root(path: &str) -> bool {
     let path = super::fold(path);
-    let home = super::fold(home);
-    path == format!("{home}/{CARGO_STORE}")
-        || [".aws", ".gnupg"].contains(&path.rsplit('/').next().unwrap_or(""))
-        || listed_directories().any(|dir| {
-            path.ends_with(&format!("/{dir}"))
-                || dir
-                    .match_indices('/')
-                    .any(|(at, _)| path == format!("{home}/{}", &dir[..at]))
-        })
+    [".aws", ".gnupg"].contains(&path.rsplit('/').next().unwrap_or(""))
+        || lexical_state::catalog()
+            .directory_suffixes
+            .iter()
+            .any(|suffix| path.ends_with(suffix))
 }

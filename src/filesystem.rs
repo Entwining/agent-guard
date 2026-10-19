@@ -14,10 +14,11 @@ mod protection;
 mod resolution;
 mod resolver;
 mod ssh;
+mod stores;
 
 pub(crate) use glob::{
-    escape_literal as literal_glob_root, grep_pattern, name_bounds, parameter_pattern_matches,
-    search_glob, shell_pattern,
+    escape_literal as literal_glob_root, filter_bounds, grep_pattern, name_bounds,
+    parameter_pattern_matches, search_glob, shell_pattern,
 };
 pub use links::FirmlinkTable;
 pub use probe::DiskProbe;

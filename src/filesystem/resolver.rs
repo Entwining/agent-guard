@@ -1,9 +1,9 @@
-mod cargo;
+mod stores;
 
 use super::{
     CheckError, FileKind, FirmlinkTable, Identity, Probe, Protection, Resolution, absolute_input,
     checked_stat, descriptor_path, lexical, near, normalize, rebase_pattern, resolve,
-    resolve_pattern, same_file, sensitive_root, ssh_public,
+    resolve_pattern, same_file, ssh_public,
 };
 use std::path::Path;
 
@@ -12,7 +12,6 @@ pub(crate) struct Resolver<'a> {
     table: &'a FirmlinkTable,
     deadline: Option<std::time::Instant>,
     resolved_home: Option<Identity>,
-    cargo_home: Option<Option<String>>,
     pub(super) lexical: lexical::Lexical,
     targets: std::collections::BTreeMap<TargetIdentity, (Identity, String, String, Option<String>)>,
 }
@@ -30,6 +29,7 @@ struct TargetIdentity {
     expands: bool,
     runtime_unknown: bool,
     search: bool,
+    bounds: Option<Vec<String>>,
 }
 
 impl<'a> Resolver<'a> {
@@ -47,14 +47,9 @@ impl<'a> Resolver<'a> {
             table,
             deadline,
             resolved_home: None,
-            cargo_home: None,
             lexical: lexical::Lexical::new(deadline, config_dirs),
             targets: std::collections::BTreeMap::new(),
         }
-    }
-
-    fn credential_root(&self, path: &str, home: &str) -> bool {
-        sensitive_root(path, home) || self.lexical.config_root(path, home)
     }
 
     pub(crate) fn home(&mut self, probe: &mut dyn Probe) -> Result<Identity, CheckError> {
@@ -77,6 +72,9 @@ impl<'a> Resolver<'a> {
             Resolution::InodeAlias => Identity::InodeAlias,
             Resolution::InheritedInput => Identity::InheritedInput,
         };
+        if let Identity::Public(resolved) = &home {
+            self.locate_stores(resolved, probe)?;
+        }
         self.resolved_home = Some(home.clone());
         Ok(home)
     }
@@ -112,18 +110,16 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn credential(
         &mut self,
-        path: &str,
+        target: &crate::record::Target,
         home: &str,
-        patterned: bool,
     ) -> Result<Option<Protection>, CheckError> {
         Ok(self
             .lexical
-            .check(path, home, patterned, true)?
+            .check(&target.path, home, target.glob, true)?
             .filter(|kind| *kind != Protection::AppData)
             .or_else(|| {
-                (!patterned && self.credential_root(path, home)
-                    || self.cargo_home_read(path, patterned))
-                .then_some(Protection::Credential)
+                self.root_read(target, &target.path, home)
+                    .map(|_| Protection::Credential)
             }))
     }
 
@@ -146,6 +142,7 @@ impl<'a> Resolver<'a> {
             expands: target.expands,
             runtime_unknown: target.runtime_unknown,
             search: target.search,
+            bounds: target.bounds.clone(),
         };
         // One preflight shares one metadata observation. Roles and pattern
         // domains stay in the key, and a resolved alias must update both fields.
@@ -175,7 +172,12 @@ impl<'a> Resolver<'a> {
         probe: &mut dyn Probe,
     ) -> Result<Identity, CheckError> {
         let raw = absolute_input(&target.unresolved, cwd, self.home);
-        if let Some(kind) = self.credential(&target.pattern_path(), self.home, target.glob)? {
+        // A credential root protects reads below it, not names moved into it.
+        if let Some(kind) = self
+            .lexical
+            .check(&target.pattern_path(), self.home, target.glob, true)?
+            .filter(|kind| *kind != Protection::AppData)
+        {
             return Ok(Identity::Protected(kind));
         }
         let resolved_home = match self.home(probe)? {
@@ -254,9 +256,13 @@ impl<'a> Resolver<'a> {
         // A consumer that walks the names a bound hands it reads the contents
         // of a credential directory the bound names.
         if matches!(target.effect, Effect::Read | Effect::Change)
-            && (!target.glob || target.via == Via::Narrow && target.walk != Walk::None)
             && (target.via != Via::Cwd || target.search)
-            && self.credential_root(&path, self.home)
+            && if target.via == Via::Narrow && target.walk != Walk::None {
+                self.credential_root(&path, self.home, None)
+            } else {
+                self.root_read(target, &path, self.home)
+            }
+            .is_some()
         {
             return Ok(Identity::Protected(Protection::Credential));
         }
@@ -330,19 +336,9 @@ impl<'a> Resolver<'a> {
         }
         if matches!(target.effect, Effect::Read | Effect::Change)
             && (target.via != Via::Cwd || target.search)
+            && self.root_read(target, &resolved, resolved_home).is_some()
         {
-            if !target.glob && self.credential_root(&resolved, resolved_home) {
-                return Ok(Identity::Protected(Protection::Credential));
-            }
-            self.resolve_cargo_home(resolved_home, probe)?;
-            let read = if target.glob {
-                target.pattern_path()
-            } else {
-                resolved.as_str().into()
-            };
-            if self.cargo_home_read(&read, target.glob) {
-                return Ok(Identity::Protected(Protection::Credential));
-            }
+            return Ok(Identity::Protected(Protection::Credential));
         }
         // The broad-root owner wins before subordinate SSH metadata comparisons.
         let search = target.walk != Walk::None;

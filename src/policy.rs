@@ -276,13 +276,15 @@ fn inspect_operation(
                     &inspection.context.home,
                 )
             };
+            let positive: Vec<_> = globs
+                .iter()
+                .filter(|glob| !glob.is_empty() && !glob.starts_with('!'))
+                .collect();
             let mut target = Target::new(root.clone(), Effect::Read, Walk::Visible, Via::Tool);
             target.search = true;
+            target.bounds = filesystem::filter_bounds(positive.iter().map(|glob| glob.as_str()));
             inspection.target(&target, &decoded.cwd, EffectSource::Operand)?;
-            for glob in globs {
-                if glob.is_empty() || glob.starts_with('!') {
-                    continue;
-                }
+            for glob in positive {
                 let mut target = Target::new(
                     filesystem::grep_pattern(&root, glob),
                     Effect::Read,
