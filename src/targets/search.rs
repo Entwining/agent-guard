@@ -7,8 +7,9 @@ pub(super) fn infer_search(
     host: HostFacts<'_>,
     effects: &mut Effects,
 ) {
-    let (mut operands, globs, hidden, names, recursive) =
+    let (mut operands, glob_words, hidden, names, recursive) =
         search_arguments(program, args, cwd, host, effects);
+    let globs: Vec<_> = glob_words.iter().map(|glob| glob.text.clone()).collect();
     // A negated glob only excludes, and globs match paths relative to the
     // search root, which never contain `..`; neither selects a file.
     let selecting: Vec<_> = globs
@@ -63,6 +64,27 @@ pub(super) fn infer_search(
     effects.hidden_listing = names && hidden;
     let hidden_walk = recursive || matches!(program, "rg" | "ag") && hidden;
     effects.hidden_content = hidden && !names && !hidden_walk;
+    // Grep and ripgrep read only files that match some positive filter, so
+    // the filters bound a walk through hidden directories when every one of
+    // them bounds the basename. A glob the shell fills in at run time selects
+    // unknown names, and grep matches a `..` glob against the operand's path.
+    let positive: Vec<_> = glob_words
+        .iter()
+        .filter(|glob| !glob.starts_with('!'))
+        .collect();
+    let bounds = (hidden_walk && !names && !positive.is_empty())
+        .then(|| {
+            positive
+                .iter()
+                .map(|glob| {
+                    (!glob.expands && !glob.runtime_unknown)
+                        .then(|| crate::filesystem::name_bounds(glob))
+                        .flatten()
+                })
+                .collect::<Option<Vec<_>>>()
+        })
+        .flatten()
+        .map(|bounds| bounds.concat());
     for root in operands {
         let mut target = Target::from_word(
             &root,
@@ -82,29 +104,20 @@ pub(super) fn infer_search(
             },
         );
         target.search = implicit && !args.iter().any(|arg| arg == "--help" || arg == "-h");
+        target.narrowed = bounds
+            .as_ref()
+            .map(|names| narrowed_reads(&root, names, cwd, host));
         effects.targets.push(target);
         if !names {
             for glob in &filters {
-                let mut target = Target::new(
-                    crate::filesystem::absolute_input(
-                        &crate::filesystem::search_glob(
-                            &if root.globs || root.shell_matches {
-                                root.text.clone()
-                            } else {
-                                crate::filesystem::literal_glob_root(&root.text)
-                            },
-                            glob,
-                        ),
-                        cwd,
-                        host.home,
-                    ),
-                    Effect::Read,
-                    Walk::None,
+                effects.targets.push(filter_target(
+                    &root,
+                    glob,
                     Via::Filter,
-                );
-                target.glob = true;
-                target.glob_hidden = reaches_hidden;
-                effects.targets.push(target);
+                    reaches_hidden,
+                    cwd,
+                    host,
+                ));
             }
         }
     }
@@ -116,7 +129,7 @@ fn search_arguments(
     cwd: &str,
     host: HostFacts<'_>,
     effects: &mut Effects,
-) -> (Vec<Word>, Vec<String>, bool, bool, bool) {
+) -> (Vec<Word>, Vec<Word>, bool, bool, bool) {
     let mut operands = Vec::new();
     let mut globs = Vec::new();
     let mut explicit = false;
@@ -203,7 +216,7 @@ fn search_arguments(
                             Walk::None,
                         ));
                     }
-                    "g" | "glob" | "iglob" | "include" => globs.push(value.text),
+                    "g" | "glob" | "iglob" | "include" => globs.push(value),
                     _ => {}
                 }
             }

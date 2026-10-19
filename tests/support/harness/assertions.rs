@@ -49,7 +49,7 @@ pub(super) fn assert_effect_or_failure(row: &Value, actual: &Value, conditional:
         effects
             .iter()
             .any(|effect| effect["kind"] == "HiddenContent")
-            && stderr.contains("hidden files")
+            && stderr.contains("hidden credential files")
     } else if required.contains("environment-file") {
         protected("Environment", false) && stderr.contains("environment")
     } else if required.contains("Zsh") || required.contains("zsh") {

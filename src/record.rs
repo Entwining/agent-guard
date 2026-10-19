@@ -259,7 +259,20 @@ impl Redirect {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Items {
     pub root: String,
-    pub hidden: bool,
+    pub listed: Listed,
+}
+/// The names a producer hands to an item consumer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Listed {
+    Visible,
+    Hidden,
+    /// What these `find` runs print, which their expressions may bound.
+    Find(Vec<FindRun>),
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FindRun {
+    pub cwd: String,
+    pub args: Vec<Word>,
 }
 /// A file that a precommand wrapper opens itself, such as `xargs -a FILE`
 /// or `uv run --env-file FILE`, or a directory it enters, such as
@@ -384,6 +397,9 @@ pub enum Via {
     Tool,
     /// A search glob that filters files below an already checked root.
     Filter,
+    /// A file-name bound that alone keeps a walk through hidden directories
+    /// from reading every file, so it is checked at any depth.
+    Narrow,
     Items,
     Option,
     Code,
@@ -404,6 +420,9 @@ pub struct Target {
     pub search: bool,
     pub command: Option<usize>,
     pub relocation_destination: Option<std::rc::Rc<Target>>,
+    /// For a hidden walk, the reads of the files that name bounds let it
+    /// handle; `None` when it handles every file.
+    pub narrowed: Option<Vec<Target>>,
 }
 
 impl Target {
@@ -482,6 +501,7 @@ impl Target {
             search: false,
             command: None,
             relocation_destination: None,
+            narrowed: None,
         }
     }
 }

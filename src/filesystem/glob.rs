@@ -1,5 +1,7 @@
 mod alternatives;
+mod name_bounds;
 pub(super) use alternatives::alternatives;
+pub(crate) use name_bounds::name_bounds;
 
 use std::collections::{BTreeMap, HashSet};
 

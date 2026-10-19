@@ -66,7 +66,7 @@ pub(super) fn go_reason_rule(reason: &str) -> &'static str {
         ("A scan rooted", "Broad"),
         ("This reads a credential", "File"),
         ("This inline code", "CodeFile"),
-        ("A recursive search", "HiddenSearch"),
+        ("This recursive search", "HiddenSearch"),
         ("This dumps", "Dump"),
         ("This prints the value", "Variable"),
         ("This prints a Git", "Token"),

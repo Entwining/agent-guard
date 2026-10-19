@@ -814,15 +814,15 @@
       "effect": "HiddenContent",
       "go_expected": {
         "claude": {
-          "reason": "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
+          "reason": "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.",
           "advice": []
         },
         "codex": {
-          "reason": "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
+          "reason": "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.",
           "advice": []
         },
         "pi": {
-          "reason": "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
+          "reason": "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.",
           "advice": []
         }
       },
@@ -837,15 +837,15 @@
       "effect": "HiddenContent",
       "go_expected": {
         "claude": {
-          "reason": "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
+          "reason": "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.",
           "advice": []
         },
         "codex": {
-          "reason": "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
+          "reason": "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.",
           "advice": []
         },
         "pi": {
-          "reason": "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
+          "reason": "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.",
           "advice": []
         }
       },
@@ -860,15 +860,15 @@
       "effect": "HiddenContent",
       "go_expected": {
         "claude": {
-          "reason": "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
+          "reason": "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.",
           "advice": []
         },
         "codex": {
-          "reason": "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
+          "reason": "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.",
           "advice": []
         },
         "pi": {
-          "reason": "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
+          "reason": "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.",
           "advice": []
         }
       },
@@ -883,15 +883,15 @@
       "effect": "HiddenContent",
       "go_expected": {
         "claude": {
-          "reason": "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
+          "reason": "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.",
           "advice": []
         },
         "codex": {
-          "reason": "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
+          "reason": "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.",
           "advice": []
         },
         "pi": {
-          "reason": "A recursive search that includes hidden files can read credentials. Use default rg on a project path, or search an exact non-sensitive file without recursive or hidden-file flags.",
+          "reason": "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.",
           "advice": []
         }
       },

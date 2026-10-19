@@ -1,4 +1,5 @@
 use super::*;
+use crate::record::FindRun;
 
 pub(super) fn infer_listing(
     program: &str,
@@ -9,21 +10,31 @@ pub(super) fn infer_listing(
     effects: &mut Effects,
     depth: usize,
 ) {
-    let (mut paths, base, child_at, hidden) = listing_arguments(program, args, cwd, host, effects);
+    let (mut paths, base, child_at, hidden, expression) =
+        listing_arguments(program, args, cwd, host, effects);
     if paths.is_empty() {
         paths.push(Word::literal(base.clone()));
     }
     let item_root = paths[0].text.clone();
-    for path in paths {
+    for path in &paths {
         effects.targets.push(Target::from_word(
-            &path,
+            path,
             cwd,
             host,
             Effect::List,
             Walk::Visible,
         ));
     }
-    effects.hidden_listing = hidden;
+    // A name bound limits what find hands on to the files it can name, as a
+    // search filter limits a walk, so those files are read instead.
+    let bounds = (program == "find")
+        .then(|| find::bounds(args, expression))
+        .flatten();
+    // An item consumer reads what a bounded find prints through `Items`.
+    effects.hidden_listing = hidden
+        && !bounds
+            .as_ref()
+            .is_some_and(|bounds| bounds.printed.is_some());
     let children: Vec<(usize, usize)> = if let Some(index) = child_at {
         vec![(index, args.len())]
     } else if program == "find" {
@@ -62,12 +73,28 @@ pub(super) fn infer_listing(
         if program == "fd" {
             nested.items = Some(crate::record::Items {
                 root: item_root.clone(),
-                hidden: shows_hidden(args),
+                listed: if shows_hidden(args) {
+                    crate::record::Listed::Hidden
+                } else {
+                    crate::record::Listed::Visible
+                },
             });
         }
         let result = infer_at(&nested, &base, host, depth + 1);
-        if effects.hidden_listing && args.get(start).is_some_and(|name| content_consumer(name)) {
-            effects.hidden_content = true;
+        if hidden && args.get(start).is_some_and(|name| content_consumer(name)) {
+            match bounds
+                .as_ref()
+                .and_then(|bounds| bounds.execs.get(&(start - 1)))
+            {
+                Some(Some(names)) => effects.targets.extend(handed(
+                    paths
+                        .iter()
+                        .map(|path| narrowed_walk(path, names, cwd, host))
+                        .collect(),
+                    &result.targets,
+                )),
+                _ => effects.hidden_content = true,
+            }
         }
         effects.targets.extend(result.targets);
         effects.gaps.extend(result.gaps);
@@ -75,6 +102,24 @@ pub(super) fn infer_listing(
         effects.inline.extend(result.inline);
         effects.hidden_content |= result.hidden_content;
     }
+}
+
+/// Narrowed walks whose names a consumer reads as it reads its own operands:
+/// a recursive consumer walks below each name it is handed.
+pub(super) fn handed(mut walks: Vec<Target>, consumer: &[Target]) -> Vec<Target> {
+    let walk = consumer
+        .iter()
+        .map(|target| target.walk)
+        .max()
+        .unwrap_or(Walk::None);
+    for read in walks
+        .iter_mut()
+        .filter_map(|walk| walk.narrowed.as_mut())
+        .flatten()
+    {
+        read.walk = walk;
+    }
+    walks
 }
 
 fn content_consumer(name: &str) -> bool {
@@ -86,14 +131,63 @@ fn content_consumer(name: &str) -> bool {
     .contains(&name)
 }
 
+/// The walks that read what `run` prints, narrowed to the names its
+/// expression bounds, or `None` when it may print any name.
+pub(super) fn find_printed_walks(
+    run: &FindRun,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) -> Option<Vec<Target>> {
+    let (mut paths, base, _, _, expression) =
+        listing_arguments("find", &run.args, &run.cwd, host, effects);
+    let names = find::bounds(&run.args, expression)?.printed?;
+    if paths.is_empty() {
+        paths.push(Word::literal(base));
+    }
+    Some(
+        paths
+            .iter()
+            .map(|path| narrowed_walk(path, &names, &run.cwd, host))
+            .collect(),
+    )
+}
+
+/// Where a find expression starts, after its options and paths.
+fn find_expression(args: &[Word]) -> usize {
+    let mut index = 0;
+    while let Some(arg) = args.get(index) {
+        if arg == "-f" {
+            index += 2;
+            continue;
+        }
+        if arg.role != Role::Option(OptionRole::Name)
+            && arg != "--"
+            && arg.starts_with(['-', '(', '!'])
+            && !arg
+                .strip_prefix('-')
+                .and_then(|flags| flags.chars().next())
+                .is_some_and(|flag| "HLPEXxdsO".contains(flag))
+        {
+            return index;
+        }
+        index += 1;
+    }
+    args.len()
+}
+
 fn listing_arguments(
     program: &str,
     args: &[Word],
     cwd: &str,
     host: HostFacts<'_>,
     effects: &mut Effects,
-) -> (Vec<Word>, String, Option<usize>, bool) {
+) -> (Vec<Word>, String, Option<usize>, bool, usize) {
     let mut paths = Vec::new();
+    let expression = if program == "find" {
+        find_expression(args)
+    } else {
+        args.len()
+    };
     let mut base = cwd.to_owned();
     let mut child_at = None;
     let mut skip = false;
@@ -156,13 +250,7 @@ fn listing_arguments(
         if program == "find" && arg == "--" {
             continue;
         }
-        if program == "find"
-            && arg.starts_with(['-', '(', '!'])
-            && !arg
-                .strip_prefix('-')
-                .and_then(|flags| flags.chars().next())
-                .is_some_and(|flag| "HLPEXxdsO".contains(flag))
-        {
+        if index == expression {
             break;
         }
         if let Some(flags) = arg.strip_prefix('-') {
@@ -184,7 +272,7 @@ fn listing_arguments(
         }
         paths.push(arg.with_text(at(arg, &base)));
     }
-    (paths, base, child_at, hidden)
+    (paths, base, child_at, hidden, expression)
 }
 
 fn takes_value(program: &str, arg: &Word) -> bool {
@@ -220,3 +308,5 @@ fn takes_value(program: &str, arg: &Word) -> bool {
         false
     }
 }
+
+mod find;

@@ -98,7 +98,7 @@ fn quoted_pattern_width_does_not_multiply_local_candidates() {
                         &super::super::lexical::Domain::new("/synthetic/home"),
                         &[],
                         true,
-                        false,
+                        super::super::Reach::Visible,
                         &mut matcher
                     ),
                     None
@@ -128,7 +128,7 @@ fn repeated_pattern_components_share_match_work() {
                     &super::super::lexical::Domain::new("/h"),
                     &[],
                     true,
-                    false,
+                    super::super::Reach::Visible,
                     &mut matcher
                 ),
                 None

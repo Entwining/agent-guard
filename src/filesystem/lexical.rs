@@ -1,4 +1,4 @@
-use super::{CheckError, Protection, glob};
+use super::{CheckError, Protection, Reach, glob};
 use crate::record::{ConfigDir, ConfigVariable};
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -87,7 +87,7 @@ pub(super) struct Domain {
     pub roots: Vec<Root>,
     pub broad_witnesses: Vec<String>,
     paths: BTreeMap<String, PathResults>,
-    candidates: BTreeMap<String, [Option<Option<Protection>>; 4]>,
+    candidates: BTreeMap<String, [Option<Option<Protection>>; 6]>,
 }
 
 pub(super) struct Root {
@@ -145,7 +145,7 @@ pub(super) struct Lexical {
 #[derive(Default)]
 struct PathResults {
     // Outer None means unobserved; Some(None) is a cached public spelling.
-    protected: [Option<Option<Protection>>; 4],
+    protected: [Option<Option<Protection>>; 6],
     broad: [Option<bool>; 2],
 }
 
@@ -207,8 +207,27 @@ impl Lexical {
         patterned: bool,
         hidden: bool,
     ) -> Result<Option<Protection>, CheckError> {
+        self.check_reach(
+            path,
+            home,
+            patterned,
+            if hidden {
+                Reach::Hidden
+            } else {
+                Reach::Visible
+            },
+        )
+    }
+
+    pub fn check_reach(
+        &mut self,
+        path: &str,
+        home: &str,
+        patterned: bool,
+        reach: Reach,
+    ) -> Result<Option<Protection>, CheckError> {
         crate::check_deadline(self.deadline)?;
-        let mode = usize::from(patterned) * 2 + usize::from(hidden);
+        let mode = usize::from(patterned) * 3 + reach as usize;
         if let Some(result) = self
             .domains
             .get(home)
@@ -229,7 +248,7 @@ impl Lexical {
         for candidate in glob::alternatives(path, patterned)? {
             crate::check_deadline(self.deadline)?;
             let candidate_patterned = patterned || candidate != path;
-            let mode = usize::from(candidate_patterned) * 2 + usize::from(hidden);
+            let mode = usize::from(candidate_patterned) * 3 + reach as usize;
             let kind = if let Some(result) = domain
                 .candidates
                 .get(candidate.as_str())
@@ -247,13 +266,13 @@ impl Lexical {
                     domain,
                     &self.config_files,
                     candidate_patterned,
-                    hidden,
+                    reach,
                     &mut self.matcher,
                 );
                 if let Some(results) = domain.candidates.get_mut(candidate.as_str()) {
                     results[mode] = Some(result);
                 } else {
-                    let mut results = [None; 4];
+                    let mut results = [None; 6];
                     results[mode] = Some(result);
                     domain.candidates.insert(candidate, results);
                 }

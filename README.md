@@ -20,7 +20,7 @@ $ cat .env
 
 ## What it blocks and allows
 
-- **Blocks** walks rooted at `~` or `~/Library`, reads and listings of protected App Data, recursive searches that include hidden files, credential and environment file reads, and commands that dump environment variables.
+- **Blocks** walks rooted at `~` or `~/Library`, reads and listings of protected App Data, recursive searches that can reach hidden credential files, credential and environment file reads, and commands that dump environment variables.
 - **Allows** project-scoped searches, named non-sensitive files, public SSH files such as `known_hosts`, and clients that use a credential file through their own option, such as `ssh -i`.
 - **Fails closed.** A check that errors or runs out of time blocks the call. A passing check is not a permission grant; the runtime's own permission rules still apply.
 

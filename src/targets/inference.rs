@@ -1,4 +1,5 @@
 use super::*;
+use crate::record::Listed;
 
 /// The effects of `command` when the shell runs it in `cwd`.
 pub fn infer(command: &CommandRecord, cwd: &str, host: HostFacts<'_>) -> Effects {
@@ -59,7 +60,8 @@ pub(super) fn infer_at(
     let args = label_options(program, args, cwd, host, &mut effects);
     let args = args.as_ref();
     infer_inputs(program, command, cwd, host, &mut effects);
-    let hidden_items_read = infer_items(program, command, &mut effects);
+    let hidden_items_read = infer_items(program, command, host, &mut effects);
+    let consumer = effects.targets.len();
     infer_xargs(program, command, &mut effects);
     secrets::infer(program, args, &mut effects);
     let (generic_walk, claimed) =
@@ -67,7 +69,14 @@ pub(super) fn infer_at(
     if let Some(walk) = generic_walk {
         infer_operands(program, args, cwd, host, &mut effects, walk, &claimed);
     }
-    effects.hidden_content |= hidden_items_read;
+    match hidden_items_read {
+        Some(Some(walks)) => {
+            let walks = listing::handed(walks, &effects.targets[consumer..]);
+            effects.targets.extend(walks);
+        }
+        Some(None) => effects.hidden_content = true,
+        None => {}
+    }
     infer_completion(program, args, command, &mut effects);
     infer_cwd(cwd_program, cwd, &mut effects);
     effects
@@ -204,7 +213,15 @@ fn infer_inputs(
     }
 }
 
-fn infer_items(program: &str, command: &CommandRecord, effects: &mut Effects) -> bool {
+/// The hidden walk an item consumer reads through: `None` when it reads
+/// none, `Some(None)` when the walk may hand it any name, and otherwise the
+/// walks narrowed to the names the producers' bounds allow.
+fn infer_items(
+    program: &str,
+    command: &CommandRecord,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) -> Option<Option<Vec<Target>>> {
     if let Some(items) = &command.items {
         let effect = match program {
             "echo" | "printf" | "print" | ":" | "true" | "false" | "export" | "set" | "unset"
@@ -218,17 +235,24 @@ fn infer_items(program: &str, command: &CommandRecord, effects: &mut Effects) ->
             _ => clients::operand(program, &command.argv[command.program.unwrap_or(0) + 1..])
                 .unwrap_or(Effect::Read),
         };
-        let walk = if items.hidden {
-            Walk::Hidden
-        } else {
+        let walk = if items.listed == Listed::Visible {
             Walk::Visible
+        } else {
+            Walk::Hidden
         };
         effects
             .targets
             .push(Target::new(items.root.clone(), effect, walk, Via::Items));
-        effect == Effect::Read && walk == Walk::Hidden
+        (effect == Effect::Read && walk == Walk::Hidden).then(|| match &items.listed {
+            Listed::Find(runs) => runs
+                .iter()
+                .map(|run| find_printed_walks(run, host, effects))
+                .collect::<Option<Vec<_>>>()
+                .map(|walks| walks.concat()),
+            _ => None,
+        })
     } else {
-        false
+        None
     }
 }
 

@@ -46,6 +46,8 @@ pub mod listing_option_values_and_children;
 pub mod literal_for_lists_execute_each_value_exactly;
 #[path = "targets/metadata_operands_do_not_read_credential_contents.rs"]
 pub mod metadata_operands_do_not_read_credential_contents;
+#[path = "targets/name_filters_narrow_hidden_walks.rs"]
+pub mod name_filters_narrow_hidden_walks;
 #[path = "targets/native_legacy_client_roles_match_go_without_losing_protection.rs"]
 pub mod native_legacy_client_roles_match_go_without_losing_protection;
 #[path = "targets/opaque_operands_refuse_broad_roots.rs"]

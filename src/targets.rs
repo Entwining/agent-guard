@@ -185,6 +185,52 @@ fn independent_operands(args: &[Word], operands: &[Word]) -> bool {
         })
 }
 
+/// A read of the files below `root` that the search glob `glob` selects.
+fn filter_target(
+    root: &Word,
+    glob: &str,
+    via: Via,
+    reaches_hidden: bool,
+    cwd: &str,
+    host: HostFacts<'_>,
+) -> Target {
+    let mut target = Target::new(
+        crate::filesystem::absolute_input(
+            &crate::filesystem::search_glob(
+                &if root.globs || root.shell_matches {
+                    root.text.clone()
+                } else {
+                    crate::filesystem::literal_glob_root(&root.text)
+                },
+                glob,
+            ),
+            cwd,
+            host.home,
+        ),
+        Effect::Read,
+        Walk::None,
+        via,
+    );
+    target.glob = true;
+    target.glob_hidden = reaches_hidden;
+    target
+}
+
+/// A hidden walk of `root` that reads only the files whose names match one
+/// of `names`, which it may find in any hidden directory.
+fn narrowed_walk(root: &Word, names: &[String], cwd: &str, host: HostFacts<'_>) -> Target {
+    let mut walk = Target::from_word(root, cwd, host, Effect::Read, Walk::Hidden);
+    walk.narrowed = Some(narrowed_reads(root, names, cwd, host));
+    walk
+}
+
+fn narrowed_reads(root: &Word, names: &[String], cwd: &str, host: HostFacts<'_>) -> Vec<Target> {
+    names
+        .iter()
+        .map(|name| filter_target(root, name, Via::Narrow, true, cwd, host))
+        .collect()
+}
+
 fn space(c: char) -> bool {
     c.is_whitespace() && c != '\u{85}' || c == '\u{feff}'
 }
@@ -206,7 +252,7 @@ use git::infer_git;
 pub use inference::infer;
 use inference::infer_at;
 use interpreters::{interpreter_code, perl_exec_argv};
-use listing::infer_listing;
+use listing::{find_printed_walks, infer_listing};
 use search::infer_search;
 use wrappers::{at, child, infer_forwarded, xargs_content_consumer};
 

@@ -222,7 +222,7 @@ impl<'a> Resolver<'a> {
         cwd: &str,
         probe: &mut dyn Probe,
     ) -> Result<Identity, CheckError> {
-        use crate::record::{Effect, Via};
+        use crate::record::{Effect, Via, Walk};
         let raw = absolute_input(&target.unresolved, cwd, self.home);
         let path = normalize(&raw, cwd, self.home);
         if descriptor_path(&path) {
@@ -234,25 +234,29 @@ impl<'a> Resolver<'a> {
         if path.ends_with("/.ssh") {
             return Ok(Identity::Protected(Protection::SshPrivate));
         }
-        if let Some(kind) = self.lexical.check(
+        if let Some(kind) = self.lexical.check_reach(
             &target.pattern_path(),
             self.home,
             target.glob,
-            target.glob_hidden,
+            reach(target),
         )? && !(target.glob
             && kind == Protection::Credential
             && !matches!(target.effect, Effect::Read | Effect::Change))
         {
             return Ok(Identity::Protected(kind));
         }
+        // A consumer that walks the names a bound hands it reads the contents
+        // of a credential directory the bound names.
         if matches!(target.effect, Effect::Read | Effect::Change)
-            && !target.glob
+            && (!target.glob || target.via == Via::Narrow && target.walk != Walk::None)
             && (target.via != Via::Cwd || target.search)
             && self.credential_root(&path, self.home)
         {
             return Ok(Identity::Protected(Protection::Credential));
         }
-        if target.effect == Effect::Name && !target.glob || target.via == Via::Filter {
+        if target.effect == Effect::Name && !target.glob
+            || matches!(target.via, Via::Filter | Via::Narrow)
+        {
             return Ok(Identity::Public(path));
         }
         let resolved_home = match self.home(probe)? {
@@ -303,17 +307,17 @@ impl<'a> Resolver<'a> {
         use crate::record::{Effect, Via, Walk};
         if let Some(kind) = self
             .lexical
-            .check(
+            .check_reach(
                 &target.pattern_path(),
                 self.home,
                 target.glob,
-                target.glob_hidden,
+                reach(target),
             )?
-            .or(self.lexical.check(
+            .or(self.lexical.check_reach(
                 &target.pattern_path(),
                 resolved_home,
                 target.glob,
-                target.glob_hidden,
+                reach(target),
             )?)
         {
             return Ok(Identity::Protected(kind));
@@ -481,5 +485,15 @@ impl Resolver<'_> {
             }
         }
         Ok(Some(false))
+    }
+}
+
+fn reach(target: &crate::record::Target) -> super::Reach {
+    if target.via == crate::record::Via::Narrow {
+        super::Reach::Walk
+    } else if target.glob_hidden {
+        super::Reach::Hidden
+    } else {
+        super::Reach::Visible
     }
 }

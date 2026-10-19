@@ -12,6 +12,24 @@ use crate::{
 };
 
 impl Inspection<'_> {
+    /// A hidden walk reads protected environment files unless name bounds
+    /// narrow it to the files they select.
+    fn hidden_walk(
+        &mut self,
+        target: &Target,
+        cwd: &str,
+        source: EffectSource,
+    ) -> Result<(), CheckError> {
+        match &target.narrowed {
+            Some(reads) => {
+                for read in reads {
+                    self.target(read, cwd, source)?;
+                }
+            }
+            None => self.hidden_search(),
+        }
+        Ok(())
+    }
     fn hidden_search(&mut self) {
         self.effect(EffectRecord::HiddenContent);
         self.denial.get_or_insert_with(|| Reason {
@@ -48,8 +66,7 @@ impl Inspection<'_> {
         }
         // Broad traversal is independent of a narrower credential identity.
         // Decide a lexical root before probes, then check resolved aliases below.
-        let broad_access = target.via != Via::Items
-            && target.via != Via::Filter
+        let broad_access = !matches!(target.via, Via::Items | Via::Filter | Via::Narrow)
             && (target.walk != Walk::None || target.glob)
             && (target.effect != Effect::Name || target.glob);
         let lexical_broad = if broad_access {
@@ -129,11 +146,11 @@ impl Inspection<'_> {
             Identity::InheritedInput => {
                 self.gap(CoverageGap::UnresolvedTarget);
                 if target.walk == Walk::Hidden && target.effect == Effect::Read {
-                    self.hidden_search();
+                    self.hidden_walk(&target, cwd, source)?;
                 }
             }
             Identity::Public(path) => {
-                self.public_target(&target, &path, lexical_broad.as_ref(), broad_access)?
+                self.public_target(&target, &path, lexical_broad.as_ref(), cwd, source)?
             }
         }
         Ok(())
@@ -143,7 +160,8 @@ impl Inspection<'_> {
         target: &Target,
         path: &str,
         lexical_broad: Option<&(String, bool)>,
-        broad_access: bool,
+        cwd: &str,
+        source: EffectSource,
     ) -> Result<(), CheckError> {
         let resolved_home = match self.resolver.home(self.probe)? {
             Identity::Public(path) => path,
@@ -166,7 +184,7 @@ impl Inspection<'_> {
             && resolved_home == self.context.home
         {
             *matched
-        } else if broad_access {
+        } else if lexical_broad.is_some() {
             #[cfg(test)]
             {
                 self.broad_root_queries += 1;
@@ -193,7 +211,7 @@ impl Inspection<'_> {
                 .resolver
                 .may_traverse(target, &resolved_home, self.probe)?
         {
-            self.hidden_search();
+            self.hidden_walk(target, cwd, source)?;
         }
         Ok(())
     }
@@ -448,6 +466,10 @@ fn target_rule(
         } else {
             DenialRule::File
         }
+    } else if target.via == Via::Narrow {
+        // The bound reaches a credential only through the hidden directories
+        // the walk descends, so the walk, not a named file, is refused.
+        DenialRule::HiddenSearch
     } else if target.search {
         DenialRule::GrepSsh
     } else {
