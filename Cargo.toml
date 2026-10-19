@@ -58,7 +58,7 @@ test = false
 
 [dependencies]
 brush-parser = "=0.4.0"
-serde_json = "=1.0.151"
+serde_json = "=1.0.154"
 serde = { version = "=1.0.229", features = ["derive"] }
 tree-sitter = "=0.27.0"
 tree-sitter-bash = "=0.25.1"
