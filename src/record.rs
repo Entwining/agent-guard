@@ -261,6 +261,38 @@ pub struct Items {
     pub root: String,
     pub hidden: bool,
 }
+/// A file that a precommand wrapper opens itself, such as `xargs -a FILE`
+/// or `uv run --env-file FILE`, or a directory it enters, such as
+/// `env -C DIR`. Each entry resolves against the directory the entries before
+/// it entered, starting from the shell's directory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WrapperFile {
+    /// The argv word that holds the path, so the path follows the word when a
+    /// cwd alternative reprojects it.
+    pub index: usize,
+    /// The length of an `--option=` prefix glued before the path.
+    pub prefix: usize,
+    pub effect: Effect,
+}
+impl WrapperFile {
+    pub fn word(&self, argv: &[Word]) -> Word {
+        let word = &argv[self.index];
+        if self.prefix == 0 {
+            word.clone()
+        } else {
+            word.with_text(word.text[self.prefix..].to_owned())
+        }
+    }
+}
+/// The directory reached from `shell_cwd` after the directories `files` enter.
+pub fn entered(shell_cwd: &str, argv: &[Word], files: &[WrapperFile], home: &str) -> String {
+    files
+        .iter()
+        .filter(|file| file.effect == Effect::Enter)
+        .fold(shell_cwd.to_owned(), |cwd, file| {
+            crate::filesystem::absolute_input(&file.word(argv).text, &cwd, home)
+        })
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stdin {
     None,
@@ -285,9 +317,14 @@ pub struct Command {
     pub function: bool,
     pub argv: Vec<Word>,
     pub redirects: Vec<Redirect>,
+    /// The program's directory, after the directories its wrappers enter.
     pub cwd: String,
+    /// The directory the shell opens redirections in and runs the first
+    /// wrapper from.
+    pub shell_cwd: String,
     pub program: Option<usize>,
     pub wrappers: Vec<String>,
+    pub wrapper_files: Vec<WrapperFile>,
     pub shell: bool,
     pub flags: Vec<Flag>,
     pub items: Option<Items>,

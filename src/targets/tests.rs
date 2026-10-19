@@ -135,7 +135,7 @@ mod record_tests {
                 .iter()
                 .find(|c| c.program.is_some())
                 .unwrap();
-            let effects = infer(command, &command.cwd, host);
+            let effects = infer(command, &command.shell_cwd, host);
             if source == "D=public true" {
                 assert!(effects.targets.is_empty(), "{source}: {effects:?}");
             } else {
@@ -180,7 +180,7 @@ mod record_tests {
                 .iter()
                 .find(|command| command.program.is_none() && !command.argv.is_empty())
                 .unwrap();
-            let effects = infer(command, &command.cwd, host);
+            let effects = infer(command, &command.shell_cwd, host);
             assert_eq!(effects.targets.len(), 1);
             assert_eq!(effects.targets[0].effect, Effect::Use);
             assert_eq!(effects.targets[0].unresolved, command.argv[0].text);
@@ -205,7 +205,11 @@ mod record_tests {
             .iter()
             .find(|command| command.program.is_none() && !command.argv.is_empty())
             .unwrap();
-        assert!(infer(assignment, &assignment.cwd, host).targets.is_empty());
+        assert!(
+            infer(assignment, &assignment.shell_cwd, host)
+                .targets
+                .is_empty()
+        );
     }
     fn targets(source: &str) -> Vec<Target> {
         let host = HostFacts {

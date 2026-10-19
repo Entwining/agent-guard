@@ -35,7 +35,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             let command = &mut self.output.script.commands[*index];
             if let Some(program) = command.program
                 && functions.contains_key(&command.argv[program].text)
-                && crate::targets::infer(command, &command.cwd, self.frontend.host)
+                && crate::targets::infer(command, &command.shell_cwd, self.frontend.host)
                     .gaps
                     .iter()
                     .any(|g| matches!(g, CoverageGap::UnknownProgram { .. }))

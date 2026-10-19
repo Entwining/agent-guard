@@ -114,11 +114,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let stdin_id = scope.stdin_id;
         let output_fds = scope.output_fds.clone();
         self.redirect_fds(scope, targets);
-        let mut resolved = shell::argv::resolve(
-            &mut argv,
-            &scope.directory.current.render(),
-            self.frontend.host,
-        );
+        let shell_cwd = scope.directory.current.render();
+        let mut resolved = shell::argv::resolve(&mut argv, &shell_cwd, self.frontend.host);
         let program = resolved.program;
         if let Some(gap) = resolved.gap.take() {
             self.output.gap(gap);
@@ -140,8 +137,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             argv,
             redirects: targets.to_vec(),
             cwd: resolved.cwd,
+            shell_cwd,
             program,
             wrappers: resolved.wrappers,
+            wrapper_files: resolved.wrapper_files,
             shell: resolved.shell,
             flags: Vec::new(),
             items: None,

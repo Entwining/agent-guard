@@ -3,7 +3,7 @@ use super::*;
 pub(super) fn interpreter_code(program: &str, args: &[Word]) -> (Vec<String>, Vec<usize>) {
     let (code, value, glued) = match program {
         "python" | "python3" => ("c", "WX", true),
-        "node" => ("ep", "", false),
+        "node" | "tsx" => ("ep", "", false),
         "bun" => ("ep", "", true),
         "ruby" => ("e", "rICEix", true),
         "perl" => ("eE", "MmIidDCFx", true),

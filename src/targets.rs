@@ -59,8 +59,8 @@ fn label_options<'a>(
         } else {
             args.get(index.wrapping_sub(1)).map_or("", Word::as_str)
         };
-        if clients::option(program, key).is_none()
-            && ["--exclude", "--exclude-dir", "--include"].contains(&key)
+        if ["--exclude", "--exclude-dir", "--include"].contains(&key)
+            && clients::option(program, args, key).is_none()
         {
             let option_value = if word.value.starts_with('-') {
                 word.value

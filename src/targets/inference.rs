@@ -1,5 +1,6 @@
 use super::*;
 
+/// The effects of `command` when the shell runs it in `cwd`.
 pub fn infer(command: &CommandRecord, cwd: &str, host: HostFacts<'_>) -> Effects {
     infer_at(command, cwd, host, 0)
 }
@@ -21,6 +22,8 @@ pub(super) fn infer_at(
         return effects;
     }
     infer_redirects(command, cwd, host, &mut effects);
+    infer_wrapper_files(command, cwd, host, &mut effects);
+    let cwd = &crate::record::entered(cwd, &command.argv, &command.wrapper_files, host.home);
     if command.function {
         if command.argv.iter().any(|word| word.field_count_unknown) {
             effects.gaps.push(CoverageGap::UnsupportedShellSyntax);
@@ -57,7 +60,7 @@ pub(super) fn infer_at(
     let args = args.as_ref();
     infer_inputs(program, command, cwd, host, &mut effects);
     let hidden_items_read = infer_items(program, command, &mut effects);
-    infer_xargs(program, command, cwd, host, &mut effects);
+    infer_xargs(program, command, &mut effects);
     secrets::infer(program, args, &mut effects);
     let (generic_walk, claimed) =
         programs::infer(program, args, command, cwd, host, &mut effects, depth);
@@ -103,6 +106,31 @@ fn infer_redirects(command: &CommandRecord, cwd: &str, host: HostFacts<'_>, effe
         target.glob_hidden = !redirect.globs && !redirect.shell_matches;
         target.expands = redirect.expands;
         target.runtime_unknown = redirect.runtime_unknown;
+        effects.targets.push(target);
+    }
+}
+
+fn infer_wrapper_files(
+    command: &CommandRecord,
+    cwd: &str,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) {
+    for (index, file) in command.wrapper_files.iter().enumerate() {
+        let cwd = crate::record::entered(
+            cwd,
+            &command.argv,
+            &command.wrapper_files[..index],
+            host.home,
+        );
+        let mut target = Target::from_word(
+            &file.word(&command.argv),
+            &cwd,
+            host,
+            file.effect,
+            Walk::None,
+        );
+        target.via = Via::Option;
         effects.targets.push(target);
     }
 }
@@ -180,18 +208,15 @@ fn infer_items(program: &str, command: &CommandRecord, effects: &mut Effects) ->
     if let Some(items) = &command.items {
         let effect = match program {
             "echo" | "printf" | "print" | ":" | "true" | "false" | "export" | "set" | "unset"
-            | "typeset" | "declare" | "local" | "cd" | "curl" | "wget" | "docker" | "ssh" => {
-                Effect::Name
-            }
+            | "typeset" | "declare" | "local" | "cd" => Effect::Name,
             "rm" | "mv" | "ln" | "stat" | "test" | "[" | "chmod" | "chown" | "chgrp"
             | "chflags" | "touch" | "rmdir" | "mkdir" | "wc" | "file" | "shasum" | "sha1sum"
             | "sha256sum" | "md5" | "md5sum" | "cksum" | "realpath" | "readlink" | "basename"
             | "dirname" => Effect::Meta,
             "ls" | "tree" | "du" | "find" | "fd" => Effect::List,
             "pushd" | "popd" => Effect::Enter,
-            "tee" => Effect::Write,
-            "ssh-add" => Effect::Use,
-            _ => Effect::Read,
+            _ => clients::operand(program, &command.argv[command.program.unwrap_or(0) + 1..])
+                .unwrap_or(Effect::Read),
         };
         let walk = if items.hidden {
             Walk::Hidden
@@ -207,30 +232,9 @@ fn infer_items(program: &str, command: &CommandRecord, effects: &mut Effects) ->
     }
 }
 
-fn infer_xargs(
-    program: &str,
-    command: &CommandRecord,
-    cwd: &str,
-    host: HostFacts<'_>,
-    effects: &mut Effects,
-) {
-    let index = command.program.unwrap_or(0);
+fn infer_xargs(program: &str, command: &CommandRecord, effects: &mut Effects) {
     if command.wrappers.iter().any(|w| w == "xargs") {
         effects.consumes_listing = xargs_content_consumer(program);
-        let options = &command.argv[..index];
-        for (i, word) in options.iter().enumerate() {
-            let file = if word == "-a" || word == "--arg-file" {
-                options.get(i + 1).cloned()
-            } else {
-                word.strip_prefix("--arg-file=")
-                    .map(|path| word.with_text(path.into()))
-            };
-            if let Some(file) = file {
-                let mut target = Target::from_word(&file, cwd, host, Effect::Read, Walk::None);
-                target.via = Via::Option;
-                effects.targets.push(target);
-            }
-        }
     }
 }
 

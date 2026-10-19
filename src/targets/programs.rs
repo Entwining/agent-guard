@@ -78,20 +78,16 @@ pub(super) fn infer(
             .targets
             .extend(resource_changes::infer(program, args, cwd, host)),
         "git" => infer_git(args, cwd, host, effects),
-        "cp" | "install" | "rsync" | "tee" | "ssh-add" | "dotenvx" | "ssh" | "scp" | "sftp"
-        | "ssh-keygen" | "dd" | "kubectl" | "npm" | "curl" | "wget" | "docker" => effects
-            .targets
-            .extend(clients::infer(program, args, cwd, host)),
         "ctags" => {
             effects.gaps.push(CoverageGap::UnknownProgram {
                 program: program.to_owned(),
             });
-            effects
-                .targets
-                .extend(clients::infer(program, args, cwd, host));
+            clients::infer(program, args, cwd, host, effects);
         }
-        "python" | "python3" | "node" | "bun" | "ruby" | "perl" | "php" | "osascript" | "lua"
-        | "deno" => executables::interpreter(program, args, cwd, host, effects, command, depth),
+        "python" | "python3" | "node" | "tsx" | "bun" | "ruby" | "perl" | "php" | "osascript"
+        | "lua" | "deno" => {
+            executables::interpreter(program, args, cwd, host, effects, command, depth)
+        }
         "bash" | "zsh" | "sh" | "dash" | "ksh" | "csh" | "tcsh" => {
             executables::shell(args, command, cwd, host, effects)
         }
@@ -102,8 +98,10 @@ pub(super) fn infer(
             .push(args.iter().map(Word::as_str).collect::<Vec<_>>().join(" ")),
         "eval" => {}
         _ => {
-            readers::unknown(program, args, effects);
-            generic_walk = Some(Walk::Visible);
+            if !clients::infer(program, args, cwd, host, effects) {
+                readers::unknown(program, args, effects);
+                generic_walk = Some(Walk::Visible);
+            }
         }
     }
     (generic_walk, claimed)

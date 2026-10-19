@@ -16,8 +16,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     argv: vec![expanded.word],
                     redirects: Vec::new(),
                     cwd: scope.directory.current.render(),
+                    shell_cwd: scope.directory.current.render(),
                     program: None,
                     wrappers: Vec::new(),
+                    wrapper_files: Vec::new(),
                     shell: true,
                     flags: Vec::new(),
                     items: None,
@@ -58,7 +60,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             ));
         }
         self.output.script.commands.push(command.clone());
-        let effects = crate::targets::infer(&command, &command.cwd, self.frontend.host);
+        let effects = crate::targets::infer(&command, &command.shell_cwd, self.frontend.host);
         let cwd_dependent = command.argv.iter().any(|word| word.pwd)
             || !effects.code.is_empty()
             || !effects.inline.is_empty()
@@ -74,12 +76,18 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         {
             let cwd = cwd.render();
             let mut copy = command.clone();
-            copy.cwd = cwd.clone();
+            copy.shell_cwd = cwd.clone();
             for word in &mut copy.argv {
                 if word.pwd {
                     word.reproject_cwd(&cwd);
                 }
             }
+            copy.cwd = crate::record::entered(
+                &cwd,
+                &copy.argv,
+                &copy.wrapper_files,
+                self.frontend.host.home,
+            );
             if !command.nested
                 && command.pipeline.is_none()
                 && !scope.piped
@@ -115,7 +123,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     )
                 })
             })
-        }) && crate::targets::infer(command, &command.cwd, self.frontend.host)
+        }) && crate::targets::infer(command, &command.shell_cwd, self.frontend.host)
             .targets
             .iter()
             .any(|target| target.expands)
@@ -125,7 +133,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         if let Some(gap) = &scope.directory.gap {
             // Only overflow pays for this second inference. A different cwd exposes
             // target dependencies without inventing a separate adapter role table.
-            let effects = crate::targets::infer(command, &command.cwd, self.frontend.host);
+            let effects = crate::targets::infer(command, &command.shell_cwd, self.frontend.host);
             let relocated = crate::targets::infer(command, "/", self.frontend.host);
             if command.argv.iter().any(|word| word.pwd)
                 || effects.targets != relocated.targets

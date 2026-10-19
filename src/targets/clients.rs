@@ -1,4 +1,5 @@
-use super::{operand_value, space};
+use super::{Effects, operand_value, space};
+use crate::CoverageGap;
 use crate::record::{Effect, HostFacts, OptionRole, Role, Target, Via, Walk, Word};
 
 struct Spec {
@@ -9,7 +10,9 @@ struct Spec {
     destination: Option<Effect>,
 }
 
-fn spec(program: &str) -> Spec {
+/// The client roles of `program`, or None when the guard does not model the
+/// program or the command form its words select.
+fn spec(program: &str, words: &[Word]) -> Option<Spec> {
     let mut spec = Spec {
         operand: Effect::Read,
         walk: Walk::Visible,
@@ -61,16 +64,24 @@ fn spec(program: &str) -> Spec {
             spec.operand = Effect::Name;
             spec.options = &[("--env-file", Effect::Use)];
         }
-        _ => {}
+        "sftp" | "ctags" => {}
+        "cargo" => return cargo::spec(words),
+        "diskutil" | "tmutil" | "dscl" => return query_verbs::spec(program, words),
+        _ => return None,
     }
-    spec
+    Some(spec)
 }
 
-pub(super) fn option(program: &str, key: &str) -> Option<Effect> {
-    spec(program)
+pub(super) fn option(program: &str, words: &[Word], key: &str) -> Option<Effect> {
+    spec(program, words)?
         .options
         .iter()
         .find_map(|(name, effect)| (*name == key).then_some(*effect))
+}
+
+/// The role of operands that come from a process item list.
+pub(super) fn operand(program: &str, words: &[Word]) -> Option<Effect> {
+    spec(program, words).map(|spec| spec.operand)
 }
 
 struct Context<'a> {
@@ -217,12 +228,22 @@ fn remote(value: &str) -> bool {
         })
 }
 
-pub(super) fn infer(program: &str, words: &[Word], cwd: &str, host: HostFacts<'_>) -> Vec<Target> {
+/// Adds the targets of a modelled client; false leaves `program` unmodelled.
+pub(super) fn infer(
+    program: &str,
+    words: &[Word],
+    cwd: &str,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) -> bool {
+    let Some(spec) = spec(program, words) else {
+        return false;
+    };
     let mut context = Context {
         words,
         cwd,
         host,
-        spec: spec(program),
+        spec,
         claimed: vec![false; words.len()],
         targets: Vec::new(),
     };
@@ -245,6 +266,7 @@ pub(super) fn infer(program: &str, words: &[Word], cwd: &str, host: HostFacts<'_
         "wget" => wget(&mut context),
         "docker" => docker(&mut context),
         "ctags" => ctags(&mut context),
+        "cargo" => cargo(&mut context, effects),
         "dd" => {
             for (index, word) in words.iter().enumerate() {
                 context.claimed[index] = true;
@@ -258,7 +280,8 @@ pub(super) fn infer(program: &str, words: &[Word], cwd: &str, host: HostFacts<'_
         _ => {}
     }
     context.fallback();
-    context.targets
+    effects.targets.extend(context.targets);
+    true
 }
 
 fn ctags(context: &mut Context<'_>) {
@@ -286,10 +309,13 @@ fn short_value(text: &str, wanted: char) -> Option<&str> {
         .map(|(at, c)| &text[at + 1 + c.len_utf8()..])
 }
 
+mod cargo;
 mod curl;
 mod docker;
+mod query_verbs;
 mod ssh;
 mod wget;
+use cargo::cargo;
 pub(super) use curl::CURL_VALUE_LETTERS;
 use curl::{CURL_USE, curl};
 use docker::docker;

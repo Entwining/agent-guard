@@ -1,0 +1,11 @@
+{"rows":[
+{"id":"top-long","partition":"magic","input":{"command":"git diff HEAD -- ':(top).env'"},"expected":"D","wire_reason":"environment-file"},
+{"id":"top-short","partition":"magic","input":{"command":"git diff HEAD -- ':/.env'"},"expected":"D","wire_reason":"environment-file"},
+{"id":"icase","partition":"magic","input":{"command":"git grep -n KEY -- ':(icase).env'"},"expected":"D","wire_reason":"environment-file"},
+{"id":"index-blob","partition":"magic","input":{"command":"git show ':.env'"},"expected":"D","wire_reason":"environment-file"},
+{"id":"status-metadata","partition":"magic","input":{"command":"git status -- ':(top).env'"},"expected":"N"},
+{"id":"exclude-long","partition":"exclude","input":{"command":"git diff HEAD -- src ':(exclude).env'"},"expected":"N"},
+{"id":"exclude-bang","partition":"exclude","input":{"command":"git log -p -- src ':!.env'"},"expected":"N"},
+{"id":"exclude-caret","partition":"exclude","input":{"command":"git diff --stat HEAD -- src ':^.env'"},"expected":"N"},
+{"id":"exclude-top","partition":"exclude","input":{"command":"git diff HEAD -- src ':(exclude,top).env'"},"expected":"N"}
+]}

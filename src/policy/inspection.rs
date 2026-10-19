@@ -274,7 +274,7 @@ impl Inspection<'_> {
         let cwd = &command.cwd;
         let effects = targets::infer(
             command,
-            cwd,
+            &command.shell_cwd,
             crate::record::HostFacts {
                 home: &self.context.home,
                 user: self.context.user.as_deref(),

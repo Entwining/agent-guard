@@ -1,5 +1,7 @@
 #[path = "targets/client_specs_preserve_file_roles.rs"]
 pub mod client_specs_preserve_file_roles;
+#[path = "targets/client_subcommands_keep_operand_roles.rs"]
+pub mod client_subcommands_keep_operand_roles;
 #[path = "targets/copy_destination_is_written_without_reading_its_contents.rs"]
 pub mod copy_destination_is_written_without_reading_its_contents;
 #[path = "targets/credential_globs_and_roots_follow_the_lexical_owner.rs"]
@@ -26,6 +28,8 @@ pub mod git_config_values_keep_fallback_read_role;
 pub mod git_environment_reaches_wrappers_and_child_shells;
 #[path = "targets/git_owns_quoted_pathspec_globs.rs"]
 pub mod git_owns_quoted_pathspec_globs;
+#[path = "targets/git_pathspec_magic_names_its_path.rs"]
+pub mod git_pathspec_magic_names_its_path;
 #[path = "targets/glab_token_keys_and_config_file_are_credentials.rs"]
 pub mod glab_token_keys_and_config_file_are_credentials;
 #[path = "targets/global_option_values_never_consume_an_option.rs"]
@@ -34,6 +38,8 @@ pub mod global_option_values_never_consume_an_option;
 pub mod global_pattern_names_follow_the_generic_owner;
 #[path = "targets/grep_equals_values_and_install_destination_keep_owner_roles.rs"]
 pub mod grep_equals_values_and_install_destination_keep_owner_roles;
+#[path = "targets/launchers_run_their_inner_command.rs"]
+pub mod launchers_run_their_inner_command;
 #[path = "targets/listing_option_values_and_children.rs"]
 pub mod listing_option_values_and_children;
 #[path = "targets/literal_for_lists_execute_each_value_exactly.rs"]

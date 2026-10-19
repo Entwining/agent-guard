@@ -22,28 +22,45 @@ pub(super) fn interpreter(
         infer_forwarded(forwarded, command, cwd, host, effects, depth);
     } else {
         effects.gaps.push(CoverageGap::InterpreterChosenRead);
-        let (code, claimed) = interpreter_code(program, args);
+        let (code, mut claimed) = interpreter_code(program, args);
         for code in code {
             if code.contains("json.load") {
                 effects.gaps.push(CoverageGap::UnresolvedTarget);
             }
             effects.inline.push(code);
         }
+        // Runtime options end at `--` or at the entry script, which `-` names
+        // for stdin. An option value taken for the entry script only ends them
+        // early, which reads the separate file word below instead of using it.
+        let mut options = true;
         for (index, arg) in args.iter().enumerate() {
-            if let Some(path) = arg
+            if claimed.contains(&index) {
+                continue;
+            }
+            let env_file = if let Some(path) = arg
                 .strip_prefix("--env-file=")
                 .or_else(|| arg.strip_prefix("--env-file-if-exists="))
             {
-                let target = Target::from_word(
-                    &arg.with_text(path.to_owned()),
-                    cwd,
-                    host,
-                    Effect::Use,
-                    Walk::None,
-                );
-                effects.targets.push(target);
-            }
-            if !claimed.contains(&index) && !arg.starts_with('-') {
+                Some(arg.with_text(path.to_owned()))
+            } else if options
+                && ["node", "tsx"].contains(&program)
+                && ["--env-file", "--env-file-if-exists"].contains(&arg.as_str())
+                && let Some(path) = args.get(index + 1)
+            {
+                // Node also takes the file as the next word.
+                claimed.push(index + 1);
+                Some(path.clone())
+            } else {
+                None
+            };
+            if let Some(path) = env_file {
+                effects
+                    .targets
+                    .push(Target::from_word(&path, cwd, host, Effect::Use, Walk::None));
+            } else if arg == "--" || arg == "-" {
+                options = false;
+            } else if !arg.starts_with('-') {
+                options = false;
                 effects.targets.push(read(arg, cwd, host, false));
             }
         }

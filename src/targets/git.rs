@@ -1,5 +1,7 @@
 use super::*;
 
+mod pathspec;
+
 pub(super) fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effects) {
     let (index, base) = global_options(args, cwd, host, effects);
     infer_subcommand(args, index, &base, cwd, host, effects);
@@ -86,29 +88,26 @@ fn infer_subcommand(
             }
             if !pattern {
                 pattern = true;
+                index += 1;
+                continue;
+            }
+            let output =
+                sub == "bundle" && bundle_action.as_deref() == Some("create") && !bundle_output;
+            bundle_output |= output;
+            let (effect, walk) = if output {
+                (Effect::Write, Walk::None)
+            } else if metadata {
+                (Effect::Meta, Walk::None)
+            } else if names {
+                (Effect::Name, Walk::None)
             } else {
-                let output =
-                    sub == "bundle" && bundle_action.as_deref() == Some("create") && !bundle_output;
-                bundle_output |= output;
-                add(
-                    arg,
-                    arg,
-                    if output {
-                        Effect::Write
-                    } else if metadata {
-                        Effect::Meta
-                    } else if names {
-                        Effect::Name
-                    } else {
-                        Effect::Read
-                    },
-                    if !output && !names && !metadata {
-                        Walk::Visible
-                    } else {
-                        Walk::None
-                    },
-                    effects,
-                );
+                (Effect::Read, Walk::Visible)
+            };
+            match pathspec::parse(arg) {
+                // An exclusion only removes paths from the selected set.
+                Some(magic) if magic.exclude => {}
+                Some(magic) => add(magic.path, arg, effect, walk, effects),
+                None => add(arg, arg, effect, walk, effects),
             }
         }
         index += 1;

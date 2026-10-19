@@ -1,4 +1,6 @@
-use crate::record::{HostFacts, Role, Word};
+use crate::record::{Effect, HostFacts, Role, Word, WrapperFile};
+
+mod launchers;
 
 pub(super) struct Resolution {
     pub program: Option<usize>,
@@ -8,6 +10,7 @@ pub(super) struct Resolution {
     pub source: Option<String>,
     pub gap: Option<crate::CoverageGap>,
     pub environment: Vec<EnvironmentChange>,
+    pub wrapper_files: Vec<WrapperFile>,
 }
 
 pub(crate) enum EnvironmentChange {
@@ -46,10 +49,11 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
         program: None,
         wrappers: Vec::new(),
         shell: true,
-        cwd: cwd.into(),
+        cwd: String::new(),
         source: None,
         gap: None,
         environment: Vec::new(),
+        wrapper_files: Vec::new(),
     };
     let mut index = 0;
     while let Some(word) = argv.get(index) {
@@ -84,7 +88,7 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
             .next()
             .unwrap_or("")
             .to_owned();
-        if !resolve_wrapper(&name, argv, &mut index, &mut result, host) {
+        if !resolve_wrapper(&name, argv, &mut index, &mut result) {
             break;
         }
         result.wrappers.push(name);
@@ -104,6 +108,7 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
     }) {
         result.gap = Some(crate::CoverageGap::UnsupportedShellSyntax);
     }
+    result.cwd = crate::record::entered(cwd, argv, &result.wrapper_files, host.home);
     result
 }
 
@@ -133,6 +138,7 @@ pub(super) fn stdin_kind(command: &crate::record::Command) -> crate::record::Std
         "osascript",
         "lua",
         "deno",
+        "tsx",
     ]
     .contains(&name)
     {
@@ -146,7 +152,6 @@ fn resolve_wrapper(
     argv: &mut [Word],
     index: &mut usize,
     result: &mut Resolution,
-    host: HostFacts<'_>,
 ) -> bool {
     match name {
         "command" if text(argv, *index) == "command" => {
@@ -202,9 +207,9 @@ fn resolve_wrapper(
             }
             *index += 1;
         }
-        "env" => resolve_environment(result, host, argv, index),
-        "xargs" => resolve_xargs(argv, index),
-        _ => return false,
+        "env" => resolve_environment(result, argv, index),
+        "xargs" => resolve_xargs(result, argv, index),
+        _ => return launchers::resolve(result, name, argv, index),
     }
     true
 }
@@ -282,20 +287,18 @@ fn resolve_privilege(result: &mut Resolution, argv: &mut [Word], index: &mut usi
     }
 }
 
-fn resolve_environment(
-    result: &mut Resolution,
-    host: HostFacts<'_>,
-    argv: &mut [Word],
-    index: &mut usize,
-) {
+fn resolve_environment(result: &mut Resolution, argv: &mut [Word], index: &mut usize) {
     mark(argv, index);
     while *index < argv.len() {
         match text(argv, *index) {
             "-C" => {
                 if let Some(word) = argv.get_mut(*index + 1) {
-                    result.cwd =
-                        crate::filesystem::absolute_input(&word.text, &result.cwd, host.home);
                     word.role = Role::Precommand;
+                    result.wrapper_files.push(WrapperFile {
+                        index: *index + 1,
+                        prefix: 0,
+                        effect: Effect::Enter,
+                    });
                 }
                 *index += 2;
             }
@@ -329,9 +332,22 @@ fn resolve_environment(
     }
 }
 
-fn resolve_xargs(argv: &mut [Word], index: &mut usize) {
+fn resolve_xargs(result: &mut Resolution, argv: &mut [Word], index: &mut usize) {
     mark(argv, index);
     while text(argv, *index).starts_with('-') {
+        let file = match text(argv, *index) {
+            "-a" | "--arg-file" => (*index + 1 < argv.len()).then_some((*index + 1, 0)),
+            option => option
+                .starts_with("--arg-file=")
+                .then_some((*index, "--arg-file=".len())),
+        };
+        if let Some((index, prefix)) = file {
+            result.wrapper_files.push(WrapperFile {
+                index,
+                prefix,
+                effect: Effect::Read,
+            });
+        }
         if [
             "-a",
             "-d",
