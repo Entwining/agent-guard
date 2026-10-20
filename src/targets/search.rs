@@ -10,58 +10,14 @@ pub(super) fn infer_search(
 ) {
     let (mut operands, glob_words, hidden, names, recursive) =
         search_arguments(program, args, cwd, host, effects);
-    let globs: Vec<_> = glob_words.iter().map(|glob| glob.text.clone()).collect();
-    // A negated glob only excludes, and globs match paths relative to the
-    // search root, which never contain `..`; neither selects a file.
-    let selecting: Vec<_> = globs
-        .iter()
-        .filter(|glob| !glob.starts_with('!') && !glob.split('/').any(|part| part == ".."))
-        .collect();
-    // ripgrep skips a hidden entry unless `--hidden` is given or a positive
-    // glob matches that entry, so hidden names are reachable only when some
-    // glob's last component can match a dot name.
-    let entering: Vec<_> = selecting
-        .iter()
-        .filter(|glob| {
-            glob.rsplit('/')
-                .next()
-                .is_some_and(|last| last.starts_with(['.', '*', '?', '[', '{']))
-        })
-        .collect();
-    let reaches_hidden = program == "grep" || hidden || !entering.is_empty();
-    let mut filters: Vec<_> = selecting.iter().map(|glob| (*glob).clone()).collect();
-    if program != "grep" && !hidden {
-        // A file that one glob selects is searched below a hidden directory
-        // that another glob enters, as `.aws` does for `credentials`. The
-        // entered directories are the dot names the last component matches,
-        // so `*` enters `.*` and `?aws` enters `.aws`; spelling them that way
-        // identifies the hidden directory a credential needs.
-        for directory in &entering {
-            let (parent, last) = directory
-                .rsplit_once('/')
-                .map_or(("**", directory.as_str()), |(parent, last)| (parent, last));
-            let last = if let Some(rest) = last.strip_prefix('?') {
-                format!(".{rest}")
-            } else if last.starts_with('*') {
-                format!(".*{}", last.trim_start_matches('*'))
-            } else {
-                last.to_owned()
-            };
-            let directory = format!("{parent}/{last}");
-            for glob in &selecting {
-                let name = glob.rsplit('/').next().unwrap_or(glob);
-                // A name matching every file reaches what its own glob does,
-                // and hidden files below a public root are not checked.
-                if !name.trim_matches('*').is_empty() {
-                    filters.push(format!("{directory}/**/{name}"));
-                }
-            }
-        }
-    }
-    let implicit = operands.is_empty()
+    let (globs_enter_hidden, filters) = glob_filters(program, hidden, &glob_words);
+    let reaches_hidden = program == "grep" || hidden || globs_enter_hidden;
+    let pathless = operands.is_empty()
         && !(program == "rg" && searches_input(command))
         && (program != "grep" || hidden);
-    if implicit {
+    let items = pathless && xargs_appends(command);
+    let implicit = pathless && !items;
+    if pathless {
         operands.push(Word::literal(cwd.to_owned()));
     }
     effects.hidden_listing = names && hidden;
@@ -102,8 +58,15 @@ pub(super) fn infer_search(
             walk,
         );
         target.search = implicit && !args.iter().any(|arg| arg == "--help" || arg == "-h");
-        // ripgrep and ag skip hidden names unless `--hidden` makes the walk hidden.
-        target.walk_hidden = walk == Walk::Hidden || !matches!(program, "rg" | "ag");
+        if items {
+            target.via = Via::Items;
+        }
+        // ripgrep and ag skip hidden names unless `--hidden` makes the walk
+        // hidden or a positive glob matches the name. Bounds decide which
+        // names a glob enters; without them, a glob such as `*` enters any.
+        target.walk_hidden = walk == Walk::Hidden
+            || !matches!(program, "rg" | "ag")
+            || bounds.is_none() && globs_enter_hidden;
         if walk == Walk::Hidden {
             target.narrowed = bounds
                 .as_ref()
@@ -126,6 +89,60 @@ pub(super) fn infer_search(
     }
 }
 
+/// The globs that select files below a search root, with each file one glob
+/// selects repeated below the hidden directories another glob enters, and
+/// whether any glob enters a hidden name.
+fn glob_filters(program: &str, hidden: bool, glob_words: &[Word]) -> (bool, Vec<String>) {
+    let globs: Vec<_> = glob_words.iter().map(|glob| glob.text.clone()).collect();
+    // A negated glob only excludes, and globs match paths relative to the
+    // search root, which never contain `..`; neither selects a file.
+    let selecting: Vec<_> = globs
+        .iter()
+        .filter(|glob| !glob.starts_with('!') && !glob.split('/').any(|part| part == ".."))
+        .collect();
+    // ripgrep skips a hidden entry unless `--hidden` is given or a positive
+    // glob matches that entry, so hidden names are reachable only when some
+    // glob's last component can match a dot name.
+    let entering: Vec<_> = selecting
+        .iter()
+        .filter(|glob| {
+            glob.rsplit('/')
+                .next()
+                .is_some_and(|last| last.starts_with(['.', '*', '?', '[', '{']))
+        })
+        .collect();
+    let mut filters: Vec<_> = selecting.iter().map(|glob| (*glob).clone()).collect();
+    if program != "grep" && !hidden {
+        // A file that one glob selects is searched below a hidden directory
+        // that another glob enters, as `.aws` does for `credentials`. The
+        // entered directories are the dot names the last component matches,
+        // so `*` enters `.*` and `?aws` enters `.aws`; spelling them that way
+        // identifies the hidden directory a credential needs.
+        for directory in &entering {
+            let (parent, last) = directory
+                .rsplit_once('/')
+                .map_or(("**", directory.as_str()), |(parent, last)| (parent, last));
+            let last = if let Some(rest) = last.strip_prefix('?') {
+                format!(".{rest}")
+            } else if last.starts_with('*') {
+                format!(".*{}", last.trim_start_matches('*'))
+            } else {
+                last.to_owned()
+            };
+            let directory = format!("{parent}/{last}");
+            for glob in &selecting {
+                let name = glob.rsplit('/').next().unwrap_or(glob);
+                // A name matching every file reaches what its own glob does,
+                // and hidden files below a public root are not checked.
+                if !name.trim_matches('*').is_empty() {
+                    filters.push(format!("{directory}/**/{name}"));
+                }
+            }
+        }
+    }
+    (!entering.is_empty(), filters)
+}
+
 /// Whether ripgrep without a path searches standard input, which it does when
 /// a pipe or a here-document feeds it; `/dev/null` is a device, so it searches
 /// the directory.
@@ -136,6 +153,19 @@ fn searches_input(command: &CommandRecord) -> bool {
     ) && !command.redirects.iter().any(|redirect| {
         redirect.fd == 0 && redirect.direction == Direction::In && redirect.target == "/dev/null"
     })
+}
+
+/// Whether `xargs` appends its items as the search's operands. macOS `xargs`
+/// does not run the utility on empty input, so such a search walks the items
+/// rather than its working directory; under `-I` or `-J` the items go only
+/// where the marker stands.
+fn xargs_appends(command: &CommandRecord) -> bool {
+    command.wrappers.iter().any(|wrapper| wrapper == "xargs")
+        && !command.argv[..command.program.unwrap_or(0)]
+            .iter()
+            .any(|word| {
+                word.starts_with("-I") || word.starts_with("-J") || word.starts_with("--replace")
+            })
 }
 
 fn search_arguments(
