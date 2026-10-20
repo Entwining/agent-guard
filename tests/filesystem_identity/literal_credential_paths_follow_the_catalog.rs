@@ -11,6 +11,11 @@ fn paths_below_a_catalog_match_are_credentials() {
 }
 
 #[test]
+fn escaped_names_in_patterns_keep_their_identity() {
+    crate::program_contract::partition("escaped-literal", ROWS);
+}
+
+#[test]
 fn generic_names_under_other_directories_are_public() {
     crate::program_contract::partition("unspelled-directory", ROWS);
 }

@@ -190,13 +190,17 @@ pub(super) fn lexical_candidate(
 ) -> Option<Protection> {
     let hidden = reach != Reach::Visible;
     let stores = || domain.stores.iter().chain(locations);
-    // Brace expansion can leave only encoded literals. Root and filename
-    // comparisons then need the same text the matcher would compare.
-    let literal = patterned
-        .then(|| glob::literal_prefix(path))
-        .and_then(|(prefix, rest)| rest.is_empty().then_some(prefix));
-    let spelling = literal.as_deref().unwrap_or(path);
-    let patterned = patterned && literal.is_none();
+    // Quoting and brace expansion escape literal text, which root, directory
+    // and filename comparisons need as the matcher reads it.
+    let (spelling, patterned) = if patterned {
+        match glob::literal_prefix(path) {
+            (literal, "") => (std::borrow::Cow::Owned(literal), false),
+            _ => (std::borrow::Cow::Owned(glob::minimal_escapes(path)), true),
+        }
+    } else {
+        (std::borrow::Cow::Borrowed(path), false)
+    };
+    let spelling = spelling.as_ref();
     let state = lexical_state::LiteralState::path(spelling, &domain.library_parts);
     if !patterned {
         return state.protection().or_else(|| {
@@ -236,14 +240,7 @@ pub(super) fn lexical_candidate(
     {
         return Some(Protection::Environment);
     }
-    if state.credential
-        || parts.iter().any(|part| {
-            part.contains('\\') && {
-                let (literal, rest) = glob::literal_prefix(part);
-                rest.is_empty() && literal == "private-keys-v1.d"
-            }
-        })
-    {
+    if state.credential {
         return Some(Protection::Credential);
     }
     if stores::selects(stores(), &path, hidden, matcher) {
@@ -357,8 +354,7 @@ fn spells_listed_directory(
                 pending.push((unmatched, remaining - 1, spelled || reach == Reach::Walk));
             }
         } else if matcher.visible_component(part, &entry.witnesses[remaining - 1], hidden) {
-            let spells = protected.starts_with('.')
-                && (part.starts_with('.') || part.starts_with("\\."))
+            let spells = protected.starts_with('.') && part.starts_with('.')
                 || matcher.identifies_component(part, protected);
             pending.push((unmatched - 1, remaining - 1, spelled || spells));
         }

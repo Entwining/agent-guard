@@ -174,6 +174,37 @@ pub(super) fn fold_pattern(pattern: &str) -> String {
     folded
 }
 
+/// Drops the escapes outside bracket classes that matching does not need,
+/// in each component as the matcher reads a path. Quoting escapes characters
+/// such as `-` that only a class or an alternative gives meaning, which hides
+/// a name from text comparisons.
+pub(super) fn minimal_escapes(pattern: &str) -> String {
+    let components: Vec<_> = pattern
+        .split('/')
+        .map(|component| {
+            let chars: Vec<char> = component.chars().collect();
+            let mut result = String::with_capacity(component.len());
+            let mut index = 0;
+            while index < chars.len() {
+                let (start, end) = match chars[index] {
+                    '\\' if index + 1 < chars.len() => {
+                        if ['*', '?', '[', '\\'].contains(&chars[index + 1]) {
+                            result.push('\\');
+                        }
+                        (index + 1, index + 1)
+                    }
+                    '[' => (index, class_end(&chars, index).unwrap_or(chars.len() - 1)),
+                    _ => (index, index),
+                };
+                result.extend(&chars[start..=end]);
+                index = end + 1;
+            }
+            result
+        })
+        .collect();
+    components.join("/")
+}
+
 /// Protected names are compared after lowercasing, as the default APFS
 /// volume resolves them, so a filesystem class matches when either ASCII case
 /// does: `[[:upper:]]ontainers` reaches `Containers`. Shell string operations
@@ -414,10 +445,7 @@ fn component_counted(
 }
 
 pub(super) fn visible_intersects(pattern: &str, protected: &str, hidden: bool) -> bool {
-    (hidden
-        || !protected.starts_with('.')
-        || pattern.starts_with('.')
-        || pattern.starts_with("\\."))
+    (hidden || !protected.starts_with('.') || pattern.starts_with('.'))
         && intersects(pattern, protected)
 }
 
