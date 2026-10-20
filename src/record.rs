@@ -404,8 +404,9 @@ pub struct Target {
     /// For a walk, the basename patterns that bound every file it reads;
     /// `None` when it reads any name.
     pub bounds: Option<Vec<String>>,
-    /// For a hidden walk, the reads of the files that name bounds let it
-    /// handle; `None` when it handles every file.
+    /// For a hidden walk, the reads checked instead of refusing it, one for
+    /// each name it was narrowed to; `None` refuses it. A consumer that walks
+    /// below those names keeps these reads although its `bounds` are cleared.
     pub narrowed: Option<Vec<Target>>,
 }
 
