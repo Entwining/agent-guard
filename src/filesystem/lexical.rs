@@ -1,4 +1,6 @@
-use super::stores::{self, Location};
+mod stores;
+
+use super::stores::Location;
 use super::{CheckError, Protection, Reach, glob};
 use crate::record::ConfigDir;
 use std::collections::BTreeMap;
@@ -91,7 +93,7 @@ impl Domain {
             broad_witnesses.push(format!("{}/x", root.path));
         }
         Self {
-            stores: stores::defaults(&home)
+            stores: super::stores::defaults(&home)
                 .map(|(_, location)| location)
                 .collect(),
             home,
@@ -134,7 +136,7 @@ impl Lexical {
             domains: BTreeMap::new(),
             matcher: glob::Matcher::default(),
             deadline,
-            locations: stores::from_environment(config_dirs),
+            locations: super::stores::from_environment(config_dirs),
             #[cfg(test)]
             candidate_evaluations: 0,
             #[cfg(test)]
@@ -143,69 +145,6 @@ impl Lexical {
             domain_preparations: 0,
             #[cfg(test)]
             classified_bytes: 0,
-        }
-    }
-
-    /// Whether walking `path`, or each directory its pattern names, reads a
-    /// store, reading only files that `names` match when it bounds the walk.
-    /// HOME, its ancestors and `~/Library` belong to the broad-root rule.
-    pub fn store_root(
-        &mut self,
-        path: &str,
-        home: &str,
-        patterned: bool,
-        names: Option<&[String]>,
-    ) -> bool {
-        self.prepare(home);
-        let domain = &self.domains[home];
-        let path = if patterned {
-            glob::fold_pattern(path)
-        } else {
-            super::fold(path)
-        };
-        let path = path.trim_end_matches('/');
-        let names: Option<Vec<_>> =
-            names.map(|names| names.iter().map(|name| glob::fold_pattern(name)).collect());
-        let matcher = &mut self.matcher;
-        stores::reached(
-            domain.stores.iter().chain(&self.locations),
-            names.as_deref(),
-            |dir| {
-                let broad = dir == domain.library
-                    || domain
-                        .home
-                        .strip_prefix(dir)
-                        .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'));
-                !broad
-                    && if patterned {
-                        matcher.visible_path(path, dir, false)
-                    } else {
-                        dir == path
-                    }
-            },
-        )
-    }
-
-    /// Protects a folded path to, or inside, a credential file of a store that
-    /// a variable or link moved, where no name identifies it.
-    pub fn moved_store(&self, path: &str) -> Option<Protection> {
-        stores::holds(self.locations.iter(), path).then_some(Protection::Credential)
-    }
-
-    /// Adds where HOME's store directories resolve. Earlier results were
-    /// decided without them, so a new location clears every cached result.
-    pub fn relocate(&mut self, moved: Vec<Location>) {
-        let before = self.locations.len();
-        for location in moved {
-            if !self.locations.contains(&location) {
-                self.locations.push(location);
-            }
-        }
-        if self.locations.len() > before {
-            for domain in self.domains.values_mut() {
-                domain.paths.clear();
-                domain.candidates.clear();
-            }
         }
     }
 

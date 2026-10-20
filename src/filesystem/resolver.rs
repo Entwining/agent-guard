@@ -1,3 +1,4 @@
+mod relocation;
 mod stores;
 
 use super::{
@@ -23,6 +24,7 @@ struct TargetIdentity {
     cwd: String,
     effect: crate::record::Effect,
     walk: crate::record::Walk,
+    walk_hidden: bool,
     via: crate::record::Via,
     glob: bool,
     glob_hidden: bool,
@@ -136,6 +138,7 @@ impl<'a> Resolver<'a> {
             cwd: cwd.into(),
             effect: target.effect,
             walk: target.walk,
+            walk_hidden: target.walk_hidden,
             via: target.via,
             glob: target.glob,
             glob_hidden: target.glob_hidden,
@@ -163,65 +166,6 @@ impl<'a> Resolver<'a> {
             ),
         );
         Ok(identity)
-    }
-
-    pub(crate) fn relocation_destination(
-        &mut self,
-        target: &crate::record::Target,
-        cwd: &str,
-        probe: &mut dyn Probe,
-    ) -> Result<Identity, CheckError> {
-        let raw = absolute_input(&target.unresolved, cwd, self.home);
-        // A credential root protects reads below it, not names moved into it.
-        if let Some(kind) = self
-            .lexical
-            .check(&target.pattern_path(), self.home, target.glob, true)?
-            .filter(|kind| *kind != Protection::AppData)
-        {
-            return Ok(Identity::Protected(kind));
-        }
-        let resolved_home = match self.home(probe)? {
-            Identity::Public(home) => home,
-            other => return Ok(other),
-        };
-        // A relocation can replace the final directory entry. Resolve its
-        // parent aliases, but do not borrow protection from the entry it replaces.
-        let (parent, name) = raw.rsplit_once('/').unwrap_or(("/", raw.as_str()));
-        let parent = if parent.is_empty() { "/" } else { parent };
-        let parent_pattern = target
-            .pattern
-            .as_deref()
-            .and_then(|pattern| pattern.rsplit_once('/').map(|(parent, _)| parent));
-        let resolved = match resolve_pattern(
-            parent,
-            (self.home, Some(&resolved_home)),
-            target.glob || target.expands,
-            parent_pattern,
-            self.table,
-            probe,
-            &mut self.lexical,
-        )? {
-            Resolution::Public(parent) => format!("{}/{name}", parent.trim_end_matches('/')),
-            Resolution::Protected(kind, _) => return Ok(Identity::Protected(kind)),
-            Resolution::Bound => return Ok(Identity::Bound),
-            Resolution::InodeAlias => return Ok(Identity::InodeAlias),
-            Resolution::InheritedInput => return Ok(Identity::InheritedInput),
-        };
-        let pattern = target.pattern.as_deref().map_or_else(
-            || resolved.clone(),
-            |pattern| rebase_pattern(&raw, &resolved, pattern),
-        );
-        if normalize(&resolved, cwd, self.home).ends_with("/.ssh") {
-            return Ok(Identity::Protected(Protection::SshPrivate));
-        }
-        if let Some(kind) =
-            self.lexical
-                .check_both(&pattern, self.home, Some(&resolved_home), target.glob)?
-        {
-            Ok(Identity::Protected(kind))
-        } else {
-            Ok(Identity::Public(resolved))
-        }
     }
 
     fn resolve_target(
@@ -258,7 +202,7 @@ impl<'a> Resolver<'a> {
         if matches!(target.effect, Effect::Read | Effect::Change)
             && (target.via != Via::Cwd || target.search)
             && if target.via == Via::Narrow && target.walk != Walk::None {
-                self.credential_root(&path, self.home, None)
+                self.credential_root(&path, self.home, None, target.walk_hidden)
             } else {
                 self.root_read(target, &path, self.home)
             }

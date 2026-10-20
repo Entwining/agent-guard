@@ -56,11 +56,9 @@ impl Inspection<'_> {
         crate::check_deadline(self.deadline)?;
         let mut target = target.clone();
         if let Some(destination) = &target.relocation_destination
-            && matches!(
-                self.resolver
-                    .relocation_destination(destination, cwd, self.probe)?,
-                Identity::Protected(_)
-            )
+            && self
+                .resolver
+                .relocation_keeps_protection(&target, destination, cwd, self.probe)?
         {
             target.effect = Effect::Meta;
         }

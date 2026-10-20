@@ -1,46 +1,15 @@
 //! Semantic records carried between the shell, target and rule owners.
 
+mod config;
 pub mod stream;
+
+pub use config::{ConfigDir, ConfigVariable};
 
 #[derive(Clone, Copy)]
 pub struct HostFacts<'a> {
     pub home: &'a str,
     pub user: Option<&'a str>,
     pub config_dirs: &'a [ConfigDir],
-}
-
-/// Environment variables that move a client's credential store.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ConfigVariable {
-    XdgConfigHome,
-    GhConfigDir,
-    GlabConfigDir,
-    CargoHome,
-}
-
-impl ConfigVariable {
-    pub const ALL: [Self; 4] = [
-        Self::XdgConfigHome,
-        Self::GhConfigDir,
-        Self::GlabConfigDir,
-        Self::CargoHome,
-    ];
-
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::XdgConfigHome => "XDG_CONFIG_HOME",
-            Self::GhConfigDir => "GH_CONFIG_DIR",
-            Self::GlabConfigDir => "GLAB_CONFIG_DIR",
-            Self::CargoHome => "CARGO_HOME",
-        }
-    }
-}
-
-/// An absolute config-location value from the hook's own environment.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ConfigDir {
-    pub variable: ConfigVariable,
-    pub path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -317,6 +286,8 @@ pub fn entered(shell_cwd: &str, argv: &[Word], files: &[WrapperFile], home: &str
 pub enum Stdin {
     None,
     Inherited,
+    /// A pipe or a redirected file feeds a pipeline stage's standard input.
+    Stream,
     Data(Vec<usize>),
     Shell,
     Code,
@@ -420,6 +391,9 @@ pub struct Target {
     pub glob_hidden: bool,
     pub effect: Effect,
     pub walk: Walk,
+    /// Whether a walk enters hidden names; only an adapter whose program
+    /// skips them clears it.
+    pub walk_hidden: bool,
     pub sends: bool,
     pub expands: bool,
     pub runtime_unknown: bool,
@@ -504,6 +478,7 @@ impl Target {
             glob_hidden: true,
             effect,
             walk,
+            walk_hidden: true,
             via,
             expands: false,
             runtime_unknown: false,

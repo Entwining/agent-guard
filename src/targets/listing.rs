@@ -34,7 +34,7 @@ pub(super) fn infer_listing(
     effects.hidden_listing = hidden
         && !bounds
             .as_ref()
-            .is_some_and(|bounds| bounds.printed.is_some());
+            .is_some_and(|bounds| bounds.printed.names.is_some());
     let children: Vec<(usize, usize)> = if let Some(index) = child_at {
         vec![(index, args.len())]
     } else if program == "find" {
@@ -86,12 +86,16 @@ pub(super) fn infer_listing(
                 .as_ref()
                 .and_then(|bounds| bounds.execs.get(&(start - 1)))
             {
-                Some(Some(names)) => effects.targets.extend(handed(
+                Some(find::Handed {
+                    names: Some(names),
+                    files,
+                }) => effects.targets.extend(handed(
                     paths
                         .iter()
                         .map(|path| narrowed_walk(path, names, cwd, host))
                         .collect(),
                     &result.targets,
+                    *files,
                 )),
                 _ => effects.hidden_content = true,
             }
@@ -106,12 +110,14 @@ pub(super) fn infer_listing(
 
 /// Narrowed walks whose names a consumer reads as it reads its own operands:
 /// a recursive consumer walks below each name it is handed, so the names no
-/// longer bound the files it reads.
-pub(super) fn handed(mut walks: Vec<Target>, consumer: &[Target]) -> Vec<Target> {
+/// longer bound the files it reads, unless `files` says every name is a
+/// regular file.
+pub(super) fn handed(mut walks: Vec<Target>, consumer: &[Target], files: bool) -> Vec<Target> {
     let walk = consumer
         .iter()
         .map(|target| target.walk)
         .max()
+        .filter(|_| !files)
         .unwrap_or(Walk::None);
     for target in &mut walks {
         if walk != Walk::None {
@@ -134,24 +140,27 @@ fn content_consumer(name: &str) -> bool {
 }
 
 /// The walks that read what `run` prints, narrowed to the names its
-/// expression bounds, or `None` when it may print any name.
+/// expression bounds, and whether it prints only regular files; `None` when
+/// it may print any name.
 pub(super) fn find_printed_walks(
     run: &FindRun,
     host: HostFacts<'_>,
     effects: &mut Effects,
-) -> Option<Vec<Target>> {
+) -> Option<(Vec<Target>, bool)> {
     let (mut paths, base, _, _, expression) =
         listing_arguments("find", &run.args, &run.cwd, host, effects);
-    let names = find::bounds(&run.args, expression)?.printed?;
+    let printed = find::bounds(&run.args, expression)?.printed;
+    let names = printed.names?;
     if paths.is_empty() {
         paths.push(Word::literal(base));
     }
-    Some(
+    Some((
         paths
             .iter()
             .map(|path| narrowed_walk(path, &names, &run.cwd, host))
             .collect(),
-    )
+        printed.files,
+    ))
 }
 
 /// Where a find expression starts, after its options and paths.

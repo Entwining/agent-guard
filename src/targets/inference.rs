@@ -70,8 +70,8 @@ pub(super) fn infer_at(
         infer_operands(program, args, cwd, host, &mut effects, walk, &claimed);
     }
     match hidden_items_read {
-        Some(Some(walks)) => {
-            let walks = listing::handed(walks, &effects.targets[consumer..]);
+        Some(Some((walks, files))) => {
+            let walks = listing::handed(walks, &effects.targets[consumer..], files);
             // The consumer reads its items only through these walks.
             if let Some(items) = effects.targets[..consumer]
                 .iter_mut()
@@ -232,7 +232,7 @@ fn infer_items(
     command: &CommandRecord,
     host: HostFacts<'_>,
     effects: &mut Effects,
-) -> Option<Option<Vec<Target>>> {
+) -> Option<Option<(Vec<Target>, bool)>> {
     if let Some(items) = &command.items {
         let effect = match program {
             "echo" | "printf" | "print" | ":" | "true" | "false" | "export" | "set" | "unset"
@@ -259,7 +259,13 @@ fn infer_items(
                 .iter()
                 .map(|run| find_printed_walks(run, host, effects))
                 .collect::<Option<Vec<_>>>()
-                .map(|walks| walks.concat()),
+                .map(|runs| {
+                    let files = runs.iter().all(|(_, files)| *files);
+                    (
+                        runs.into_iter().flat_map(|(walks, _)| walks).collect(),
+                        files,
+                    )
+                }),
             _ => None,
         })
     } else {

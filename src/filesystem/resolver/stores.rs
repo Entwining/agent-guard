@@ -35,12 +35,13 @@ impl Resolver<'_> {
         path: &str,
         home: &str,
         names: Option<&[String]>,
+        hidden: bool,
     ) -> Option<RootRead> {
         if sensitive_root(path) {
             Some(RootRead::Credentials)
         } else {
             self.lexical
-                .store_root(path, home, false, names)
+                .store_root(path, home, false, names, hidden)
                 .then_some(RootRead::Store)
         }
     }
@@ -53,15 +54,20 @@ impl Resolver<'_> {
         path: &str,
         home: &str,
     ) -> Option<RootRead> {
+        use crate::record::Walk;
         let names = target.bounds.as_deref();
         if target.glob {
-            (target.walk != crate::record::Walk::None
-                && self
-                    .lexical
-                    .store_root(&target.pattern_path(), home, true, names))
+            (target.walk != Walk::None
+                && self.lexical.store_root(
+                    &target.pattern_path(),
+                    home,
+                    true,
+                    names,
+                    target.walk_hidden,
+                ))
             .then_some(RootRead::Store)
         } else {
-            self.credential_root(path, home, names)
+            self.credential_root(path, home, names, target.walk_hidden)
         }
     }
 

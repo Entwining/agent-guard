@@ -3,6 +3,7 @@ use super::*;
 pub(super) fn infer_search(
     program: &str,
     args: &[Word],
+    command: &CommandRecord,
     cwd: &str,
     host: HostFacts<'_>,
     effects: &mut Effects,
@@ -57,7 +58,9 @@ pub(super) fn infer_search(
             }
         }
     }
-    let implicit = operands.is_empty() && (program != "grep" || hidden);
+    let implicit = operands.is_empty()
+        && !(program == "rg" && searches_input(command))
+        && (program != "grep" || hidden);
     if implicit {
         operands.push(Word::literal(cwd.to_owned()));
     }
@@ -99,6 +102,8 @@ pub(super) fn infer_search(
             walk,
         );
         target.search = implicit && !args.iter().any(|arg| arg == "--help" || arg == "-h");
+        // ripgrep and ag skip hidden names unless `--hidden` makes the walk hidden.
+        target.walk_hidden = walk == Walk::Hidden || !matches!(program, "rg" | "ag");
         if walk == Walk::Hidden {
             target.narrowed = bounds
                 .as_ref()
@@ -119,6 +124,18 @@ pub(super) fn infer_search(
             }
         }
     }
+}
+
+/// Whether ripgrep without a path searches standard input, which it does when
+/// a pipe or a here-document feeds it; `/dev/null` is a device, so it searches
+/// the directory.
+fn searches_input(command: &CommandRecord) -> bool {
+    matches!(
+        command.stdin,
+        crate::record::Stdin::Stream | crate::record::Stdin::Data(_)
+    ) && !command.redirects.iter().any(|redirect| {
+        redirect.fd == 0 && redirect.direction == Direction::In && redirect.target == "/dev/null"
+    })
 }
 
 fn search_arguments(

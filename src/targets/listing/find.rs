@@ -7,13 +7,21 @@ use std::collections::BTreeMap;
 /// protected name stays checked beside a wider filter.
 type Bound = Option<Vec<String>>;
 
+/// What an action handles: the names that bound it, and whether a `-type f`
+/// test passed before it, so that no name is a directory to walk below.
+#[derive(Clone, Default)]
+pub(super) struct Handed {
+    pub names: Bound,
+    pub files: bool,
+}
+
 /// The name bounds a `find` expression places on what it hands on.
 pub(super) struct Bounds {
     /// The files each `-exec`-family action receives, by the index of its
     /// action word.
-    pub execs: BTreeMap<usize, Bound>,
+    pub execs: BTreeMap<usize, Handed>,
     /// The names it prints to standard output.
-    pub printed: Bound,
+    pub printed: Handed,
 }
 
 /// Bounds for the expression starting at `start`, or `None` when it is empty
@@ -26,17 +34,21 @@ pub(super) fn bounds(args: &[Word], start: usize) -> Option<Bounds> {
         execs: BTreeMap::new(),
         actions: false,
     };
-    let whole = parser.or(&None, 0)?;
+    let whole = parser.or(&Handed::default(), 0)?;
     if parser.at != args.len() {
         return None;
     }
     // Without an action, find prints every name the expression accepts.
     let printed = if parser.actions {
-        parser
-            .printed
-            .into_iter()
-            .collect::<Option<Vec<_>>>()
-            .map(|bounds| bounds.concat())
+        Handed {
+            files: parser.printed.iter().all(|handed| handed.files),
+            names: parser
+                .printed
+                .into_iter()
+                .map(|handed| handed.names)
+                .collect::<Option<Vec<_>>>()
+                .map(|bounds| bounds.concat()),
+        }
     } else {
         whole
     };
@@ -49,8 +61,8 @@ pub(super) fn bounds(args: &[Word], start: usize) -> Option<Bounds> {
 struct Parser<'a> {
     args: &'a [Word],
     at: usize,
-    printed: Vec<Bound>,
-    execs: BTreeMap<usize, Bound>,
+    printed: Vec<Handed>,
+    execs: BTreeMap<usize, Handed>,
     actions: bool,
 }
 
@@ -61,25 +73,27 @@ impl Parser<'_> {
 
     /// A disjunction is bounded only when every branch is, and an action in
     /// one branch learns nothing from the branches that failed before it.
-    fn or(&mut self, guard: &Bound, depth: usize) -> Option<Bound> {
+    fn or(&mut self, guard: &Handed, depth: usize) -> Option<Handed> {
         let mut branches = vec![self.and(guard, depth)?];
         while matches!(self.peek(), Some("-o" | "-or")) {
             self.at += 1;
             branches.push(self.and(guard, depth)?);
         }
-        Some(
-            branches
+        Some(Handed {
+            files: branches.iter().all(|branch| branch.files),
+            names: branches
                 .into_iter()
+                .map(|branch| branch.names)
                 .collect::<Option<Vec<_>>>()
                 .map(|bounds| bounds.concat()),
-        )
+        })
     }
 
     /// Terms run left to right, so an action is bounded only by the terms
     /// that passed before it, and each term bounds the conjunction.
-    fn and(&mut self, guard: &Bound, depth: usize) -> Option<Bound> {
+    fn and(&mut self, guard: &Handed, depth: usize) -> Option<Handed> {
         let mut guard = guard.clone();
-        let mut bound = None;
+        let mut bound = Handed::default();
         let mut terms = 0;
         loop {
             match self.peek() {
@@ -92,17 +106,20 @@ impl Parser<'_> {
             }
             let term = self.unary(&guard, depth)?;
             terms += 1;
-            if let Some(names) = term {
+            if let Some(names) = term.names {
                 bound
+                    .names
                     .get_or_insert_with(Vec::new)
                     .extend(names.iter().cloned());
-                guard.get_or_insert_with(Vec::new).extend(names);
+                guard.names.get_or_insert_with(Vec::new).extend(names);
             }
+            bound.files |= term.files;
+            guard.files |= term.files;
         }
         (terms > 0).then_some(bound)
     }
 
-    fn unary(&mut self, guard: &Bound, depth: usize) -> Option<Bound> {
+    fn unary(&mut self, guard: &Handed, depth: usize) -> Option<Handed> {
         if depth > crate::limits::MAX_NESTING {
             return None;
         }
@@ -110,7 +127,7 @@ impl Parser<'_> {
             "!" | "-not" => {
                 self.at += 1;
                 self.unary(guard, depth + 1)?;
-                Some(None)
+                Some(Handed::default())
             }
             "(" => {
                 self.at += 1;
@@ -128,7 +145,7 @@ impl Parser<'_> {
         Some(value)
     }
 
-    fn primary(&mut self, guard: &Bound) -> Option<Bound> {
+    fn primary(&mut self, guard: &Handed) -> Option<Handed> {
         let index = self.at;
         let primary = self.value()?.as_str();
         match primary {
@@ -136,26 +153,36 @@ impl Parser<'_> {
                 let filter = self.value()?;
                 // A filter the shell fills in at run time selects unknown names.
                 if filter.expands || filter.runtime_unknown {
-                    return Some(None);
+                    return Some(Handed::default());
                 }
-                return Some(crate::filesystem::name_bounds(filter).map(|mut names| {
-                    if !names.contains(&filter.text) {
-                        names.push(filter.text.clone());
-                    }
-                    names
-                }));
+                return Some(Handed {
+                    names: crate::filesystem::name_bounds(filter).map(|mut names| {
+                        if !names.contains(&filter.text) {
+                            names.push(filter.text.clone());
+                        }
+                        names
+                    }),
+                    files: false,
+                });
+            }
+            "-type" => {
+                let kind = self.value()?;
+                return Some(Handed {
+                    names: None,
+                    files: kind == "f",
+                });
             }
             // A format can print any text.
             "-printf" => {
                 self.value()?;
                 self.actions = true;
-                self.printed.push(None);
+                self.printed.push(Handed::default());
             }
             "-fprintf" => {
                 self.value()?;
                 self.value()?;
                 self.actions = true;
-                self.printed.push(None);
+                self.printed.push(Handed::default());
             }
             "-print" | "-print0" | "-ls" => {
                 self.actions = true;
@@ -169,7 +196,7 @@ impl Parser<'_> {
                 self.actions = true;
                 self.execs.insert(index, guard.clone());
                 // The command may print anything, such as a file's contents.
-                self.printed.push(None);
+                self.printed.push(Handed::default());
             }
             "-delete" => self.actions = true,
             // The named file can be standard output.
@@ -181,11 +208,11 @@ impl Parser<'_> {
             "-prune" | "-depth" | "-d" | "-empty" | "-false" | "-true" | "-follow" | "-xdev"
             | "-x" | "-mount" | "-nouser" | "-nogroup" | "-readable" | "-writable"
             | "-executable" | "-quit" => {}
-            "-type" | "-xtype" | "-maxdepth" | "-mindepth" | "-mtime" | "-mmin" | "-atime"
-            | "-amin" | "-ctime" | "-cmin" | "-Btime" | "-Bmin" | "-newer" | "-anewer"
-            | "-cnewer" | "-mnewer" | "-size" | "-user" | "-group" | "-uid" | "-gid" | "-perm"
-            | "-links" | "-inum" | "-samefile" | "-regex" | "-iregex" | "-regextype"
-            | "-fstype" | "-flags" | "-lname" | "-ilname" | "-used" => {
+            "-xtype" | "-maxdepth" | "-mindepth" | "-mtime" | "-mmin" | "-atime" | "-amin"
+            | "-ctime" | "-cmin" | "-Btime" | "-Bmin" | "-newer" | "-anewer" | "-cnewer"
+            | "-mnewer" | "-size" | "-user" | "-group" | "-uid" | "-gid" | "-perm" | "-links"
+            | "-inum" | "-samefile" | "-regex" | "-iregex" | "-regextype" | "-fstype"
+            | "-flags" | "-lname" | "-ilname" | "-used" => {
                 self.value()?;
             }
             newer if newer.len() == 8 && newer.starts_with("-newer") => {
@@ -193,6 +220,6 @@ impl Parser<'_> {
             }
             _ => return None,
         }
-        Some(None)
+        Some(Handed::default())
     }
 }

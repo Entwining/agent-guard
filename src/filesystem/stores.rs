@@ -17,6 +17,9 @@ struct Store {
     files: &'static [&'static str],
 }
 
+/// A row admits a file or directory that a client's documentation or source
+/// names as its credential storage, fallback storage included, where agents
+/// reach it in ordinary work.
 const STORES: &[Store] = &[
     Store {
         dir: ".cargo",
@@ -53,7 +56,7 @@ const STORES: &[Store] = &[
     },
     Store {
         dir: ".docker",
-        variables: &[],
+        variables: &[(ConfigVariable::DockerConfig, "")],
         files: &["config.json"],
     },
     Store {
@@ -63,13 +66,62 @@ const STORES: &[Store] = &[
     },
     Store {
         dir: ".gnupg",
-        variables: &[],
+        variables: &[(ConfigVariable::Gnupghome, "")],
         files: &["private-keys-v1.d/"],
+    },
+    Store {
+        dir: ".pi/agent",
+        variables: &[(ConfigVariable::PiCodingAgentDir, "")],
+        files: &["auth.json", "mcp-auth.json"],
+    },
+    // `.credentials.json` holds MCP OAuth tokens where no keyring is available.
+    Store {
+        dir: ".codex",
+        variables: &[(ConfigVariable::CodexHome, "")],
+        files: &["auth.json", ".credentials.json"],
+    },
+    // Claude Code's fallback where the macOS Keychain refuses the login.
+    Store {
+        dir: ".claude",
+        variables: &[(ConfigVariable::ClaudeConfigDir, "")],
+        files: &[".credentials.json"],
+    },
+    // Snowflake CLI falls back to Application Support when the directory
+    // `SNOWFLAKE_HOME` or `~/.snowflake` names is missing.
+    Store {
+        dir: ".snowflake",
+        variables: &[(ConfigVariable::SnowflakeHome, "")],
+        files: &["config.toml", "connections.toml"],
+    },
+    Store {
+        dir: "Library/Application Support/snowflake",
+        variables: &[],
+        files: &["config.toml", "connections.toml"],
+    },
+    // dbt v1 reads `DBT_ENGINE_PROFILES_DIR` before the legacy variable; a
+    // project's own `profiles.yml` is not a store.
+    Store {
+        dir: ".dbt",
+        variables: &[
+            (ConfigVariable::DbtEngineProfilesDir, ""),
+            (ConfigVariable::DbtProfilesDir, ""),
+        ],
+        files: &["profiles.yml"],
+    },
+    // `pnpm login` writes `auth.ini`, or `_auth` in the global `config.yaml`
+    // in later releases, which still read `auth.ini`; the global `rc` holds
+    // registry and auth settings.
+    Store {
+        dir: "Library/Preferences/pnpm",
+        variables: &[(ConfigVariable::XdgConfigHome, "/pnpm")],
+        files: &["auth.ini", "config.yaml", "rc"],
     },
 ];
 
 #[derive(PartialEq, Eq)]
 pub(super) struct Location {
+    /// The folded store directory.
+    dir: String,
     files: &'static [&'static str],
     /// Folded credential paths.
     credentials: Vec<String>,
@@ -84,6 +136,7 @@ impl Location {
                 .iter()
                 .map(|file| format!("{dir}/{}", file.trim_end_matches('/')))
                 .collect(),
+            dir,
         }
     }
 
@@ -126,6 +179,29 @@ pub(super) fn holds<'a>(mut locations: impl Iterator<Item = &'a Location>, path:
     })
 }
 
+/// Whether moving the store directory at folded `source` to folded
+/// `destination` lands every store it carries where a store with the same
+/// credential files is located, so their reads and walks stay protected.
+pub(super) fn keeps_stores(locations: &[&Location], source: &str, destination: &str) -> bool {
+    let mut carried = locations.iter().filter_map(|location| {
+        location
+            .dir
+            .strip_prefix(source)
+            .filter(|rest| rest.is_empty() || rest.starts_with('/'))
+            .map(|rest| (location, format!("{destination}{rest}")))
+    });
+    locations.iter().any(|location| location.dir == source)
+        && carried.all(|(carried, moved)| {
+            locations.iter().any(|location| {
+                location.dir == moved
+                    && carried
+                        .files
+                        .iter()
+                        .all(|file| location.files.contains(file))
+            })
+        })
+}
+
 /// A folded pattern whose expansion can name a credential file.
 pub(super) fn selects<'a>(
     mut locations: impl Iterator<Item = &'a Location>,
@@ -142,14 +218,21 @@ pub(super) fn selects<'a>(
 }
 
 /// Whether a walk from a folded directory that `root` accepts reaches a
-/// credential file through visible directories, as one without `--hidden` does.
-/// A walk that folded name bounds narrow reads only the files they match, but
-/// every file below a credential directory.
+/// credential file. A walk that folded name bounds narrow reads only the files
+/// they match, but every file below a credential directory. Unless it enters
+/// hidden names, it passes a dot name only where a bound matches it, as
+/// ripgrep does without `--hidden`.
 pub(super) fn reached<'a>(
     mut locations: impl Iterator<Item = &'a Location>,
     names: Option<&[String]>,
+    hidden: bool,
     mut root: impl FnMut(&str) -> bool,
 ) -> bool {
+    let enters = |name: &str| {
+        hidden
+            || !name.starts_with('.')
+            || names.is_some_and(|names| names.iter().any(|bound| glob::component(bound, name)))
+    };
     locations.any(|location| {
         location
             .files
@@ -164,7 +247,7 @@ pub(super) fn reached<'a>(
                 }
                 let mut below = file.as_str();
                 while let Some((dir, name)) = below.rsplit_once('/')
-                    && (below == file || !name.starts_with('.'))
+                    && enters(name)
                 {
                     if root(dir) {
                         return true;

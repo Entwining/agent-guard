@@ -116,6 +116,21 @@ fn name_filters_bound_walks_of_directories_that_hold_a_store() {
 }
 
 #[test]
+fn client_stores_are_protected_at_their_default_locations() {
+    partition("client-store");
+}
+
+#[test]
+fn only_walks_that_enter_hidden_names_reach_a_hidden_store_file() {
+    partition("hidden-store-file");
+}
+
+#[test]
+fn ripgrep_without_a_path_searches_piped_input_instead_of_the_directory() {
+    partition("piped-search");
+}
+
+#[test]
 fn macos_aliases_keep_lexical_protection_before_probes() {
     partition("aliases");
 }

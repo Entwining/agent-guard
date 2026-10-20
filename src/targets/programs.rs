@@ -27,7 +27,10 @@ pub(super) fn infer(
         }
         "read"
             if command.pipeline.is_some()
-                || command.stdin == crate::record::Stdin::Inherited
+                || matches!(
+                    command.stdin,
+                    crate::record::Stdin::Inherited | crate::record::Stdin::Stream
+                )
                 || command.redirects.iter().any(|redirect| {
                     matches!(
                         redirect.direction,
@@ -53,7 +56,7 @@ pub(super) fn infer(
         }
         "ls" => readers::listing(args, cwd, host, effects),
         "rg" | "grep" | "ag" | "ack" => {
-            infer_search(program, args, cwd, host, effects);
+            infer_search(program, args, command, cwd, host, effects);
             if command.unresolved() {
                 effects.gaps.push(CoverageGap::UnresolvedTarget);
             }
