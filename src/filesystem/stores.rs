@@ -202,7 +202,9 @@ pub(super) fn keeps_stores(locations: &[&Location], source: &str, destination: &
         })
 }
 
-/// A folded pattern whose expansion can name a credential file.
+/// A folded pattern whose expansion can name a credential file. The files in
+/// a credential directory have arbitrary names, so a wildcard-only name
+/// selects them.
 pub(super) fn selects<'a>(
     mut locations: impl Iterator<Item = &'a Location>,
     pattern: &str,
@@ -211,9 +213,17 @@ pub(super) fn selects<'a>(
 ) -> bool {
     locations.any(|location| {
         location
-            .credentials
+            .files
             .iter()
-            .any(|file| matcher.visible_path(pattern, file, hidden))
+            .zip(&location.credentials)
+            .any(|(entry, file)| {
+                matcher.visible_path(pattern, file, hidden)
+                    || entry.ends_with('/')
+                        && pattern.rsplit_once('/').is_some_and(|(parent, name)| {
+                            name.trim_matches(['*', '?']).is_empty()
+                                && matcher.visible_path(parent, file, hidden)
+                        })
+            })
     })
 }
 

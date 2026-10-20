@@ -195,6 +195,8 @@
  ,{"id":"config-wildcard-search","partition":"store-ancestor","tool":"Bash","input":{"command":"rg token $H/.config/*"},"expected":"D","reason":"[policy:agent-guard/credential_store]","alternative":"restrict a search to file names"}
  ,{"id":"application-support-app-wildcard-search","partition":"store-ancestor","tool":"Bash","input":{"command":"rg token \"$H/Library/Application Support\"/C*"},"expected":"N"}
  ,{"id":"wildcard-read-without-walk","partition":"store-ancestor","tool":"Bash","input":{"command":"cat $H/.config/*"},"expected":"N"}
+ ,{"id":"wildcard-credential-directory-files","partition":"store-ancestor","tool":"Bash","input":{"command":"cat $H/.gnupg/*/*"},"expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file"}
+ ,{"id":"wildcard-directory-named-files","partition":"store-ancestor","tool":"Bash","input":{"command":"cat $H/.gnupg/*/*.json"},"expected":"N"}
  ,{"id":"unfiltered-hidden-walk","partition":"store-filter","tool":"Bash","input":{"command":"grep -r token $H/.config"},"expected":"D","reason":"[policy:agent-guard/credential_store]","alternative":"restrict a search to file names"}
  ,{"id":"visible-filter-skips-store","partition":"store-filter","tool":"Bash","input":{"command":"rg -g '*.lua' foo $H/.config"},"expected":"N"}
  ,{"id":"visible-filter-selects-store-file","partition":"store-filter","tool":"Bash","input":{"command":"rg -g '*.yml' foo $H/.config"},"expected":"D","reason":"[policy:agent-guard/credential_store]","alternative":"restrict a search to file names"}
