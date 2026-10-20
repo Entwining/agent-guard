@@ -16,6 +16,8 @@ pub mod explicit_missing_public_ssh_files_preserve_go_roles;
 pub mod git_owns_quoted_pathspec_globs;
 #[path = "filesystem_identity/listing_option_values_and_children.rs"]
 pub mod listing_option_values_and_children;
+#[path = "filesystem_identity/literal_credential_paths_follow_the_catalog.rs"]
+pub mod literal_credential_paths_follow_the_catalog;
 #[path = "filesystem_identity/ordinary_directory_globs_do_not_intersect_wildcard_only_credential_tails.rs"]
 pub mod ordinary_directory_globs_do_not_intersect_wildcard_only_credential_tails;
 #[path = "filesystem_identity/physical_links_keep_order_and_eight_hop_bound.rs"]

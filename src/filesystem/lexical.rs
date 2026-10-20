@@ -308,18 +308,6 @@ impl Lexical {
     }
 }
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-enum Parent {
-    #[default]
-    Other,
-    Aws,
-    Docker,
-    Kube,
-    Cargo,
-    Config,
-    GlabCli,
-}
-
 #[derive(Clone, Copy, Default)]
 pub(super) struct LiteralState {
     parts: usize,
@@ -329,9 +317,9 @@ pub(super) struct LiteralState {
     ssh_private: bool,
     pub environment: bool,
     environment_example: bool,
-    credential_ancestor: bool,
-    config_gh: bool,
-    parent: Parent,
+    /// For each catalog entry, how many leading components of its tail the
+    /// path's last components match.
+    progress: [u8; super::SENSITIVE.len()],
     pub credential: bool,
 }
 
@@ -358,34 +346,22 @@ impl LiteralState {
             .is_some_and(|depth| depth > 1 || depth == 1 && !super::ssh_public(original));
         self.environment |= part == ".env" || part.starts_with(".env.");
         self.environment_example = [".env.example", ".env.age"].contains(&part.as_str());
-        self.credential_ancestor |= part == "private-keys-v1.d"
-            || self.parts > 1 && self.parent == Parent::Cargo && part.starts_with("credentials");
-        // Root reads remain role-dependent in the resolver; public children
-        // must not inherit protection merely from a credential-directory name.
-        self.credential = self.credential_ancestor
-            || self.parts > 1 && self.parent == Parent::Aws && part.starts_with("credentials")
-            || [".npmrc", ".netrc", ".git-credentials", ".pypirc", ".pgpass"]
-                .contains(&part.as_str())
-            || part.starts_with(".zsh_history")
-            || part.starts_with("auth.json")
-            || part.starts_with(".credentials.json")
-            || part.ends_with(".pem")
-            || part.ends_with(".key")
-            || self.parts > 1
-                && (self.parent == Parent::Docker && part == "config.json"
-                    || self.parent == Parent::Kube && part == "config"
-                    || self.parent == Parent::GlabCli && part == "config.yml")
-            || self.config_gh && part == "hosts.yml";
-        self.config_gh = self.parts > 1 && self.parent == Parent::Config && part == "gh";
-        self.parent = match part.as_str() {
-            ".aws" => Parent::Aws,
-            ".docker" => Parent::Docker,
-            ".kube" => Parent::Kube,
-            ".cargo" => Parent::Cargo,
-            ".config" => Parent::Config,
-            "glab-cli" => Parent::GlabCli,
-            _ => Parent::Other,
-        };
+        // A path is a credential from the component that completes a catalog
+        // entry onward, so what lies below the match stays protected for
+        // callers that judge only the whole path, such as items, filters,
+        // patterns and unresolved suffixes.
+        for (progress, entry) in self.progress.iter_mut().zip(&catalog().sensitive) {
+            let tail = &entry.tail;
+            let matched = usize::from(*progress);
+            *progress = if matched < tail.len() && glob::component(tail[matched], &part) {
+                *progress + 1
+            } else if matched == 0 {
+                0
+            } else {
+                u8::from(glob::component(tail[0], &part))
+            };
+            self.credential |= usize::from(*progress) == tail.len();
+        }
         self.parts += 1;
         self
     }
