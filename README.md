@@ -10,10 +10,10 @@ The guard runs as a pre-tool hook. A blocked call never starts, and the agent re
 
 ```text
 $ rg -n TODO ~
-[policy:agent-guard/broad_scan] DENIED: A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path. Do NOT bypass this restriction or retry the same blocked command.
+[policy:agent-guard/broad_scan] DENIED: A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path.
 
 $ cat .env
-[policy:agent-guard/credential_file] DENIED: This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed. Do NOT bypass this restriction or retry the same blocked command.
+[policy:agent-guard/credential_file] DENIED: This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.
 ```
 
 `rg -n TODO src` inside a project passes without output. The leading marker names the class and condition of each block, so session logs can attribute it without matching the wording.

@@ -106,9 +106,7 @@ pub(super) fn observe_contract(
     let go_rule = go_reason_rule(old_reason);
     let same_denial_rule = go_rule != "None" && rust_rule == go_rule;
     let expected_text = if consumer == Consumer::Claude {
-        format!(
-            "DENIED: {old_reason} Do NOT bypass this restriction or retry the same blocked command.\n"
-        )
+        format!("DENIED: {old_reason}\n")
     } else {
         format!("{old_reason}\n")
     };

@@ -255,15 +255,15 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
 }
 
 // The marker is the first token of the hook's reason, ahead of `DENIED:`, so a
-// session index can attribute the block without matching its wording.
+// session index can attribute the block without matching its wording. Claude
+// Code shows the reason as a hook error, so its text states the disposition.
 fn denial_text(consumer: Consumer, class: &str, id: &str, reason: &str) -> String {
-    if consumer == Consumer::Claude {
-        format!(
-            "[{class}:agent-guard/{id}] DENIED: {reason} Do NOT bypass this restriction or retry the same blocked command.\n"
-        )
+    let disposition = if consumer == Consumer::Claude {
+        "DENIED: "
     } else {
-        format!("[{class}:agent-guard/{id}] {reason}\n")
-    }
+        ""
+    };
+    format!("[{class}:agent-guard/{id}] {disposition}{reason}\n")
 }
 
 /// Consumers authorize a call from the hook wire, never from an internal verdict label.

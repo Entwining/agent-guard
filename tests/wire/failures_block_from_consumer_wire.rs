@@ -31,9 +31,7 @@ fn check_failures_block_each_consumer() {
             let sentence = row["sentence"].as_str().unwrap();
             let marker = format!("[error:agent-guard/{}]", kind.id());
             let expected = if consumer == Consumer::Claude {
-                format!(
-                    "{marker} DENIED: {sentence} Do NOT bypass this restriction or retry the same blocked command.\n"
-                )
+                format!("{marker} DENIED: {sentence}\n")
             } else {
                 format!("{marker} {sentence}\n")
             };
@@ -82,9 +80,7 @@ fn unresolved_operations_offer_an_explicit_public_path() {
             let sentence = row["sentence"].as_str().unwrap();
             let marker = format!("[coverage:agent-guard/{}]", cause.id());
             let expected = if consumer == Consumer::Claude {
-                format!(
-                    "{marker} DENIED: {sentence} Do NOT bypass this restriction or retry the same blocked command.\n"
-                )
+                format!("{marker} DENIED: {sentence}\n")
             } else {
                 format!("{marker} {sentence}\n")
             };
