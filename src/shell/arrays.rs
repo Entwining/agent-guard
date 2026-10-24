@@ -191,14 +191,17 @@ impl IndexedArray {
                 .chain(&state.unknown)
                 .chain(state.tail.as_ref().into_iter().flat_map(|(_, words)| words))
             {
+                let evidence = || super::statements::ShellValue::from_word(word);
                 let value = if word.runtime_unknown {
-                    BindingValue::RuntimeUnknown(Some(word.text.clone()))
+                    BindingValue::RuntimeUnknown(Some(evidence()))
                 } else if word.expands {
-                    BindingValue::RuntimeDerived(word.text.clone())
+                    BindingValue::RuntimeDerived(evidence())
                 } else if word.globs || word.shell_matches {
-                    BindingValue::ShellMatches(super::statements::ShellValue::from_word(word))
+                    BindingValue::ShellMatches(evidence())
+                } else if let Some(text) = word.exact() {
+                    BindingValue::Known(text.into())
                 } else {
-                    BindingValue::Known(word.text.clone())
+                    BindingValue::RuntimeDerived(evidence())
                 };
                 if !values.contains(&value) {
                     values.push(value);
@@ -272,24 +275,30 @@ fn binding_words(values: &[BindingValue]) -> Vec<Word> {
     for value in values {
         let texts = match value {
             BindingValue::RepeatedFields(value) => value.projections(),
-            BindingValue::Known(text)
-            | BindingValue::RuntimeDerived(text)
-            | BindingValue::RuntimeUnknown(Some(text)) => vec![text.clone()],
-            BindingValue::ShellMatches(value) | BindingValue::ShellDerived(value) => {
-                vec![value.text.clone()]
-            }
+            BindingValue::Known(text) => vec![text.clone()],
+            BindingValue::RuntimeDerived(value)
+            | BindingValue::RuntimeUnknown(Some(value))
+            | BindingValue::ShellMatches(value)
+            | BindingValue::ShellDerived(value) => vec![value.text.clone()],
             BindingValue::Array(_) | BindingValue::Arguments(_) => continue,
-            BindingValue::RuntimeUnknown(None) | BindingValue::Undetermined => vec![String::new()],
+            BindingValue::RuntimeUnknown(None)
+            | BindingValue::Inherited
+            | BindingValue::Unset
+            | BindingValue::Undetermined => vec![String::new()],
         };
         for text in texts {
             let mut word = Word::literal(text);
             if let BindingValue::ShellMatches(value) | BindingValue::ShellDerived(value) = value {
                 word.quoted_ranges = value.quoted_ranges.clone();
             }
+            if let Some(gaps) = value.gaps() {
+                word.gaps = gaps.to_vec();
+            }
             word.expands = matches!(
                 value,
                 BindingValue::RuntimeDerived(_)
                     | BindingValue::RuntimeUnknown(None)
+                    | BindingValue::Inherited
                     | BindingValue::Undetermined
             );
             word.runtime_unknown = matches!(

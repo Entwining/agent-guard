@@ -172,6 +172,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 program: None,
                 wrappers: Vec::new(),
                 wrapper_files: Vec::new(),
+                unproven: None,
                 shell: true,
                 flags: Vec::new(),
                 items: None,

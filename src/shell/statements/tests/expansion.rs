@@ -33,7 +33,7 @@ fn expand_candidates(
 #[test]
 fn empty_runtime_candidate_survives_without_erasing_known_alternatives() {
     let (sole, _) = expand_candidates(
-        vec![BindingValue::RuntimeUnknown(Some(String::new()))],
+        vec![BindingValue::RuntimeUnknown(Some(String::new().into()))],
         Vec::new(),
         0,
     );
@@ -43,7 +43,7 @@ fn empty_runtime_candidate_survives_without_erasing_known_alternatives() {
     assert!(sole[0].word.text.is_empty());
     let (mixed, _) = expand_candidates(
         vec![
-            BindingValue::RuntimeUnknown(Some(String::new())),
+            BindingValue::RuntimeUnknown(Some(String::new().into())),
             BindingValue::Known("public".into()),
         ],
         Vec::new(),

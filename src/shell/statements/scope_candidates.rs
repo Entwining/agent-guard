@@ -61,13 +61,90 @@ impl Scope {
             .iter()
             .filter(|(name, binding)| {
                 binding.values.iter().any(|value| {
-                    value.known().is_none()
+                    !matches!(value, BindingValue::Inherited | BindingValue::Unset)
+                        && value.known().is_none()
                         && (value.lexical() == context.get(*name)
                             || matches!(value, BindingValue::Array(_)))
                 })
             })
             .map(|(name, _)| name.clone())
             .collect()
+    }
+    /// The presence and text evidence that `context` cannot carry for
+    /// `names`; `unset` holds the names the context projected as unset.
+    pub(in crate::shell) fn facts<'a>(
+        &self,
+        names: impl IntoIterator<Item = &'a String>,
+        context: &BTreeMap<String, String>,
+        unknown: &BTreeSet<String>,
+        unset: &BTreeSet<String>,
+    ) -> shell::words::ContextFacts {
+        let mut facts = shell::words::ContextFacts {
+            unset: unset.clone(),
+            inherited_unset: self.inherited_unset,
+            cwd_unknown: self.directory.current.unknown(),
+            ..Default::default()
+        };
+        for name in names {
+            let Some(binding) = self.bindings.get(name) else {
+                continue;
+            };
+            if binding
+                .values
+                .iter()
+                .all(|value| value == &BindingValue::Unset)
+                && !context.contains_key(name)
+            {
+                facts.unset.insert(name.clone());
+            }
+            let Some(text) = context.get(name).filter(|_| unknown.contains(name)) else {
+                continue;
+            };
+            // Equal text from several values is known only where every
+            // value that could have produced it knows it.
+            let mut evidence: Option<Vec<crate::record::Gap>> = Some(Vec::new());
+            let mut nonempty: Option<Vec<crate::record::Gap>> = None;
+            for value in binding.values.iter() {
+                if value.lexical() != Some(text) {
+                    continue;
+                }
+                if let Some(gaps) = value
+                    .gaps()
+                    .filter(|gaps| crate::record::nonempty_text(text.len(), gaps))
+                {
+                    nonempty = Some(crate::record::union_gaps(
+                        nonempty.as_deref().unwrap_or_default(),
+                        gaps,
+                    ));
+                }
+                if value.known().is_some() {
+                    continue;
+                }
+                evidence = evidence
+                    .zip(value.gaps())
+                    .map(|(gaps, more)| crate::record::union_gaps(&gaps, more));
+            }
+            if let Some(gaps) = evidence.filter(|gaps| !gaps.is_empty()) {
+                if let Some(nonempty) = nonempty
+                    && !crate::record::nonempty_text(text.len(), &gaps)
+                {
+                    facts.nonempty_evidence.insert(name.clone(), nonempty);
+                }
+                facts.evidence.insert(name.clone(), gaps);
+            }
+        }
+        facts
+    }
+    /// The value a name takes in a branch that never assigned it.
+    pub(in crate::shell) fn absent(&self) -> BindingValue {
+        if self.inherited_unset {
+            BindingValue::Unset
+        } else {
+            BindingValue::Inherited
+        }
+    }
+    pub(in crate::shell) fn inherits_unset(&self) -> bool {
+        self.inherited_unset
     }
     pub(super) fn repeated_word(&self, word: &crate::record::Word) -> bool {
         word.vars.iter().any(|name| {

@@ -105,6 +105,10 @@ fn modifier_piece(
         out.word
             .text
             .push_str(&raw[piece.start_index..modifier.end]);
+        out.word.gaps.push(crate::record::Gap {
+            range: start..out.word.text.len(),
+            nonempty: false,
+        });
         out.word.expands = true;
         out.unknown_splitting |= !quoted;
         if let Some(region) = out
@@ -187,22 +191,22 @@ fn expand_parameter_fragments<'a>(
             ),
         )?;
         fragment_assignments.extend(inner.assignments.clone());
+        // Pattern characters are fragment syntax, not unknown text.
+        let exact = !inner.word.expands
+            && !inner.word.runtime_unknown
+            && inner.word.gaps.is_empty()
+            && !inner.unsupported
+            && !inner
+                .word
+                .vars
+                .iter()
+                .any(|name| expansion.unknown_variables.contains(name));
         fragments.push((
             body,
             parameters::Fragment {
-                value: (!inner.word.expands
-                    && !inner.word.runtime_unknown
-                    && !inner.unsupported
-                    && !inner
-                        .word
-                        .vars
-                        .iter()
-                        .any(|name| expansion.unknown_variables.contains(name)))
-                .then(|| inner.word.text.clone()),
-                pattern: crate::filesystem::shell_pattern(
-                    &inner.word.text,
-                    &inner.word.quoted_ranges,
-                ),
+                value: exact.then(|| inner.word.text.clone()),
+                representative: (!inner.unsupported).then(|| inner.word.text.clone()),
+                pattern: fragment_pattern(&inner.word, exact),
                 assignments: inner.assignments.clone(),
                 has_variables: !inner.word.vars.is_empty(),
             },
@@ -212,9 +216,46 @@ fn expand_parameter_fragments<'a>(
     Ok(fragments)
 }
 
+/// A fragment's pattern, in which an unknown run may match any text rather
+/// than its representative.
+fn fragment_pattern(word: &crate::record::Word, exact: bool) -> String {
+    let known = |range: std::ops::Range<usize>| {
+        let quoted = word
+            .quoted_ranges
+            .iter()
+            .filter_map(|quoted| {
+                let start = quoted.start.max(range.start);
+                let end = quoted.end.min(range.end);
+                (start < end).then(|| start - range.start..end - range.start)
+            })
+            .collect::<Vec<_>>();
+        crate::filesystem::shell_pattern(&word.text[range], &quoted)
+    };
+    if exact {
+        return known(0..word.text.len());
+    }
+    let mut gaps = word
+        .gaps
+        .iter()
+        .map(|gap| gap.range.clone())
+        .collect::<Vec<_>>();
+    if gaps.is_empty() {
+        gaps.push(0..word.text.len());
+    }
+    let mut pattern = String::new();
+    let mut cursor = 0;
+    for gap in &gaps {
+        pattern.push_str(&known(cursor..gap.start.max(cursor)));
+        pattern.push('*');
+        cursor = cursor.max(gap.end);
+    }
+    pattern.push_str(&known(cursor..word.text.len()));
+    pattern
+}
+
 fn parameter_text(
     plain: &Option<String>,
-    computed: Option<String>,
+    computed: Option<parameters::Value>,
     spelling: &str,
     quoted: bool,
     expansion: &ExpansionContext<'_>,
@@ -226,32 +267,43 @@ fn parameter_text(
     let variables = expansion.variables;
     let host = expansion.host;
     if let Some(value) = computed {
-        if out.word.runtime_unknown {
+        if !value.gaps.is_empty() {
             out.unknown_splitting |= !quoted;
-            out.lexical_ranges
-                .push(out.word.text.len()..out.word.text.len() + value.len());
         }
-        out.word.text.push_str(&value);
+        if value.lexical {
+            out.lexical_ranges.push(start..start + value.text.len());
+        }
+        out.word.text.push_str(&value.text);
+        out.word
+            .gaps
+            .extend(value.gaps.into_iter().map(|gap| crate::record::Gap {
+                range: start + gap.range.start..start + gap.range.end,
+                nonempty: gap.nonempty,
+            }));
         *splitting |= !quoted;
-        out.word.globs |= !quoted && value.contains(['*', '?', '[']);
-    } else if let Some(value) = plain.as_deref().and_then(|name| {
+        out.word.globs |= !quoted && value.text.contains(['*', '?', '[']);
+    } else if let Some((value, assigned)) = plain.as_deref().and_then(|name| {
         out.assignments
             .iter()
             .rev()
             .find(|(key, _)| key == name)
-            .map(|(_, value)| value.as_str())
+            .map(|(_, value)| (value.as_str(), true))
             .or_else(|| {
                 expansion
                     .get(name)
                     .map(String::as_str)
-                    .or_else(|| (name == "HOME").then_some(host.home))
-                    .or_else(|| (name == "PWD").then_some(expansion.cwd))
+                    .or_else(|| {
+                        (name == "HOME"
+                            && !expansion.unset(name)
+                            && !expansion.facts.inherited.contains(name))
+                        .then_some(host.home)
+                    })
+                    .or_else(|| (name == "PWD" && !expansion.unset(name)).then_some(expansion.cwd))
+                    .map(|value| (value, false))
             })
     }) {
-        if let Some(ranges) = plain
-            .as_ref()
-            .and_then(|name| expansion.pattern_variables.get(name))
-        {
+        let name = plain.as_deref().unwrap_or_default();
+        if let Some(ranges) = expansion.pattern_variables.get(name) {
             // A captured pathname expansion keeps its original
             // pattern domain through a later quoted reference.
             out.word.quoted_ranges.extend(
@@ -261,29 +313,52 @@ fn parameter_text(
             );
             inherited_pattern = true;
         }
-        if plain.as_deref() == Some("PWD") && !variables.contains_key("PWD") {
+        let cwd = name == "PWD" && !variables.contains_key("PWD");
+        if cwd {
             out.word.pwd = true;
-            out.word
-                .cwd_ranges
-                .push(out.word.text.len()..out.word.text.len() + value.len());
+            out.word.cwd_ranges.push(start..start + value.len());
         }
-        if plain
-            .as_ref()
-            .is_some_and(|name| expansion.runtime_variables.contains(name))
-        {
+        if expansion.runtime_variables.contains(name) {
             out.word.runtime_unknown = true;
             out.unknown_splitting |= !quoted;
             // Lexical representatives describe unknown output;
             // their whitespace is not a runtime field boundary.
-            out.lexical_ranges
-                .push(out.word.text.len()..out.word.text.len() + value.len());
+            out.lexical_ranges.push(start..start + value.len());
         }
         out.word.text.push_str(value);
+        let gaps = if assigned {
+            Vec::new()
+        } else if cwd && expansion.facts.cwd_unknown {
+            vec![crate::record::Gap {
+                range: 0..value.len(),
+                nonempty: true,
+            }]
+        } else {
+            expansion.gaps(name, value)
+        };
+        out.word
+            .gaps
+            .extend(gaps.into_iter().map(|gap| crate::record::Gap {
+                range: start + gap.range.start..start + gap.range.end,
+                nonempty: gap.nonempty,
+            }));
         *splitting |= !quoted;
         // Keep Bash pathname expansion even when Zsh leaves the binding literal.
         out.word.globs |= !quoted && value.contains(['*', '?', '[']);
+    } else if let Some(name) = plain.as_deref().filter(|name| expansion.unset(name)) {
+        if expansion.facts.hypotheses.contains(name) {
+            out.word.gaps.push(crate::record::Gap {
+                range: start..start,
+                nonempty: false,
+            });
+        }
+        *splitting |= !quoted;
     } else {
         out.word.text.push_str(spelling);
+        out.word.gaps.push(crate::record::Gap {
+            range: start..out.word.text.len(),
+            nonempty: false,
+        });
         out.word.expands = true;
         out.unknown_splitting |= !quoted;
     }

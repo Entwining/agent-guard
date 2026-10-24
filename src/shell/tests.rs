@@ -66,7 +66,7 @@ fn alternative_environments_store_only_binding_deltas() {
             "file".into(),
             vec![
                 statements::BindingValue::Known("public".into()),
-                statements::BindingValue::RuntimeUnknown(Some("public".into())),
+                statements::BindingValue::RuntimeUnknown(Some(String::from("public").into())),
                 statements::BindingValue::Known("protected".into()),
             ],
         );

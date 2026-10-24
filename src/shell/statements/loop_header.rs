@@ -41,10 +41,12 @@ impl HeaderKey {
         match self.value {
             HeaderValue::Unknown => BindingValue::RuntimeUnknown(None),
             HeaderValue::Literal(value) => BindingValue::Known(value),
-            HeaderValue::Pattern(text, ranges) => BindingValue::ShellMatches(ShellValue {
-                text,
-                quoted_ranges: ranges.into_iter().map(|(start, end)| start..end).collect(),
-            }),
+            HeaderValue::Pattern(text, ranges) => {
+                let mut word = crate::record::Word::literal(text);
+                word.shell_matches = true;
+                word.quoted_ranges = ranges.into_iter().map(|(start, end)| start..end).collect();
+                BindingValue::ShellMatches(ShellValue::from_word(&word))
+            }
         }
     }
 }

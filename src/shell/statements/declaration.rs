@@ -15,7 +15,23 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let in_function = !scope.frames.is_empty();
         let local = in_function && matches!(program, "local" | "declare" | "typeset");
         let top_local = !in_function && program == "local";
-        let exported = program == "export" && !argv.iter().any(|word| word == "-n");
+        let exported = if program == "export" {
+            Some(if argv.iter().any(|word| word == "-n") {
+                Export::No
+            } else {
+                Export::Yes
+            })
+        } else {
+            argv.iter()
+                .skip(1)
+                .filter_map(|word| {
+                    word.strip_prefix('-')
+                        .map(|flags| (flags, Export::Yes))
+                        .or_else(|| word.strip_prefix('+').map(|flags| (flags, Export::No)))
+                })
+                .filter_map(|(flags, export)| flags.contains('x').then_some(export))
+                .next_back()
+        };
         let arithmetic = argv
             .iter()
             .skip(1)
@@ -40,23 +56,37 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         {
             self.output.gap(CoverageGap::UnsupportedShellSyntax);
         }
+        // A word whose option or variable name the shell has not fixed makes
+        // every declaration here possible rather than established.
+        let before = argv[1..]
+            .iter()
+            .any(|word| word.exact().is_none() && assignment(word.known_prefix()).is_none())
+            .then(|| scope.clone());
         for word in &argv[1..] {
-            self.declaration_word(word, program, scope, (local, top_local, exported, indexed));
+            self.declaration_word(word, scope, (local, top_local, exported, indexed));
             if let Some(arithmetic) = arithmetic {
                 let name = assignment(&word.text).map_or(word.text.as_str(), |(name, _)| name);
                 if identifier(name) {
+                    let absent = scope.absent();
                     Rc::make_mut(&mut scope.bindings)
                         .entry(name.into())
                         .or_insert_with(|| Binding {
                             #[cfg(test)]
                             copies: EntryCopies::default(),
                             origins: None,
-                            values: Rc::new(vec![BindingValue::RuntimeUnknown(None)]),
-                            exported: false,
+                            values: Rc::new(vec![absent]),
+                            exported: Export::No,
                             arithmetic: false,
                         })
                         .arithmetic = arithmetic;
                 }
+            }
+        }
+        if let Some(before) = before {
+            let after = scope.clone();
+            self.merge_bindings(scope, &[before, after]);
+            if !scope.may_mutate(&BindingValue::Inherited) {
+                self.output.gap(CoverageGap::UnsupportedShellSyntax);
             }
         }
     }
@@ -93,7 +123,13 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     }
                 }
             }
-            return true;
+            // Text the shell does not fix only possibly selects functions, so
+            // its variable declarations stay possible too.
+            return argv.iter().any(|word| {
+                word.exact()
+                    .and_then(|text| text.strip_prefix('-'))
+                    .is_some_and(|flags| flags.contains('f'))
+            });
         }
         false
     }
@@ -101,9 +137,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
     fn declaration_word(
         &mut self,
         word: &crate::record::Word,
-        program: &str,
         scope: &mut Scope,
-        flags: (bool, bool, bool, bool),
+        flags: (bool, bool, Option<Export>, bool),
     ) {
         let (local, top_local, exported, indexed) = flags;
         if let Some((name, value)) = assignment(&word.text) {
@@ -138,19 +173,20 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 ))];
             }
             scope.assign(name.into(), values);
-            if program == "export"
+            if let Some(exported) = exported
                 && let Some(binding) = Rc::make_mut(&mut scope.bindings).get_mut(name)
             {
                 binding.exported = exported;
             }
-        } else if program == "export" && identifier(&word.text) {
+        } else if let Some(exported) = exported.filter(|_| identifier(&word.text)) {
+            let absent = scope.absent();
             Rc::make_mut(&mut scope.bindings)
                 .entry(word.text.clone())
                 .or_insert_with(|| Binding {
                     #[cfg(test)]
                     copies: EntryCopies::default(),
                     origins: None,
-                    values: Rc::new(vec![BindingValue::RuntimeUnknown(None)]),
+                    values: Rc::new(vec![absent]),
                     exported,
                     arithmetic: false,
                 })
@@ -168,7 +204,14 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 });
             if !initialized_array {
                 scope.local(&word.text);
-                scope.assign(word.text.clone(), vec![BindingValue::Known(String::new())]);
+                // Depending on its release and on an outer variable, Bash
+                // leaves a local without a value unset or sets it empty.
+                let values = if self.frontend.zsh {
+                    vec![BindingValue::Known(String::new())]
+                } else {
+                    vec![BindingValue::Known(String::new()), BindingValue::Unset]
+                };
+                scope.assign(word.text.clone(), values);
             }
         }
         if indexed

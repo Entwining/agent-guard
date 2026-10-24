@@ -72,14 +72,21 @@ pub(super) fn infer(
             claimed = readers::filter(program, args);
             generic_walk = Some(Walk::Visible);
         }
-        "gh" | "aws" => {
+        "diff" => {
             readers::unknown(program, args, effects);
-            claimed = readers::output_query(program, args);
+            claimed = readers::diff_patterns(args);
             generic_walk = Some(Walk::Visible);
         }
-        "rm" | "mv" | "ln" => effects
-            .targets
-            .extend(resource_changes::infer(program, args, cwd, host)),
+        "gh" | "aws" | "rex" | "sessidx" => {
+            readers::unknown(program, args, effects);
+            claimed = match program {
+                "rex" => readers::rex_names(args),
+                "sessidx" => readers::sessidx_queries(args),
+                _ => readers::output_query(program, args),
+            };
+            generic_walk = Some(Walk::Visible);
+        }
+        "rm" | "mv" | "ln" => resource_changes::infer(program, args, cwd, host, effects),
         "git" => infer_git(args, cwd, host, effects),
         "ctags" => {
             effects.gaps.push(CoverageGap::UnknownProgram {
@@ -92,14 +99,9 @@ pub(super) fn infer(
             executables::interpreter(program, args, cwd, host, effects, command, depth)
         }
         "bash" | "zsh" | "sh" | "dash" | "ksh" | "csh" | "tcsh" => {
-            executables::shell(args, command, cwd, host, effects)
+            executables::shell(program, args, command, cwd, host, effects)
         }
-        // The shell evaluator already observes builtin eval in its binding/cwd
-        // scope. Replaying it here both loses that scope and doubles nested work.
-        "eval" if !command.shell => effects
-            .code
-            .push(args.iter().map(Word::as_str).collect::<Vec<_>>().join(" ")),
-        "eval" => {}
+        "eval" => executables::eval(args, command, effects),
         _ => {
             if !clients::infer(program, args, cwd, host, effects) {
                 readers::unknown(program, args, effects);
@@ -115,11 +117,7 @@ fn read(word: &Word, cwd: &str, host: HostFacts<'_>, recursive: bool) -> Target 
         word,
         cwd,
         host,
-        if word.role == Role::Option(OptionRole::Name) {
-            Effect::Name
-        } else {
-            Effect::Read
-        },
+        Effect::Read,
         if recursive { Walk::Visible } else { Walk::None },
     )
 }

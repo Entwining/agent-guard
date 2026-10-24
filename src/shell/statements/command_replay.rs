@@ -2,36 +2,38 @@ use super::super as shell;
 use super::*;
 
 impl<'a, 'b> Evaluator<'a, 'b> {
+    /// The code argument of a shell whose invocation is proven: an exact
+    /// program, every wrapper word placed, and every option fixed.
+    fn proven_shell_code(
+        argv: &[crate::record::Word],
+        resolved: &shell::argv::Resolution,
+    ) -> Option<usize> {
+        let index = resolved
+            .program
+            .filter(|index| resolved.unproven.is_none() && argv[*index].exact().is_some())?;
+        let invocation =
+            crate::targets::shell_invocation(argv[index].rsplit('/').next()?, &argv[index + 1..])?;
+        match invocation.source {
+            crate::targets::ShellSource::Code(Some(at)) if invocation.posix => Some(index + 1 + at),
+            _ => None,
+        }
+    }
+
     pub(super) fn observed_shell_source(
         &self,
         argv: &mut [crate::record::Word],
         scope: &Scope,
-        program: Option<usize>,
+        resolved: &shell::argv::Resolution,
     ) -> Option<Box<(String, String)>> {
-        let code_argument = program
-            .filter(|index| {
-                matches!(
-                    argv[*index].rsplit('/').next(),
-                    Some("sh" | "bash" | "zsh" | "dash" | "ksh")
-                )
-            })
-            .and_then(|index| {
-                (index + 1..argv.len().saturating_sub(1))
-                    .find(|at| shell::argv::shell_code_flag(&argv[*at]))
-            })
-            .map(|at| at + 1);
+        let code_argument = Self::proven_shell_code(argv, resolved);
         let source = code_argument.and_then(|at| {
             scope
                 .repetition_source(&argv[at])
                 .map(|source| (at, source))
         });
-        if let Some(source) = &source {
-            argv[source.0].cardinality_unknown = false;
-            argv[source.0].field_count_unknown = false;
-        }
-        if let Some(at) =
-            code_argument.filter(|at| !argv[*at].expands && !argv[*at].cardinality_unknown)
-        {
+        if let Some(at) = code_argument.filter(|at| {
+            source.is_some() || argv[*at].exact().is_some() && !argv[*at].cardinality_unknown
+        }) {
             // The child scope below observes this source with effective
             // exports and wrapper overrides; empty-environment replay loses them.
             argv[at].role = Role::ObservedShellCode;
@@ -48,29 +50,51 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         shell_source: Option<&(String, String)>,
     ) -> Result<Option<Output>, CheckError> {
         let (environment, depth) = context;
-        if let Some(index) = command.program.filter(|index| {
-            !command.function
-                && matches!(
-                    command.argv[*index].rsplit('/').next(),
-                    Some("sh" | "bash" | "zsh" | "dash" | "ksh")
+        let Some(index) = command.program.filter(|_| !command.function) else {
+            return Ok(None);
+        };
+        let args = &command.argv[index + 1..];
+        let Some(invocation) = command.argv[index]
+            .rsplit('/')
+            .next()
+            .and_then(|program| crate::targets::shell_invocation(program, args))
+            .filter(|invocation| invocation.posix)
+        else {
+            return Ok(None);
+        };
+        match invocation.source {
+            crate::targets::ShellSource::Code(Some(at)) => {
+                let mut child = self.shell_child(command, scope, prior, environment);
+                let code = if let Some((name, source)) = shell_source {
+                    if let Some(binding) = scope.bindings.get(name) {
+                        Rc::make_mut(&mut child.bindings).insert(name.clone(), binding.clone());
+                    }
+                    source.as_str()
+                } else {
+                    &args[at].text
+                };
+                let output = self.shell_source(code, &mut child, environment, depth + 1)?;
+                // Replaying a representative only adds observations; its
+                // output is not the command's.
+                Ok(
+                    (shell_source.is_some() || args[at].role == Role::ObservedShellCode)
+                        .then_some(output),
                 )
-        }) && let Some(pair) = command.argv[index + 1..]
-            .windows(2)
-            .find(|pair| shell::argv::shell_code_flag(&pair[0]))
-        {
-            let mut child = self.shell_child(command, scope, prior, environment);
-            let code = if let Some((name, source)) = shell_source {
-                if let Some(binding) = scope.bindings.get(name) {
-                    Rc::make_mut(&mut child.bindings).insert(name.clone(), binding.clone());
+            }
+            // Each fixed argument that some reading makes the code is
+            // inspected in the child the shell would start; neither its
+            // state nor its output is the command's.
+            crate::targets::ShellSource::Uncertain(candidates) => {
+                for code in candidates.iter().map(|at| &args[*at]) {
+                    if code.exact().is_some() && !code.cardinality_unknown {
+                        let mut child = self.shell_child(command, scope, prior, environment);
+                        self.shell_source(&code.text, &mut child, environment, depth + 1)?;
+                    }
                 }
-                source.as_str()
-            } else {
-                &pair[1].text
-            };
-            let output = self.shell_source(code, &mut child, environment, depth + 1)?;
-            return Ok(Some(output));
+                Ok(None)
+            }
+            _ => Ok(None),
         }
-        Ok(None)
     }
 
     pub(super) fn command_stdin_source(
@@ -137,7 +161,21 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     }
                 }
             }
-            return Ok(Some(self.flow.outputs(&results, true)));
+            // Only a proven shell reading its standard input as code makes
+            // that code's output the command's.
+            let proven = command.unproven.is_none()
+                && command.program.is_some_and(|index| {
+                    command.argv[index].exact().is_some_and(|program| {
+                        crate::targets::shell_invocation(
+                            program.rsplit('/').next().unwrap_or(program),
+                            &command.argv[index + 1..],
+                        )
+                        .is_some_and(|invocation| {
+                            invocation.source == crate::targets::ShellSource::Stdin
+                        })
+                    })
+                });
+            return Ok(proven.then(|| self.flow.outputs(&results, true)));
         }
         Ok(None)
     }

@@ -1,0 +1,11 @@
+{"rows":[
+{"id": "uncertain-pattern-retains-original", "partition": "uncertain-transforms", "input": {"command": "p=.env; cat \"${p/${PAT:-*}/public}\""}, "expected": "D"},
+{"id": "uncertain-pattern-binding-retains-original", "partition": "uncertain-transforms", "input": {"command": "p=.env; x=\"${p/${PAT:-*}/public}\"; cat \"$x\""}, "expected": "D"},
+{"id": "unknown-pattern-retains-replacement", "partition": "uncertain-transforms", "input": {"command": "p=public; cat \"${p/$PAT/.env}\""}, "expected": "D"},
+{"id": "representative-pattern-retains-replacement", "partition": "uncertain-transforms", "input": {"command": "p=public; cat \"${p/${PAT:-*}/.env}\""}, "expected": "D"},
+{"id": "unset-pattern-proves-safe-transform", "partition": "uncertain-transforms", "input": {"command": "unset PAT; p=.env; cat \"${p/${PAT:-*}/public}\""}, "expected": "N"},
+{"id": "literal-pattern-proves-safe-transform", "partition": "uncertain-transforms", "input": {"command": "p=.env; cat \"${p/*/public}\""}, "expected": "N"},
+{"id": "uncertain-pattern-name-role-control", "partition": "uncertain-transforms", "input": {"command": "p=.env; echo \"${p/${PAT:-*}/public}\""}, "expected": "N"},
+{"id": "default-representative-suffix-removal", "partition": "uncertain-transforms", "input": {"command": "X=\"${FOO:-.env.bak}\"; cat \"${X%.bak}\""}, "expected": "D"},
+{"id": "default-representative-replacement", "partition": "uncertain-transforms", "input": {"command": "X=\"${FOO:-public}\"; cat \"${X/public/.env}\""}, "expected": "D"}
+]}

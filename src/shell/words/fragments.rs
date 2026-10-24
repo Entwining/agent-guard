@@ -39,10 +39,12 @@ pub(super) fn fragment(
         arithmetic: Vec::new(),
         references: Vec::new(),
         assignments: Vec::new(),
+        conditional_assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
         lexical_ranges: Vec::new(),
+        uncertain_decisions: false,
     };
     let (lexical, error) = crate::shell::lexer::Lexed::parameter_fragment(raw, context);
     match error {
@@ -130,6 +132,7 @@ pub(super) fn merge_fragment(out: &mut Expanded, inner: Expanded, offset: usize)
     out.arithmetic.extend(inner.arithmetic);
     out.references.extend(inner.references);
     out.tilde |= inner.tilde;
+    out.uncertain_decisions |= inner.uncertain_decisions;
 }
 
 pub(super) fn push_tilde(out: &mut Expanded, value: &str) {

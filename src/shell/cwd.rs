@@ -5,8 +5,14 @@ use std::rc::Rc;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum CwdPath {
     LoopUnknown(String),
+    /// An unknown directory that an uncertain movement only witnesses as
+    /// this path.
+    Witness(Box<CwdPath>),
     Logical(String),
-    Physical { prefix: String, tail: String },
+    Physical {
+        prefix: String,
+        tail: String,
+    },
 }
 
 impl CwdPath {
@@ -18,9 +24,21 @@ impl CwdPath {
             .join("/");
         Self::Logical(if path.is_empty() { "/".into() } else { path })
     }
+    /// Whether the rendered text only represents an unresolved directory.
+    pub fn unknown(&self) -> bool {
+        matches!(self, Self::LoopUnknown(_) | Self::Witness(_))
+    }
+    /// An unresolved directory reached from this one.
+    fn unresolved(&self) -> Self {
+        Self::LoopUnknown(match self {
+            Self::LoopUnknown(base) => base.clone(),
+            path => path.render(),
+        })
+    }
     pub fn render(&self) -> String {
         match self {
             Self::LoopUnknown(base) => format!("{base}/${{__loop_cwd__}}"),
+            Self::Witness(path) => path.render(),
             Self::Logical(path) => path.clone(),
             Self::Physical { prefix, tail } => {
                 if tail.is_empty() {
@@ -44,6 +62,7 @@ impl CwdPath {
         }
         match self {
             Self::LoopUnknown(base) => Self::LoopUnknown(base.clone()),
+            Self::Witness(path) => Self::Witness(Box::new(path.change(target, physical))),
             Self::Logical(path) => {
                 let raw = format!("{path}/{target}");
                 if physical {
@@ -131,10 +150,7 @@ impl Directory {
         let mut origins = self.alternatives.as_ref().clone();
         origins.push(self.current.clone());
         origins.push(initial.current.clone());
-        origins.push(CwdPath::LoopUnknown(match &initial.current {
-            CwdPath::LoopUnknown(base) => base.clone(),
-            path => path.render(),
-        }));
+        origins.push(initial.current.unresolved());
         self.alternatives = Rc::default();
         extend_unique(
             Rc::make_mut(&mut self.alternatives),
@@ -165,6 +181,46 @@ impl Directory {
             self.alternatives = Rc::new(alternatives);
         }
         self.gap = self.gap.take().or(gap);
+    }
+    /// The cwd after a command that may have moved to an unknown directory.
+    pub fn possibly_moved(&mut self) {
+        let unknown = self.current.unresolved();
+        if self.current != unknown {
+            extend_unique(Rc::make_mut(&mut self.alternatives), [unknown]);
+        }
+        self.gap = self.gap.take().or(Some(CoverageGap::UnresolvedTarget));
+    }
+    /// A movement whose directory or mode the shell has not fixed: each
+    /// directory it reaches from the representative is only a witness.
+    pub fn move_uncertain(
+        &mut self,
+        targets: &[String],
+        physical: bool,
+        disputed: bool,
+        home: &str,
+    ) {
+        let stayed = std::iter::once(self.current.clone())
+            .chain(self.alternatives.iter().cloned())
+            .collect::<Vec<_>>();
+        self.move_to(targets, physical, disputed, home);
+        let witness = |path: CwdPath| match path {
+            CwdPath::LoopUnknown(_) | CwdPath::Witness(_) => path,
+            path => CwdPath::Witness(Box::new(path)),
+        };
+        self.current = witness(self.current.clone());
+        let alternatives = self
+            .alternatives
+            .iter()
+            .map(|path| {
+                if stayed.contains(path) {
+                    path.clone()
+                } else {
+                    witness(path.clone())
+                }
+            })
+            .collect();
+        self.alternatives = Rc::new(alternatives);
+        self.gap = self.gap.take().or(Some(CoverageGap::UnresolvedTarget));
     }
     pub fn move_to(&mut self, targets: &[String], physical: bool, disputed: bool, home: &str) {
         let move_from = |cwd: &CwdPath| {

@@ -1,7 +1,7 @@
 use crate::{CoverageGap, shell::CommandRecord};
 
 pub use crate::record::Target;
-use crate::record::{Direction, Effect, HostFacts, OptionRole, Role, Via, Walk, Word};
+use crate::record::{Direction, Effect, HostFacts, Role, Via, Walk, Word};
 mod clients;
 mod resource_changes;
 mod secrets;
@@ -16,6 +16,10 @@ pub struct Effects {
     #[cfg(test)]
     argv_words: usize,
     pub(crate) independent_arguments: bool,
+    /// The first argument whose role the program's grammar cannot prove,
+    /// because runtime text there could spell an option that consumes or
+    /// re-roles the words after it.
+    pub(crate) unproven: Option<usize>,
     pub targets: Vec<Target>,
     pub gaps: Vec<CoverageGap>,
     pub code: Vec<String>,
@@ -34,54 +38,109 @@ pub struct Effects {
     pub consumes_listing: bool,
 }
 
-fn label_options<'a>(
-    program: &str,
-    args: &'a [Word],
-    cwd: &str,
-    host: HostFacts<'_>,
-    effects: &mut Effects,
-) -> std::borrow::Cow<'a, [Word]> {
+/// Marks the words after `--` as operands, unless an earlier word could
+/// spell an option that consumes the `--`.
+fn label_options(args: &[Word]) -> std::borrow::Cow<'_, [Word]> {
     let mut labelled = std::borrow::Cow::Borrowed(args);
-    let mut options = true;
-    // Program options take precedence over generic name-only options;
-    // keep values in place for the adapter that owns their role.
     for (index, word) in args.iter().enumerate() {
-        if word == "--" {
-            options = false;
-            continue;
+        if word.option_unknown() {
+            break;
         }
-        if !options {
-            labelled.to_mut()[index].role = Role::Path;
-            continue;
-        }
-        let key = if word.value.starts_with('-') {
-            word.value.split_once('=').map_or("", |(key, _)| key)
-        } else {
-            args.get(index.wrapping_sub(1)).map_or("", Word::as_str)
-        };
-        if ["--exclude", "--exclude-dir", "--include"].contains(&key)
-            && clients::option(program, args, key).is_none()
-        {
-            let option_value = if word.value.starts_with('-') {
-                word.value
-                    .split_once('=')
-                    .map_or(word.value.as_str(), |(_, value)| value)
-            } else {
-                &word.value
-            };
-            labelled.to_mut()[index].role = Role::Option(OptionRole::Name);
-            let mut target = Target::from_word(
-                &word.with_text(option_value.into()),
-                cwd,
-                host,
-                Effect::Name,
-                Walk::None,
-            );
-            target.via = Via::Option;
-            effects.targets.push(target);
+        if word.exact() == Some("--") {
+            for operand in &mut labelled.to_mut()[index + 1..] {
+                operand.role = Role::Path;
+            }
+            break;
         }
     }
     labelled
+}
+
+/// The options a getopt_long parser is known to accept: flags, and options
+/// that take a value glued as `-xVALUE` or `--name=VALUE`, or as the next
+/// word. Any other option may take the next word as its value.
+struct Getopt {
+    short_flags: &'static str,
+    short_values: &'static str,
+    flags: &'static [&'static str],
+    values: &'static [&'static str],
+}
+
+/// The words holding the values of the `wanted` options, spelled `-x` or
+/// `--name`, and the first word whose role the parser could take
+/// differently: one the shell may split, runtime text that could spell an
+/// option, or an option the grammar does not know. A known `--` ends the
+/// options with every role proven.
+fn option_values(args: &[Word], getopt: &Getopt, wanted: &[&str]) -> (Vec<usize>, Option<usize>) {
+    let mut values = Vec::new();
+    let mut index = 0;
+    while let Some(word) = args.get(index) {
+        let at = index;
+        index += 1;
+        let prefix = word.known_prefix();
+        if !word.option_unknown() && (prefix == "-" || !prefix.starts_with('-')) {
+            continue;
+        }
+        // Of runtime text, only a known option name with a glued value is
+        // sure to be that option.
+        let (text, glued_only) = match word.exact() {
+            Some(text) => (text, false),
+            None if word.fixed_position => (prefix, true),
+            None => return (values, Some(at)),
+        };
+        if text == "--" && !glued_only {
+            return (values, None);
+        }
+        let (key, holder) = if let Some(long) = text.strip_prefix("--") {
+            let (name, glued) = long
+                .split_once('=')
+                .map_or((long, false), |(name, _)| (name, true));
+            let key = &text[..name.len() + 2];
+            if glued_only && !glued {
+                return (values, Some(at));
+            }
+            if getopt.flags.contains(&key) {
+                continue;
+            }
+            if !getopt.values.contains(&key) {
+                return (values, Some(at));
+            }
+            (key, if glued { at } else { index })
+        } else {
+            if glued_only {
+                return (values, Some(at));
+            }
+            // A short option's key is its letter.
+            let Some((offset, letter)) = text
+                .char_indices()
+                .skip(1)
+                .find(|(_, letter)| !getopt.short_flags.contains(*letter))
+            else {
+                continue;
+            };
+            if !getopt.short_values.contains(letter) {
+                return (values, Some(at));
+            }
+            let end = offset + letter.len_utf8();
+            (
+                &text[offset..end],
+                if end < text.len() { at } else { index },
+            )
+        };
+        if holder == index {
+            if !args.get(index).is_some_and(|value| value.fixed_position) {
+                return (values, Some(index));
+            }
+            index += 1;
+        }
+        if wanted
+            .iter()
+            .any(|option| *option == key || option.strip_prefix('-') == Some(key))
+        {
+            values.push(holder);
+        }
+    }
+    (values, None)
 }
 
 fn modelled_program(program: &str) -> bool {
@@ -243,6 +302,7 @@ mod inference;
 mod interpreters;
 mod listing;
 mod search;
+mod shells;
 #[cfg(test)]
 mod tests;
 mod wrappers;
@@ -255,6 +315,7 @@ use inference::infer_at;
 use interpreters::{interpreter_code, perl_exec_argv};
 use listing::{find_printed_walks, infer_listing};
 use search::infer_search;
+pub(crate) use shells::{ShellSource, shell_invocation};
 use wrappers::{at, child, infer_forwarded, xargs_content_consumer};
 
 mod programs;

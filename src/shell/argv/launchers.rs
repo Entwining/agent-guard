@@ -368,6 +368,7 @@ fn option(launcher: &Launcher, argv: &[Word], at: usize, consumed: &mut Consumed
     match launcher.kind(name)? {
         Kind::Flag => Some(1),
         Kind::Optional if inline => Some(1),
+        Kind::Optional if next.is_some_and(Word::option_unknown) => None,
         Kind::Optional => Some(
             if next_usable && !next.is_some_and(|w| w.starts_with('-')) {
                 2
@@ -405,18 +406,20 @@ fn walk(launcher: &Launcher, argv: &[Word], start: usize) -> Option<Consumed> {
         // A launcher form without an inner command leaves it to the launcher's
         // own input, such as the items `xargs` appends.
         let word = argv.get(at)?;
-        if !word.fixed_position || word.cardinality_unknown || word.runtime_unknown {
+        // Text the shell does not fix cannot select a form, and may be an
+        // option.
+        if word.option_unknown() || word.cardinality_unknown || word.runtime_unknown {
             return None;
         }
         if let Some((next, rest)) = path.split_first()
-            && word == *next
+            && word.exact() == Some(*next)
         {
             path = rest;
             at += 1;
             continue;
         }
         let option_word = word.starts_with('-') && word.len() > 1;
-        if path.is_empty() && word == "--" {
+        if path.is_empty() && word.exact() == Some("--") {
             ended = true;
             at += 1;
             break;
@@ -442,7 +445,7 @@ fn walk(launcher: &Launcher, argv: &[Word], start: usize) -> Option<Consumed> {
         && !ended
         && argv[at..]
             .iter()
-            .any(|word| word.starts_with('-') && word.len() > 1)
+            .any(|word| word.option_unknown() || word.starts_with('-') && word.len() > 1)
     {
         return None;
     }

@@ -5,7 +5,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let Some(index) = command.program else {
             return;
         };
-        let program = command.argv[index].text.as_str();
+        let Some(program) = command.argv[index].exact() else {
+            return;
+        };
         if !command.shell || !matches!(program, "cd" | "pushd") {
             return;
         }
@@ -39,12 +41,15 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 return;
             };
             for value in binding.values.iter() {
-                if let BindingValue::Known(value) = value {
-                    if !home_targets.contains(value) {
-                        home_targets.push(value.clone());
+                match value {
+                    BindingValue::Known(value) => {
+                        if !home_targets.contains(value) {
+                            home_targets.push(value.clone());
+                        }
                     }
-                } else {
-                    self.output.gap(CoverageGap::IdentityBound);
+                    // Without HOME, cd fails and the shell stays.
+                    BindingValue::Unset => {}
+                    _ => self.output.gap(CoverageGap::IdentityBound),
                 }
             }
             let Some(target) = home_targets.first() else {
@@ -63,8 +68,17 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             })
             .flat_map(|w| w.bytes().filter(|b| matches!(b, b'L' | b'P')))
             .collect::<Vec<_>>();
-        let physical = modes.contains(&b'P')
-            && operand.is_none_or(|i| !args[i].expands && !args[i].globs && !args[i].shell_matches);
+        // The representative operand and options only witness a movement
+        // unless the words before the operand are fixed and every word up to
+        // it is known; the directory domain keeps a pathname pattern.
+        let certain = command.argv[index].fixed_position
+            && args[..operand.map_or(args.len(), |i| i + 1)]
+                .iter()
+                .enumerate()
+                .all(|(at, w)| {
+                    w.pattern_exact().is_some() && (w.fixed_position || Some(at) == operand)
+                });
+        let physical = modes.contains(&b'P') && (certain || operand.is_none());
         let disputed = physical && modes.last() == Some(&b'L');
         let targets = if home_targets.is_empty() {
             vec![target]
@@ -81,9 +95,15 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         {
             scope.directory.relative_growth += 1;
         }
-        scope
-            .directory
-            .move_to(&targets, physical, disputed, self.frontend.host.home);
+        if certain {
+            scope
+                .directory
+                .move_to(&targets, physical, disputed, self.frontend.host.home);
+        } else {
+            scope
+                .directory
+                .move_uncertain(&targets, physical, disputed, self.frontend.host.home);
+        }
         let bindings = Rc::make_mut(&mut scope.bindings);
         bindings.remove("PWD");
         bindings.remove("OLDPWD");

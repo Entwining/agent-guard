@@ -45,3 +45,40 @@ fn projected_cwd_ranges_describe_current_word_bytes() {
     }
     assert!(projected > 0);
 }
+#[test]
+fn field_width_and_unfixed_bytes_decide_option_position_separately() {
+    let arguments = |source: &str| {
+        let result =
+            crate::shell::observe(source, crate::shell::Arm::Brush, "/h", "/h/project", true)
+                .unwrap();
+        result
+            .script
+            .commands
+            .iter()
+            .filter(|command| command.argv.first().is_some_and(|word| word == "cat"))
+            .flat_map(|command| command.argv[1..].to_vec())
+            .collect::<Vec<_>>()
+    };
+    let repeated = "M=\"\"; for f in a b; do test -f public || M=\"$M $f\"; done; ";
+    // Each split field of a repetition keeps its own bytes; only the count is open.
+    let fields = arguments(&format!("{repeated}cat $M"));
+    assert!(fields.iter().any(|word| word == "a"));
+    for word in fields.iter().filter(|word| !word.text.is_empty()) {
+        assert!(
+            word.field_count_unknown && word.exact().is_some(),
+            "{word:?}"
+        );
+        assert!(!word.option_unknown(), "{word:?}");
+    }
+    // A quoted repetition joins an open number of fields into one word.
+    for word in arguments(&format!("{repeated}cat \"$M\"")) {
+        assert!(word.text.is_empty() || word.exact().is_none(), "{word:?}");
+    }
+    // Unfixed text after a literal prefix keeps that prefix.
+    for word in arguments("read V; cat \"x$V\"") {
+        assert!(word.exact().is_none() && !word.option_unknown(), "{word:?}");
+    }
+    for word in arguments("read V; cat \"$V\"") {
+        assert!(word.option_unknown(), "{word:?}");
+    }
+}

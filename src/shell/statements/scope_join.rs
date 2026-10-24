@@ -31,7 +31,8 @@ impl Scope {
                 .collect::<BTreeSet<_>>();
             let mut bindings = BTreeMap::new();
             for name in keys {
-                let (value, bound) = join_values(branches.iter().map(|s| s.bindings.get(&name)));
+                let (value, bound) =
+                    join_values(branches.iter().map(|s| (s.bindings.get(&name), s.absent())));
                 bounded |= bound;
                 if let Some(value) = value {
                     bindings.insert(name, value);
@@ -40,6 +41,7 @@ impl Scope {
             self.bindings = Rc::new(bindings);
         }
         bounded |= self.join_frames(branches);
+        self.inherited_unset = branches.iter().all(|branch| branch.inherited_unset);
         for branch in branches {
             self.relative_glob_moves = self.relative_glob_moves.max(branch.relative_glob_moves);
             for state in branch.returns.iter() {
@@ -91,9 +93,12 @@ impl Scope {
                 .collect::<BTreeSet<_>>();
             for name in names {
                 let (value, bound) = join_values(branches.iter().map(|s| {
-                    s.frames[index]
-                        .get(&name)
-                        .map_or_else(|| s.bindings.get(&name), Option::as_ref)
+                    (
+                        s.frames[index]
+                            .get(&name)
+                            .map_or_else(|| s.bindings.get(&name), Option::as_ref),
+                        s.absent(),
+                    )
                 }));
                 bounded |= bound;
                 frame.insert(name, value);
@@ -103,10 +108,12 @@ impl Scope {
     }
 }
 
+/// The binding a name has after branches that held `values`; a branch that
+/// lacks the name contributes the value it gives an unassigned name.
 pub(super) fn join_values<'a>(
-    values: impl Iterator<Item = Option<&'a Binding>>,
+    branches: impl Iterator<Item = (Option<&'a Binding>, BindingValue)>,
 ) -> (Option<Binding>, bool) {
-    let values: Vec<_> = values.collect();
+    let (values, absent): (Vec<_>, Vec<_>) = branches.unzip();
     if let Some(first) = values.first().copied().flatten().filter(|first| {
         first.join_is_identity()
             && values.iter().all(|binding| {
@@ -122,16 +129,16 @@ pub(super) fn join_values<'a>(
     let mut joined = Vec::new();
     let mut present = false;
     let mut bounded = false;
-    let mut exported = false;
+    let mut exported = None::<Export>;
     let mut arithmetic = false;
-    for binding in values {
+    for (binding, absent) in values.into_iter().zip(absent) {
         present |= binding.is_some();
-        exported |= binding.is_some_and(|binding| binding.exported);
+        // A branch that never bound the name passes only what the shell
+        // inherited, as an unexported variable does.
+        let export = binding.map_or(Export::No, |binding| binding.exported);
+        exported = Some(exported.map_or(export, |exported| exported.join(export)));
         arithmetic |= binding.is_some_and(|binding| binding.arithmetic);
-        let values = binding.map_or_else(
-            || vec![BindingValue::RuntimeUnknown(Some(String::new()))],
-            |b| b.values.as_ref().clone(),
-        );
+        let values = binding.map_or_else(|| vec![absent], |b| b.values.as_ref().clone());
         for value in values {
             bounded |= join_candidate(&mut joined, value);
         }
@@ -161,7 +168,7 @@ pub(super) fn join_values<'a>(
             copies: EntryCopies::default(),
             origins: None,
             values: Rc::new(joined),
-            exported,
+            exported: exported.unwrap_or(Export::No),
             arithmetic,
         }),
         bounded,

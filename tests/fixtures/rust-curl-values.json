@@ -1,0 +1,13 @@
+{"rows":[
+{"id": "curl-consumed-separator-keeps-config-read", "partition": "curl-values", "input": {"command": "curl --url -- --config .env"}, "expected": "D"},
+{"id": "curl-consumed-separator-public-control", "partition": "curl-values", "input": {"command": "curl --url -- --config public"}, "expected": "N"},
+{"id": "curl-real-separator-keeps-url-data", "partition": "curl-values", "input": {"command": "curl -- --config .env"}, "expected": "N"},
+{"id": "curl-url-file-value", "partition": "curl-values", "input": {"command": "curl --url @.env"}, "expected": "D"},
+{"id": "curl-url-file-glued-value", "partition": "curl-values", "input": {"command": "curl --url=@.env"}, "expected": "D"},
+{"id": "curl-url-file-positional", "partition": "curl-values", "input": {"command": "curl @.env"}, "expected": "D"},
+{"id": "curl-url-file-after-separator", "partition": "curl-values", "input": {"command": "curl -- @.env"}, "expected": "D"},
+{"id": "curl-public-url-file-control", "partition": "curl-values", "input": {"command": "curl --url @public"}, "expected": "N"},
+{"id": "curl-at-sign-user-data-control", "partition": "curl-values", "input": {"command": "curl --user @.env https://example.invalid"}, "expected": "N"},
+{"id": "curl-public-url-prefix-control", "partition": "curl-values", "input": {"command": "curl \"https://${HOST:-x}/.env\""}, "expected": "N"},
+{"id": "curl-possible-url-file-value", "partition": "curl-values", "input": {"command": "curl --url \"${URL:-@.env}\""}, "expected": "D"}
+]}

@@ -39,10 +39,12 @@ pub(in crate::shell) fn expand(
         arithmetic: Vec::new(),
         references: Vec::new(),
         assignments: Vec::new(),
+        conditional_assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
         lexical_ranges: Vec::new(),
+        uncertain_decisions: false,
     };
     out.word.raw = raw.to_owned();
     out.word.globs = braces;
@@ -91,18 +93,7 @@ pub(in crate::shell) fn expand(
     fill(&input, &pieces, &lexical, context, &mut out, &mut splitting)?;
     out.unsupported |= out.parameters.iter().any(|region| !region.supported);
     if input != raw && !out.parameters.is_empty() {
-        let original = crate::shell::lexer::Lexed::scan(raw).map_err(|_| CheckError {
-            kind: CheckErrorKind::GuardFault,
-        })?;
-        let original_regions = parameter_regions(raw, &original);
-        if original_regions.len() != out.parameters.len() {
-            return Err(CheckError {
-                kind: CheckErrorKind::GuardFault,
-            });
-        }
-        for (region, original) in out.parameters.iter_mut().zip(original_regions) {
-            region.range = original.range;
-        }
+        original_regions(raw, &mut out.parameters)?;
     }
     if arithmetic {
         out.arithmetic.push(raw.to_owned());
@@ -111,10 +102,35 @@ pub(in crate::shell) fn expand(
     if splitting && context.runtime_variables.contains("IFS") {
         out.word.expands = true;
         out.word.runtime_unknown = true;
+        out.word.gaps = vec![crate::record::Gap {
+            range: 0..out.word.text.len(),
+            nonempty: false,
+        }];
         out.unknown_splitting = true;
     }
     out.split = split_fields(&mut out, context, splitting);
     Ok(out)
+}
+
+/// Moves parameter regions found in brace-rewritten input back to the byte
+/// ranges of the original word.
+fn original_regions(
+    raw: &str,
+    regions: &mut [crate::shell::ParameterRegion],
+) -> Result<(), CheckError> {
+    let original = crate::shell::lexer::Lexed::scan(raw).map_err(|_| CheckError {
+        kind: CheckErrorKind::GuardFault,
+    })?;
+    let original_regions = parameter_regions(raw, &original);
+    if original_regions.len() != regions.len() {
+        return Err(CheckError {
+            kind: CheckErrorKind::GuardFault,
+        });
+    }
+    for (region, original) in regions.iter_mut().zip(original_regions) {
+        region.range = original.range;
+    }
+    Ok(())
 }
 
 fn literal_word(raw: &str) -> Expanded {
@@ -132,10 +148,12 @@ fn literal_word(raw: &str) -> Expanded {
         arithmetic: Vec::new(),
         references: Vec::new(),
         assignments: Vec::new(),
+        conditional_assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
         lexical_ranges: Vec::new(),
+        uncertain_decisions: false,
     }
 }
 
@@ -175,6 +193,19 @@ fn split_fields(out: &mut Expanded, context: &ExpansionContext<'_>, splitting: b
                     let left = range.start.max(start);
                     let right = range.end.min(end);
                     (left < right).then(|| left - start..right - start)
+                })
+                .collect();
+            // A field cut from an unknown run keeps its part unknown; only an
+            // uncut run keeps its nonempty fact.
+            word.gaps = out
+                .word
+                .gaps
+                .iter()
+                .filter(|gap| gap.range.start <= end && gap.range.end >= start)
+                .filter(|gap| !gap.range.is_empty() || (start..=end).contains(&gap.range.start))
+                .map(|gap| crate::record::Gap {
+                    range: gap.range.start.max(start) - start..gap.range.end.min(end) - start,
+                    nonempty: gap.nonempty && gap.range.start >= start && gap.range.end <= end,
                 })
                 .collect();
             if out.word.cwd_ranges.iter().any(|range| {

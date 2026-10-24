@@ -1,15 +1,22 @@
 use super::*;
 
 impl Evaluator<'_, '_> {
-    pub(super) fn read(&self, args: &[crate::record::Word], scope: &mut Scope) {
+    pub(super) fn read(&mut self, args: &[crate::record::Word], scope: &mut Scope) {
         let mut array_name = None;
         let mut index = 0;
+        // Option and name words select which variables change; an option
+        // value only needs a fixed position.
+        let mut certain = args.last().is_none_or(|word| word.fixed_position);
         while let Some(word) = args.get(index) {
-            if word == "--" {
+            let Some(text) = word.exact() else {
+                certain = false;
+                break;
+            };
+            if text == "--" {
                 index += 1;
                 break;
             }
-            let Some(flags) = word.strip_prefix('-').filter(|flags| !flags.is_empty()) else {
+            let Some(flags) = text.strip_prefix('-').filter(|flags| !flags.is_empty()) else {
                 break;
             };
             for (at, option) in flags.char_indices() {
@@ -17,7 +24,10 @@ impl Evaluator<'_, '_> {
                     let attached = &flags[at + option.len_utf8()..];
                     let value = if attached.is_empty() {
                         index += 1;
-                        args.get(index).map(|word| word.text.as_str())
+                        args.get(index).map(|word| {
+                            certain &= option != 'a' || word.exact().is_some();
+                            word.text.as_str()
+                        })
                     } else {
                         Some(attached)
                     };
@@ -29,7 +39,14 @@ impl Evaluator<'_, '_> {
             }
             index += 1;
         }
-        let mut names = args[index.min(args.len())..]
+        let operands = &args[index.min(args.len())..];
+        if !certain || operands.iter().any(|word| word.exact().is_none()) {
+            if !scope.may_mutate(&BindingValue::RuntimeUnknown(None)) {
+                self.output.gap(CoverageGap::UnsupportedShellSyntax);
+            }
+            return;
+        }
+        let mut names = operands
             .iter()
             .filter(|word| identifier(&word.text))
             .map(|word| word.text.clone())

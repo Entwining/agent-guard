@@ -164,7 +164,7 @@ pub struct Observation {
     pub(crate) expansion_size: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParameterRegion {
     pub range: Range<usize>,
     pub supported: bool,
@@ -176,7 +176,7 @@ pub struct ArrayTailRegions {
     pub ranges: Vec<Range<usize>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WordCoverage {
     pub raw: String,
     pub parameters: Vec<ParameterRegion>,
@@ -289,10 +289,17 @@ struct Expanded {
     arithmetic: Vec<String>,
     references: Vec<String>,
     assignments: Vec<(String, String)>,
+    /// `${NAME:=value}` assignments that happen only if NAME, whose value
+    /// this context does not know, turns out to be empty or unset: the
+    /// value NAME holds after the expansion, represented by the default.
+    conditional_assignments: Vec<(String, statements::ShellValue)>,
     tilde: bool,
     parameters: Vec<ParameterRegion>,
     unsupported: bool,
     lexical_ranges: Vec<std::ops::Range<usize>>,
+    /// A parameter operator decided on text the context only represents, so
+    /// the expansion also has the reading that keeps the parameter's value.
+    uncertain_decisions: bool,
 }
 
 mod candidates;

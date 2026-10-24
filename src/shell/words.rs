@@ -165,6 +165,33 @@ pub(super) fn single_literal(raw: &str) -> Option<String> {
         .then(|| raw.to_owned())
 }
 
+/// What a context knows about its names beyond their text.
+#[derive(Default)]
+pub(super) struct ContextFacts {
+    pub unset: std::collections::BTreeSet<String>,
+    /// Names whose text or unset state in this context is an assumption
+    /// about an unknown value: results computed from them are evidence of
+    /// one possible runtime text, not that text.
+    pub hypotheses: std::collections::BTreeSet<String>,
+    /// Names the context leaves out because their presence is unknown.
+    pub inherited: std::collections::BTreeSet<String>,
+    /// Names the context does not list are unset rather than inherited.
+    pub inherited_unset: bool,
+    /// The unknown runs of the text of names whose value is not fully known
+    /// but whose representative has known parts.
+    pub evidence: BTreeMap<String, Vec<crate::record::Gap>>,
+    /// The unknown runs of the values sure to be nonempty, for names whose
+    /// evidence leaves the text possibly empty: a colon test keeps those
+    /// values and replaces the others.
+    pub nonempty_evidence: BTreeMap<String, Vec<crate::record::Gap>>,
+    /// The cwd text only represents a directory the guard cannot resolve.
+    pub cwd_unknown: bool,
+    /// Parameter operators whose decision depends on text the context only
+    /// represents take the reading that keeps the parameter's value: such a
+    /// pattern matches nothing, and an unknown value is present.
+    pub alternate: bool,
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct ExpansionContext<'a> {
     pub zsh: bool,
@@ -177,6 +204,7 @@ pub(super) struct ExpansionContext<'a> {
     pub host: crate::record::HostFacts<'a>,
     pub cwd: &'a str,
     pub tilde_assigned: bool,
+    pub facts: &'a ContextFacts,
 }
 
 impl ExpansionContext<'_> {
@@ -187,6 +215,38 @@ impl ExpansionContext<'_> {
             .find(|(key, _)| key == name)
             .map(|(_, value)| value)
             .or_else(|| self.variables.get(name))
+    }
+    /// Whether `name` is known to be unset in this context.
+    fn unset(&self, name: &str) -> bool {
+        self.get(name).is_none()
+            && !self.runtime_variables.contains(name)
+            && !self.unknown_variables.contains(name)
+            && (self.facts.unset.contains(name) || self.facts.inherited_unset && name != "PWD")
+    }
+    /// Whether `name` holds text this context does not determine: a value
+    /// with unknown runs, or an inherited name whose presence is unknown.
+    fn unknown(&self, name: &str) -> bool {
+        self.unknown_variables.contains(name)
+            || self.get(name).is_none()
+                && !self.runtime_variables.contains(name)
+                && !self.unset(name)
+                && (self.facts.inherited.contains(name)
+                    || !(name == "HOME" || name == "PWD" && !self.facts.cwd_unknown))
+    }
+    /// The unknown runs of `name`'s context text.
+    fn gaps(&self, name: &str, text: &str) -> Vec<crate::record::Gap> {
+        if !self.unknown_variables.contains(name)
+            && !self.runtime_variables.contains(name)
+            && !self.facts.hypotheses.contains(name)
+        {
+            return Vec::new();
+        }
+        self.facts.evidence.get(name).cloned().unwrap_or_else(|| {
+            vec![crate::record::Gap {
+                range: 0..text.len(),
+                nonempty: false,
+            }]
+        })
     }
 }
 

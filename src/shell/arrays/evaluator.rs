@@ -72,7 +72,19 @@ impl Evaluator<'_, '_> {
         store(scope, name, IndexedArray::unknown(self.frontend.zsh));
     }
 
-    pub(in crate::shell) fn read_array_lines(&self, args: &[Word], scope: &mut Scope) {
+    pub(in crate::shell) fn read_array_lines(&mut self, args: &[Word], scope: &mut Scope) {
+        if args
+            .iter()
+            .any(|word| word.exact().is_none() || !word.fixed_position)
+        {
+            // Unfixed words leave the array name unknown.
+            if !scope.may_mutate(&crate::shell::statements::BindingValue::RuntimeUnknown(
+                None,
+            )) {
+                self.output.gap(crate::CoverageGap::UnsupportedShellSyntax);
+            }
+            return;
+        }
         let name = args
             .iter()
             .rfind(|word| crate::shell::statements::identifier(&word.text))

@@ -44,6 +44,10 @@ const COMPOSE_VALUES: &[&str] = &[
 fn docker_command_start(context: &Context<'_>, start: usize) -> usize {
     let mut index = start + 1;
     while let Some(word) = context.words.get(index) {
+        // Runtime text could spell an option that consumes the image.
+        if word.option_unknown() {
+            break;
+        }
         if !word.starts_with('-') {
             return index;
         }
@@ -79,25 +83,44 @@ fn docker_command_start(context: &Context<'_>, start: usize) -> usize {
 
 pub(super) fn docker(context: &mut Context<'_>) {
     let mut start = 0;
-    while context.text(start).starts_with('-') {
+    while context
+        .words
+        .get(start)
+        .and_then(Word::exact)
+        .is_some_and(|word| word.starts_with('-'))
+    {
         start += if DOCKER_GLOBAL.contains(&context.text(start)) {
             2
         } else {
             1
         };
     }
-    if ["container", "image", "buildx"].contains(&context.text(start)) {
+    if context
+        .words
+        .get(start)
+        .and_then(Word::exact)
+        .is_some_and(|word| ["container", "image", "buildx"].contains(&word))
+    {
         start += 1;
     }
-    let sub = context.text(start);
+    // Runtime text names no known subcommand, so options run to the end.
+    let sub = context.words.get(start).and_then(Word::exact).unwrap_or("");
     let end = if ["run", "create", "exec"].contains(&sub) {
         docker_command_start(context, start)
     } else {
         context.words.len()
     };
     let mut compose_sub = start + 1;
-    while context.text(compose_sub).starts_with('-') {
-        compose_sub += if COMPOSE_VALUES.contains(&context.text(compose_sub)) {
+    while let Some(word) = context.words.get(compose_sub) {
+        // Runtime text could spell an option that consumes the subcommand.
+        if word.option_unknown() {
+            compose_sub = context.words.len();
+            break;
+        }
+        if !word.starts_with('-') {
+            break;
+        }
+        compose_sub += if COMPOSE_VALUES.contains(&word.as_str()) {
             2
         } else {
             1
@@ -105,7 +128,11 @@ pub(super) fn docker(context: &mut Context<'_>) {
     }
     for (index, word) in context.words[..end].iter().enumerate() {
         let previous = context.text(index.wrapping_sub(1));
-        if previous == "--entrypoint" {
+        if index
+            .checked_sub(1)
+            .and_then(|previous| context.words[previous].exact())
+            == Some("--entrypoint")
+        {
             continue;
         }
         let text = word.as_str();

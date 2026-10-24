@@ -2,16 +2,23 @@ use super::super as shell;
 use super::*;
 
 impl Scope {
+    /// The binding a word assigns, where `text` is the word's value after
+    /// any `NAME=` prefix. Only an exact value is known; any other value
+    /// keeps the word's text evidence.
     pub(super) fn expanded_binding(&self, word: &crate::record::Word, text: &str) -> BindingValue {
-        let raw = if text != word.text {
-            assignment(&word.raw).map_or(word.raw.as_str(), |(_, value)| value)
+        let (raw, value) = if text != word.text {
+            let start = word.text.len() - text.len();
+            (
+                assignment(&word.raw).map_or(word.raw.as_str(), |(_, value)| value),
+                std::borrow::Cow::Owned(word.suffix(start)),
+            )
         } else {
-            &word.raw
+            (word.raw.as_str(), std::borrow::Cow::Borrowed(word))
         };
         for name in &word.vars {
             if let Some(binding) = self.bindings.get(name) {
-                for value in binding.values.iter() {
-                    if let BindingValue::RepeatedFields(repeated) = value
+                for candidate in binding.values.iter() {
+                    if let BindingValue::RepeatedFields(repeated) = candidate
                         && let Some((prefix, suffix, _)) =
                             shell::words::parameter_affixes(raw, name)
                         && word.binding_candidates.get(name).is_some_and(|value| {
@@ -31,27 +38,30 @@ impl Scope {
             && shell::words::parameter_affixes(raw, word.vars.first().map_or("", String::as_str))
                 .is_none()
         {
-            return BindingValue::RuntimeDerived(text.into());
+            return BindingValue::RuntimeDerived(ShellValue::from_word(&value));
         }
         if word.shell_matches {
             return if word.globs || word.expands {
-                BindingValue::ShellDerived(ShellValue::from_word(&word.with_text(text.into())))
+                BindingValue::ShellDerived(ShellValue::from_word(&value))
             } else {
-                BindingValue::ShellMatches(ShellValue::from_word(&word.with_text(text.into())))
+                BindingValue::ShellMatches(ShellValue::from_word(&value))
             };
+        }
+        if let Some(text) = value.exact() {
+            return BindingValue::Known(text.into());
         }
         let candidates = word.vars.iter().filter_map(|name| self.bindings.get(name));
         let mut runtime = false;
         let mut representative = false;
         let mut derived = false;
         for binding in candidates {
-            for value in binding.values.iter() {
-                match value {
+            for candidate in binding.values.iter() {
+                match candidate {
                     BindingValue::RuntimeDerived(_) => derived = true,
-                    BindingValue::RuntimeUnknown(Some(value)) => {
-                        runtime |= !value.is_empty()
+                    BindingValue::RuntimeUnknown(Some(candidate)) => {
+                        runtime |= !candidate.is_empty()
                             || !binding.values.iter().any(|value| value.known().is_some());
-                        representative |= value == text;
+                        representative |= candidate.text == text;
                     }
                     BindingValue::RuntimeUnknown(None) => {
                         runtime = true;
@@ -78,14 +88,112 @@ impl Scope {
                     }
                 }
                 if placeholders && !fields.is_empty() {
-                    return BindingValue::RuntimeDerived(fields.join(" "));
+                    return BindingValue::RuntimeDerived(fields.join(" ").into());
                 }
             }
-            BindingValue::RuntimeDerived(text.into())
-        } else if runtime || word.expands {
-            BindingValue::RuntimeUnknown(Some(text.into()))
+            BindingValue::RuntimeDerived(ShellValue::from_word(&value))
         } else {
-            BindingValue::Known(text.into())
+            BindingValue::RuntimeUnknown(Some(ShellValue::from_word(&value)))
+        }
+    }
+    /// A mutation the shell has not established: `name` keeps its prior
+    /// state and may also hold `values`. Returns false for an array, whose
+    /// elements this update cannot weaken.
+    pub(in crate::shell) fn possibly_assign(
+        &mut self,
+        name: &str,
+        values: &[BindingValue],
+    ) -> bool {
+        let mut combined = self.bindings.get(name).map_or_else(
+            || vec![self.absent()],
+            |binding| binding.values.as_ref().clone(),
+        );
+        if combined
+            .iter()
+            .any(|value| matches!(value, BindingValue::Array(_)))
+        {
+            return false;
+        }
+        for value in values {
+            if !combined.contains(value) {
+                combined.push(value.clone());
+            }
+        }
+        self.assign_binding(name.into(), combined);
+        true
+    }
+    /// A successful unset, which also removes the variable's attributes.
+    pub(in crate::shell) fn unset_binding(&mut self, name: &str) {
+        self.assign_binding(name.into(), vec![BindingValue::Unset]);
+        if let Some(binding) = Rc::make_mut(&mut self.bindings).get_mut(name) {
+            binding.exported = Export::No;
+            binding.arithmetic = false;
+        }
+    }
+    /// An unset that may not happen: the variable keeps its state and
+    /// attributes or loses both. A kept arithmetic attribute stays the
+    /// stricter reading.
+    pub(in crate::shell) fn possibly_unset(&mut self, name: &str) -> bool {
+        let complete = self.possibly_assign(name, &[BindingValue::Unset]);
+        if let Some(binding) = Rc::make_mut(&mut self.bindings).get_mut(name) {
+            binding.exported = binding.exported.join(Export::No);
+        }
+        complete
+    }
+    /// A mutation of a variable the shell has not identified: every tracked
+    /// variable keeps its prior state and may also hold `value` or have
+    /// changed whether it is exported. Returns false when an array binding
+    /// cannot carry it.
+    pub(in crate::shell) fn may_mutate(&mut self, value: &BindingValue) -> bool {
+        let mut complete = true;
+        for (name, binding) in Rc::make_mut(&mut self.bindings).iter_mut() {
+            if !identifier(name) {
+                continue;
+            }
+            binding.exported = binding.exported.join(Export::Unknown);
+            if binding
+                .values
+                .iter()
+                .any(|value| matches!(value, BindingValue::Array(_)))
+            {
+                complete = false;
+            } else if !binding.values.contains(value) {
+                Rc::make_mut(&mut binding.values).push(value.clone());
+            }
+        }
+        if value != &BindingValue::Unset {
+            self.inherited_unset = false;
+        }
+        complete
+    }
+    /// The positional parameters after a command that may have replaced
+    /// them with unknown ones. Untracked parameters are already unknown.
+    pub(in crate::shell) fn positionals_unknown(&mut self) {
+        let Some(binding) = self.bindings.get("@") else {
+            return;
+        };
+        let mut word = crate::record::Word::literal("${@}".into());
+        word.expands = true;
+        word.runtime_unknown = true;
+        word.field_count_unknown = true;
+        word.vars.push("@".into());
+        let mut values = binding.values.as_ref().clone();
+        let unknown = BindingValue::Arguments(vec![word]);
+        if !values.contains(&unknown) {
+            values.push(unknown);
+        }
+        self.assign_binding("@".into(), values);
+        for (name, binding) in Rc::make_mut(&mut self.bindings).iter_mut() {
+            let value = if name == "#" {
+                BindingValue::RuntimeUnknown(None)
+            } else if name.parse::<usize>().is_ok() {
+                BindingValue::Inherited
+            } else {
+                continue;
+            };
+            if !binding.values.contains(&value) {
+                Rc::make_mut(&mut binding.values).push(value);
+            }
         }
     }
     pub(in crate::shell) fn local(&mut self, name: &str) {
@@ -157,7 +265,7 @@ impl Scope {
         let exported = self
             .bindings
             .get(&name)
-            .is_some_and(|binding| binding.exported);
+            .map_or(Export::No, |binding| binding.exported);
         let arithmetic = self
             .bindings
             .get(&name)

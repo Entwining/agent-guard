@@ -70,19 +70,19 @@ const OPTIONS: &[(&str, Effect)] = &[
 ];
 
 /// The builtin subcommand, Some(None) when no subcommand is given, or None for
-/// an external subcommand or alias.
+/// an external subcommand, an alias, or runtime text, which could name any
+/// subcommand or option.
 fn subcommand(words: &[Word]) -> Option<Option<&str>> {
-    let mut index = usize::from(words.first().is_some_and(|word| word.starts_with('+')));
+    let toolchain = words
+        .first()
+        .is_some_and(|word| word.known_prefix().starts_with('+'));
+    let mut index = usize::from(toolchain);
     while let Some(word) = words.get(index) {
+        let word = word.exact()?;
         if !word.starts_with('-') {
-            let name = word.as_str();
-            return COMMANDS.contains(&name).then_some(Some(name));
+            return COMMANDS.contains(&word).then_some(Some(word));
         }
-        index += if GLOBAL_VALUES.contains(&word.as_str()) {
-            2
-        } else {
-            1
-        };
+        index += if GLOBAL_VALUES.contains(&word) { 2 } else { 1 };
     }
     Some(None)
 }

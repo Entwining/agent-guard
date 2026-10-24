@@ -122,10 +122,12 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
         arithmetic: Vec::new(),
         references: Vec::new(),
         assignments: Vec::new(),
+        conditional_assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
         lexical_ranges: Vec::new(),
+        uncertain_decisions: false,
     };
     let error = fill(
         raw,
@@ -146,6 +148,7 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
             },
             cwd: "/synthetic/home/project",
             tilde_assigned: true,
+            facts: &Default::default(),
         },
         &mut out,
         &mut false,
@@ -228,6 +231,7 @@ fn brush_accepted_word_lexer_refusal_is_unsupported() {
             },
             cwd: "/synthetic/home/project",
             tilde_assigned: true,
+            facts: &Default::default(),
         },
     )
     .unwrap();
@@ -258,6 +262,7 @@ fn outer_early_closer_has_its_own_unsupported_region() {
             },
             cwd: "/synthetic/home/project",
             tilde_assigned: true,
+            facts: &Default::default(),
         },
     )
     .unwrap();
@@ -290,10 +295,12 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
         arithmetic: Vec::new(),
         references: Vec::new(),
         assignments: Vec::new(),
+        conditional_assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
         lexical_ranges: Vec::new(),
+        uncertain_decisions: false,
     };
     fill(
         raw,
@@ -314,6 +321,7 @@ fn arithmetic_piece_end_is_checked_against_lexer() {
             },
             cwd: "/synthetic/home/project",
             tilde_assigned: true,
+            facts: &Default::default(),
         },
         &mut out,
         &mut false,
@@ -345,10 +353,12 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
         arithmetic: Vec::new(),
         references: Vec::new(),
         assignments: Vec::new(),
+        conditional_assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
         lexical_ranges: Vec::new(),
+        uncertain_decisions: false,
     };
     fill(
         raw,
@@ -369,6 +379,7 @@ fn reverse_substitution_end_is_unsupported_and_retains_code() {
             },
             cwd: "/synthetic/home/project",
             tilde_assigned: true,
+            facts: &Default::default(),
         },
         &mut out,
         &mut false,
@@ -399,10 +410,12 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
         arithmetic: Vec::new(),
         references: Vec::new(),
         assignments: Vec::new(),
+        conditional_assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
         lexical_ranges: Vec::new(),
+        uncertain_decisions: false,
     };
     fill(
         raw,
@@ -423,6 +436,7 @@ fn covered_substitution_does_not_reexpand_body_as_word_data() {
             },
             cwd: "/synthetic/home/project",
             tilde_assigned: true,
+            facts: &Default::default(),
         },
         &mut out,
         &mut false,

@@ -26,6 +26,8 @@ pub mod function_argv_preserves_fields_and_scope;
 pub mod indexed_arrays_preserve_elements;
 #[path = "shell_state/indexed_parameter_expansion_evaluates_binding.rs"]
 pub mod indexed_parameter_expansion_evaluates_binding;
+#[path = "shell_state/inherited_presence_reaches_defaults_and_children.rs"]
+pub mod inherited_presence_reaches_defaults_and_children;
 #[path = "shell_state/literal_for_lists_execute_each_value_exactly.rs"]
 pub mod literal_for_lists_execute_each_value_exactly;
 #[path = "shell_state/loop_cwd_widening_preserves_protected_candidates.rs"]
@@ -60,6 +62,8 @@ pub mod reassignment_replaces_copied_armed_value;
 pub mod repeated_loop_references_share_one_binding_candidate;
 #[path = "shell_state/shell_glob_loop_items_keep_protected_intersection_at_sinks.rs"]
 pub mod shell_glob_loop_items_keep_protected_intersection_at_sinks;
+#[path = "shell_state/shell_invocations_select_code_script_and_startup_sources.rs"]
+pub mod shell_invocations_select_code_script_and_startup_sources;
 #[path = "shell_state/shell_list_length_is_not_syntactic_nesting.rs"]
 pub mod shell_list_length_is_not_syntactic_nesting;
 #[path = "shell_state/shell_observation_reuse.rs"]
@@ -67,6 +71,8 @@ pub mod shell_observation_reuse;
 #[path = "shell_state/substitution_bindings_remain_single_unknown_words.rs"]
 pub mod substitution_bindings_remain_single_unknown_words;
 pub(crate) mod support;
+#[path = "shell_state/uncertain_transforms_keep_original_and_replacement.rs"]
+pub mod uncertain_transforms_keep_original_and_replacement;
 #[path = "shell_state/unknown_producer_values_are_not_reparsed_as_lexical_shell_code.rs"]
 pub mod unknown_producer_values_are_not_reparsed_as_lexical_shell_code;
 #[path = "shell_state/unknown_read_aggregation_converges_without_literal_path_loss.rs"]

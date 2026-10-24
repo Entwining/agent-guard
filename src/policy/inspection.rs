@@ -43,6 +43,13 @@ impl Inspection<'_> {
         }
     }
     fn gap(&mut self, value: CoverageGap) {
+        // A divergence between executors the consumer cannot run is an
+        // unsupported construct, whichever shell the source names.
+        let value = if value == CoverageGap::ExecutorDivergence && !self.context.zsh_executor {
+            CoverageGap::UnsupportedDialectConstruct
+        } else {
+            value
+        };
         if !self.gaps.contains(&value) {
             self.gaps.push(value);
         }
@@ -296,13 +303,7 @@ impl Inspection<'_> {
         );
         self.pipeline_content(command.pipeline, &effects, hidden_listings);
         for value in effects.gaps {
-            self.gap(
-                if value == CoverageGap::ExecutorDivergence && !self.context.zsh_executor {
-                    CoverageGap::UnsupportedDialectConstruct
-                } else {
-                    value
-                },
-            );
+            self.gap(value);
         }
         if effects.dump {
             self.effect(EffectRecord::EnvironmentDump);

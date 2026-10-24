@@ -49,27 +49,60 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         child.captured = scope.captured;
         child.output_fds = scope.output_fds.clone();
         child.flow_guard = scope.flow_guard.clone();
-        child.zsh = self.frontend.zsh;
-        Rc::make_mut(&mut child.bindings).extend(
-            scope
-                .bindings
-                .iter()
-                .filter(|(name, binding)| binding.exported || prefixes.contains_key(*name))
-                .map(|(name, binding)| (name.clone(), binding.clone())),
-        );
+        // The named shell, not the one running this command, owns the
+        // child's dialect.
+        child.zsh = command
+            .program
+            .is_some_and(|index| command.argv[index].rsplit('/').next() == Some("zsh"));
+        // The child imports what this shell exports. A variable this shell
+        // unset is absent from its environment, and one the shell may not
+        // have exported may hold only what the shell itself inherited.
+        let absent = scope.absent();
+        for (name, binding) in scope.bindings.iter() {
+            let export = if prefixes.contains_key(name)
+                || binding
+                    .values
+                    .iter()
+                    .all(|value| value == &BindingValue::Unset)
+            {
+                Export::Yes
+            } else {
+                binding.exported
+            };
+            let mut binding = binding.clone();
+            match export {
+                Export::Yes => {}
+                // Neither shell passes an array to a command.
+                Export::Unknown
+                    if !binding
+                        .values
+                        .iter()
+                        .any(|value| matches!(value, BindingValue::Array(_))) =>
+                {
+                    if !binding.values.contains(&absent) {
+                        Rc::make_mut(&mut binding.values).push(absent.clone());
+                    }
+                }
+                Export::Unknown | Export::No => continue,
+            }
+            binding.exported = Export::Yes;
+            Rc::make_mut(&mut child.bindings).insert(name.clone(), binding);
+        }
+        child.inherited_unset = scope.inherited_unset;
         for change in environment {
             match change {
-                shell::argv::EnvironmentChange::Clear => Rc::make_mut(&mut child.bindings).clear(),
-                shell::argv::EnvironmentChange::Unset(name) => {
-                    Rc::make_mut(&mut child.bindings).remove(name);
+                shell::argv::EnvironmentChange::Clear => {
+                    Rc::make_mut(&mut child.bindings).clear();
+                    child.inherited_unset = true;
                 }
+                shell::argv::EnvironmentChange::Unset(name) => child.unset_binding(name),
                 shell::argv::EnvironmentChange::Set(name, value) => {
                     child.assign(
                         name.clone(),
                         vec![scope.expanded_binding(value, &value.text)],
                     );
                     if let Some(binding) = Rc::make_mut(&mut child.bindings).get_mut(name) {
-                        binding.exported = true;
+                        binding.exported = Export::Yes;
                     }
                 }
             }

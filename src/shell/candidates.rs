@@ -23,20 +23,28 @@ pub(super) fn expand_candidates(
     let contexts = contexts::binding_contexts(&seed, scope, evaluator)?;
     let mut nested = nested_sources(raw, scope, evaluator);
     let mut result = Vec::new();
-    let mut updates = std::collections::BTreeMap::<String, Vec<(Option<String>, String)>>::new();
+    let mut updates = std::collections::BTreeMap::<String, Vec<Update>>::new();
     let mut context = first;
+    let mut hypotheses = std::collections::BTreeSet::new();
+    let mut inherited = std::collections::BTreeSet::new();
+    let mut unset = std::collections::BTreeSet::new();
     'expansions: for delta in contexts {
         #[cfg(test)]
         {
             evaluator.output.context_delta_entries += delta.len();
         }
-        for (name, value) in delta {
-            if let Some(value) = value {
-                context.insert(name, value);
-            } else {
-                context.remove(&name);
-            }
-        }
+        contexts::apply(
+            delta,
+            &mut context,
+            &mut hypotheses,
+            &mut inherited,
+            &mut unset,
+        );
+        let mut unknown_variables = scope.unknown_parameters(&context);
+        unknown_variables.retain(|name| !hypotheses.contains(name));
+        let mut facts = scope.facts(&seed.word.vars, &context, &unknown_variables, &unset);
+        facts.hypotheses.clone_from(&hypotheses);
+        facts.inherited.clone_from(&inherited);
         {
             for zsh in std::iter::once(false).chain(
                 (scope.zsh && (seed.modifiers || !seed.named_tildes.is_empty())).then_some(true),
@@ -47,46 +55,50 @@ pub(super) fn expand_candidates(
                     } else {
                         vec![true]
                     } {
-                        let runtime_variables = runtime_variables(&seed, scope, &context);
-                        crate::check_deadline(evaluator.deadline)?;
-                        if result.len() == 512 {
-                            evaluator.output.gap(CoverageGap::InspectionBudget);
-                            break 'expansions;
-                        }
-                        #[cfg(test)]
-                        {
-                            evaluator.output.word_candidates_max =
-                                evaluator.output.word_candidates_max.max(result.len() + 1);
-                        }
-                        let expanded = expand_reading(
-                            raw,
-                            scope,
-                            evaluator,
-                            &words::ExpansionContext {
-                                zsh,
-                                assignments: &[],
-                                variables: &context,
-                                unknown_variables: &scope.unknown_parameters(&context),
-                                deadline: evaluator.deadline,
-                                runtime_variables: &runtime_variables,
-                                pattern_variables: &scope.pattern_contexts(&context),
-                                host: evaluator.frontend.host,
-                                cwd: &cwd,
-                                tilde_assigned,
-                            },
-                        )?;
-                        for code in &expanded.nested {
-                            if !nested.contains(code) {
-                                nested.push(code.clone());
+                        facts.alternate = false;
+                        loop {
+                            let runtime_variables = runtime_variables(&seed, scope, &context);
+                            crate::check_deadline(evaluator.deadline)?;
+                            if result.len() == 512 {
+                                evaluator.output.gap(CoverageGap::InspectionBudget);
+                                break 'expansions;
                             }
+                            #[cfg(test)]
+                            {
+                                evaluator.output.word_candidates_max =
+                                    evaluator.output.word_candidates_max.max(result.len() + 1);
+                            }
+                            let expanded = expand_reading(
+                                raw,
+                                scope,
+                                evaluator,
+                                &words::ExpansionContext {
+                                    zsh,
+                                    assignments: &[],
+                                    variables: &context,
+                                    unknown_variables: &unknown_variables,
+                                    deadline: evaluator.deadline,
+                                    runtime_variables: &runtime_variables,
+                                    pattern_variables: &scope.pattern_contexts(&context),
+                                    host: evaluator.frontend.host,
+                                    cwd: &cwd,
+                                    tilde_assigned,
+                                    facts: &facts,
+                                },
+                            )?;
+                            for code in &expanded.nested {
+                                if !nested.contains(code) {
+                                    nested.push(code.clone());
+                                }
+                            }
+                            record_updates(&mut updates, &expanded, &context);
+                            let again = !facts.alternate && expanded.uncertain_decisions;
+                            result.push(expanded);
+                            if !again {
+                                break;
+                            }
+                            facts.alternate = true;
                         }
-                        for (name, value) in &expanded.assignments {
-                            updates
-                                .entry(name.clone())
-                                .or_default()
-                                .push((context.get(name).cloned(), value.clone()));
-                        }
-                        result.push(expanded);
                     }
                 }
             }
@@ -136,6 +148,7 @@ fn seed_expansion(
     first: &std::collections::BTreeMap<String, String>,
     cwd: &str,
 ) -> Result<Box<Expanded>, CheckError> {
+    let unknown_variables = scope.unknown_parameters(first);
     let seed = words::expand_boxed(
         &raw.raw,
         &raw.syntax,
@@ -143,13 +156,19 @@ fn seed_expansion(
             zsh: false,
             assignments: &[],
             variables: first,
-            unknown_variables: &scope.unknown_parameters(first),
+            unknown_variables: &unknown_variables,
             deadline: evaluator.deadline,
             runtime_variables: &std::collections::BTreeSet::new(),
             pattern_variables: &scope.pattern_contexts(first),
             host: evaluator.frontend.host,
             cwd,
             tilde_assigned: true,
+            facts: &scope.facts(
+                scope.bindings.keys(),
+                first,
+                &unknown_variables,
+                &Default::default(),
+            ),
         },
     )?;
     Ok(seed)
@@ -168,7 +187,7 @@ fn runtime_variables(
             scope.bindings.get(*name).is_some_and(|binding| {
                 binding.values.iter().any(|value| match value {
                     statements::BindingValue::RuntimeUnknown(Some(value)) => {
-                        context.get(*name) == Some(value)
+                        context.get(*name) == Some(&value.text)
                     }
                     statements::BindingValue::RuntimeUnknown(None) => !context.contains_key(*name),
                     _ => false,
@@ -177,11 +196,17 @@ fn runtime_variables(
         })
         .cloned()
         .collect::<std::collections::BTreeSet<_>>();
-    if scope
-        .bindings
-        .get("IFS")
-        .is_some_and(|binding| binding.values.iter().any(|value| value.known().is_none()))
-    {
+    // The shell starts with the default IFS whatever it inherited, and an
+    // unset IFS splits as the default does.
+    if scope.bindings.get("IFS").is_some_and(|binding| {
+        binding.values.iter().any(|value| {
+            value.known().is_none()
+                && !matches!(
+                    value,
+                    statements::BindingValue::Inherited | statements::BindingValue::Unset
+                )
+        })
+    }) {
         runtime_variables.insert("IFS".into());
     }
     runtime_variables
@@ -215,15 +240,19 @@ fn annotate_bindings(
                     .any(|value| matches!(value, statements::BindingValue::RepeatedFields(_)))
             })
         })
+        .cloned()
         .collect::<Vec<_>>();
     if !repeated.is_empty() {
         if repeated
             .iter()
             .any(|name| words::parameter_affixes(&raw.raw, name).is_none())
         {
-            expanded.word.expands = true;
-            for word in &mut expanded.split {
+            for word in std::iter::once(&mut expanded.word).chain(&mut expanded.split) {
                 word.expands = true;
+                word.gaps = vec![crate::record::Gap {
+                    range: 0..word.text.len(),
+                    nonempty: false,
+                }];
             }
         }
         // The literal fields are known; their repetition count is not.
@@ -232,6 +261,23 @@ fn annotate_bindings(
         expanded.word.field_count_unknown = repeated
             .iter()
             .any(|name| words::parameter_affixes(&raw.raw, name).is_none_or(|(_, _, split)| split));
+        // One quoted repetition keeps the literal text around it in every
+        // projection.
+        if let [name] = repeated.as_slice()
+            && let Some((prefix, suffix, false)) = words::parameter_affixes(&raw.raw, name)
+        {
+            for word in std::iter::once(&mut expanded.word).chain(&mut expanded.split) {
+                if word.text.len() >= prefix.len() + suffix.len()
+                    && word.text.starts_with(&prefix)
+                    && word.text.ends_with(&suffix)
+                {
+                    word.gaps = vec![crate::record::Gap {
+                        range: prefix.len()..word.text.len() - suffix.len(),
+                        nonempty: false,
+                    }];
+                }
+            }
+        }
         for word in &mut expanded.split {
             word.cardinality_unknown = true;
             word.field_count_unknown = expanded.word.field_count_unknown;
@@ -259,8 +305,9 @@ fn annotate_bindings(
             binding.values.iter().any(|value| {
                 matches!(
                     value,
-                    statements::BindingValue::RuntimeDerived(_)
-                        | statements::BindingValue::ShellDerived(_)
+                    statements::BindingValue::RuntimeDerived(text)
+                        | statements::BindingValue::ShellDerived(text)
+                        if context.get(name) == Some(&text.text)
                 )
             })
         })
@@ -290,12 +337,16 @@ fn expand_reading(
     {
         evaluator.output.gap(CoverageGap::UnsupportedShellSyntax);
     }
-    if expanded.unsupported || !expanded.parameters.is_empty() {
-        evaluator.output.word_coverage.push(WordCoverage {
-            raw: raw.raw.clone(),
-            parameters: expanded.parameters.clone(),
-            unsupported: expanded.unsupported,
-        });
+    let coverage = WordCoverage {
+        raw: raw.raw.clone(),
+        parameters: expanded.parameters.clone(),
+        unsupported: expanded.unsupported,
+    };
+    // Each reading of a word covers the same regions.
+    if (coverage.unsupported || !coverage.parameters.is_empty())
+        && !evaluator.output.word_coverage.contains(&coverage)
+    {
+        evaluator.output.word_coverage.push(coverage);
     }
     for expression in &expanded.arithmetic {
         for code in super::arithmetic::evaluate(expression)?.code {
@@ -307,26 +358,70 @@ fn expand_reading(
     Ok(expanded)
 }
 
+struct Update {
+    old: Option<String>,
+    value: statements::BindingValue,
+    /// The assignment happens whatever the old value was.
+    definite: bool,
+}
+
+/// Records the assignments a reading of the word makes in `context`.
+fn record_updates(
+    updates: &mut std::collections::BTreeMap<String, Vec<Update>>,
+    expanded: &Expanded,
+    context: &std::collections::BTreeMap<String, String>,
+) {
+    for (name, value) in &expanded.assignments {
+        updates.entry(name.clone()).or_default().push(Update {
+            old: context.get(name).cloned(),
+            value: statements::BindingValue::Known(value.clone()),
+            definite: true,
+        });
+    }
+    for (name, value) in &expanded.conditional_assignments {
+        updates.entry(name.clone()).or_default().push(Update {
+            old: context.get(name).cloned(),
+            value: statements::BindingValue::RuntimeUnknown(Some(value.clone())),
+            definite: false,
+        });
+    }
+}
+
 fn apply_updates(
     scope: &mut statements::Scope,
-    updates: std::collections::BTreeMap<String, Vec<(Option<String>, String)>>,
+    updates: std::collections::BTreeMap<String, Vec<Update>>,
 ) {
     for (name, updates) in updates {
-        let mut values = scope
-            .bindings
-            .get(&name)
-            .map_or_else(Vec::new, |binding| binding.values.as_ref().clone());
+        let mut values = scope.bindings.get(&name).map_or_else(
+            || vec![scope.absent()],
+            |binding| binding.values.as_ref().clone(),
+        );
+        // A definite assignment replaces the value its context read, which
+        // was no value for a name the context had unset.
         values.retain(|value| {
-            !updates.iter().any(|(old, _)| {
-                value
-                    .known()
-                    .is_some_and(|value| Some(value) == old.as_ref())
+            !updates.iter().any(|update| {
+                update.definite
+                    && match value.known() {
+                        Some(value) => Some(value) == update.old.as_ref(),
+                        None => update.old.is_none() && value == &statements::BindingValue::Unset,
+                    }
             })
         });
-        for (_, value) in updates {
-            let value = statements::BindingValue::Known(value);
-            if !values.contains(&value) {
-                values.push(value);
+        // After a conditional default the name is set, and the update's
+        // representative stands for both its old value and the default.
+        if updates.iter().any(|update| !update.definite) {
+            values.retain(|value| {
+                !matches!(
+                    value,
+                    statements::BindingValue::Inherited
+                        | statements::BindingValue::Unset
+                        | statements::BindingValue::RuntimeUnknown(None)
+                )
+            });
+        }
+        for update in updates {
+            if !values.contains(&update.value) {
+                values.push(update.value);
             }
         }
         scope.assign(name, values);

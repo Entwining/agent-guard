@@ -31,6 +31,14 @@ pub(super) fn infer_at(
         }
         return effects;
     }
+    // A program the shell does not fix proves no owner's roles, and neither
+    // does a wrapper word its grammar cannot place.
+    let unproven = command.unproven.or(command
+        .program
+        .filter(|index| command.argv[*index].exact().is_none()));
+    if let Some(start) = unproven {
+        infer_unproven(&command.argv[start..], cwd, host, &mut effects);
+    }
     if command.program.is_none() {
         infer_unselected(command, cwd, host, &mut effects);
         return effects;
@@ -57,7 +65,7 @@ pub(super) fn infer_at(
         })
         .unwrap_or(program);
     let args = &command.argv[index + 1..];
-    let args = label_options(program, args, cwd, host, &mut effects);
+    let args = label_options(args);
     let args = args.as_ref();
     infer_inputs(program, command, cwd, host, &mut effects);
     let hidden_items_read = infer_items(program, command, host, &mut effects);
@@ -68,6 +76,9 @@ pub(super) fn infer_at(
         programs::infer(program, args, command, cwd, host, &mut effects, depth);
     if let Some(walk) = generic_walk {
         infer_operands(program, args, cwd, host, &mut effects, walk, &claimed);
+    }
+    if let Some(start) = effects.unproven {
+        infer_unproven(&args[start..], cwd, host, &mut effects);
     }
     match hidden_items_read {
         Some(Some((walks, files))) => {
@@ -292,7 +303,6 @@ fn infer_operands(
     // adapters retain ownership of the arguments they already claimed.
     for (index, arg) in args.iter().enumerate() {
         if !claimed.contains(&index)
-            && arg.role != Role::Option(OptionRole::Name)
             && arg.as_str() != "__observed_stream__"
             && let Some(value) = if arg.role == Role::Path {
                 (!arg.value.is_empty()).then_some(arg.value.as_str())
@@ -320,15 +330,38 @@ fn infer_operands(
     }
 }
 
+/// Reads each argument from the first one whose role the grammar cannot
+/// prove, keeping no claim that would narrow it to a name, value or
+/// destination; the owner's own observations stay alongside. The owner
+/// already gave that first word its positional role unless its
+/// representative reads as an option.
+fn infer_unproven(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effects) {
+    let positional = args.first().is_some_and(|word| !word.starts_with('-'));
+    for arg in &args[usize::from(positional)..] {
+        if let Some(value) = operand_value(arg) {
+            effects.targets.push(Target::from_word(
+                &arg.with_text(value.into()),
+                cwd,
+                host,
+                Effect::Read,
+                Walk::Visible,
+            ));
+        }
+    }
+}
+
 fn infer_completion(program: &str, args: &[Word], command: &CommandRecord, effects: &mut Effects) {
     // A repetition projects each literal, not every possible argument sequence.
     // Positional roles and executable text cannot use those projections as a
     // complete command. Independent operand owners above can check their union;
-    // transformations also need a complete resource spelling.
-    if !effects.independent_arguments && args.iter().any(|word| word.cardinality_unknown)
-        || args
-            .iter()
-            .any(|word| word.cardinality_unknown && word.expands)
+    // transformations also need a complete resource spelling. A word with no
+    // representative text spells nothing, and its owner already leaves it
+    // unresolved. Code that its source owner observed was re-expanded there.
+    let mut repeated = args
+        .iter()
+        .filter(|word| word.cardinality_unknown && word.role != Role::ObservedShellCode);
+    if !effects.independent_arguments && repeated.clone().next().is_some()
+        || repeated.any(|word| word.expands && !word.text.is_empty())
             && effects.targets.iter().any(|target| {
                 target.effect != Effect::Name && !matches!(target.via, Via::Redirect | Via::Cwd)
             })

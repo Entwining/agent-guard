@@ -17,7 +17,7 @@ pub(super) fn infer_tar(
     let mut options = true;
     while index < args.len() {
         let arg = &args[index];
-        if arg == "--" && options {
+        if arg.exact() == Some("--") && options {
             options = false;
             index += 1;
             continue;
@@ -28,7 +28,18 @@ pub(super) fn infer_tar(
             index += 1;
             continue;
         }
-        if arg.role == Role::Option(OptionRole::Name) {
+        // Runtime text could spell a mode, or an option that consumes or
+        // re-roles the words after it; the first word is a mode even
+        // without a dash.
+        if arg.option_unknown() || index == 0 && arg.exact().is_none() {
+            effects.unproven = Some(index);
+            break;
+        }
+        // Exclusion patterns select entries rather than name files.
+        let separate = ["--exclude", "--include"].contains(&arg.as_str());
+        if separate || arg.starts_with("--exclude=") || arg.starts_with("--include=") {
+            index += usize::from(separate);
+            claimed.push(index);
             index += 1;
             continue;
         }

@@ -9,7 +9,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         binding: &[BindingValue],
     ) -> Vec<BindingValue> {
         let prior = assignment_scope.bindings.get(name).map_or_else(
-            || vec![BindingValue::Known(String::new())],
+            || vec![assignment_scope.absent()],
             |binding| binding.values.as_ref().clone(),
         );
         let mut combined = Vec::new();
@@ -26,11 +26,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     (BindingValue::Undetermined, _) | (_, BindingValue::Undetermined) => {
                         BindingValue::Undetermined
                     }
-                    _ => BindingValue::RuntimeDerived(format!(
-                        "{}{}",
-                        left.lexical().map_or("", String::as_str),
-                        right.lexical().map_or("", String::as_str),
-                    )),
+                    (BindingValue::Unset, right) => right.clone(),
+                    _ => BindingValue::RuntimeDerived(left.evidence().concat(&right.evidence())),
                 };
                 if !combined.contains(&value) {
                     combined.push(value);
@@ -87,7 +84,12 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 .map(|v| v.word.clone())
                 .unwrap_or_else(|| crate::record::Word::literal(String::new()));
             word.text = format!("{name}={}", word.text);
-            for range in word.cwd_ranges.iter_mut().chain(&mut word.quoted_ranges) {
+            for range in word
+                .cwd_ranges
+                .iter_mut()
+                .chain(&mut word.quoted_ranges)
+                .chain(word.gaps.iter_mut().map(|gap| &mut gap.range))
+            {
                 range.start += name.len() + 1;
                 range.end += name.len() + 1;
             }

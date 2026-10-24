@@ -14,24 +14,76 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             Some(1)
         } else {
             args.first()
-                .filter(|word| !word.expands)
-                .and_then(|word| word.parse::<usize>().ok())
+                .filter(|word| word.fixed_position)
+                .and_then(|word| word.exact())
+                .and_then(|text| text.parse::<usize>().ok())
         };
-        if let (Some(amount), Some(sequences)) = (amount, scope.positional_sequences()) {
+        if let Some(sequences) = scope.positional_sequences() {
+            if amount.is_none() {
+                self.output.gap(CoverageGap::UnresolvedTarget);
+            }
             let before = scope.clone();
             let mut exits = Vec::new();
             for arguments in sequences {
-                let mut branch = before.clone();
-                if amount <= arguments.len() {
-                    self.positionals(&arguments[amount..], &mut branch);
+                // An unknown amount shifts by any count; one larger than the
+                // parameter count fails and shifts nothing.
+                let amounts = amount.map_or(0..=arguments.len(), |amount| amount..=amount);
+                for amount in amounts {
+                    let mut branch = before.clone();
+                    if amount <= arguments.len() {
+                        self.positionals(&arguments[amount..], &mut branch);
+                    }
+                    exits.push(branch);
                 }
-                exits.push(branch);
             }
             self.merge_bindings(scope, &exits);
         } else if scope.bindings.contains_key("#") {
             self.output.gap(CoverageGap::UnsupportedShellSyntax);
         } else {
             self.output.gap(CoverageGap::UnresolvedTarget);
+        }
+    }
+    pub(super) fn set(&mut self, args: &[crate::record::Word], scope: &mut Scope) {
+        // The first argument that is not an option starts the new positional
+        // parameters; `--` replaces them even with none, `-` only with some.
+        let start = |certain: bool| {
+            let mut index = 0;
+            while let Some(word) = args.get(index) {
+                let text = if certain {
+                    word.exact().filter(|_| word.fixed_position)?
+                } else {
+                    &word.text
+                };
+                if text == "--" {
+                    return Some(Some(index + 1));
+                }
+                if text == "-" {
+                    return Some((index + 1 < args.len()).then_some(index + 1));
+                }
+                if text.len() > 1 && text.starts_with(['-', '+']) {
+                    if text.contains('A') {
+                        // Zsh array assignment is not a positional update.
+                        return Some(None);
+                    }
+                    index += 1 + usize::from(text.contains('o'));
+                    continue;
+                }
+                return Some(Some(index));
+            }
+            Some(None)
+        };
+        match start(true) {
+            Some(Some(index)) => self.positionals(&args[index..], scope),
+            Some(None) => {}
+            None => {
+                let before = scope.clone();
+                let mut replaced = scope.clone();
+                if let Some(Some(index)) = start(false) {
+                    self.positionals(&args[index..], &mut replaced);
+                }
+                self.merge_bindings(scope, &[before, replaced]);
+                scope.positionals_unknown();
+            }
         }
     }
     pub(super) fn positionals(&mut self, argv: &[crate::record::Word], scope: &mut Scope) {
@@ -60,7 +112,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         scope.assign(
             "#".into(),
             vec![if argv.iter().any(|word| word.field_count_unknown) {
-                BindingValue::RuntimeDerived(argv.len().to_string())
+                BindingValue::RuntimeDerived(argv.len().to_string().into())
             } else {
                 BindingValue::Known(argv.len().to_string())
             }],
@@ -80,17 +132,17 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             scope.local(&name);
             scope.assign(
                 name,
-                vec![if matches!(binding, BindingValue::RepeatedFields(_)) {
-                    binding
-                } else if word.shell_matches && word.expands {
-                    BindingValue::ShellDerived(ShellValue::from_word(word))
-                } else if word.shell_matches {
-                    BindingValue::ShellMatches(ShellValue::from_word(word))
-                } else if word.expands {
-                    BindingValue::RuntimeUnknown(None)
-                } else {
-                    BindingValue::Known(word.text.clone())
-                }],
+                vec![
+                    if word.shell_matches && !matches!(binding, BindingValue::RepeatedFields(_)) {
+                        if word.expands {
+                            BindingValue::ShellDerived(ShellValue::from_word(word))
+                        } else {
+                            BindingValue::ShellMatches(ShellValue::from_word(word))
+                        }
+                    } else {
+                        binding
+                    },
+                ],
             );
         }
     }

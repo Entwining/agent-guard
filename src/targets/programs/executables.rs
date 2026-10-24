@@ -37,6 +37,9 @@ pub(super) fn interpreter(
             if claimed.contains(&index) {
                 continue;
             }
+            if options && effects.unproven.is_none() && arg.option_unknown() {
+                effects.unproven = Some(index);
+            }
             let env_file = if let Some(path) = arg
                 .strip_prefix("--env-file=")
                 .or_else(|| arg.strip_prefix("--env-file-if-exists="))
@@ -67,32 +70,85 @@ pub(super) fn interpreter(
     }
 }
 
+// The shell evaluator already observes builtin eval of exact code in its
+// binding/cwd scope. Replaying it here both loses that scope and doubles
+// nested work; a representative is only lexical evidence.
+pub(super) fn eval(args: &[Word], command: &CommandRecord, effects: &mut Effects) {
+    let code = args.iter().map(Word::as_str).collect::<Vec<_>>().join(" ");
+    if args.iter().any(|arg| arg.role == Role::ObservedShellCode) {
+        // Its source owner re-expanded it in this shell's scope.
+    } else if args.iter().any(|arg| arg.exact().is_none()) {
+        effects.inline.push(code);
+    } else if !command.shell {
+        effects.code.push(code);
+    }
+}
+
 pub(super) fn shell(
+    program: &str,
     args: &[Word],
     command: &CommandRecord,
     cwd: &str,
     host: HostFacts<'_>,
     effects: &mut Effects,
 ) {
-    // Without flags each argument has its own read role; no combination
+    let Some(invocation) = shell_invocation(program, args) else {
+        return;
+    };
+    // Without options each argument has its own read role; no combination
     // can select code, consume another argument, or change its target.
-    effects.independent_arguments = args.iter().all(|arg| !arg.starts_with('-'));
-    let mut claimed = Vec::new();
-    if let Some(index) = args.iter().position(|s| {
-        s.starts_with('-') && s[1..].chars().all(|c| c.is_ascii_lowercase()) && s.contains('c')
-    }) {
-        if let Some(code) = args.get(index + 1) {
-            if code.role != crate::record::Role::ObservedShellCode {
-                effects.code.push(code.text.clone());
-            }
-            claimed.push(index + 1);
+    effects.independent_arguments =
+        matches!(invocation.source, ShellSource::Script(0)) || args.is_empty();
+    for (index, effect) in &invocation.values {
+        if let Some(effect) = effect {
+            effects.targets.push(Target::from_word(
+                &args[*index],
+                cwd,
+                host,
+                *effect,
+                Walk::None,
+            ));
         }
-    } else if command.stdin != crate::record::Stdin::Shell {
+    }
+    let mut operands = invocation.operands..args.len();
+    let mut code = None;
+    match &invocation.source {
+        ShellSource::Code(Some(index)) => {
+            let word = &args[*index];
+            if word.role == Role::ObservedShellCode {
+                // Its source owner inspected it in the child scope.
+            } else if word.exact().is_none() {
+                // A representative is lexical evidence of the code, not
+                // code to parse.
+                effects.inline.push(word.text.clone());
+                effects.gaps.push(CoverageGap::UnresolvedTarget);
+            } else {
+                effects.code.push(word.text.clone());
+            }
+            code = Some(*index);
+        }
+        ShellSource::Uncertain(candidates) => {
+            // Each later word keeps a read role from the unproven word on;
+            // that word may itself be the script.
+            effects.unproven = Some(invocation.operands);
+            operands.end = (invocation.operands + 1).min(args.len());
+            for word in candidates.iter().map(|index| &args[*index]) {
+                if word.exact().is_none() {
+                    effects.inline.push(word.text.clone());
+                    effects.gaps.push(CoverageGap::UnresolvedTarget);
+                } else if !invocation.posix {
+                    effects.code.push(word.text.clone());
+                }
+            }
+        }
+        ShellSource::Code(None) | ShellSource::Stdin | ShellSource::Script(_) => {}
+    }
+    if !matches!(invocation.source, ShellSource::Code(_))
+        && command.stdin != crate::record::Stdin::Shell
+    {
         effects.gaps.push(CoverageGap::UnresolvedTarget);
     }
-    for (index, arg) in args.iter().enumerate() {
-        if !claimed.contains(&index) && !arg.starts_with('-') {
-            effects.targets.push(read(arg, cwd, host, false));
-        }
+    for index in operands.filter(|index| Some(*index) != code) {
+        effects.targets.push(read(&args[index], cwd, host, false));
     }
 }

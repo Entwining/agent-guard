@@ -39,7 +39,7 @@
     {"id":"runtime-bare-name","partition":"runtime-math","source":"branch=$(git branch --show-current); git log -1 branch","expected":"N"},
     {"id":"runtime-math-control","partition":"runtime-math","source":"branch=$(git branch --show-current); printf '%d' branch","expected":"N"},
     {"id":"runtime-arithmetic-context","partition":"runtime-arithmetic","source":"branch=$(git branch --show-current); echo \"$((branch))\"","expected":"N"},
-    {"id":"runtime-cd-appdata-known-limit","partition":"runtime-cd","source":"cd $(printf %s ~/Library/Containers/com.example.syn/Data); cat notes.txt","expected":"N"},
-    {"id":"runtime-cd-git-known-limit","partition":"runtime-cd","source":"cd $(git rev-parse --show-toplevel); cat notes.txt","expected":"N"}
+    {"id":"runtime-cd-appdata-unresolved","partition":"runtime-cd","source":"cd $(printf %s ~/Library/Containers/com.example.syn/Data); cat notes.txt","expected":"UC"},
+    {"id":"runtime-cd-git-unresolved","partition":"runtime-cd","source":"cd $(git rev-parse --show-toplevel); cat notes.txt","expected":"UC"}
   ]
 }

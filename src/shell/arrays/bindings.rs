@@ -40,13 +40,19 @@ pub(in crate::shell) fn store(scope: &mut Scope, name: &str, state: IndexedArray
             .iter()
             .map(|word| {
                 if word.runtime_unknown || word.expands {
-                    BindingValue::RuntimeUnknown(Some(word.text.clone()))
+                    BindingValue::RuntimeUnknown(Some(
+                        crate::shell::statements::ShellValue::from_word(word),
+                    ))
                 } else if word.globs || word.shell_matches {
                     BindingValue::ShellMatches(crate::shell::statements::ShellValue::from_word(
                         word,
                     ))
+                } else if let Some(text) = word.exact() {
+                    BindingValue::Known(text.into())
                 } else {
-                    BindingValue::Known(word.text.clone())
+                    BindingValue::RuntimeDerived(crate::shell::statements::ShellValue::from_word(
+                        word,
+                    ))
                 }
             })
             .collect();

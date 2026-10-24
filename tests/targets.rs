@@ -12,6 +12,8 @@ pub mod ctags_atfile_values_read_and_global_values_remain_names;
 pub mod ctags_owns_its_option_file_references;
 #[path = "targets/curl_urls_after_double_dash_keep_their_read_role.rs"]
 pub mod curl_urls_after_double_dash_keep_their_read_role;
+#[path = "targets/curl_values_keep_url_and_config_reads.rs"]
+pub mod curl_values_keep_url_and_config_reads;
 #[path = "support/differential.rs"]
 pub mod differential;
 #[path = "targets/du_option_files_have_list_role.rs"]
@@ -69,5 +71,7 @@ pub(crate) mod support;
 pub mod tar_short_values_keep_their_read_or_write_roles;
 #[path = "targets/tracked_cwd_entry_follows_go_named_target_rule.rs"]
 pub mod tracked_cwd_entry_follows_go_named_target_rule;
+#[path = "targets/uncertain_words_keep_grammar_positions.rs"]
+pub mod uncertain_words_keep_grammar_positions;
 #[path = "targets/wrapper_assignment_operands_are_unknown_programs.rs"]
 pub mod wrapper_assignment_operands_are_unknown_programs;

@@ -1,6 +1,168 @@
-use super::{Effects, operand_value, space};
+use super::{Effects, Getopt, operand_value, option_values, space};
 use crate::CoverageGap;
-use crate::record::{Effect, HostFacts, OptionRole, Role, Target, Via, Walk, Word};
+use crate::record::{Effect, HostFacts, Role, Target, Via, Walk, Word};
+
+// The options of openrsync and rsync that agents use, from their manuals.
+const RSYNC: Getopt = Getopt {
+    short_flags: "0468ACDEFHIJKLNOPRSUVWXabcdghiklmnopqrstuvxyz",
+    short_values: "BeT@fM",
+    flags: &[
+        "--archive",
+        "--recursive",
+        "--verbose",
+        "--quiet",
+        "--checksum",
+        "--relative",
+        "--dirs",
+        "--links",
+        "--copy-links",
+        "--copy-unsafe-links",
+        "--safe-links",
+        "--keep-dirlinks",
+        "--copy-dirlinks",
+        "--hard-links",
+        "--perms",
+        "--executability",
+        "--acls",
+        "--xattrs",
+        "--extended-attributes",
+        "--owner",
+        "--group",
+        "--devices",
+        "--specials",
+        "--times",
+        "--atimes",
+        "--crtimes",
+        "--omit-dir-times",
+        "--omit-link-times",
+        "--super",
+        "--fake-super",
+        "--sparse",
+        "--preallocate",
+        "--dry-run",
+        "--whole-file",
+        "--one-file-system",
+        "--existing",
+        "--ignore-existing",
+        "--ignore-non-existing",
+        "--remove-source-files",
+        "--del",
+        "--delete",
+        "--delete-before",
+        "--delete-during",
+        "--delete-delay",
+        "--delete-after",
+        "--delete-excluded",
+        "--ignore-missing-args",
+        "--delete-missing-args",
+        "--ignore-errors",
+        "--force",
+        "--partial",
+        "--progress",
+        "--prune-empty-dirs",
+        "--numeric-ids",
+        "--size-only",
+        "--ignore-times",
+        "--update",
+        "--inplace",
+        "--append",
+        "--append-verify",
+        "--compress",
+        "--cvs-exclude",
+        "--from0",
+        "--protect-args",
+        "--secluded-args",
+        "--stats",
+        "--human-readable",
+        "--itemize-changes",
+        "--list-only",
+        "--blocking-io",
+        "--no-motd",
+        "--mkpath",
+        "--backup",
+        "--delay-updates",
+        "--fuzzy",
+        "--no-implied-dirs",
+        "--no-perms",
+        "--no-times",
+        "--no-owner",
+        "--no-group",
+        "--no-whole-file",
+        "--no-compress",
+        "--no-inc-recursive",
+        "--cache",
+        "--no-cache",
+        "--8-bit-output",
+        "--ipv4",
+        "--ipv6",
+        "--help",
+        "--version",
+    ],
+    values: &[
+        "--info",
+        "--debug",
+        "--stderr",
+        "--backup-dir",
+        "--suffix",
+        "--confine-root",
+        "--chmod",
+        "--checksum-choice",
+        "--cc",
+        "--block-size",
+        "--rsh",
+        "--rsync-path",
+        "--max-delete",
+        "--max-size",
+        "--min-size",
+        "--max-alloc",
+        "--partial-dir",
+        "--usermap",
+        "--groupmap",
+        "--chown",
+        "--timeout",
+        "--contimeout",
+        "--modify-window",
+        "--temp-dir",
+        "--compare-dest",
+        "--copy-dest",
+        "--link-dest",
+        "--compress-choice",
+        "--zc",
+        "--compress-level",
+        "--zl",
+        "--compress-threads",
+        "--skip-compress",
+        "--filter",
+        "--exclude",
+        "--exclude-from",
+        "--include",
+        "--include-from",
+        "--files-from",
+        "--copy-as",
+        "--address",
+        "--port",
+        "--sockopts",
+        "--outbuf",
+        "--remote-option",
+        "--out-format",
+        "--log-format",
+        "--log-file",
+        "--log-file-format",
+        "--password-file",
+        "--early-input",
+        "--bwlimit",
+        "--stop-after",
+        "--stop-at",
+        "--write-batch",
+        "--only-write-batch",
+        "--read-batch",
+        "--protocol",
+        "--iconv",
+        "--checksum-seed",
+        "--config",
+        "--dparam",
+    ],
+};
 
 struct Spec {
     operand: Effect,
@@ -52,10 +214,7 @@ fn spec(program: &str, words: &[Word]) -> Option<Spec> {
         "ssh-keygen" => spec.options = &[("-f", Effect::Use)],
         "kubectl" => spec.options = &[("--kubeconfig", Effect::Use)],
         "npm" => spec.options = &[("--userconfig", Effect::Use)],
-        "curl" => {
-            spec.operand = Effect::Name;
-            spec.options = CURL_USE;
-        }
+        "curl" => spec.operand = Effect::Name,
         "wget" => {
             spec.operand = Effect::Name;
             spec.options = WGET_USE;
@@ -72,13 +231,6 @@ fn spec(program: &str, words: &[Word]) -> Option<Spec> {
     Some(spec)
 }
 
-pub(super) fn option(program: &str, words: &[Word], key: &str) -> Option<Effect> {
-    spec(program, words)?
-        .options
-        .iter()
-        .find_map(|(name, effect)| (*name == key).then_some(*effect))
-}
-
 /// The role of operands that come from a process item list.
 pub(super) fn operand(program: &str, words: &[Word]) -> Option<Effect> {
     spec(program, words).map(|spec| spec.operand)
@@ -91,6 +243,8 @@ struct Context<'a> {
     spec: Spec,
     claimed: Vec<bool>,
     targets: Vec<Target>,
+    /// The first word whose role the adapter's grammar cannot prove.
+    unproven: Option<usize>,
 }
 
 impl<'a> Context<'a> {
@@ -127,7 +281,12 @@ impl<'a> Context<'a> {
             return None;
         }
         let value = &self.words[index].value;
-        let previous = self.text(index.wrapping_sub(1));
+        // A word another option consumed, or runtime text, names no option.
+        let previous = index
+            .checked_sub(1)
+            .filter(|&previous| !self.claimed[previous])
+            .and_then(|previous| self.words[previous].exact())
+            .unwrap_or("");
         let key = if value.starts_with('-') {
             value.split_once('=').map_or("", |(key, _)| key)
         } else if previous.starts_with('-') && !previous.starts_with("--") {
@@ -142,7 +301,20 @@ impl<'a> Context<'a> {
                 .then_some(*effect)
         })
     }
-    fn fallback(&mut self) {
+    /// Adds the targets of the words no adapter claimed, and returns the
+    /// first word whose role it cannot prove.
+    fn fallback(&mut self) -> Option<usize> {
+        // Runtime text that could spell an option makes later roles, and
+        // which operand comes last, provisional.
+        let uncertain: Vec<usize> = (0..self.words.len())
+            .filter(|&index| {
+                !self.claimed[index]
+                    && self.words[index].role != Role::Path
+                    && self.words[index].option_unknown()
+            })
+            .chain(self.unproven)
+            .collect();
+        let unproven = uncertain.iter().copied().min();
         let into = self.spec.destination.is_some()
             && self.words.iter().any(|word| {
                 word.role != Role::Path
@@ -161,7 +333,7 @@ impl<'a> Context<'a> {
             .next_back();
         let sends = self.spec.remote && self.words.iter().any(|word| remote(&word.value));
         for (index, word) in self.words.iter().enumerate() {
-            if self.claimed[index] || word.role == Role::Option(OptionRole::Name) {
+            if self.claimed[index] {
                 continue;
             }
             if word.role != Role::Path
@@ -203,6 +375,18 @@ impl<'a> Context<'a> {
                 && !word.globs
             {
                 effect = self.spec.destination.unwrap_or(Effect::Write);
+                // Only another uncertain word can make this one a source.
+                if uncertain.iter().any(|&other| other != index) {
+                    let mut target = Target::from_word(
+                        &word.with_text(value.into()),
+                        self.cwd,
+                        self.host,
+                        Effect::Read,
+                        self.spec.walk,
+                    );
+                    target.sends = sends;
+                    self.targets.push(target);
+                }
             }
             if self.spec.remote && remote(&word.value) {
                 effect = Effect::Name;
@@ -217,6 +401,7 @@ impl<'a> Context<'a> {
             target.sends = sends;
             self.targets.push(target);
         }
+        unproven
     }
 }
 
@@ -246,6 +431,7 @@ pub(super) fn infer(
         spec,
         claimed: vec![false; words.len()],
         targets: Vec::new(),
+        unproven: None,
     };
     match program {
         "cp" => {
@@ -266,6 +452,14 @@ pub(super) fn infer(
         "wget" => wget(&mut context),
         "docker" => docker(&mut context),
         "ctags" => ctags(&mut context),
+        // Filter patterns select transferred names.
+        "rsync" => {
+            let (patterns, unproven) = option_values(words, &RSYNC, &["--exclude", "--include"]);
+            for index in patterns {
+                context.claimed[index] = true;
+            }
+            context.unproven = unproven;
+        }
         "cargo" => cargo(&mut context, effects),
         "dd" => {
             for (index, word) in words.iter().enumerate() {
@@ -279,7 +473,7 @@ pub(super) fn infer(
         }
         _ => {}
     }
-    context.fallback();
+    effects.unproven = context.fallback();
     effects.targets.extend(context.targets);
     true
 }
@@ -297,6 +491,15 @@ fn ctags(context: &mut Context<'_>) {
             && !path.is_empty()
         {
             context.add(path, Some(index), Effect::Read, None);
+        }
+        // ctags documents long option values only after `=`, where any
+        // pattern but `@FILE` names files to skip.
+        if word
+            .known_prefix()
+            .strip_prefix("--exclude=")
+            .is_some_and(|pattern| !pattern.is_empty() && !pattern.starts_with('@'))
+        {
+            context.claimed[index] = true;
         }
     }
 }
@@ -317,7 +520,7 @@ mod ssh;
 mod wget;
 use cargo::cargo;
 pub(super) use curl::CURL_VALUE_LETTERS;
-use curl::{CURL_USE, curl};
+use curl::curl;
 use docker::docker;
 use ssh::ssh;
 use wget::{WGET_USE, wget};

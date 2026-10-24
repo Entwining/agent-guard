@@ -91,6 +91,7 @@ fn tilde_piece(
 ) -> bool {
     let variables = expansion.variables;
     let host = expansion.host;
+    let start = out.word.text.len();
     if let TildeExpr::UserHome(user) = tilde {
         out.named_tildes.insert(user.clone());
         if expansion.zsh {
@@ -112,6 +113,7 @@ fn tilde_piece(
                         .unwrap_or(spelling)
                         .trim_end_matches('/'),
                 );
+                unknown_run(out, start, true);
                 out.word.expands = true;
                 out.word.runtime_unknown = true;
                 return true;
@@ -120,9 +122,11 @@ fn tilde_piece(
             out.word.vars.push(user.clone());
         }
     }
+    let mut unknown = false;
     let value = match tilde {
         TildeExpr::Home => {
             out.word.vars.push("HOME".into());
+            unknown = expansion.unknown_variables.contains("HOME");
             variables
                 .get("HOME")
                 .map(String::as_str)
@@ -133,8 +137,10 @@ fn tilde_piece(
             out.tilde = true;
             out.word.vars.push("PWD".into());
             if expansion.tilde_assigned && variables.contains_key("PWD") {
+                unknown = expansion.unknown_variables.contains("PWD");
                 variables.get("PWD").map(String::as_str)
             } else {
+                unknown = expansion.facts.cwd_unknown;
                 out.word.pwd = true;
                 out.word
                     .cwd_ranges
@@ -145,7 +151,18 @@ fn tilde_piece(
         _ => None,
     };
     push_tilde(out, value.unwrap_or(spelling));
+    if unknown {
+        unknown_run(out, start, true);
+    }
     false
+}
+
+/// Marks the text pushed since `start` as an unknown run.
+fn unknown_run(out: &mut Expanded, start: usize, nonempty: bool) {
+    out.word.gaps.push(crate::record::Gap {
+        range: start..out.word.text.len(),
+        nonempty,
+    });
 }
 
 fn substitution_piece(
@@ -157,9 +174,11 @@ fn substitution_piece(
     quoted: bool,
 ) -> Result<(Option<usize>, bool), CheckError> {
     let mut covered = None;
+    let start = out.word.text.len();
     let Some(body) = lexical.substitution_body(piece.start_index) else {
         out.unsupported = true;
         out.word.expands = true;
+        unknown_run(out, start, false);
         return Ok((None, false));
     };
     let right = body.end;
@@ -176,6 +195,9 @@ fn substitution_piece(
             .cwd_ranges
             .push(out.word.text.len()..out.word.text.len() + expansion.cwd.len());
         out.word.text.push_str(expansion.cwd);
+        if expansion.facts.cwd_unknown {
+            unknown_run(out, start, true);
+        }
     } else if right + 1 == piece.end_index
         && let Some(value) = dirname_output(code, expansion)?
     {
@@ -183,6 +205,7 @@ fn substitution_piece(
     } else {
         out.word.text.push_str(&raw[piece.start_index..right + 1]);
         out.word.expands = true;
+        unknown_run(out, start, false);
     }
     // Substituted output is not field-split here, even when its text is known.
     out.unknown_splitting |= !quoted;
@@ -221,7 +244,9 @@ fn arithmetic_piece(
         kind: CheckErrorKind::GuardFault,
     })?;
     merge_fragment(out, inner, piece.start_index + offset);
+    let start = out.word.text.len();
     out.word.text.push_str(spelling);
+    unknown_run(out, start, false);
     out.word.expands = true;
     Ok(())
 }

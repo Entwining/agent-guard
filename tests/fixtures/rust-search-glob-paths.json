@@ -8,7 +8,7 @@
     {"id":"rg-glob-basename-env","partition":"search-glob-path","input":{"command":"rg -l KEY -g '.env' ."},"expected":"D"},
     {"id":"rg-glob-basename-source","partition":"search-glob-path","input":{"command":"rg -l KEY -g '*.ts' ."},"expected":"N"},
     {"id":"rg-glob-nested-source","partition":"search-glob-path","input":{"command":"rg -l KEY -g 'src/**/*.ts' ."},"expected":"N"},
-    {"id":"rg-glob-below-array-glob-root-filters","partition":"search-glob-path","input":{"command":"cd ~/projects && d=(./*agent*); rg -l -F KEY -g '*.jsonl' -- \"${d[@]}\""},"expected":"N"},
+    {"id":"rg-glob-below-array-glob-root-filters","partition":"search-glob-path","input":{"command":"cd ~/projects && d=(./*agent*); rg -l -F KEY -g '*.jsonl' -- \"${d[@]}\""},"expected":"UC"},
     {"id":"rg-glob-below-literal-root-filters","partition":"search-glob-path","input":{"command":"rg -l KEY -g '*.jsonl' -- logs"},"expected":"N"},
     {"id":"rg-negative-nested-env","partition":"search-glob-path","input":{"command":"rg -l KEY -g '!config/.env' ."},"expected":"N"},
     {"id":"rg-wildcard-glob-selects-hidden-dotfile","partition":"search-glob-hidden","input":{"command":"rg -l KEY -g '*.npmrc' ."},"expected":"D"},

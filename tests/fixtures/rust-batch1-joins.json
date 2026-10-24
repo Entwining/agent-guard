@@ -18,6 +18,13 @@
       "id": "c1-if-noelse",
       "partition": "batch1-join",
       "source": "if false; then D=/tmp; fi; cat \"$D/notes.txt\"",
+      "expected": "UC",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c1-if-noelse-unset",
+      "partition": "batch1-join",
+      "source": "unset D; if false; then D=/tmp; fi; cat \"$D/notes.txt\"",
       "expected": "N",
       "cwd": "/h/project"
     },
@@ -25,6 +32,13 @@
       "id": "c3-if-true",
       "partition": "batch1-join",
       "source": "if true; then D=public; fi; cat \"$D/x\"",
+      "expected": "UC",
+      "cwd": "/h/project"
+    },
+    {
+      "id": "c3-if-true-unset",
+      "partition": "batch1-join",
+      "source": "unset D; if true; then D=public; fi; cat \"$D/x\"",
       "expected": "N",
       "cwd": "/h/project"
     },
@@ -39,35 +53,35 @@
       "id": "c6-case",
       "partition": "batch1-join",
       "source": "case x in x) D=/tmp;; esac; cat \"$D/notes.txt\"",
-      "expected": "N",
+      "expected": "UC",
       "cwd": "/h/project"
     },
     {
       "id": "c7-and",
       "partition": "batch1-join",
       "source": "true && D=/tmp; cat \"$D/notes.txt\"",
-      "expected": "N",
+      "expected": "UC",
       "cwd": "/h/project"
     },
     {
       "id": "c8-or",
       "partition": "batch1-join",
       "source": "false || D=/tmp; cat \"$D/notes.txt\"",
-      "expected": "N",
+      "expected": "UC",
       "cwd": "/h/project"
     },
     {
       "id": "c11-if-nested",
       "partition": "batch1-join",
       "source": "if true; then if false; then D=/tmp; fi; fi; cat \"$D/notes.txt\"",
-      "expected": "N",
+      "expected": "UC",
       "cwd": "/h/project"
     },
     {
       "id": "c12-while",
       "partition": "batch1-join",
       "source": "i=0; while [ $i -lt 1 ]; do D=/tmp; i=1; done; cat \"$D/notes.txt\"",
-      "expected": "N",
+      "expected": "UC",
       "cwd": "/h/project"
     },
     {
@@ -81,7 +95,7 @@
       "id": "c16-ctrl-if-cd",
       "partition": "batch1-join",
       "source": "if false; then D=/tmp; fi; cd \"$D\"; cat notes.txt",
-      "expected": "N",
+      "expected": "UC",
       "cwd": "/h/project"
     },
     {

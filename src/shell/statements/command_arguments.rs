@@ -27,7 +27,12 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 )? {
                     let mut word = expanded.word;
                     word.text = format!("{name}={}", word.text);
-                    for range in word.cwd_ranges.iter_mut().chain(&mut word.quoted_ranges) {
+                    for range in word
+                        .cwd_ranges
+                        .iter_mut()
+                        .chain(&mut word.quoted_ranges)
+                        .chain(word.gaps.iter_mut().map(|gap| &mut gap.range))
+                    {
                         range.start += name.len() + 1;
                         range.end += name.len() + 1;
                     }
@@ -98,6 +103,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                     shell_cwd: scope.directory.current.render(),
                     wrappers: resolution.wrappers,
                     wrapper_files: resolution.wrapper_files,
+                    unproven: resolution.unproven,
                     shell: resolution.shell,
                     function: false,
                     redirects: Vec::new(),

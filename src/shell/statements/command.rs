@@ -130,14 +130,16 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         }
         let mut executed_output =
             self.command_builtin(&mut argv, &resolved, scope, &prior, depth)?;
-        let shell_source = self.observed_shell_source(&mut argv, scope, program);
+        let shell_source = self.observed_shell_source(&mut argv, scope, &resolved);
         // xargs consumes its pipe; the command it runs does not read it.
         let stream = scope.piped
             && scope.pipeline_input.is_some()
             && !resolved.wrappers.iter().any(|wrapper| wrapper == "xargs");
+        let unresolved = program.is_some_and(|i| argv[i].exact().is_none());
+        let function = resolved.wrappers.is_empty()
+            && program.is_some_and(|i| self.functions.contains_key(&argv[i].text));
         let command = Command {
-            function: resolved.wrappers.is_empty()
-                && program.is_some_and(|i| self.functions.contains_key(&argv[i].text)),
+            function: function && !unresolved,
             argv,
             redirects: targets.to_vec(),
             cwd: resolved.cwd,
@@ -145,15 +147,14 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             program,
             wrappers: resolved.wrappers,
             wrapper_files: resolved.wrapper_files,
+            unproven: resolved.unproven,
             shell: resolved.shell,
             flags: Vec::new(),
             items: None,
-            stdin: if stream {
-                Stdin::Stream
-            } else if scope.piped {
-                Stdin::Inherited
-            } else {
-                Stdin::None
+            stdin: match (stream, scope.piped) {
+                (true, _) => Stdin::Stream,
+                (false, true) => Stdin::Inherited,
+                (false, false) => Stdin::None,
             },
             pipeline: pipeline.map(|id| (source_id, id)),
             nested,
@@ -183,7 +184,15 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             executed_output = Some(output);
         }
         self.command_xargs_sources(&command, depth)?;
-        if let Some(output) = self.command_function(&command, scope, (depth, nested, flow_end))? {
+        if function && unresolved {
+            // The function a representative names is one possible callee:
+            // inspect its body without committing its state or output.
+            let mut call = command.clone();
+            call.function = true;
+            self.command_function(&call, &mut scope.clone(), (depth, nested, flow_end))?;
+        } else if let Some(output) =
+            self.command_function(&command, scope, (depth, nested, flow_end))?
+        {
             executed_output = Some(output);
         }
         let output = self.command_completion(

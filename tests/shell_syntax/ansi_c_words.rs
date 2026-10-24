@@ -113,9 +113,13 @@ fn word_fragments_distinguish_unset_from_runtime_values() {
     assert_eq!(words[1].text, "$ROOT/Library/Containers");
     assert!(words[1].expands);
     assert_eq!(words[1].vars, ["ROOT"]);
-    assert_eq!(words[2].text, "");
-    assert!(!words[2].expands && !words[2].globs);
+    // An inherited name may be set, so its alternative is lexical evidence.
+    assert_eq!(words[2].text, "/synthetic/home/Library/Containers/x");
+    assert!(words[2].expands && !words[2].globs);
     assert_eq!(words[3].vars, ["value", "API_KEY"]);
+    let empty = argv(r#"D=; ls "${D:+~/Library/Containers/x}""#);
+    assert_eq!(empty[1].text, "");
+    assert!(!empty[1].expands && !empty[1].globs);
     let children = argv(
         r#"echo $((1+$COUNT)) "${v/$PATTERN/$REPLACEMENT}" "${v:$OFFSET:$LENGTH}" "${a[$INDEX]}" "$@" "$1""#,
     );

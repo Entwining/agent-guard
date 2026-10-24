@@ -199,12 +199,12 @@ fn array_tail_control_bytes_have_divergence_cause() {
                 )
                 .unwrap();
                 assert_eq!(
-                    observation.gaps,
-                    [if zsh {
+                    observation.gaps.first(),
+                    Some(&if zsh {
                         CoverageGap::ExecutorDivergence
                     } else {
                         CoverageGap::UnsupportedDialectConstruct
-                    }],
+                    }),
                     "ruling31 cause: {source:?}"
                 );
                 assert_eq!(

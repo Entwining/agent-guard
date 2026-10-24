@@ -1,9 +1,11 @@
 //! Semantic records carried between the shell, target and rule owners.
 
 mod config;
+mod gaps;
 pub mod stream;
 
 pub use config::{ConfigDir, ConfigVariable};
+pub use gaps::{Gap, nonempty_text, union_gaps};
 
 #[derive(Clone, Copy)]
 pub struct HostFacts<'a> {
@@ -33,6 +35,9 @@ pub struct Word {
     pub pwd: bool,
     pub cwd_ranges: Vec<std::ops::Range<usize>>,
     pub quoted_ranges: Vec<std::ops::Range<usize>>,
+    /// The runs of `text` that only represent runtime bytes the shell has
+    /// not fixed, in order; `text` elsewhere is the runtime text.
+    pub gaps: Vec<Gap>,
     pub stream: Option<Box<StreamOutput>>,
 }
 
@@ -62,12 +67,15 @@ impl Word {
             pwd: false,
             cwd_ranges: Vec::new(),
             quoted_ranges: Vec::new(),
+            gaps: Vec::new(),
             stream: None,
         }
     }
     pub fn as_str(&self) -> &str {
         &self.text
     }
+    /// Text derived from this word without a certified transformation:
+    /// exact words stay exact, and any unknown run makes all of it unknown.
     pub fn with_text(&self, text: String) -> Self {
         let quoted_ranges = if let Some(start) = self.text.len().checked_sub(text.len())
             && self.text.ends_with(&text)
@@ -108,11 +116,20 @@ impl Word {
         } else {
             Vec::new()
         };
+        let gaps = if self.unknown().is_empty() {
+            Vec::new()
+        } else {
+            vec![Gap {
+                range: 0..text.len(),
+                nonempty: false,
+            }]
+        };
         Self {
             text: text.clone(),
             value: text,
             cwd_ranges: Vec::new(),
             quoted_ranges,
+            gaps,
             pwd: false,
             ..self.clone()
         }
@@ -130,6 +147,9 @@ impl Word {
         };
         for range in &mut self.quoted_ranges {
             *range = project(range.start)..project(range.end);
+        }
+        for gap in &mut self.gaps {
+            gap.range = project(gap.range.start)..project(gap.range.end);
         }
         let mut text = String::new();
         let mut value = String::new();
@@ -179,15 +199,6 @@ pub enum Role {
     PatternFile,
     OptionArg,
     Glob,
-    Option(OptionRole),
-}
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum OptionRole {
-    Flag,
-    PatternFile,
-    Arg,
-    Glob,
-    Name,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
@@ -269,7 +280,7 @@ impl WrapperFile {
         if self.prefix == 0 {
             word.clone()
         } else {
-            word.with_text(word.text[self.prefix..].to_owned())
+            word.suffix(self.prefix)
         }
     }
 }
@@ -316,6 +327,9 @@ pub struct Command {
     pub program: Option<usize>,
     pub wrappers: Vec<String>,
     pub wrapper_files: Vec<WrapperFile>,
+    /// The first word whose role the wrapper grammar cannot prove; every
+    /// word from it on keeps the reads of an unknown program's arguments.
+    pub unproven: Option<usize>,
     pub shell: bool,
     pub flags: Vec<Flag>,
     pub items: Option<Items>,

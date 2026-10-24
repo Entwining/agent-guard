@@ -1,16 +1,33 @@
+use super::Effects;
 use crate::record::{Effect, HostFacts, Role, Target, Walk, Word};
 use std::rc::Rc;
 
-pub(super) fn infer(program: &str, words: &[Word], cwd: &str, host: HostFacts<'_>) -> Vec<Target> {
+pub(super) fn infer(
+    program: &str,
+    words: &[Word],
+    cwd: &str,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) {
     let mut operands = Vec::new();
     let mut directory = None;
     let mut symbolic = false;
     let mut options = true;
     let mut index = 0;
     while let Some(word) = words.get(index) {
+        if options && effects.unproven.is_none() && word.role != Role::Path && word.option_unknown()
+        {
+            effects.unproven = Some(index);
+        }
         index += 1;
-        if options && word == "--" {
+        // After a word the grammar cannot place, no option consumes a later
+        // word or makes a link symbolic.
+        let scan = effects.unproven.is_some();
+        if options && !scan && word == "--" {
             options = false;
+            continue;
+        }
+        if options && scan && word.role != Role::Path && word.starts_with('-') {
             continue;
         }
         if options && word.role != Role::Path && word.starts_with('-') {
@@ -75,22 +92,18 @@ pub(super) fn infer(program: &str, words: &[Word], cwd: &str, host: HostFacts<'_
     } else {
         Walk::Visible
     };
-    let mut targets: Vec<_> = operands
-        .iter()
-        .map(|word| {
-            let mut target = Target::from_word(word, cwd, host, Effect::Meta, walk);
-            if relocate && let Some(destination) = &destination {
-                target.effect = Effect::Change;
-                target.relocation_destination = Some(Rc::clone(destination));
-            }
-            target
-        })
-        .collect();
+    effects.targets.extend(operands.iter().map(|word| {
+        let mut target = Target::from_word(word, cwd, host, Effect::Meta, walk);
+        if relocate && let Some(destination) = &destination {
+            target.effect = Effect::Change;
+            target.relocation_destination = Some(Rc::clone(destination));
+        }
+        target
+    }));
     if let Some(destination) = destination {
         let mut target = (*destination).clone();
         target.effect = Effect::Meta;
         target.walk = walk;
-        targets.push(target);
+        effects.targets.push(target);
     }
-    targets
 }

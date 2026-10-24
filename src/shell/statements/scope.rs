@@ -5,7 +5,7 @@ impl Scope {
         !self.frames.is_empty()
     }
     /// A shell started with the hook's environment, which includes HOME and
-    /// any config-location variables.
+    /// any config-location variables; the shell exports what it imports.
     pub fn for_host(host: crate::record::HostFacts<'_>, cwd: &str) -> Self {
         let mut scope = Self::new(host.home, cwd);
         let bindings = Rc::make_mut(&mut scope.bindings);
@@ -17,7 +17,7 @@ impl Scope {
                     copies: EntryCopies::default(),
                     origins: None,
                     values: Rc::new(vec![BindingValue::Known(dir.path.clone())]),
-                    exported: false,
+                    exported: Export::Yes,
                     arithmetic: false,
                 },
             );
@@ -34,7 +34,7 @@ impl Scope {
                     copies: EntryCopies::default(),
                     origins: None,
                     values: Rc::new(vec![BindingValue::Known(home.into())]),
-                    exported: false,
+                    exported: Export::Yes,
                     arithmetic: false,
                 },
             )])),
@@ -58,6 +58,7 @@ impl Scope {
             flow_guard: Rc::default(),
             flow_end: false,
             relative_glob_moves: 0,
+            inherited_unset: false,
         }
     }
     pub fn isolated(&self) -> Self {

@@ -43,10 +43,12 @@ pub(super) fn expand_process_input(
         arithmetic: Vec::new(),
         references: Vec::new(),
         assignments: Vec::new(),
+        conditional_assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
         lexical_ranges: Vec::new(),
+        uncertain_decisions: false,
     }])
 }
 
@@ -131,10 +133,12 @@ pub(super) fn expand_positional_argv(
             arithmetic: Vec::new(),
             references: Vec::new(),
             assignments: Vec::new(),
+            conditional_assignments: Vec::new(),
             tilde: false,
             parameters: Vec::new(),
             unsupported: false,
             lexical_ranges: Vec::new(),
+            uncertain_decisions: false,
         });
     }
     Some(results)

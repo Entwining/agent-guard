@@ -38,6 +38,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         stable: &mut BTreeSet<String>,
     ) -> Result<Option<shell::Expanded>, CheckError> {
         let variables = scope.contexts();
+        let unknown = scope.unknown_parameters(&variables);
         let cwd = scope.directory.current.render();
         let expanded = shell::words::expand(
             &word.raw,
@@ -46,13 +47,19 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 zsh: false,
                 assignments: &[],
                 variables: &variables,
-                unknown_variables: &scope.unknown_parameters(&variables),
+                unknown_variables: &unknown,
                 deadline: self.deadline,
                 runtime_variables: &BTreeSet::new(),
                 pattern_variables: &scope.pattern_contexts(&variables),
                 cwd: &cwd,
                 host: self.frontend.host,
                 tilde_assigned: true,
+                facts: &scope.facts(
+                    scope.bindings.keys(),
+                    &variables,
+                    &unknown,
+                    &BTreeSet::new(),
+                ),
             },
         )?;
         if expanded.unsupported
@@ -319,7 +326,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 let self_update = scope.bindings.get(name).is_some_and(|binding| {
                     binding.values.iter().all(|candidate| match candidate {
                         BindingValue::Known(value) => value.parse::<i128>().is_ok(),
-                        BindingValue::RuntimeUnknown(Some(value)) => value == &word.raw,
+                        BindingValue::RuntimeUnknown(Some(value)) => value.text == word.raw,
                         _ => false,
                     })
                 });

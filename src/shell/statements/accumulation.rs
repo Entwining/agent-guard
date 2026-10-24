@@ -29,6 +29,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             return Ok(None);
         };
         let variables = scope.contexts();
+        let unknown = scope.unknown_parameters(&variables);
         let cwd = scope.directory.current.render();
         let preview = shell::words::expand(
             &tail,
@@ -37,13 +38,19 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 zsh: false,
                 assignments: &[],
                 variables: &variables,
-                unknown_variables: &scope.unknown_parameters(&variables),
+                unknown_variables: &unknown,
                 deadline: self.deadline,
                 runtime_variables: &BTreeSet::new(),
                 pattern_variables: &scope.pattern_contexts(&variables),
                 host: self.frontend.host,
                 cwd: &cwd,
                 tilde_assigned: true,
+                facts: &scope.facts(
+                    scope.bindings.keys(),
+                    &variables,
+                    &unknown,
+                    &BTreeSet::new(),
+                ),
             },
         )?;
         if preview.word.expands

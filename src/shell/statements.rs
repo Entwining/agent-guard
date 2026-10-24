@@ -18,13 +18,16 @@ pub(super) enum BindingValue {
     RepeatedFields(Box<LiteralRepetition>),
     Arguments(Vec<crate::record::Word>),
     Array(Box<super::arrays::IndexedArray>),
-    // The lexical representative preserves target inference; it is
-    // never evidence of the runtime value or its arithmetic contents.
-    RuntimeUnknown(Option<String>),
+    // The lexical representative preserves target inference; outside its
+    // gaps it is evidence of the runtime text, never of arithmetic contents.
+    RuntimeUnknown(Option<ShellValue>),
     // Derived text must carry its runtime uncertainty through substitution.
-    RuntimeDerived(String),
+    RuntimeDerived(ShellValue),
     ShellMatches(ShellValue),
     ShellDerived(ShellValue),
+    /// Whatever the shell inherited: both presence and value are unknown.
+    Inherited,
+    Unset,
     Undetermined,
 }
 
@@ -32,20 +35,63 @@ pub(super) enum BindingValue {
 pub(super) struct ShellValue {
     pub text: String,
     pub quoted_ranges: Vec<std::ops::Range<usize>>,
+    pub gaps: Vec<crate::record::Gap>,
 }
 
 impl ShellValue {
+    /// The value a word assigns, with the word's text evidence. A value
+    /// that is not fully known keeps at least one unknown run.
     pub fn from_word(word: &crate::record::Word) -> Self {
+        let mut gaps = word.unknown().into_owned();
+        if gaps.is_empty() {
+            gaps.push(crate::record::Gap {
+                range: 0..word.text.len(),
+                nonempty: false,
+            });
+        }
         Self {
             text: word.text.clone(),
             quoted_ranges: word.quoted_ranges.clone(),
+            gaps,
+        }
+    }
+    /// This value followed by `other`.
+    pub fn concat(&self, other: &Self) -> Self {
+        let offset = self.text.len();
+        Self {
+            text: format!("{}{}", self.text, other.text),
+            quoted_ranges: self
+                .quoted_ranges
+                .iter()
+                .cloned()
+                .chain(
+                    other
+                        .quoted_ranges
+                        .iter()
+                        .map(|range| range.start + offset..range.end + offset),
+                )
+                .collect(),
+            gaps: self
+                .gaps
+                .iter()
+                .cloned()
+                .chain(other.gaps.iter().map(|gap| crate::record::Gap {
+                    range: gap.range.start + offset..gap.range.end + offset,
+                    nonempty: gap.nonempty,
+                }))
+                .collect(),
         }
     }
 }
 
 impl From<String> for ShellValue {
+    /// A representative with no known runtime text.
     fn from(text: String) -> Self {
         Self {
+            gaps: vec![crate::record::Gap {
+                range: 0..text.len(),
+                nonempty: false,
+            }],
             text,
             quoted_ranges: Vec::new(),
         }
@@ -88,14 +134,17 @@ impl LiteralRepetition {
 impl BindingValue {
     pub(super) fn lexical(&self) -> Option<&String> {
         match self {
-            Self::Known(value)
-            | Self::RuntimeUnknown(Some(value))
-            | Self::RuntimeDerived(value) => Some(value),
-            Self::ShellMatches(value) | Self::ShellDerived(value) => Some(&value.text),
+            Self::Known(value) => Some(value),
+            Self::RuntimeUnknown(Some(value))
+            | Self::RuntimeDerived(value)
+            | Self::ShellMatches(value)
+            | Self::ShellDerived(value) => Some(&value.text),
             Self::RepeatedFields(_)
             | Self::Arguments(_)
             | Self::Array(_)
             | Self::RuntimeUnknown(None)
+            | Self::Inherited
+            | Self::Unset
             | Self::Undetermined => None,
         }
     }
@@ -109,7 +158,36 @@ impl BindingValue {
             | Self::RuntimeDerived(_)
             | Self::ShellMatches(_)
             | Self::ShellDerived(_)
+            | Self::Inherited
+            | Self::Unset
             | Self::Undetermined => None,
+        }
+    }
+    /// The value's text evidence; a value without a representative is one
+    /// unknown run.
+    pub(super) fn evidence(&self) -> ShellValue {
+        match self {
+            Self::Known(text) => ShellValue {
+                text: text.clone(),
+                quoted_ranges: Vec::new(),
+                gaps: Vec::new(),
+            },
+            Self::RuntimeUnknown(Some(value))
+            | Self::RuntimeDerived(value)
+            | Self::ShellMatches(value)
+            | Self::ShellDerived(value) => value.clone(),
+            _ => String::new().into(),
+        }
+    }
+    /// The unknown runs of the lexical representative.
+    pub fn gaps(&self) -> Option<&[crate::record::Gap]> {
+        match self {
+            Self::Known(_) => Some(&[]),
+            Self::RuntimeUnknown(Some(value))
+            | Self::RuntimeDerived(value)
+            | Self::ShellMatches(value)
+            | Self::ShellDerived(value) => Some(&value.gaps),
+            _ => None,
         }
     }
 }
@@ -128,11 +206,26 @@ impl PartialEq for EntryCopies {
 #[cfg(test)]
 impl Eq for EntryCopies {}
 
+/// Whether the shell passes a variable to the commands it runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Export {
+    No,
+    Yes,
+    /// The shell may or may not have exported the variable.
+    Unknown,
+}
+
+impl Export {
+    fn join(self, other: Self) -> Self {
+        if self == other { self } else { Self::Unknown }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct Binding {
     origins: Option<Rc<Origins>>,
     pub values: Rc<Vec<BindingValue>>,
-    exported: bool,
+    exported: Export,
     arithmetic: bool,
     #[cfg(test)]
     copies: EntryCopies,
@@ -187,6 +280,9 @@ pub(super) struct Scope {
     flow_guard: Rc<Guard>,
     flow_end: bool,
     relative_glob_moves: usize,
+    /// Names no binding lists are unset rather than inherited, after a
+    /// proven environment clear.
+    inherited_unset: bool,
 }
 
 #[derive(Clone, PartialEq, Eq)]

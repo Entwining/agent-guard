@@ -144,6 +144,7 @@ fn observe_indices(
     evaluator: &mut Evaluator<'_, '_>,
     depth: usize,
 ) -> Result<Expanded, CheckError> {
+    let unknown = scope.unknown_parameters(contexts);
     let observed = words::expand(
         &raw.raw,
         &raw.syntax,
@@ -151,13 +152,14 @@ fn observe_indices(
             zsh: false,
             assignments: &[],
             variables: contexts,
-            unknown_variables: &scope.unknown_parameters(contexts),
+            unknown_variables: &unknown,
             deadline: evaluator.deadline,
             runtime_variables: &BTreeSet::new(),
             pattern_variables: &scope.pattern_contexts(contexts),
             host: evaluator.frontend.host,
             cwd: &scope.directory.current.render(),
             tilde_assigned: true,
+            facts: &scope.facts(scope.bindings.keys(), contexts, &unknown, &BTreeSet::new()),
         },
     )?;
     for code in &observed.nested {
@@ -392,9 +394,11 @@ fn expand_sequence(
         arithmetic: Vec::new(),
         references: Vec::new(),
         assignments: Vec::new(),
+        conditional_assignments: Vec::new(),
         tilde: false,
         parameters: Vec::new(),
         unsupported: false,
         lexical_ranges: Vec::new(),
+        uncertain_decisions: false,
     }
 }

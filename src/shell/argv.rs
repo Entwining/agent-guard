@@ -11,30 +11,39 @@ pub(super) struct Resolution {
     pub gap: Option<crate::CoverageGap>,
     pub environment: Vec<EnvironmentChange>,
     pub wrapper_files: Vec<WrapperFile>,
+    pub unproven: Option<usize>,
 }
 
 pub(crate) enum EnvironmentChange {
     Clear,
     Unset(String),
-    Set(String, Word),
+    Set(String, Box<Word>),
 }
 
 impl EnvironmentChange {
     pub(crate) fn assignment(word: &Word) -> Option<Self> {
-        let (name, value) = word.text.split_once('=')?;
-        let mut value = word.with_text(value.into());
+        let (name, _) = word.text.split_once('=')?;
+        let mut value = word.suffix(name.len() + 1);
         if super::lexer::initial_quote(&value.raw) == super::lexer::Quote::Unquoted {
             value.raw = value
                 .raw
                 .split_once('=')
                 .map_or(value.raw.clone(), |(_, raw)| raw.into());
         }
-        Some(Self::Set(name.into(), value))
+        Some(Self::Set(name.into(), Box::new(value)))
     }
 }
 
 fn text(argv: &[Word], index: usize) -> &str {
     argv.get(index).map_or("", Word::as_str)
+}
+
+/// Records a word the shell may turn into an option at a position where the
+/// wrapper grammar reads options, so its representative proves no role.
+fn check(result: &mut Resolution, argv: &[Word], index: usize) {
+    if argv.get(index).is_some_and(Word::option_unknown) {
+        result.unproven.get_or_insert(index);
+    }
 }
 
 fn mark(argv: &mut [Word], index: &mut usize) {
@@ -54,6 +63,7 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
         gap: None,
         environment: Vec::new(),
         wrapper_files: Vec::new(),
+        unproven: None,
     };
     let mut index = 0;
     while let Some(word) = argv.get(index) {
@@ -67,6 +77,9 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
     }
     let mut last = "".to_owned();
     while ["builtin", "-", "noglob"].contains(&text(argv, index)) {
+        if argv[index].exact().is_none() {
+            result.unproven.get_or_insert(index);
+        }
         last = text(argv, index).to_owned();
         mark(argv, &mut index);
     }
@@ -88,8 +101,12 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
             .next()
             .unwrap_or("")
             .to_owned();
+        let start = index;
         if !resolve_wrapper(&name, argv, &mut index, &mut result) {
             break;
+        }
+        if argv[start].exact().is_none() {
+            result.unproven.get_or_insert(start);
         }
         result.wrappers.push(name);
         result.shell = false;
@@ -112,19 +129,15 @@ pub(super) fn resolve(argv: &mut [Word], cwd: &str, host: HostFacts<'_>) -> Reso
     result
 }
 
-pub(crate) fn shell_code_flag(word: &Word) -> bool {
-    word.starts_with('-') && word[1..].chars().all(|c| c.is_ascii_lowercase()) && word.contains('c')
-}
-
 pub(super) fn stdin_kind(command: &crate::record::Command) -> crate::record::Stdin {
     use crate::record::Stdin;
     let Some(index) = command.program else {
         return Stdin::None;
     };
     let name = command.argv[index].rsplit('/').next().unwrap_or("");
-    if ["sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh"].contains(&name)
-        && !command.argv[index + 1..].iter().any(shell_code_flag)
-    {
+    if crate::targets::shell_invocation(name, &command.argv[index + 1..]).is_some_and(
+        |invocation| !matches!(invocation.source, crate::targets::ShellSource::Code(_)),
+    ) {
         return Stdin::Shell;
     }
     let name = name.trim_end_matches(|c: char| c.is_ascii_digit() || c == '.');
@@ -156,8 +169,10 @@ fn resolve_wrapper(
     match name {
         "command" if text(argv, *index) == "command" => {
             mark(argv, index);
+            check(result, argv, *index);
             while ["-p", "--"].contains(&text(argv, *index)) {
                 *index += 1;
+                check(result, argv, *index);
             }
             if ["-v", "-V"].contains(&text(argv, *index)) {
                 *index = argv.len();
@@ -167,11 +182,13 @@ fn resolve_wrapper(
         // wrapper itself accepts assignments (env, sudo and doas).
         "exec" if result.shell && text(argv, *index) == "exec" => {
             mark(argv, index);
+            check(result, argv, *index);
             while ["-c", "-l"].contains(&text(argv, *index)) {
                 if text(argv, *index) == "-c" {
                     result.environment.push(EnvironmentChange::Clear);
                 }
                 mark(argv, index);
+                check(result, argv, *index);
             }
             if text(argv, *index) == "-a" {
                 mark(argv, index);
@@ -180,25 +197,31 @@ fn resolve_wrapper(
         }
         "nohup" => {
             mark(argv, index);
+            check(result, argv, *index);
             if text(argv, *index) == "--" {
                 mark(argv, index);
             }
         }
         "timeout" => {
             mark(argv, index);
+            check(result, argv, *index);
             while text(argv, *index).starts_with('-') {
                 if ["-s", "--signal", "-k", "--kill-after"].contains(&text(argv, *index)) {
                     mark(argv, index);
                 }
                 mark(argv, index);
+                check(result, argv, *index);
             }
             mark(argv, index);
         }
-        "nice" => resolve_nice(argv, index),
-        "script" | "arch" | "stdbuf" | "caffeinate" | "time" => resolve_options(name, argv, index),
+        "nice" => resolve_nice(result, argv, index),
+        "script" | "arch" | "stdbuf" | "caffeinate" | "time" => {
+            resolve_options(result, name, argv, index)
+        }
         "sudo" | "doas" => resolve_privilege(result, argv, index),
         "envchain" => {
             mark(argv, index);
+            check(result, argv, *index);
             if text(argv, *index).starts_with('-') {
                 *index = argv.len();
             }
@@ -214,9 +237,10 @@ fn resolve_wrapper(
     true
 }
 
-fn resolve_options(name: &str, argv: &mut [Word], index: &mut usize) {
+fn resolve_options(result: &mut Resolution, name: &str, argv: &mut [Word], index: &mut usize) {
     mark(argv, index);
     while *index < argv.len() {
+        check(result, argv, *index);
         let option = text(argv, *index);
         let accepted = match name {
             "stdbuf" => {
@@ -247,6 +271,7 @@ fn resolve_options(name: &str, argv: &mut [Word], index: &mut usize) {
 
 fn resolve_privilege(result: &mut Resolution, argv: &mut [Word], index: &mut usize) {
     mark(argv, index);
+    check(result, argv, *index);
     while *index < argv.len()
         && text(argv, *index) != "--"
         && (text(argv, *index).starts_with('-')
@@ -281,6 +306,7 @@ fn resolve_privilege(result: &mut Resolution, argv: &mut [Word], index: &mut usi
             mark(argv, index);
         }
         mark(argv, index);
+        check(result, argv, *index);
     }
     if text(argv, *index) == "--" {
         mark(argv, index);
@@ -290,6 +316,7 @@ fn resolve_privilege(result: &mut Resolution, argv: &mut [Word], index: &mut usi
 fn resolve_environment(result: &mut Resolution, argv: &mut [Word], index: &mut usize) {
     mark(argv, index);
     while *index < argv.len() {
+        check(result, argv, *index);
         match text(argv, *index) {
             "-C" => {
                 if let Some(word) = argv.get_mut(*index + 1) {
@@ -334,6 +361,7 @@ fn resolve_environment(result: &mut Resolution, argv: &mut [Word], index: &mut u
 
 fn resolve_xargs(result: &mut Resolution, argv: &mut [Word], index: &mut usize) {
     mark(argv, index);
+    check(result, argv, *index);
     while text(argv, *index).starts_with('-') {
         let file = match text(argv, *index) {
             "-a" | "--arg-file" => (*index + 1 < argv.len()).then_some((*index + 1, 0)),
@@ -367,11 +395,13 @@ fn resolve_xargs(result: &mut Resolution, argv: &mut [Word], index: &mut usize) 
             *index += 1;
         }
         *index += 1;
+        check(result, argv, *index);
     }
 }
 
-fn resolve_nice(argv: &mut [Word], index: &mut usize) {
+fn resolve_nice(result: &mut Resolution, argv: &mut [Word], index: &mut usize) {
     mark(argv, index);
+    check(result, argv, *index);
     let option = text(argv, *index);
     if ["-n", "--adjustment"].contains(&option) {
         mark(argv, index);

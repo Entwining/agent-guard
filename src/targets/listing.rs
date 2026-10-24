@@ -171,8 +171,10 @@ fn find_expression(args: &[Word]) -> usize {
             index += 2;
             continue;
         }
-        if arg.role != Role::Option(OptionRole::Name)
-            && arg != "--"
+        // Runtime text before the expression may be a path, so only fixed
+        // text starts the expression.
+        if arg != "--"
+            && !arg.option_unknown()
             && arg.starts_with(['-', '(', '!'])
             && !arg
                 .strip_prefix('-')
@@ -205,11 +207,18 @@ fn listing_arguments(
     let mut hidden = program == "find";
     let mut pattern = program != "fd";
     for (index, arg) in args.iter().enumerate() {
-        if arg.role == Role::Option(OptionRole::Name) {
-            continue;
-        }
         if skip {
             skip = false;
+            continue;
+        }
+        if program != "find" && effects.unproven.is_none() && arg.option_unknown() {
+            effects.unproven = Some(index);
+        }
+        // After a word the grammar cannot place, no option consumes a later
+        // word and no operand becomes the pattern.
+        let scan = effects.unproven.is_some();
+        if program == "find" && index < expression && arg.option_unknown() {
+            paths.push(arg.with_text(at(arg, &base)));
             continue;
         }
         if program == "fd" && ["-x", "-X", "--exec", "--exec-batch"].contains(&arg.as_str()) {
@@ -232,7 +241,7 @@ fn listing_arguments(
                     paths.push(path.with_text(at(&path, &base)));
                 }
             }
-            skip = !arg.contains('=');
+            skip = !arg.contains('=') && !scan;
             continue;
         }
         if program == "du"
@@ -248,7 +257,7 @@ fn listing_arguments(
                 target.via = Via::Option;
                 effects.targets.push(target);
             }
-            skip = !arg.contains('=');
+            skip = !arg.contains('=') && !scan;
             continue;
         }
         if program == "find" && arg == "-f" {
@@ -274,10 +283,10 @@ fn listing_arguments(
                     } else {
                         &['H', 'u', 'a'][..]
                     });
-            skip = takes_value(program, arg);
+            skip = takes_value(program, arg) && !scan;
             continue;
         }
-        if !pattern {
+        if !pattern && !scan {
             pattern = true;
             continue;
         }

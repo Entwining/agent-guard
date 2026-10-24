@@ -34,10 +34,7 @@ pub(super) fn infer_search(
     // the filters bound a walk when every one of them bounds the basename. A
     // glob the shell fills in at run time selects unknown names, and grep
     // matches a `..` glob against the operand's path.
-    let positive: Vec<_> = glob_words
-        .iter()
-        .filter(|glob| !glob.starts_with('!'))
-        .collect();
+    let positive: Vec<_> = glob_words.iter().filter(|glob| !negated(glob)).collect();
     let bounds = (walk != Walk::None
         && !names
         && positive
@@ -93,13 +90,17 @@ pub(super) fn infer_search(
 /// selects repeated below the hidden directories another glob enters, and
 /// whether any glob enters a hidden name.
 fn glob_filters(program: &str, hidden: bool, glob_words: &[Word]) -> (bool, Vec<String>) {
-    let globs: Vec<_> = glob_words.iter().map(|glob| glob.text.clone()).collect();
     // A negated glob only excludes, and globs match paths relative to the
     // search root, which never contain `..`; neither selects a file.
-    let selecting: Vec<_> = globs
+    let selecting: Vec<_> = glob_words
         .iter()
-        .filter(|glob| !glob.starts_with('!') && !glob.split('/').any(|part| part == ".."))
+        .filter(|glob| !negated(glob) && !glob.split('/').any(|part| part == ".."))
+        .map(|glob| &glob.text)
         .collect();
+    // A selecting glob the shell fills in at run time may enter any name.
+    let unknown = glob_words
+        .iter()
+        .any(|glob| !negated(glob) && (glob.expands || glob.runtime_unknown));
     // ripgrep skips a hidden entry unless `--hidden` is given or a positive
     // glob matches that entry, so hidden names are reachable only when some
     // glob's last component can match a dot name.
@@ -140,7 +141,12 @@ fn glob_filters(program: &str, hidden: bool, glob_words: &[Word]) -> (bool, Vec<
             }
         }
     }
-    (!entering.is_empty(), filters)
+    (unknown || !entering.is_empty(), filters)
+}
+
+/// Whether the shell fixes the `!` that makes a glob exclude.
+fn negated(glob: &Word) -> bool {
+    glob.known_prefix().starts_with('!')
 }
 
 /// Whether ripgrep without a path searches standard input, which it does when
@@ -179,80 +185,81 @@ fn search_arguments(
     let mut globs = Vec::new();
     let mut explicit = false;
     let mut names = false;
-    let mut hidden = false;
-    let mut recursive = false;
-    let mut no_hidden = false;
-    let mut unrestricted = 0;
+    let mut visibility = Visibility::default();
     let mut options = true;
     let mut position = 0;
     let mut fixed = false;
     let mut patterns = Vec::new();
+    // Whether the first operand is a word whose runtime text could spell an
+    // option: it is then the pattern or an option, never a file.
+    let mut unproven_pattern = false;
     while position < args.len() {
         let arg = &args[position];
-        if options && arg == "--" {
+        if options && effects.unproven.is_none() && arg.exact() == Some("--") {
             options = false;
             position += 1;
             continue;
         }
+        if options && effects.unproven.is_none() && arg.option_unknown() {
+            effects.unproven = Some(position);
+            unproven_pattern = operands.is_empty() && !arg.starts_with('-');
+        }
+        // From a word whose runtime text could spell an option that consumes
+        // the next word or re-roles the operands, including the pattern
+        // before it, no option consumes a word and only what widens the
+        // search applies; even a later `--` may be such an option's value.
+        let scan = effects.unproven.is_some();
         let mut value_option = None;
         if options && arg.starts_with("--") {
             let (key, value) = arg[2..]
                 .split_once('=')
                 .map_or((&arg[2..], None), |(k, v)| {
-                    (k, Some(arg.with_text(v.to_owned())))
+                    // The value keeps which of its bytes the shell fixes, as
+                    // the `!` of an excluding glob.
+                    (k, Some(arg.suffix(arg.len() - v.len())))
                 });
             if key == "include" && program == "rg" {
                 effects.include_advice = true;
             }
-            fixed |= key == "fixed-strings";
-            names |= key == "files";
-            long_visibility(
-                program,
-                key,
-                &mut hidden,
-                &mut no_hidden,
-                &mut unrestricted,
-                &mut recursive,
-            );
+            let mut next = visibility;
+            long_visibility(program, key, &mut next);
+            if scan {
+                visibility.hidden |= next.hidden;
+                visibility.recursive |= next.recursive;
+            } else {
+                fixed |= key == "fixed-strings";
+                names |= key == "files";
+                visibility = next;
+            }
             if (if program=="rg" {"regexp file glob iglob type type-not encoding replace color colors sort sortr max-depth max-filesize pre pre-glob engine threads max-columns type-add type-clear path-separator context-separator field-context-separator field-match-separator after-context before-context context max-count ignore-file dfa-size-limit regex-size-limit hyperlink-format"} else {"regexp file include exclude exclude-dir exclude-from label context after-context before-context max-count binary-files devices directories"}).split_whitespace().any(|option|option==key)
             {
                 value_option = Some((key.to_owned(), value));
             }
         } else if options && arg.starts_with('-') && arg.len() > 1 {
-            let (value, is_fixed, next_hidden, next_recursive, next_unrestricted) = short_flags(
-                program,
-                arg,
-                no_hidden,
-                hidden,
-                recursive,
-                unrestricted,
-                effects,
-            );
+            let (value, is_fixed, next) = short_flags(program, arg, visibility, effects);
             value_option = value.map(|(offset, ch)| short_value(program, arg, offset, ch));
-            fixed |= is_fixed;
-            hidden = next_hidden;
-            recursive = next_recursive;
-            unrestricted = next_unrestricted;
+            fixed |= is_fixed && !scan;
+            visibility = next;
         } else {
             operands.push(arg.clone());
         }
         if let Some((key, inline)) = value_option {
             let value = inline.or_else(|| {
-                position += 1;
-                args.get(position).cloned()
+                position += usize::from(!scan);
+                args.get(position).filter(|_| !scan).cloned()
             });
             if let Some(value) = value {
                 match key.as_str() {
                     "d" | "directories" if program == "grep" && value == "recurse" => {
-                        hidden = true;
-                        recursive = true;
+                        visibility.hidden = true;
+                        visibility.recursive = true;
                     }
-                    "e" | "regexp" => {
+                    "e" | "regexp" if !scan => {
                         explicit = true;
                         patterns.push(value.text);
                     }
                     "f" | "file" | "ignore-file" | "exclude-from" => {
-                        explicit |= matches!(key.as_str(), "f" | "file");
+                        explicit |= !scan && matches!(key.as_str(), "f" | "file");
                         effects.targets.push(Target::from_word(
                             &value,
                             cwd,
@@ -261,45 +268,56 @@ fn search_arguments(
                             Walk::None,
                         ));
                     }
-                    "g" | "glob" | "iglob" | "include" => globs.push(value),
+                    "g" | "glob" | "iglob" | "include" if !scan => globs.push(value),
                     _ => {}
                 }
             }
         }
         position += 1;
     }
-    if !explicit && !names && !operands.is_empty() {
+    if !explicit
+        && !names
+        && (effects.unproven.is_none() || unproven_pattern)
+        && !operands.is_empty()
+    {
         patterns.push(operands.remove(0).text);
     }
     effects.independent_arguments = independent_operands(args, &operands);
     effects.bre_advice = bre_advice(program, fixed, &patterns);
+    let Visibility {
+        hidden, recursive, ..
+    } = visibility;
     (operands, globs, hidden, names, recursive)
 }
 
-fn long_visibility(
-    program: &str,
-    key: &str,
-    hidden: &mut bool,
-    no_hidden: &mut bool,
-    unrestricted: &mut usize,
-    recursive: &mut bool,
-) {
+/// Whether the search enters hidden names and directories, as its options
+/// so far select.
+#[derive(Clone, Copy, Default)]
+struct Visibility {
+    hidden: bool,
+    no_hidden: bool,
+    unrestricted: usize,
+    recursive: bool,
+}
+
+fn long_visibility(program: &str, key: &str, visibility: &mut Visibility) {
     match key {
         "hidden" => {
-            *hidden = true;
-            *no_hidden = false;
+            visibility.hidden = true;
+            visibility.no_hidden = false;
         }
         "no-hidden" => {
-            *hidden = false;
-            *no_hidden = true;
+            visibility.hidden = false;
+            visibility.no_hidden = true;
         }
         "unrestricted" => {
-            *unrestricted += 1;
-            *hidden |= (program == "ag" || *unrestricted >= 2) && !*no_hidden;
+            visibility.unrestricted += 1;
+            visibility.hidden |=
+                (program == "ag" || visibility.unrestricted >= 2) && !visibility.no_hidden;
         }
         "recursive" => {
-            *recursive = program == "grep";
-            *hidden |= *recursive;
+            visibility.recursive = program == "grep";
+            visibility.hidden |= visibility.recursive;
         }
         _ => {}
     }
@@ -344,29 +362,26 @@ fn bre_advice(program: &str, fixed: bool, patterns: &[String]) -> bool {
 fn short_flags(
     program: &str,
     arg: &Word,
-    no_hidden: bool,
-    mut hidden: bool,
-    mut recursive: bool,
-    mut unrestricted: usize,
+    mut visibility: Visibility,
     effects: &mut Effects,
-) -> (Option<(usize, char)>, bool, bool, bool, usize) {
+) -> (Option<(usize, char)>, bool, Visibility) {
     let mut fixed = false;
     for (offset, ch) in arg.char_indices().skip(1) {
         if program == "rg" {
             fixed |= ch == 'F';
             if ch == 'u' {
-                unrestricted += 1;
-                hidden |= unrestricted >= 2 && !no_hidden;
+                visibility.unrestricted += 1;
+                visibility.hidden |= visibility.unrestricted >= 2 && !visibility.no_hidden;
             }
             if ch == '.' {
-                hidden = true;
+                visibility.hidden = true;
             }
             if ch == 'r' {
                 effects.replace_advice = true;
             }
         } else if program == "grep" && (ch == 'r' || ch == 'R') || program == "ag" && ch == 'u' {
-            hidden = true;
-            recursive |= program == "grep";
+            visibility.hidden = true;
+            visibility.recursive |= program == "grep";
         }
         if (if program == "rg" {
             "efgtTEABCmMjrd"
@@ -375,8 +390,8 @@ fn short_flags(
         })
         .contains(ch)
         {
-            return (Some((offset, ch)), fixed, hidden, recursive, unrestricted);
+            return (Some((offset, ch)), fixed, visibility);
         }
     }
-    (None, fixed, hidden, recursive, unrestricted)
+    (None, fixed, visibility)
 }

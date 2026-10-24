@@ -18,6 +18,9 @@ fn infer_subcommand(
     let Some(sub) = args.get(index) else {
         return;
     };
+    if sub.exact().is_none() {
+        effects.unproven.get_or_insert(index);
+    }
     index += 1;
     // Credential fill exposes stored secrets without naming a file to read.
     effects.stored_secret |=
@@ -50,33 +53,34 @@ fn infer_subcommand(
             effects.targets.push(target);
         }
     };
-    let keys: &[&str] = match sub.as_str() {
-        "config" => &["-f", "--file", "--blob"],
-        "blame" => &["--contents"],
-        "commit" => &["-F", "--file", "--pathspec-from-file"],
-        "tag" | "merge" => &["-F", "--file"],
-        "add" | "rm" | "restore" | "reset" | "checkout" | "stash" => &["--pathspec-from-file"],
-        _ => &[],
-    };
+    let keys = file_options(sub);
     let mut pattern = sub != "grep";
     let mut options = true;
     let mut bundle_action = None;
     let mut bundle_output = false;
     while index < args.len() {
         let arg = &args[index];
-        if options && sub == "commit" && ["-m", "--message"].contains(&arg.as_str()) {
+        if options && effects.unproven.is_none() && arg.option_unknown() {
+            effects.unproven = Some(index);
+        }
+        // After a word the grammar cannot place, no option consumes a later
+        // word and no operand becomes the grep pattern.
+        let scan = effects.unproven.is_some();
+        pattern |= scan;
+        if options && !scan && sub == "commit" && ["-m", "--message"].contains(&arg.as_str()) {
             index += 2;
             continue;
         }
         let mut option_path = None;
         if sub == "grep" && options {
-            let (skip, path) = grep_option_path(args, arg, &mut index, &mut options, &mut pattern);
+            let (skip, path) =
+                grep_option_path(args, arg, &mut index, &mut options, &mut pattern, scan);
             if skip {
                 continue;
             }
             option_path = path;
         }
-        option_path = option_path_for_keys(args, arg, &mut index, keys).or(option_path);
+        option_path = option_path_for_keys(args, arg, &mut index, keys, scan).or(option_path);
         if let Some(path) = option_path {
             add(&path, &path, Effect::Read, Walk::None, effects);
         } else if !options || !arg.starts_with('-') {
@@ -128,20 +132,24 @@ fn global_options(
         Walk::Visible
     };
     while let Some(arg) = args.get(index).filter(|arg| arg.starts_with('-')) {
-        let takes = [
-            "-C",
-            "-c",
-            "--git-dir",
-            "--work-tree",
-            "--namespace",
-            "--exec-path",
-        ]
-        .contains(&arg.as_str());
+        if effects.unproven.is_none() && arg.option_unknown() {
+            effects.unproven = Some(index);
+        }
+        let takes = effects.unproven.is_none()
+            && [
+                "-C",
+                "-c",
+                "--git-dir",
+                "--work-tree",
+                "--namespace",
+                "--exec-path",
+            ]
+            .contains(&arg.as_str());
         let path = arg
             .strip_prefix("--work-tree=")
             .map(|text| arg.with_text(text.to_owned()))
             .or_else(|| {
-                if ["-C", "--work-tree"].contains(&arg.as_str()) {
+                if takes && ["-C", "--work-tree"].contains(&arg.as_str()) {
                     args.get(index + 1).cloned()
                 } else {
                     None
@@ -163,7 +171,7 @@ fn global_options(
             .strip_prefix("--git-dir=")
             .map(|text| arg.with_text(text.to_owned()))
             .or_else(|| {
-                (arg == "--git-dir")
+                (takes && arg == "--git-dir")
                     .then(|| args.get(index + 1).cloned())
                     .flatten()
             });
@@ -176,7 +184,8 @@ fn global_options(
                 option_walk,
             ));
         }
-        if arg == "-c"
+        if takes
+            && arg == "-c"
             && let Some(value) = args.get(index + 1)
         {
             // Configuration values retain the generic operand's read role.
@@ -193,14 +202,27 @@ fn global_options(
     (index, base)
 }
 
+/// The options of a subcommand whose value is a file git reads.
+fn file_options(sub: &str) -> &'static [&'static str] {
+    match sub {
+        "config" => &["-f", "--file", "--blob"],
+        "blame" => &["--contents"],
+        "commit" => &["-F", "--file", "--pathspec-from-file"],
+        "tag" | "merge" => &["-F", "--file"],
+        "add" | "rm" | "restore" | "reset" | "checkout" | "stash" => &["--pathspec-from-file"],
+        _ => &[],
+    }
+}
+
 fn option_path_for_keys(
     args: &[Word],
     arg: &Word,
     index: &mut usize,
     keys: &[&str],
+    scan: bool,
 ) -> Option<Word> {
     for key in keys {
-        if arg == key {
+        if arg == key && !scan {
             *index += 1;
             return args.get(*index).cloned();
         }
@@ -222,14 +244,15 @@ fn grep_option_path(
     index: &mut usize,
     options: &mut bool,
     pattern: &mut bool,
+    scan: bool,
 ) -> (bool, Option<Word>) {
     let mut option_path = None;
-    if arg == "--" {
+    if !scan && arg == "--" {
         *options = false;
         *index += 1;
         return (true, None);
     }
-    if arg == "-e" {
+    if !scan && arg == "-e" {
         *pattern = true;
         *index += 2;
         return (true, None);
@@ -239,7 +262,7 @@ fn grep_option_path(
         .or_else(|| arg.strip_prefix("-f="))
     {
         option_path = Some(arg.with_text(path.to_owned()));
-    } else if arg == "-f" {
+    } else if arg == "-f" && !scan {
         *pattern = true;
         *index += 1;
         option_path = args.get(*index).cloned();

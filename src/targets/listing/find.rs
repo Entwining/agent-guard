@@ -67,8 +67,10 @@ struct Parser<'a> {
 }
 
 impl Parser<'_> {
+    /// The next word, when the shell fixes its text: runtime text could
+    /// spell any primary or operator, which this model does not know.
     fn peek(&self) -> Option<&str> {
-        self.args.get(self.at).map(|word| word.as_str())
+        self.args.get(self.at).and_then(Word::exact)
     }
 
     /// A disjunction is bounded only when every branch is, and an action in
@@ -147,7 +149,7 @@ impl Parser<'_> {
 
     fn primary(&mut self, guard: &Handed) -> Option<Handed> {
         let index = self.at;
-        let primary = self.value()?.as_str();
+        let primary = self.value()?.exact()?;
         match primary {
             "-name" | "-iname" | "-path" | "-ipath" | "-wholename" | "-iwholename" => {
                 let filter = self.value()?;
@@ -169,7 +171,7 @@ impl Parser<'_> {
                 let kind = self.value()?;
                 return Some(Handed {
                     names: None,
-                    files: kind == "f",
+                    files: kind.exact() == Some("f"),
                 });
             }
             // A format can print any text.
@@ -191,7 +193,7 @@ impl Parser<'_> {
             "-exec" | "-execdir" | "-ok" | "-okdir" => {
                 let end = self.args[self.at..]
                     .iter()
-                    .position(|word| word == ";" || word == "+")?;
+                    .position(|word| matches!(word.exact(), Some(";" | "+")))?;
                 self.at += end + 1;
                 self.actions = true;
                 self.execs.insert(index, guard.clone());

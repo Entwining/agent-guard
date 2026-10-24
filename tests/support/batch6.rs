@@ -11,7 +11,6 @@ pub fn partition_with(
     packet: &str,
     assertion: impl Fn(&Value, &agent_guard_rust::Evaluation),
 ) {
-    let fixture = support::Fixture::new();
     let packet: Value = serde_json::from_str(packet).unwrap();
     let rows: Vec<_> = packet["rows"]
         .as_array()
@@ -24,6 +23,8 @@ pub fn partition_with(
         "missing program contract partition {name}"
     );
     for row in rows {
+        let fixture = support::Fixture::new();
+        fixture.setup(row);
         for consumer in ["claude", "codex", "pi"] {
             let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
             let tool =
@@ -102,9 +103,26 @@ pub fn partition_with(
                     wire.stderr
                 );
             }
+            assert_unprobed(row, &fixture, &probe, consumer);
             if let Ok(evaluation) = &result {
                 assertion(row, evaluation);
             }
         }
+    }
+}
+
+fn assert_unprobed(
+    row: &Value,
+    fixture: &support::Fixture,
+    probe: &support::RecordingProbe,
+    consumer: &str,
+) {
+    for path in row["unprobed"].as_array().into_iter().flatten() {
+        let path = fixture.expand(path.as_str().unwrap());
+        assert!(
+            !probe.calls.contains(&path) && !probe.stat_calls.contains(&path),
+            "{consumer}: {}: probed {path}",
+            row["id"]
+        );
     }
 }

@@ -12,7 +12,7 @@
 {"id":"fn-restore","partition":"argv","input":{"command":"set -- .env; f() { cat \"$@\"; }; f public; cat \"$@\""},"expected":"D"},
 {"id":"fn-shift","partition":"shift","input":{"command":"f() { shift; cat \"$1\"; }; f public .env"},"expected":"D"},
 {"id":"fn-shift-two","partition":"shift","input":{"command":"f() { shift 2; cat \"$@\"; }; f a b .env"},"expected":"D"},
-{"id":"fn-shift-unknown","partition":"shift","input":{"command":"f() { shift $n; cat \"$1\"; }; f public .env"},"expected":"UR"},
+{"id":"fn-shift-unknown","partition":"shift","input":{"command":"f() { shift $n; cat \"$1\"; }; f public .env"},"expected":"D"},
 {"id":"fn-for","partition":"for","input":{"command":"f() { for x; do cat \"$x\"; done; }; f .env"},"expected":"D"},
 {"id":"fn-for-explicit","partition":"for","input":{"command":"f() { for x in \"$@\"; do cat \"$x\"; done; }; f .env"},"expected":"D"},
 {"id":"fn-helper","partition":"command","input":{"command":"t() { shift; \"$@\"; }; t x ls"},"expected":"UC"},

@@ -12,6 +12,7 @@ pub(super) fn child(command: &CommandRecord, argv: &[Word], cwd: &str) -> Comman
         program: (!argv.is_empty()).then_some(0),
         wrappers: command.wrappers.clone(),
         wrapper_files: Vec::new(),
+        unproven: None,
         shell: command.shell,
         flags: command.flags.clone(),
         items: command.items.clone(),
