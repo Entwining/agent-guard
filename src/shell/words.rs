@@ -180,10 +180,10 @@ pub(super) struct ContextFacts {
     /// The unknown runs of the text of names whose value is not fully known
     /// but whose representative has known parts.
     pub evidence: BTreeMap<String, Vec<crate::record::Gap>>,
-    /// The unknown runs of the values sure to be nonempty, for names whose
-    /// evidence leaves the text possibly empty: a colon test keeps those
-    /// values and replaces the others.
-    pub nonempty_evidence: BTreeMap<String, Vec<crate::record::Gap>>,
+    /// Names whose evidence leaves the text possibly empty although some
+    /// value with the text is sure to be nonempty: a colon test keeps that
+    /// value and replaces the others, so the alternate reading follows it.
+    pub nonempty_values: std::collections::BTreeSet<String>,
     /// The cwd text only represents a directory the guard cannot resolve.
     pub cwd_unknown: bool,
     /// Parameter operators whose decision depends on text the context only
@@ -233,13 +233,24 @@ impl ExpansionContext<'_> {
                 && (self.facts.inherited.contains(name)
                     || !(name == "HOME" || name == "PWD" && !self.facts.cwd_unknown))
     }
-    /// The unknown runs of `name`'s context text.
-    fn gaps(&self, name: &str, text: &str) -> Vec<crate::record::Gap> {
+    /// The unknown runs of `name`'s context text. Reading a name with a
+    /// nonempty value sets `uncertain`, and the alternate reading takes that
+    /// value as one run sure to be nonempty, so it stays present through
+    /// copies and arguments to the colon test that keeps it.
+    fn gaps(&self, name: &str, text: &str, uncertain: &mut bool) -> Vec<crate::record::Gap> {
         if !self.unknown_variables.contains(name)
             && !self.runtime_variables.contains(name)
             && !self.facts.hypotheses.contains(name)
         {
             return Vec::new();
+        }
+        let nonempty = self.facts.nonempty_values.contains(name);
+        *uncertain |= nonempty;
+        if nonempty && self.facts.alternate {
+            return vec![crate::record::Gap {
+                range: 0..text.len(),
+                nonempty: true,
+            }];
         }
         self.facts.evidence.get(name).cloned().unwrap_or_else(|| {
             vec![crate::record::Gap {

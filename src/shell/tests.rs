@@ -81,11 +81,15 @@ fn alternative_environments_store_only_binding_deltas() {
                 0,
             )
             .unwrap();
-        assert_eq!(values.len(), 2);
+        // The known `public` adds the alternate reading of a nonempty value.
+        assert_eq!(values.len(), 3);
         assert_eq!(values[0].word.text, "public");
         assert!(values[0].word.runtime_unknown);
-        assert_eq!(values[1].word.text, "protected");
-        assert!(!values[1].word.runtime_unknown);
+        assert!(!values[0].word.unknown()[0].nonempty);
+        assert_eq!(values[1].word.text, "public");
+        assert!(values[1].word.unknown()[0].nonempty);
+        assert_eq!(values[2].word.text, "protected");
+        assert!(!values[2].word.runtime_unknown);
         assert_eq!(output.context_delta_entries, 2, "ambient width={width}");
     }
 }

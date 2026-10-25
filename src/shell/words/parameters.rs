@@ -129,10 +129,6 @@ impl Value {
             lexical: true,
         }
     }
-    /// Whether some byte of the text is the runtime value's own.
-    fn fixed(&self) -> bool {
-        (0..self.text.len()).any(|at| !self.gaps.iter().any(|gap| gap.range.contains(&at)))
-    }
     fn nonempty(&self) -> bool {
         crate::record::nonempty_text(self.text.len(), &self.gaps)
     }
@@ -246,7 +242,7 @@ fn unknown_value(
     // multiplying loop aggregates while retaining protected defaults.
     let known_set = context.unknown_variables.contains(&name);
     let current = current.map(|text| Value {
-        gaps: context.gaps(&name, &text),
+        gaps: context.gaps(&name, &text, &mut out.uncertain_decisions),
         text,
         lexical: true,
     });
@@ -262,21 +258,9 @@ fn unknown_value(
             ..
         } => {
             let colon = !matches!(test_type, ParameterTestType::Unset);
-            // Of several values with this text, a colon test keeps those sure
-            // to be nonempty, which the alternate reading follows.
-            let kept = known_set
-                .then(|| context.facts.nonempty_evidence.get(&name))
-                .flatten()
-                .filter(|_| colon);
-            out.uncertain_decisions |= kept.is_some();
             if known_set && (!colon || current.as_ref().is_some_and(Value::nonempty)) {
                 // The value's own text proves the test.
                 current
-            } else if let Some(gaps) = kept.filter(|_| context.facts.alternate) {
-                current.map(|current| Value {
-                    gaps: gaps.clone(),
-                    ..current
-                })
             } else {
                 apply_default(
                     expr,
@@ -304,13 +288,13 @@ fn unknown_value(
             .map(|text| Value::represented(text, false)),
         ParameterLength { .. } => None,
         // A pattern or offset applied to a representative gives the
-        // representative of the result. Where the value's own bytes are
-        // partly known, the runtime pattern may match them differently, so
-        // the alternate reading keeps the value's text.
+        // representative of the result. Where the value is sure to be
+        // nonempty, the runtime pattern may match it differently and leave
+        // it whole, so the alternate reading keeps the value.
         _ => match current {
-            Some(current) if current.fixed() && context.facts.alternate => Some(current),
+            Some(current) if current.nonempty() && context.facts.alternate => Some(current),
             Some(current) => {
-                out.uncertain_decisions |= current.fixed();
+                out.uncertain_decisions |= current.nonempty();
                 computed_value(
                     expr,
                     context,

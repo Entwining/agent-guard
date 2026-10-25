@@ -103,20 +103,14 @@ impl Scope {
             // Equal text from several values is known only where every
             // value that could have produced it knows it.
             let mut evidence: Option<Vec<crate::record::Gap>> = Some(Vec::new());
-            let mut nonempty: Option<Vec<crate::record::Gap>> = None;
+            let mut nonempty = false;
             for value in binding.values.iter() {
                 if value.lexical() != Some(text) {
                     continue;
                 }
-                if let Some(gaps) = value
+                nonempty |= value
                     .gaps()
-                    .filter(|gaps| crate::record::nonempty_text(text.len(), gaps))
-                {
-                    nonempty = Some(crate::record::union_gaps(
-                        nonempty.as_deref().unwrap_or_default(),
-                        gaps,
-                    ));
-                }
+                    .is_some_and(|gaps| crate::record::nonempty_text(text.len(), gaps));
                 if value.known().is_some() {
                     continue;
                 }
@@ -125,10 +119,8 @@ impl Scope {
                     .map(|(gaps, more)| crate::record::union_gaps(&gaps, more));
             }
             if let Some(gaps) = evidence.filter(|gaps| !gaps.is_empty()) {
-                if let Some(nonempty) = nonempty
-                    && !crate::record::nonempty_text(text.len(), &gaps)
-                {
-                    facts.nonempty_evidence.insert(name.clone(), nonempty);
+                if nonempty && !crate::record::nonempty_text(text.len(), &gaps) {
+                    facts.nonempty_values.insert(name.clone());
                 }
                 facts.evidence.insert(name.clone(), gaps);
             }

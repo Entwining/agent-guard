@@ -297,8 +297,9 @@ struct Expanded {
     parameters: Vec<ParameterRegion>,
     unsupported: bool,
     lexical_ranges: Vec<std::ops::Range<usize>>,
-    /// A parameter operator decided on text the context only represents, so
-    /// the expansion also has the reading that keeps the parameter's value.
+    /// A parameter operator decided on text the context only represents, or
+    /// a name with a value sure to be nonempty was read, so the expansion
+    /// also has the reading that keeps the parameter's value.
     uncertain_decisions: bool,
 }
 

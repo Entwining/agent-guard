@@ -334,7 +334,7 @@ fn parameter_text(
                 nonempty: true,
             }]
         } else {
-            expansion.gaps(name, value)
+            expansion.gaps(name, value, &mut out.uncertain_decisions)
         };
         out.word
             .gaps

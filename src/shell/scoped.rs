@@ -96,25 +96,7 @@ pub(super) fn expand_positional_argv(
             .take(length.flatten().map_or(usize::MAX, |n| n as usize))
             .collect();
         if list.concatenate && list.quoted {
-            let text = arguments
-                .iter()
-                .map(Word::as_str)
-                .collect::<Vec<_>>()
-                .join(" ");
-            let mut joined = Word::literal(text);
-            for argument in &arguments {
-                joined.expands |= argument.expands;
-                joined.runtime_unknown |= argument.runtime_unknown;
-                joined.shell_matches |= argument.shell_matches;
-                joined.cardinality_unknown |= argument.cardinality_unknown;
-                joined.expands |= argument.cardinality_unknown;
-                for name in &argument.vars {
-                    if !joined.vars.contains(name) {
-                        joined.vars.push(name.clone());
-                    }
-                }
-            }
-            arguments = vec![joined];
+            arguments = vec![join_arguments(&arguments)];
         }
         let word = arguments
             .first()
@@ -142,6 +124,58 @@ pub(super) fn expand_positional_argv(
         });
     }
     Some(results)
+}
+
+/// Quoted `$*`: the arguments joined by a space.
+fn join_arguments(arguments: &[Word]) -> Word {
+    let text = arguments
+        .iter()
+        .map(Word::as_str)
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut joined = Word::literal(text);
+    // Each argument's unknown runs keep their place in the joined text, so a
+    // value sure to be nonempty stays so. The runtime separator is the first
+    // IFS character, which the command may have changed or emptied, even
+    // through a write to an unknown name, so each space stays an unknown run
+    // that may be empty. A join of literal arguments stays literal, a known
+    // limit in `docs/setup.md`, and an unknown argument count or repetition
+    // leaves the flags below to make the whole word unknown.
+    if arguments.iter().any(|argument| argument.exact().is_none())
+        && arguments
+            .iter()
+            .all(|argument| !argument.field_count_unknown && !argument.cardinality_unknown)
+    {
+        let mut offset = 0;
+        for argument in arguments {
+            if offset > 0 {
+                joined.gaps.push(crate::record::Gap {
+                    range: offset - 1..offset,
+                    nonempty: false,
+                });
+            }
+            joined
+                .gaps
+                .extend(argument.unknown().iter().map(|gap| crate::record::Gap {
+                    range: gap.range.start + offset..gap.range.end + offset,
+                    nonempty: gap.nonempty,
+                }));
+            offset += argument.text.len() + 1;
+        }
+    }
+    for argument in arguments {
+        joined.expands |= argument.expands;
+        joined.runtime_unknown |= argument.runtime_unknown;
+        joined.shell_matches |= argument.shell_matches;
+        joined.cardinality_unknown |= argument.cardinality_unknown;
+        joined.expands |= argument.cardinality_unknown;
+        for name in &argument.vars {
+            if !joined.vars.contains(name) {
+                joined.vars.push(name.clone());
+            }
+        }
+    }
+    joined
 }
 
 pub(super) fn expand_scoped(
