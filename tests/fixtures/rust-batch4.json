@@ -1848,6 +1848,41 @@
     },
     {
       "cwd": "$H/project",
+      "id": "maskey-get",
+      "partition": "secret",
+      "source": "mk get example/API_KEY",
+      "expected": "D"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "maskey-control",
+      "partition": "secret",
+      "source": "mk list",
+      "expected": "UC"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "maskey-get-help",
+      "partition": "secret",
+      "source": "mk get --help",
+      "expected": "UC"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "envchain-list-values",
+      "partition": "secret",
+      "source": "envchain --list --show-value aws",
+      "expected": "D"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "envchain-list-names",
+      "partition": "secret",
+      "source": "envchain -l aws",
+      "expected": "UC"
+    },
+    {
+      "cwd": "$H/project",
       "id": "ssh-private-use",
       "partition": "spec",
       "source": "ssh -i ~/.ssh/id_rsa host true",

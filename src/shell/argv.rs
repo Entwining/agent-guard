@@ -215,12 +215,11 @@ fn resolve_wrapper(
             resolve_options(result, name, argv, index)
         }
         "sudo" | "doas" => resolve_privilege(result, argv, index),
-        "envchain" => {
+        // An option makes envchain manage its store instead of running a
+        // command.
+        "envchain" if !text(argv, *index + 1).starts_with('-') => {
             mark(argv, index);
             check(result, argv, *index);
-            if text(argv, *index).starts_with('-') {
-                *index = argv.len();
-            }
             if let Some(word) = argv.get_mut(*index) {
                 word.role = Role::Namespace;
             }

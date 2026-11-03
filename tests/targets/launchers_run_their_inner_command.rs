@@ -11,6 +11,11 @@ fn launchers_run_their_inner_command() {
 }
 
 #[test]
+fn launcher_selectors_name_stored_entries() {
+    crate::program_contract::partition("selector", ROWS);
+}
+
+#[test]
 fn launcher_directory_options_set_the_inner_cwd() {
     crate::program_contract::partition("directory", ROWS);
 }

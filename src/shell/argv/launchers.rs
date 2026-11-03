@@ -23,6 +23,9 @@ struct Launcher {
     /// The inner command is a Python script the launcher runs when a script
     /// flag precedes it or its name ends in `.py` or `.pyw`.
     scripts: bool,
+    /// Operands before a required `--` select what the launcher loads, and
+    /// the command follows the `--`.
+    selectors: bool,
 }
 
 const SCRIPT_FLAGS: &[&str] = &["--script", "-s", "--gui-script"];
@@ -54,6 +57,7 @@ const UV: Launcher = Launcher {
     options_after: true,
     interspersed: false,
     scripts: true,
+    selectors: false,
 };
 
 // npm 11 `npm exec`; npx alone documents `-p` for `--package` and parses no
@@ -78,6 +82,7 @@ const NPM: Launcher = Launcher {
     options_after: true,
     interspersed: true,
     scripts: false,
+    selectors: false,
 };
 
 // pnpm `exec` takes its options before the `exec` keyword; `dlx` after it.
@@ -101,6 +106,7 @@ const PNPM: Launcher = Launcher {
     options_after: false,
     interspersed: false,
     scripts: false,
+    selectors: false,
 };
 
 const BUN: Launcher = Launcher {
@@ -121,6 +127,7 @@ const BUN: Launcher = Launcher {
     options_after: true,
     interspersed: false,
     scripts: false,
+    selectors: false,
 };
 
 // 1Password CLI `op run` options, including op's global flags.
@@ -145,6 +152,7 @@ const OP: Launcher = Launcher {
     options_after: true,
     interspersed: true,
     scripts: false,
+    selectors: false,
 };
 
 // dotenv-cli parses argv with minimist, which gives every undeclared option
@@ -173,6 +181,27 @@ const DOTENV: Launcher = Launcher {
     options_after: true,
     interspersed: true,
     scripts: false,
+    selectors: false,
+};
+
+// Maskey's `mk run`: releases before 0.0.3 select entries with `-n` and
+// `-e`, later ones with selector operands. Its help forms run no command.
+const MK: Launcher = Launcher {
+    command: &["mk", "run"],
+    grammar: Grammar {
+        syntax: Syntax::Clap,
+        short: "",
+        flags: "--json",
+        values: &[("-n --namespace -e --entry", Name)],
+        attached: &[],
+        stops: false,
+        complete: true,
+    },
+    optional: &[],
+    options_after: true,
+    interspersed: false,
+    scripts: false,
+    selectors: true,
 };
 
 const LAUNCHERS: &[Launcher] = &[
@@ -227,6 +256,7 @@ const LAUNCHERS: &[Launcher] = &[
     },
     OP,
     DOTENV,
+    MK,
 ];
 
 /// One option word, or an option and its value in the next word. Returns the
@@ -254,15 +284,17 @@ fn option(launcher: &Launcher, argv: &[Word], at: usize, binding: &mut Binding) 
     binding.unproven.is_none().then_some(words)
 }
 
-/// Where the inner command starts and the values of the launcher's options,
-/// found without changing argv.
+/// Where the inner command starts, the values of the launcher's options, and
+/// its selector operands, found without changing argv.
 struct Consumed {
     command: usize,
     binding: Binding,
+    selectors: Vec<usize>,
 }
 
 fn walk(launcher: &Launcher, argv: &[Word], start: usize) -> Option<Consumed> {
     let mut binding = Binding::default();
+    let mut selectors = Vec::new();
     let mut path = &launcher.command[1..];
     let mut at = start + 1;
     let mut ended = false;
@@ -271,9 +303,15 @@ fn walk(launcher: &Launcher, argv: &[Word], start: usize) -> Option<Consumed> {
         // own input, such as the items `xargs` appends.
         let word = argv.get(at)?;
         // Text the shell does not fix cannot select a form, and may be an
-        // option.
+        // option. Before a required `--` it is taken as a selector, since the
+        // launcher's options there select entries and do not move the command.
         if word.option_unknown() || word.cardinality_unknown || word.runtime_unknown {
-            return None;
+            if !launcher.selectors || !path.is_empty() {
+                return None;
+            }
+            selectors.push(at);
+            at += 1;
+            continue;
         }
         if let Some((next, rest)) = path.split_first()
             && word.exact() == Some(*next)
@@ -290,14 +328,18 @@ fn walk(launcher: &Launcher, argv: &[Word], start: usize) -> Option<Consumed> {
         }
         // Before the subcommand words only global options may appear; after
         // them, a form that takes no options starts its command here.
-        if option_word && (!path.is_empty() || launcher.options_after) {
+        if option_word && selectors.is_empty() && (!path.is_empty() || launcher.options_after) {
             at += option(launcher, argv, at, &mut binding)?;
             continue;
         }
         if option_word || !path.is_empty() {
             return None;
         }
-        break;
+        if !launcher.selectors {
+            break;
+        }
+        selectors.push(at);
+        at += 1;
     }
     // An unexpanded directory would leave the inner command's cwd unknown.
     if binding
@@ -319,6 +361,7 @@ fn walk(launcher: &Launcher, argv: &[Word], start: usize) -> Option<Consumed> {
     Some(Consumed {
         command: at,
         binding,
+        selectors,
     })
 }
 
@@ -365,6 +408,9 @@ pub(super) fn resolve(
         .extend(entered.into_iter().chain(files).chain(script));
     for word in &mut argv[*index..found.command] {
         word.role = Role::Precommand;
+    }
+    for &selector in &found.selectors {
+        argv[selector].role = Role::Namespace;
     }
     *index = found.command;
     true

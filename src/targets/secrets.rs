@@ -49,7 +49,15 @@ pub(super) fn infer(program: &str, args: &[Word], effects: &mut Effects) {
         "kubectl" => {
             arg(0) == "config" && arg(1) == "view" && args.iter().any(|arg| arg == "--raw")
         }
-        // Maskey prints the entry's value to any stdout but a terminal.
+        // Maskey prints the entry's value to any stdout but a terminal, and
+        // only usage with a help flag.
+        "mk" => arg(0) == "get" && !args.iter().any(|arg| arg == "-h" || arg == "--help"),
+        "envchain" => {
+            ["--list", "-l"].contains(&arg(0))
+                && args[1..]
+                    .iter()
+                    .any(|arg| arg == "--show-value" || arg == "-v")
+        }
         "gpg" => args
             .iter()
             .any(|arg| ["--export-secret-keys", "--export-secret-subkeys"].contains(&arg.as_str())),
