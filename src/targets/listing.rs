@@ -10,12 +10,14 @@ pub(super) fn infer_listing(
     effects: &mut Effects,
     depth: usize,
 ) {
-    let (mut paths, base, child_at, hidden, expression) =
+    let (paths, base, child_at, hidden, expression) =
         listing_arguments(program, args, cwd, host, effects);
-    if paths.is_empty() {
-        paths.push(Word::literal(base.clone()));
+    if program == "find" {
+        find_outputs(args, expression, cwd, host, effects);
     }
-    let item_root = paths[0].text.clone();
+    let item_root = paths
+        .first()
+        .map_or_else(|| base.clone(), |path| path.text.clone());
     for path in &paths {
         effects.targets.push(Target::from_word(
             path,
@@ -188,6 +190,9 @@ fn find_expression(args: &[Word]) -> usize {
     args.len()
 }
 
+/// The paths a listing walks, the directory it resolves them in, where an
+/// fd command to run starts, whether the listing shows hidden names, and
+/// where a find expression starts.
 fn listing_arguments(
     program: &str,
     args: &[Word],
@@ -195,138 +200,120 @@ fn listing_arguments(
     host: HostFacts<'_>,
     effects: &mut Effects,
 ) -> (Vec<Word>, String, Option<usize>, bool, usize) {
-    let mut paths = Vec::new();
-    let expression = if program == "find" {
-        find_expression(args)
-    } else {
-        args.len()
-    };
+    if program == "find" {
+        return find_arguments(args, cwd);
+    }
+    // fd runs everything after an exec option as the command.
+    let child_at = (program == "fd")
+        .then(|| {
+            args.iter()
+                .position(|arg| ["-x", "-X", "--exec", "--exec-batch"].contains(&arg.as_str()))
+        })
+        .flatten();
+    let options = &args[..child_at.unwrap_or(args.len())];
+    let binding = crate::options::bind(
+        options,
+        match program {
+            "fd" => &grammars::FD,
+            "du" => &grammars::DU,
+            _ => &grammars::TREE,
+        },
+    );
+    if let Some(start) = binding.unproven {
+        effects.unproven.get_or_insert(start);
+    }
     let mut base = cwd.to_owned();
-    let mut child_at = None;
-    let mut skip = false;
-    let mut hidden = program == "find";
-    let mut pattern = program != "fd";
-    for (index, arg) in args.iter().enumerate() {
-        if skip {
-            skip = false;
-            continue;
-        }
-        if program != "find" && effects.unproven.is_none() && arg.option_unknown() {
-            effects.unproven = Some(index);
-        }
-        // After a word the grammar cannot place, no option consumes a later
-        // word and no operand becomes the pattern.
-        let scan = effects.unproven.is_some();
-        if program == "find" && index < expression && arg.option_unknown() {
-            paths.push(arg.with_text(at(arg, &base)));
-            continue;
-        }
-        if program == "fd" && ["-x", "-X", "--exec", "--exec-batch"].contains(&arg.as_str()) {
-            child_at = Some(index + 1);
-            break;
-        }
-        if program == "fd"
-            && (arg == "-C"
-                || arg.starts_with("--base-directory")
-                || arg.starts_with("--search-path"))
-        {
-            let path = arg
-                .split_once('=')
-                .map(|(_, value)| arg.with_text(value.to_owned()))
-                .or_else(|| args.get(index + 1).cloned());
-            if let Some(path) = path {
-                if arg == "-C" || arg.starts_with("--base-directory") {
-                    base = at(&path, &base);
-                } else {
-                    paths.push(path.with_text(at(&path, &base)));
-                }
-            }
-            skip = !arg.contains('=') && !scan;
-            continue;
-        }
-        if program == "du"
-            && ["--exclude-from", "--files0-from"]
-                .contains(&arg.split_once('=').map_or(arg.as_str(), |(key, _)| key))
-        {
-            let value = arg
-                .split_once('=')
-                .map(|(_, value)| arg.with_text(value.into()))
-                .or_else(|| args.get(index + 1).cloned());
-            if let Some(value) = value {
-                let mut target = Target::from_word(&value, cwd, host, Effect::List, Walk::None);
+    let mut paths = Vec::new();
+    for bound in &binding.values {
+        let value = bound.value.word(options);
+        match bound.value.effect {
+            Effect::Enter => base = at(&value, &base),
+            Effect::List => paths.push(value.with_text(at(&value, &base))),
+            Effect::Name => {}
+            effect => {
+                let mut target = Target::from_word(&value, cwd, host, effect, Walk::None);
                 target.via = Via::Option;
                 effects.targets.push(target);
             }
-            skip = !arg.contains('=') && !scan;
-            continue;
         }
-        if program == "find" && arg == "-f" {
-            if let Some(path) = args.get(index + 1) {
-                paths.push(path.clone());
-            }
-            skip = true;
-            continue;
-        }
-        if program == "find" && arg == "--" {
-            continue;
-        }
-        if index == expression {
-            break;
-        }
-        if let Some(flags) = arg.strip_prefix('-') {
-            hidden |= arg == "--hidden"
-                || arg == "--unrestricted"
-                || !arg.starts_with("--")
-                    && flags.chars().all(|letter| letter.is_ascii_alphabetic())
-                    && arg.contains(if program == "fd" {
-                        &['H', 'u'][..]
-                    } else {
-                        &['H', 'u', 'a'][..]
-                    });
-            skip = takes_value(program, arg) && !scan;
-            continue;
-        }
-        if !pattern && !scan {
-            pattern = true;
-            continue;
-        }
-        paths.push(arg.with_text(at(arg, &base)));
     }
-    (paths, base, child_at, hidden, expression)
+    let hidden = ["-H", "--hidden", "-u", "--unrestricted"]
+        .iter()
+        .chain(if program == "fd" {
+            &[][..]
+        } else {
+            &["-a"][..]
+        })
+        .any(|flag| binding.has(flag));
+    // tree --fromfile reads a listing from its operands instead of walking them.
+    let fromfile = program == "tree" && (binding.has("--fromfile") || binding.has("--fromtabfile"));
+    // After a word the grammar cannot place, no operand becomes fd's pattern.
+    let pattern = program == "fd"
+        && binding
+            .operands
+            .first()
+            .is_some_and(|&first| binding.unproven.is_none_or(|start| first < start));
+    for &index in &binding.operands[usize::from(pattern)..] {
+        let arg = &options[index];
+        if fromfile {
+            let mut target = Target::from_word(arg, cwd, host, Effect::Read, Walk::None);
+            target.via = Via::Option;
+            effects.targets.push(target);
+        } else {
+            paths.push(arg.with_text(at(arg, &base)));
+        }
+    }
+    if paths.is_empty() && !fromfile {
+        paths.push(Word::literal(base.clone()));
+    }
+    (
+        paths,
+        base,
+        child_at.map(|index| index + 1),
+        hidden,
+        args.len(),
+    )
 }
 
-fn takes_value(program: &str, arg: &Word) -> bool {
-    if program == "fd" {
-        [
-            "-d",
-            "-E",
-            "-e",
-            "-t",
-            "-j",
-            "--max-depth",
-            "--exclude",
-            "--extension",
-            "--type",
-            "--threads",
-            "--changed-within",
-            "--changed-before",
-        ]
-        .contains(&arg.as_str())
-    } else if program == "du" {
-        [
-            "-B",
-            "-I",
-            "-t",
-            "-d",
-            "--block-size",
-            "--max-depth",
-            "--exclude",
-        ]
-        .contains(&arg.as_str())
-            || !arg.starts_with("--") && arg.chars().last().is_some_and(|c| "dIBt".contains(c))
-    } else {
-        false
+/// The paths before a find expression and where the expression starts.
+fn find_arguments(args: &[Word], cwd: &str) -> (Vec<Word>, String, Option<usize>, bool, usize) {
+    let expression = find_expression(args);
+    let mut paths = Vec::new();
+    let mut index = 0;
+    while index < expression {
+        let arg = &args[index];
+        if arg == "-f" {
+            paths.extend(args.get(index + 1).cloned());
+            index += 1;
+        } else if arg.option_unknown() || !arg.starts_with('-') {
+            paths.push(arg.with_text(at(arg, cwd)));
+        }
+        index += 1;
+    }
+    if paths.is_empty() {
+        paths.push(Word::literal(cwd.to_owned()));
+    }
+    (paths, cwd.to_owned(), None, true, expression)
+}
+
+/// The files the output primaries of a find expression write.
+fn find_outputs(
+    args: &[Word],
+    expression: usize,
+    cwd: &str,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) {
+    for (index, arg) in args.iter().enumerate().skip(expression) {
+        if ["-fprint", "-fprint0", "-fls", "-fprintf"].contains(&arg.as_str())
+            && let Some(file) = args.get(index + 1)
+        {
+            let mut target = Target::from_word(file, cwd, host, Effect::Write, Walk::None);
+            target.via = Via::Option;
+            effects.targets.push(target);
+        }
     }
 }
 
 mod find;
+mod grammars;

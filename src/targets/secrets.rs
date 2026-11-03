@@ -49,6 +49,7 @@ pub(super) fn infer(program: &str, args: &[Word], effects: &mut Effects) {
         "kubectl" => {
             arg(0) == "config" && arg(1) == "view" && args.iter().any(|arg| arg == "--raw")
         }
+        // Maskey prints the entry's value to any stdout but a terminal.
         "gpg" => args
             .iter()
             .any(|arg| ["--export-secret-keys", "--export-secret-subkeys"].contains(&arg.as_str())),

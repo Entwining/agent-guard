@@ -37,6 +37,7 @@ const DSCL: &[&str] = &[
     "-read", "-readall", "-readpl", "-readpli", "-list", "-search",
 ];
 const DSCL_VALUES: &[&str] = &["-u", "-P", "-f"];
+const DSCL_OPTIONS: Grammar = Grammar::partial(Syntax::Getopt, &[("-f", Use)]);
 
 fn operands(words: &[Word]) -> impl Iterator<Item = &str> {
     words
@@ -50,7 +51,7 @@ fn listed(verbs: &[&str], word: &str) -> bool {
     verbs.iter().any(|verb| verb.eq_ignore_ascii_case(word))
 }
 
-fn spec_with(operand: Effect, options: &'static [(&'static str, Effect)]) -> Spec {
+fn spec_with(operand: Effect, options: Option<&'static Grammar>) -> Spec {
     Spec {
         operand,
         walk: Walk::None,
@@ -68,8 +69,8 @@ pub(super) fn spec(program: &str, words: &[Word]) -> Option<Spec> {
             || DISKUTIL_GROUPS.iter().any(|(group, verbs_in_group)| {
                 listed(group, verb) && verbs.next().is_some_and(|sub| listed(verbs_in_group, sub))
             }))
-        .then(|| spec_with(Effect::Meta, &[])),
-        "tmutil" => listed(TMUTIL, verb).then(|| spec_with(Effect::Meta, &[])),
+        .then(|| spec_with(Effect::Meta, None)),
+        "tmutil" => listed(TMUTIL, verb).then(|| spec_with(Effect::Meta, None)),
         _ => {
             // dscl [options] datasource command; directory service paths name
             // records, not files.
@@ -84,7 +85,7 @@ pub(super) fn spec(program: &str, words: &[Word]) -> Option<Spec> {
             words
                 .get(index + 1)
                 .is_some_and(|command| DSCL.contains(&command.as_str()))
-                .then(|| spec_with(Effect::Name, &[("-f", Effect::Use)]))
+                .then(|| spec_with(Effect::Name, Some(&DSCL_OPTIONS)))
         }
     }
 }

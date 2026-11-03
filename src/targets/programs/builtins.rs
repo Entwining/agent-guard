@@ -32,8 +32,8 @@ pub(super) fn metadata(
     } else {
         Walk::Visible
     };
-    effects.targets.extend(args.iter().filter_map(|word| {
-        operand_value(word).map(|value| {
+    effects.targets.extend(args.iter().flat_map(|word| {
+        operand_values(word, false).map(move |value| {
             Target::from_word(&word.with_text(value.into()), cwd, host, Effect::Meta, walk)
         })
     }));
@@ -76,8 +76,8 @@ pub(super) fn temporary(
     effects.gaps.push(CoverageGap::UnknownProgram {
         program: program.into(),
     });
-    effects.targets.extend(args.iter().filter_map(|word| {
-        operand_value(word).map(|value| {
+    effects.targets.extend(args.iter().flat_map(|word| {
+        operand_values(word, false).map(move |value| {
             Target::from_word(
                 &word.with_text(value.into()),
                 cwd,

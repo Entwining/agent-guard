@@ -72,10 +72,9 @@ pub(super) fn infer_at(
     let consumer = effects.targets.len();
     infer_xargs(program, command, &mut effects);
     secrets::infer(program, args, &mut effects);
-    let (generic_walk, claimed) =
-        programs::infer(program, args, command, cwd, host, &mut effects, depth);
-    if let Some(walk) = generic_walk {
-        infer_operands(program, args, cwd, host, &mut effects, walk, &claimed);
+    if let Some(operands) = programs::infer(program, args, command, cwd, host, &mut effects, depth)
+    {
+        infer_operands(program, args, cwd, host, &mut effects, &operands);
     }
     if let Some(start) = effects.unproven {
         infer_unproven(&args[start..], cwd, host, &mut effects);
@@ -296,20 +295,16 @@ fn infer_operands(
     cwd: &str,
     host: HostFacts<'_>,
     effects: &mut Effects,
-    walk: Walk,
-    claimed: &[usize],
+    operands: &Operands,
 ) {
     // Unclaimed glued values reach the generic operand role; program-specific
     // adapters retain ownership of the arguments they already claimed.
     for (index, arg) in args.iter().enumerate() {
-        if !claimed.contains(&index)
-            && arg.as_str() != "__observed_stream__"
-            && let Some(value) = if arg.role == Role::Path {
-                (!arg.value.is_empty()).then_some(arg.value.as_str())
-            } else {
-                operand_value(arg)
-            }
-        {
+        if operands.claimed.contains(&index) || arg.as_str() == "__observed_stream__" {
+            continue;
+        }
+        let literal = arg.role == Role::Path || operands.literal && !arg.starts_with('-');
+        for value in operand_values(arg, literal) {
             effects.targets.push(Target::from_word(
                 &arg.with_text(value.into()),
                 cwd,
@@ -324,7 +319,7 @@ fn infer_operands(
                 } else {
                     Effect::Read
                 },
-                walk,
+                operands.walk,
             ));
         }
     }
@@ -338,7 +333,7 @@ fn infer_operands(
 fn infer_unproven(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effects) {
     let positional = args.first().is_some_and(|word| !word.starts_with('-'));
     for arg in &args[usize::from(positional)..] {
-        if let Some(value) = operand_value(arg) {
+        for value in operand_values(arg, false) {
             effects.targets.push(Target::from_word(
                 &arg.with_text(value.into()),
                 cwd,

@@ -52,22 +52,16 @@ const COMMANDS: &[&str] = &[
 const GLOBAL_VALUES: &[&str] = &["--explain", "--color", "-C", "--config", "-Z"];
 // Every other option value is data, like the package, target and feature
 // names that make up cargo's operands.
-const OPTIONS: &[(&str, Effect)] = &[
-    ("--manifest-path", Effect::Read),
-    ("-m", Effect::Read),
-    ("--lockfile-path", Effect::Read),
-    ("--path", Effect::Read),
-    ("--root", Effect::Write),
-    ("--target-dir", Effect::Write),
-    ("--artifact-dir", Effect::Write),
-    ("--sync", Effect::Read),
-    ("--config", Effect::Use),
-    // Git sources, registry indexes and target specifications may be paths.
-    ("--git", Effect::Use),
-    ("--index", Effect::Use),
-    ("--target", Effect::Use),
-    ("-C", Effect::Enter),
-];
+const OPTIONS: Grammar = Grammar::partial(
+    Syntax::Clap,
+    &[
+        ("--manifest-path -m --lockfile-path --path --sync", Read),
+        ("--root --target-dir --artifact-dir", Write),
+        // Git sources, registry indexes and target specifications may be paths.
+        ("--config --git --index --target", Use),
+        ("-C", Effect::Enter),
+    ],
+);
 
 /// The builtin subcommand, Some(None) when no subcommand is given, or None for
 /// an external subcommand, an alias, or runtime text, which could name any
@@ -98,7 +92,7 @@ pub(super) fn spec(words: &[Word]) -> Option<Spec> {
         operand,
         // Cargo reads the package trees its path options name.
         walk: Walk::Visible,
-        options: OPTIONS,
+        options: Some(&OPTIONS),
         remote: false,
         destination: None,
     })
@@ -114,7 +108,7 @@ pub(super) fn cargo(context: &mut Context<'_>, effects: &mut Effects) {
         for index in separator + 1..context.words.len() {
             context.claimed[index] = true;
             let word = &context.words[index];
-            if let Some(value) = operand_value(word) {
+            for value in operand_values(word, false) {
                 context.targets.push(Target::from_word(
                     &word.with_text(value.into()),
                     context.cwd,

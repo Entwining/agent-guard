@@ -1,5 +1,7 @@
-use crate::record::{Effect, HostFacts, Role, Word, WrapperFile};
+use crate::options::{Binding, Grammar};
+use crate::record::{Effect, HostFacts, OptionValue, Role, Word};
 
+mod grammars;
 mod launchers;
 
 pub(super) struct Resolution {
@@ -10,7 +12,7 @@ pub(super) struct Resolution {
     pub source: Option<String>,
     pub gap: Option<crate::CoverageGap>,
     pub environment: Vec<EnvironmentChange>,
-    pub wrapper_files: Vec<WrapperFile>,
+    pub wrapper_files: Vec<OptionValue>,
     pub unproven: Option<usize>,
 }
 
@@ -204,14 +206,8 @@ fn resolve_wrapper(
         }
         "timeout" => {
             mark(argv, index);
-            check(result, argv, *index);
-            while text(argv, *index).starts_with('-') {
-                if ["-s", "--signal", "-k", "--kill-after"].contains(&text(argv, *index)) {
-                    mark(argv, index);
-                }
-                mark(argv, index);
-                check(result, argv, *index);
-            }
+            options(result, argv, index, &grammars::TIMEOUT);
+            // The duration.
             mark(argv, index);
         }
         "nice" => resolve_nice(result, argv, index),
@@ -237,166 +233,118 @@ fn resolve_wrapper(
     true
 }
 
-fn resolve_options(result: &mut Resolution, name: &str, argv: &mut [Word], index: &mut usize) {
-    mark(argv, index);
+/// Binds a wrapper's options up to its first operand, marking each word
+/// they span; `--` ends them and is marked too. The values that name a file
+/// or directory become wrapper files.
+fn options(
+    result: &mut Resolution,
+    argv: &mut [Word],
+    index: &mut usize,
+    grammar: &Grammar,
+) -> Binding {
+    let mut binding = Binding::default();
     while *index < argv.len() {
-        check(result, argv, *index);
-        let option = text(argv, *index);
-        let accepted = match name {
-            "stdbuf" => {
-                option.starts_with("-i") || option.starts_with("-o") || option.starts_with("-e")
-            }
-            "caffeinate" => ["-d", "-i", "-s", "-u", "-m", "-t", "-w"].contains(&option),
-            _ => option.starts_with('-'),
-        };
-        if !accepted {
+        if argv[*index].exact() == Some("--") {
+            mark(argv, index);
             break;
         }
-        let takes = match name {
-            "script" => ["-F", "-t"].contains(&option),
-            "arch" => ["-e", "-d", "-arch"].contains(&option),
-            "stdbuf" => ["-i", "-o", "-e"].contains(&option),
-            "caffeinate" => ["-t", "-w"].contains(&option),
-            _ => ["-f", "-o", "--format", "--output"].contains(&option),
+        let Some(words) = binding.option(argv, *index, grammar) else {
+            break;
         };
-        if takes {
+        for _ in 0..words {
             mark(argv, index);
         }
-        mark(argv, index);
     }
+    if let Some(start) = binding.unproven {
+        result.unproven.get_or_insert(start);
+    }
+    result.wrapper_files.extend(
+        binding
+            .values
+            .iter()
+            .map(|bound| bound.value.clone())
+            .filter(|value| value.effect != Effect::Name),
+    );
+    binding
+}
+
+fn resolve_options(result: &mut Resolution, name: &str, argv: &mut [Word], index: &mut usize) {
+    mark(argv, index);
+    let binding = options(
+        result,
+        argv,
+        index,
+        match name {
+            "script" => &grammars::SCRIPT,
+            "arch" => &grammars::ARCH,
+            "stdbuf" => &grammars::STDBUF,
+            "caffeinate" => &grammars::CAFFEINATE,
+            _ => &grammars::TIME,
+        },
+    );
+    // script records the session in its file operand, or plays it back.
+    let playback = binding.has("-p") || binding.values.iter().any(|bound| bound.name == "-T");
     if name == "script" && *index < argv.len() {
+        result.wrapper_files.push(OptionValue {
+            index: *index,
+            prefix: 0,
+            effect: if playback {
+                Effect::Read
+            } else {
+                Effect::Write
+            },
+        });
         mark(argv, index);
     }
 }
 
 fn resolve_privilege(result: &mut Resolution, argv: &mut [Word], index: &mut usize) {
     mark(argv, index);
-    check(result, argv, *index);
-    while *index < argv.len()
-        && text(argv, *index) != "--"
-        && (text(argv, *index).starts_with('-')
-            || super::statements::assignment(text(argv, *index)).is_some())
+    options(result, argv, index, &grammars::PRIVILEGE);
+    while let Some(change) = argv
+        .get(*index)
+        .filter(|word| super::statements::assignment(word).is_some())
+        .and_then(EnvironmentChange::assignment)
     {
-        if super::statements::assignment(text(argv, *index)).is_some()
-            && let Some(change) = EnvironmentChange::assignment(&argv[*index])
-        {
-            result.environment.push(change);
-        }
-        let option = text(argv, *index);
-        let takes = [
-            "--user",
-            "--group",
-            "--host",
-            "--prompt",
-            "--chdir",
-            "--chroot",
-            "--role",
-            "--type",
-            "--other-user",
-            "--close-from",
-            "--command-timeout",
-        ]
-        .contains(&option)
-            || option.strip_prefix('-').is_some_and(|letters| {
-                !letters.is_empty()
-                    && letters.chars().all(|c| c.is_ascii_alphabetic())
-                    && letters.ends_with(['u', 'g', 'h', 'p', 'C', 'D', 'R', 'T', 'r', 't', 'U'])
-            });
-        if takes {
-            mark(argv, index);
-        }
-        mark(argv, index);
-        check(result, argv, *index);
-    }
-    if text(argv, *index) == "--" {
+        result.environment.push(change);
         mark(argv, index);
     }
 }
 
 fn resolve_environment(result: &mut Resolution, argv: &mut [Word], index: &mut usize) {
     mark(argv, index);
-    while *index < argv.len() {
-        check(result, argv, *index);
-        match text(argv, *index) {
-            "-C" => {
-                if let Some(word) = argv.get_mut(*index + 1) {
-                    word.role = Role::Precommand;
-                    result.wrapper_files.push(WrapperFile {
-                        index: *index + 1,
-                        prefix: 0,
-                        effect: Effect::Enter,
-                    });
-                }
-                *index += 2;
-            }
-            "-i" | "--ignore-environment" => {
-                result.environment.push(EnvironmentChange::Clear);
-                *index += 1;
-            }
-            "-u" | "--unset" => {
-                if let Some(word) = argv.get(*index + 1) {
-                    result
-                        .environment
-                        .push(EnvironmentChange::Unset(word.text.clone()));
-                }
-                *index += 2;
-            }
-            "-P" => *index += 2,
-            "-S" => {
-                result.source = argv.get(*index + 1).map(|w| w.text.clone());
+    let binding = options(result, argv, index, &grammars::ENV);
+    // A lone `-` also clears the environment.
+    if binding.has("-i") || binding.has("--ignore-environment") || text(argv, *index) == "-" {
+        result.environment.push(EnvironmentChange::Clear);
+    }
+    if text(argv, *index) == "-" {
+        mark(argv, index);
+    }
+    for bound in binding.values {
+        let value = bound.value.word(argv);
+        match bound.name {
+            "-u" | "--unset" => result
+                .environment
+                .push(EnvironmentChange::Unset(value.text)),
+            "-S" | "--split-string" => {
+                result.source = Some(value.text);
                 result.wrappers.push("env-S".into());
                 *index = argv.len();
+                return;
             }
-            option if option.starts_with('-') => *index += 1,
-            _ => {
-                let Some(change) = EnvironmentChange::assignment(&argv[*index]) else {
-                    break;
-                };
-                result.environment.push(change);
-                *index += 1;
-            }
+            _ => {}
         }
+    }
+    while let Some(change) = argv.get(*index).and_then(EnvironmentChange::assignment) {
+        result.environment.push(change);
+        mark(argv, index);
     }
 }
 
 fn resolve_xargs(result: &mut Resolution, argv: &mut [Word], index: &mut usize) {
     mark(argv, index);
-    check(result, argv, *index);
-    while text(argv, *index).starts_with('-') {
-        let file = match text(argv, *index) {
-            "-a" | "--arg-file" => (*index + 1 < argv.len()).then_some((*index + 1, 0)),
-            option => option
-                .starts_with("--arg-file=")
-                .then_some((*index, "--arg-file=".len())),
-        };
-        if let Some((index, prefix)) = file {
-            result.wrapper_files.push(WrapperFile {
-                index,
-                prefix,
-                effect: Effect::Read,
-            });
-        }
-        if [
-            "-a",
-            "-d",
-            "-E",
-            "-I",
-            "-L",
-            "-n",
-            "-P",
-            "-s",
-            "--arg-file",
-            "--delimiter",
-            "--replace",
-            "--max-args",
-        ]
-        .contains(&text(argv, *index))
-        {
-            *index += 1;
-        }
-        *index += 1;
-        check(result, argv, *index);
-    }
+    options(result, argv, index, &grammars::XARGS);
 }
 
 fn resolve_nice(result: &mut Resolution, argv: &mut [Word], index: &mut usize) {

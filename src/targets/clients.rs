@@ -1,173 +1,67 @@
-use super::{Effects, Getopt, operand_value, option_values, space};
+use super::{Effects, operand_values, space};
 use crate::CoverageGap;
+use crate::options::{Grammar, Syntax};
+use crate::record::Effect::{Name, Read, Use, Write};
 use crate::record::{Effect, HostFacts, Role, Target, Via, Walk, Word};
 
-// The options of openrsync and rsync that agents use, from their manuals.
-const RSYNC: Getopt = Getopt {
-    short_flags: "0468ACDEFHIJKLNOPRSUVWXabcdghiklmnopqrstuvxyz",
-    short_values: "BeT@fM",
-    flags: &[
-        "--archive",
-        "--recursive",
-        "--verbose",
-        "--quiet",
-        "--checksum",
-        "--relative",
-        "--dirs",
-        "--links",
-        "--copy-links",
-        "--copy-unsafe-links",
-        "--safe-links",
-        "--keep-dirlinks",
-        "--copy-dirlinks",
-        "--hard-links",
-        "--perms",
-        "--executability",
-        "--acls",
-        "--xattrs",
-        "--extended-attributes",
-        "--owner",
-        "--group",
-        "--devices",
-        "--specials",
-        "--times",
-        "--atimes",
-        "--crtimes",
-        "--omit-dir-times",
-        "--omit-link-times",
-        "--super",
-        "--fake-super",
-        "--sparse",
-        "--preallocate",
-        "--dry-run",
-        "--whole-file",
-        "--one-file-system",
-        "--existing",
-        "--ignore-existing",
-        "--ignore-non-existing",
-        "--remove-source-files",
-        "--del",
-        "--delete",
-        "--delete-before",
-        "--delete-during",
-        "--delete-delay",
-        "--delete-after",
-        "--delete-excluded",
-        "--ignore-missing-args",
-        "--delete-missing-args",
-        "--ignore-errors",
-        "--force",
-        "--partial",
-        "--progress",
-        "--prune-empty-dirs",
-        "--numeric-ids",
-        "--size-only",
-        "--ignore-times",
-        "--update",
-        "--inplace",
-        "--append",
-        "--append-verify",
-        "--compress",
-        "--cvs-exclude",
-        "--from0",
-        "--protect-args",
-        "--secluded-args",
-        "--stats",
-        "--human-readable",
-        "--itemize-changes",
-        "--list-only",
-        "--blocking-io",
-        "--no-motd",
-        "--mkpath",
-        "--backup",
-        "--delay-updates",
-        "--fuzzy",
-        "--no-implied-dirs",
-        "--no-perms",
-        "--no-times",
-        "--no-owner",
-        "--no-group",
-        "--no-whole-file",
-        "--no-compress",
-        "--no-inc-recursive",
-        "--cache",
-        "--no-cache",
-        "--8-bit-output",
-        "--ipv4",
-        "--ipv6",
-        "--help",
-        "--version",
-    ],
+// GNU cp; macOS cp has no value options, so a letter that is a macOS flag
+// takes a value only when glued.
+const CP: Grammar = Grammar {
     values: &[
-        "--info",
-        "--debug",
-        "--stderr",
-        "--backup-dir",
-        "--suffix",
-        "--confine-root",
-        "--chmod",
-        "--checksum-choice",
-        "--cc",
-        "--block-size",
-        "--rsh",
-        "--rsync-path",
-        "--max-delete",
-        "--max-size",
-        "--min-size",
-        "--max-alloc",
-        "--partial-dir",
-        "--usermap",
-        "--groupmap",
-        "--chown",
-        "--timeout",
-        "--contimeout",
-        "--modify-window",
-        "--temp-dir",
-        "--compare-dest",
-        "--copy-dest",
-        "--link-dest",
-        "--compress-choice",
-        "--zc",
-        "--compress-level",
-        "--zl",
-        "--compress-threads",
-        "--skip-compress",
-        "--filter",
-        "--exclude",
-        "--exclude-from",
-        "--include",
-        "--include-from",
-        "--files-from",
-        "--copy-as",
-        "--address",
-        "--port",
-        "--sockopts",
-        "--outbuf",
-        "--remote-option",
-        "--out-format",
-        "--log-format",
-        "--log-file",
-        "--log-file-format",
-        "--password-file",
-        "--early-input",
-        "--bwlimit",
-        "--stop-after",
-        "--stop-at",
-        "--write-batch",
-        "--only-write-batch",
-        "--read-batch",
-        "--protocol",
-        "--iconv",
-        "--checksum-seed",
-        "--config",
-        "--dparam",
+        ("-t --target-directory", Write),
+        ("--suffix --sparse --no-preserve", Name),
     ],
+    attached: &[("-S --backup --reflink --preserve --context --update", Name)],
+    stops: true,
+    ..Grammar::partial(Syntax::Getopt, &[])
+};
+
+// macOS and GNU install. A letter whose arity differs between the two takes a
+// value only when glued.
+const INSTALL: Grammar = Grammar {
+    values: &[
+        ("-t --target-directory -M", Write),
+        ("-N", Read),
+        ("--strip-program", Use),
+        ("-B -f -g --group -h -l -m --mode -o --owner --suffix", Name),
+    ],
+    attached: &[("-D -S -T", Name)],
+    stops: true,
+    ..Grammar::partial(Syntax::Getopt, &[])
+};
+
+const DOTENVX: Grammar = Grammar::partial(Syntax::Getopt, &[("-f --file --env-file", Use)]);
+const SSH_KEYGEN: Grammar = Grammar::partial(Syntax::Getopt, &[("-f", Use)]);
+const KUBECTL: Grammar = Grammar::partial(Syntax::Clap, &[("--kubeconfig", Use)]);
+const NPM: Grammar = Grammar::partial(Syntax::Getopt, &[("--userconfig", Use)]);
+const DOCKER: Grammar = Grammar::partial(Syntax::Clap, &[("--env-file", Use)]);
+
+// The options of openrsync and rsync that agents use, from their manuals.
+const RSYNC: Grammar = Grammar {
+    syntax: Syntax::Getopt,
+    short: "0468ACDEFHIJKLNOPRSUVWXabcdghiklmnopqrstuvxyz",
+    flags: "--archive --recursive --verbose --quiet --checksum --relative --dirs --links --copy-links --copy-unsafe-links --safe-links --keep-dirlinks --copy-dirlinks --hard-links --perms --executability --acls --xattrs --extended-attributes --owner --group --devices --specials --times --atimes --crtimes --omit-dir-times --omit-link-times --super --fake-super --sparse --preallocate --dry-run --whole-file --one-file-system --existing --ignore-existing --ignore-non-existing --remove-source-files --del --delete --delete-before --delete-during --delete-delay --delete-after --delete-excluded --ignore-missing-args --delete-missing-args --ignore-errors --force --partial --progress --prune-empty-dirs --numeric-ids --size-only --ignore-times --update --inplace --append --append-verify --compress --cvs-exclude --from0 --protect-args --secluded-args --stats --human-readable --itemize-changes --list-only --blocking-io --no-motd --mkpath --backup --delay-updates --fuzzy --no-implied-dirs --no-perms --no-times --no-owner --no-group --no-whole-file --no-compress --no-inc-recursive --cache --no-cache --8-bit-output --ipv4 --ipv6 --help --version",
+    values: &[
+        (
+            "--files-from --exclude-from --include-from --read-batch --early-input --config -e --rsh -T --temp-dir --backup-dir --partial-dir --compare-dest --copy-dest --link-dest --confine-root",
+            Read,
+        ),
+        ("--log-file --write-batch --only-write-batch", Write),
+        ("--password-file", Use),
+        (
+            "-f --filter --exclude --include --out-format --log-format --log-file-format --info --debug --stderr --suffix --chmod --checksum-choice --cc -B --block-size --rsync-path --max-delete --max-size --min-size --max-alloc --usermap --groupmap --chown --timeout --contimeout -@ --modify-window --compress-choice --zc --compress-level --zl --compress-threads --skip-compress --copy-as --address --port --sockopts --outbuf -M --remote-option --bwlimit --stop-after --stop-at --protocol --iconv --checksum-seed --dparam",
+            Name,
+        ),
+    ],
+    attached: &[],
+    stops: false,
+    complete: true,
 };
 
 struct Spec {
     operand: Effect,
     walk: Walk,
-    options: &'static [(&'static str, Effect)],
+    options: Option<&'static Grammar>,
     remote: bool,
     destination: Option<Effect>,
 }
@@ -178,50 +72,42 @@ fn spec(program: &str, words: &[Word]) -> Option<Spec> {
     let mut spec = Spec {
         operand: Effect::Read,
         walk: Walk::Visible,
-        options: &[],
+        options: None,
         remote: false,
         destination: None,
     };
     match program {
-        "cp" | "install" => {
+        "cp" => {
             spec.destination = Some(Effect::Write);
-            spec.options = &[("-t", Effect::Write), ("--target-directory", Effect::Write)];
-            if program == "cp" {
-                spec.walk = Walk::None;
-            }
+            spec.options = Some(&CP);
+            spec.walk = Walk::None;
+        }
+        "install" => {
+            spec.destination = Some(Effect::Write);
+            spec.options = Some(&INSTALL);
         }
         "ssh" => spec.operand = Effect::Name,
         "scp" => spec.remote = true,
         // Client operand and option roles are not exceptions to protection.
         "rsync" => {
             spec.remote = true;
-            spec.options = &[
-                ("--files-from", Effect::Read),
-                ("--exclude-from", Effect::Read),
-                ("--include-from", Effect::Read),
-            ];
+            spec.options = Some(&RSYNC);
         }
         "tee" => spec.operand = Effect::Write,
         "ssh-add" => spec.operand = Effect::Use,
-        "dotenvx" => {
-            spec.options = &[
-                ("-f", Effect::Use),
-                ("--file", Effect::Use),
-                ("--env-file", Effect::Use),
-            ]
-        }
+        "dotenvx" => spec.options = Some(&DOTENVX),
         "dd" => spec.walk = Walk::None,
-        "ssh-keygen" => spec.options = &[("-f", Effect::Use)],
-        "kubectl" => spec.options = &[("--kubeconfig", Effect::Use)],
-        "npm" => spec.options = &[("--userconfig", Effect::Use)],
+        "ssh-keygen" => spec.options = Some(&SSH_KEYGEN),
+        "kubectl" => spec.options = Some(&KUBECTL),
+        "npm" => spec.options = Some(&NPM),
         "curl" => spec.operand = Effect::Name,
         "wget" => {
             spec.operand = Effect::Name;
-            spec.options = WGET_USE;
+            spec.options = Some(&WGET);
         }
         "docker" => {
             spec.operand = Effect::Name;
-            spec.options = &[("--env-file", Effect::Use)];
+            spec.options = Some(&DOCKER);
         }
         "sftp" | "ctags" => {}
         "cargo" => return cargo::spec(words),
@@ -276,34 +162,43 @@ impl<'a> Context<'a> {
         self.targets.push(target);
         &mut self.targets[at]
     }
-    fn option_effect(&self, index: usize) -> Option<Effect> {
-        if self.words[index].role == Role::Path {
-            return None;
-        }
-        let value = &self.words[index].value;
-        // A word another option consumed, or runtime text, names no option.
-        let previous = index
-            .checked_sub(1)
-            .filter(|&previous| !self.claimed[previous])
-            .and_then(|previous| self.words[previous].exact())
-            .unwrap_or("");
-        let key = if value.starts_with('-') {
-            value.split_once('=').map_or("", |(key, _)| key)
-        } else if previous.starts_with('-') && !previous.starts_with("--") {
-            previous
-                .get(previous.len().saturating_sub(1)..)
-                .unwrap_or("")
-        } else {
-            previous
+    /// Adds the targets of the option values the spec's grammar models, and
+    /// returns whether an option names the destination directory.
+    fn options(&mut self) -> bool {
+        let Some(grammar) = self.spec.options else {
+            return false;
         };
-        self.spec.options.iter().find_map(|(option, effect)| {
-            (*option == key || key.len() == 1 && option.strip_prefix('-') == Some(key))
-                .then_some(*effect)
-        })
+        let binding = crate::options::bind(self.words, grammar);
+        let sends = self.sends();
+        for bound in &binding.values {
+            if bound.value.effect != Effect::Name {
+                let mut target = Target::from_word(
+                    &bound.value.word(self.words),
+                    self.cwd,
+                    self.host,
+                    bound.value.effect,
+                    self.spec.walk,
+                );
+                target.via = Via::Option;
+                target.sends = sends;
+                self.targets.push(target);
+            }
+        }
+        for &index in &binding.options {
+            self.claimed[index] = true;
+        }
+        self.unproven = binding.unproven;
+        binding
+            .values
+            .iter()
+            .any(|bound| ["-t", "--target-directory"].contains(&bound.name))
+    }
+    fn sends(&self) -> bool {
+        self.spec.remote && self.words.iter().any(|word| remote(&word.value))
     }
     /// Adds the targets of the words no adapter claimed, and returns the
     /// first word whose role it cannot prove.
-    fn fallback(&mut self) -> Option<usize> {
+    fn fallback(&mut self, into: bool) -> Option<usize> {
         // Runtime text that could spell an option makes later roles, and
         // which operand comes last, provisional.
         let uncertain: Vec<usize> = (0..self.words.len())
@@ -315,91 +210,46 @@ impl<'a> Context<'a> {
             .chain(self.unproven)
             .collect();
         let unproven = uncertain.iter().copied().min();
-        let into = self.spec.destination.is_some()
-            && self.words.iter().any(|word| {
-                word.role != Role::Path
-                    && (word.starts_with("--t")
-                        && "--target-directory".starts_with(
-                            word.split_once('=').map_or(word.as_str(), |(key, _)| key),
-                        )
-                        || word.starts_with('-') && !word.starts_with("--") && word.contains('t'))
-            });
-        let last = self
-            .words
-            .iter()
-            .enumerate()
-            .filter(|(i, word)| !word.starts_with('-') && self.option_effect(*i).is_none())
-            .map(|(i, _)| i)
-            .next_back();
-        let sends = self.spec.remote && self.words.iter().any(|word| remote(&word.value));
+        let last = (0..self.words.len())
+            .rfind(|&index| !self.claimed[index] && !self.words[index].starts_with('-'));
+        let sends = self.sends();
         for (index, word) in self.words.iter().enumerate() {
             if self.claimed[index] {
                 continue;
             }
-            if word.role != Role::Path
-                && let Some(flags) = word.strip_prefix('-').filter(|s| !s.starts_with('-'))
-                && let Some((at, (_, effect))) = flags.char_indices().find_map(|(at, letter)| {
-                    self.spec
-                        .options
-                        .iter()
-                        .find(|(option, _)| option.strip_prefix('-') == Some(&letter.to_string()))
-                        .map(|option| (at, option))
-                })
-            {
-                let value = &flags[at + 1..];
-                if !value.is_empty() {
-                    let mut target = Target::from_word(
-                        &word.with_text(value.into()),
-                        self.cwd,
-                        self.host,
-                        *effect,
-                        self.spec.walk,
-                    );
-                    target.via = Via::Option;
-                    target.sends = sends;
-                    self.targets.push(target);
-                    continue;
+            for value in operand_values(word, word.role == Role::Path) {
+                let mut effect = self.spec.operand;
+                if (self.spec.remote || self.spec.destination.is_some() && !into)
+                    && Some(index) == last
+                    && !word.globs
+                {
+                    effect = self.spec.destination.unwrap_or(Effect::Write);
+                    // Only another uncertain word can make this one a source.
+                    if uncertain.iter().any(|&other| other != index) {
+                        let mut target = Target::from_word(
+                            &word.with_text(value.into()),
+                            self.cwd,
+                            self.host,
+                            Effect::Read,
+                            self.spec.walk,
+                        );
+                        target.sends = sends;
+                        self.targets.push(target);
+                    }
                 }
-            }
-            let value = if word.role == Role::Path {
-                (!word.value.is_empty()).then_some(word.value.as_str())
-            } else {
-                operand_value(word)
-            };
-            let Some(value) = value else {
-                continue;
-            };
-            let mut effect = self.option_effect(index).unwrap_or(self.spec.operand);
-            if (self.spec.remote || self.spec.destination.is_some() && !into)
-                && Some(index) == last
-                && !word.globs
-            {
-                effect = self.spec.destination.unwrap_or(Effect::Write);
-                // Only another uncertain word can make this one a source.
-                if uncertain.iter().any(|&other| other != index) {
-                    let mut target = Target::from_word(
-                        &word.with_text(value.into()),
-                        self.cwd,
-                        self.host,
-                        Effect::Read,
-                        self.spec.walk,
-                    );
-                    target.sends = sends;
-                    self.targets.push(target);
+                if self.spec.remote && remote(&word.value) {
+                    effect = Effect::Name;
                 }
+                let mut target = Target::from_word(
+                    &word.with_text(value.into()),
+                    self.cwd,
+                    self.host,
+                    effect,
+                    self.spec.walk,
+                );
+                target.sends = sends;
+                self.targets.push(target);
             }
-            if self.spec.remote && remote(&word.value) {
-                effect = Effect::Name;
-            }
-            let mut target = Target::from_word(
-                &word.with_text(value.into()),
-                self.cwd,
-                self.host,
-                effect,
-                self.spec.walk,
-            );
-            target.sends = sends;
-            self.targets.push(target);
         }
         unproven
     }
@@ -452,14 +302,6 @@ pub(super) fn infer(
         "wget" => wget(&mut context),
         "docker" => docker(&mut context),
         "ctags" => ctags(&mut context),
-        // Filter patterns select transferred names.
-        "rsync" => {
-            let (patterns, unproven) = option_values(words, &RSYNC, &["--exclude", "--include"]);
-            for index in patterns {
-                context.claimed[index] = true;
-            }
-            context.unproven = unproven;
-        }
         "cargo" => cargo(&mut context, effects),
         "dd" => {
             for (index, word) in words.iter().enumerate() {
@@ -473,7 +315,8 @@ pub(super) fn infer(
         }
         _ => {}
     }
-    effects.unproven = context.fallback();
+    let into = context.options();
+    effects.unproven = context.fallback(into);
     effects.targets.extend(context.targets);
     true
 }
@@ -523,4 +366,4 @@ pub(super) use curl::CURL_VALUE_LETTERS;
 use curl::curl;
 use docker::docker;
 use ssh::ssh;
-use wget::{WGET_USE, wget};
+use wget::{WGET, wget};

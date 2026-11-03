@@ -1,21 +1,20 @@
 use super::{Resolution, text};
-use crate::record::{Effect, Role, Word, WrapperFile};
+use crate::options::{Binding, Grammar, Syntax};
+use crate::record::Effect::{Enter, Name, Use};
+use crate::record::{Effect, OptionValue, Role, Word};
 
 /// A program form that runs the rest of argv as another command. The option
-/// tables are transcribed from each launcher's own help or source; an option
-/// missing from them leaves the launcher as an unknown program.
+/// grammars are transcribed from each launcher's own help or source; an
+/// option missing from them leaves the launcher as an unknown program. A
+/// value naming a file or directory the launcher uses itself takes
+/// `Effect::Use`, and one naming the inner command's working directory
+/// `Effect::Enter`.
 struct Launcher {
     /// Program name followed by the subcommand words that select this form.
     command: &'static [&'static str],
-    flags: &'static [&'static str],
-    values: &'static [&'static str],
-    /// Options whose value can name a file or directory the launcher uses
-    /// itself.
-    files: &'static [&'static str],
+    grammar: Grammar,
     /// Options that take the next word only when it does not start with `-`.
     optional: &'static [&'static str],
-    /// Options whose value becomes the working directory of the inner command.
-    directory: &'static [&'static str],
     /// Options may follow the subcommand words.
     options_after: bool,
     /// The launcher keeps parsing options after the inner command unless `--`
@@ -29,180 +28,76 @@ struct Launcher {
 const SCRIPT_FLAGS: &[&str] = &["--script", "-s", "--gui-script"];
 
 // uv 0.13 `uv help run`; global options are accepted on both sides of `run`.
-const UV_FLAGS: &[&str] = &[
-    "--all-extras",
-    "--no-dev",
-    "--only-dev",
-    "--no-default-groups",
-    "--all-groups",
-    "--module",
-    "-m",
-    "--no-editable",
-    "--exact",
-    "--no-env-file",
-    "--isolated",
-    "--active",
-    "--no-sync",
-    "--locked",
-    "--frozen",
-    "--script",
-    "-s",
-    "--gui-script",
-    "--all-packages",
-    "--no-project",
-    "--no-index",
-    "--upgrade",
-    "-U",
-    "--no-sources",
-    "--reinstall",
-    "--compile-bytecode",
-    "--no-build-isolation",
-    "--no-build",
-    "--no-binary",
-    "--require-build-hashes",
-    "--no-require-build-hashes",
-    "--no-cache",
-    "-n",
-    "--refresh",
-    "--managed-python",
-    "--no-managed-python",
-    "--no-python-downloads",
-    "--quiet",
-    "-q",
-    "--verbose",
-    "-v",
-    "--system-certs",
-    "--offline",
-    "--no-progress",
-    "--no-config",
-    "--lfs",
-];
-const UV_VALUES: &[&str] = &[
-    "--extra",
-    "--no-extra",
-    "--group",
-    "--no-group",
-    "--only-group",
-    "--no-editable-package",
-    "--package",
-    "--python-platform",
-    "--index-strategy",
-    "--keyring-provider",
-    "--upgrade-package",
-    "-P",
-    "--upgrade-group",
-    "--resolution",
-    "--prerelease",
-    "--prerelease-package",
-    "--fork-strategy",
-    "--exclude-newer",
-    "--exclude-newer-package",
-    "--no-sources-package",
-    "--reinstall-package",
-    "--link-mode",
-    "--config-setting",
-    "-C",
-    "--config-settings-package",
-    "--no-build-isolation-package",
-    "--no-build-package",
-    "--no-binary-package",
-    "--refresh-package",
-    "--color",
-    "--allow-insecure-host",
-    "--torch-backend",
-];
 // Package sources, indexes and interpreters may be local paths.
-const UV_FILES: &[&str] = &[
-    "--with",
-    "-w",
-    "--with-editable",
-    "--index",
-    "--default-index",
-    "--index-url",
-    "-i",
-    "--extra-index-url",
-    "--find-links",
-    "-f",
-    "--python",
-    "-p",
-    "--from",
-    "--env-file",
-    "--with-requirements",
-    "--constraints",
-    "-c",
-    "--build-constraints",
-    "-b",
-    "--overrides",
-    "--project",
-    "--config-file",
-    "--cache-dir",
-];
 const UV: Launcher = Launcher {
     command: &["uv", "run"],
-    flags: UV_FLAGS,
-    values: UV_VALUES,
-    files: UV_FILES,
+    grammar: Grammar {
+        syntax: Syntax::Clap,
+        short: "msUnqv",
+        flags: "--all-extras --no-dev --only-dev --no-default-groups --all-groups --module --no-editable --exact --no-env-file --isolated --active --no-sync --locked --frozen --script --gui-script --all-packages --no-project --no-index --upgrade --no-sources --reinstall --compile-bytecode --no-build-isolation --no-build --no-binary --require-build-hashes --no-require-build-hashes --no-cache --refresh --managed-python --no-managed-python --no-python-downloads --quiet --verbose --system-certs --offline --no-progress --no-config --lfs",
+        values: &[
+            (
+                "--with -w --with-editable --index --default-index --index-url -i --extra-index-url --find-links -f --python -p --from --env-file --with-requirements --constraints -c --build-constraints -b --overrides --project --config-file --cache-dir",
+                Use,
+            ),
+            ("--directory", Enter),
+            (
+                "--extra --no-extra --group --no-group --only-group --no-editable-package --package --python-platform --index-strategy --keyring-provider --upgrade-package -P --upgrade-group --resolution --prerelease --prerelease-package --fork-strategy --exclude-newer --exclude-newer-package --no-sources-package --reinstall-package --link-mode --config-setting -C --config-settings-package --no-build-isolation-package --no-build-package --no-binary-package --refresh-package --color --allow-insecure-host --torch-backend",
+                Name,
+            ),
+        ],
+        attached: &[],
+        stops: false,
+        complete: true,
+    },
     optional: &[],
-    directory: &["--directory"],
     options_after: true,
     interspersed: false,
     scripts: true,
 };
 
 // npm 11 `npm exec`; npx alone documents `-p` for `--package` and parses no
-// option after the first positional argument.
-const NPM_FLAGS: &[&str] = &[
-    "--yes",
-    "-y",
-    "--no",
-    "--workspaces",
-    "--ws",
-    "--include-workspace-root",
-    "--prefer-online",
-    "--prefer-offline",
-    "--offline",
-    "--quiet",
-    "-q",
-    "--silent",
-    "-s",
-];
-const NPM_VALUES: &[&str] = &["--registry", "--loglevel"];
-// A package spec may be a local directory or tarball.
-const NPM_FILES: &[&str] = &["--package", "--workspace", "-w"];
-const NPX_FILES: &[&str] = &["--package", "-p", "--workspace", "-w"];
+// option after the first positional argument. A package spec may be a local
+// directory or tarball.
+const NPM_GRAMMAR: Grammar = Grammar {
+    syntax: Syntax::Getopt,
+    short: "yqs",
+    flags: "--yes --no --workspaces --ws --include-workspace-root --prefer-online --prefer-offline --offline --quiet --silent",
+    values: &[
+        ("--package --workspace -w", Use),
+        ("--registry --loglevel", Name),
+    ],
+    attached: &[],
+    stops: false,
+    complete: true,
+};
 const NPM: Launcher = Launcher {
     command: &["npm", "exec"],
-    flags: NPM_FLAGS,
-    values: NPM_VALUES,
-    files: NPM_FILES,
+    grammar: NPM_GRAMMAR,
     optional: &[],
-    directory: &[],
     options_after: true,
     interspersed: true,
     scripts: false,
 };
 
 // pnpm `exec` takes its options before the `exec` keyword; `dlx` after it.
-const PNPM_FLAGS: &[&str] = &[
-    "--recursive",
-    "-r",
-    "--parallel",
-    "--no-reporter-hide-prefix",
-    "--report-summary",
-    "--workspace-root",
-    "-w",
-    "--silent",
-    "-s",
-];
-const PNPM_VALUES: &[&str] = &["--resume-from", "--reporter"];
+// A filter may select packages by directory.
 const PNPM: Launcher = Launcher {
     command: &["pnpm", "exec"],
-    flags: PNPM_FLAGS,
-    values: PNPM_VALUES,
-    // A filter may select packages by directory.
-    files: &["--filter"],
+    grammar: Grammar {
+        syntax: Syntax::Getopt,
+        short: "rws",
+        flags: "--recursive --parallel --no-reporter-hide-prefix --report-summary --workspace-root --silent",
+        values: &[
+            ("--filter", Use),
+            ("--dir -C", Enter),
+            ("--resume-from --reporter", Name),
+        ],
+        attached: &[],
+        stops: false,
+        complete: true,
+    },
     optional: &[],
-    directory: &["--dir", "-C"],
     options_after: false,
     interspersed: false,
     scripts: false,
@@ -210,11 +105,19 @@ const PNPM: Launcher = Launcher {
 
 const BUN: Launcher = Launcher {
     command: &["bunx"],
-    flags: &["--bun", "--no-install", "--trust", "--verbose", "--silent"],
-    values: &["--minimum-release-age"],
-    files: &["--env-file", "--package", "-p"],
+    grammar: Grammar {
+        syntax: Syntax::Getopt,
+        short: "",
+        flags: "--bun --no-install --trust --verbose --silent",
+        values: &[
+            ("--env-file --package -p", Use),
+            ("--minimum-release-age", Name),
+        ],
+        attached: &[],
+        stops: false,
+        complete: true,
+    },
     optional: &[],
-    directory: &[],
     options_after: true,
     interspersed: false,
     scripts: false,
@@ -223,25 +126,22 @@ const BUN: Launcher = Launcher {
 // 1Password CLI `op run` options, including op's global flags.
 const OP: Launcher = Launcher {
     command: &["op", "run"],
-    flags: &[
-        "--no-masking",
-        "--help",
-        "-h",
-        "--cache",
-        "--debug",
-        "--iso-timestamps",
-        "--no-color",
-    ],
-    values: &[
-        "--environment",
-        "--account",
-        "--encoding",
-        "--format",
-        "--session",
-    ],
-    files: &["--env-file", "--config"],
+    grammar: Grammar {
+        syntax: Syntax::Clap,
+        short: "h",
+        flags: "--no-masking --help --cache --debug --iso-timestamps --no-color",
+        values: &[
+            ("--env-file --config", Use),
+            (
+                "--environment --account --encoding --format --session",
+                Name,
+            ),
+        ],
+        attached: &[],
+        stops: false,
+        complete: true,
+    },
     optional: &[],
-    directory: &[],
     options_after: true,
     interspersed: true,
     scripts: false,
@@ -249,12 +149,18 @@ const OP: Launcher = Launcher {
 
 // dotenv-cli parses argv with minimist, which gives every undeclared option
 // the next word that does not start with `-`. `-p` prints a loaded value and
-// stays outside the table.
+// stays outside the grammar.
 const DOTENV: Launcher = Launcher {
     command: &["dotenv"],
-    flags: &["--no-expand"],
-    values: &["-v"],
-    files: &["-e"],
+    grammar: Grammar {
+        syntax: Syntax::Getopt,
+        short: "",
+        flags: "--no-expand",
+        values: &[("-e", Use), ("-v", Name)],
+        attached: &[],
+        stops: false,
+        complete: true,
+    },
     optional: &[
         "-c",
         "--debug",
@@ -264,7 +170,6 @@ const DOTENV: Launcher = Launcher {
         "--override",
         "--help",
     ],
-    directory: &[],
     options_after: true,
     interspersed: true,
     scripts: false,
@@ -289,16 +194,29 @@ const LAUNCHERS: &[Launcher] = &[
     },
     Launcher {
         command: &["npx"],
-        files: NPX_FILES,
+        grammar: Grammar {
+            values: &[
+                ("--package -p --workspace -w", Use),
+                ("--registry --loglevel", Name),
+            ],
+            ..NPM_GRAMMAR
+        },
         interspersed: false,
         ..NPM
     },
     PNPM,
     Launcher {
         command: &["pnpm", "dlx"],
-        flags: &["--silent", "-s"],
-        values: &["--allow-build"],
-        files: &["--package"],
+        grammar: Grammar {
+            short: "s",
+            flags: "--silent",
+            values: &[
+                ("--package", Use),
+                ("--dir -C", Enter),
+                ("--allow-build", Name),
+            ],
+            ..PNPM.grammar
+        },
         options_after: true,
         ..PNPM
     },
@@ -311,94 +229,40 @@ const LAUNCHERS: &[Launcher] = &[
     DOTENV,
 ];
 
-#[derive(Clone, Copy)]
-enum Kind {
-    Flag,
-    Value,
-    File,
-    Optional,
-    Directory,
-}
-
-impl Launcher {
-    fn kind(&self, option: &str) -> Option<Kind> {
-        if self.flags.contains(&option) {
-            Some(Kind::Flag)
-        } else if self.values.contains(&option) {
-            Some(Kind::Value)
-        } else if self.files.contains(&option) {
-            Some(Kind::File)
-        } else if self.optional.contains(&option) {
-            Some(Kind::Optional)
-        } else if self.directory.contains(&option) {
-            Some(Kind::Directory)
-        } else {
-            None
-        }
+/// One option word, or an option and its value in the next word. Returns the
+/// number of words consumed, or None for an option the grammar does not know
+/// or a value word that is not one fixed word.
+fn option(launcher: &Launcher, argv: &[Word], at: usize, binding: &mut Binding) -> Option<usize> {
+    let word = text(argv, at);
+    if let Some((name, _)) = word.split_once('=')
+        && word.starts_with("--")
+        && launcher.optional.contains(&name)
+    {
+        return Some(1);
     }
+    if launcher.optional.contains(&word) {
+        let next = argv.get(at + 1);
+        if next.is_some_and(Word::option_unknown) {
+            return None;
+        }
+        let usable = next.is_some_and(|word| {
+            word.fixed_position && !word.cardinality_unknown && !word.starts_with('-')
+        });
+        return Some(if usable { 2 } else { 1 });
+    }
+    let words = binding.option(argv, at, &launcher.grammar)?;
+    binding.unproven.is_none().then_some(words)
 }
 
-/// The words a launcher consumes, found without changing argv. Option values
-/// are argv indexes with the length of a glued `--option=` prefix.
-#[derive(Default)]
+/// Where the inner command starts and the values of the launcher's options,
+/// found without changing argv.
 struct Consumed {
     command: usize,
-    files: Vec<(usize, usize)>,
-    directory: Option<(usize, usize)>,
-    script: bool,
-}
-
-/// One option word, or an option and its value in the next word. Returns the
-/// number of words consumed, or None for an option the table does not know or
-/// a value word that is not one fixed word.
-fn option(launcher: &Launcher, argv: &[Word], at: usize, consumed: &mut Consumed) -> Option<usize> {
-    let word = text(argv, at);
-    let next = argv.get(at + 1);
-    let next_usable = next.is_some_and(|word| word.fixed_position && !word.cardinality_unknown);
-    let (name, inline) = if word.starts_with("--") {
-        word.split_once('=')
-            .map_or((word, false), |(name, _)| (name, true))
-    } else if word.chars().count() == 2 {
-        (word, false)
-    } else {
-        // Short clusters and glued short values are left to the fallback.
-        return None;
-    };
-    consumed.script |= launcher.scripts && SCRIPT_FLAGS.contains(&name);
-    match launcher.kind(name)? {
-        Kind::Flag => Some(1),
-        Kind::Optional if inline => Some(1),
-        Kind::Optional if next.is_some_and(Word::option_unknown) => None,
-        Kind::Optional => Some(
-            if next_usable && !next.is_some_and(|w| w.starts_with('-')) {
-                2
-            } else {
-                1
-            },
-        ),
-        kind => {
-            let (value, words) = if inline {
-                ((at, name.len() + 1), 1)
-            } else if next_usable {
-                ((at + 1, 0), 2)
-            } else {
-                return None;
-            };
-            match kind {
-                // An unexpanded directory would leave the inner command's cwd
-                // unknown.
-                Kind::Directory if argv[value.0].expands => return None,
-                Kind::Directory => consumed.directory = Some(value),
-                Kind::File => consumed.files.push(value),
-                Kind::Flag | Kind::Value | Kind::Optional => {}
-            }
-            Some(words)
-        }
-    }
+    binding: Binding,
 }
 
 fn walk(launcher: &Launcher, argv: &[Word], start: usize) -> Option<Consumed> {
-    let mut consumed = Consumed::default();
+    let mut binding = Binding::default();
     let mut path = &launcher.command[1..];
     let mut at = start + 1;
     let mut ended = false;
@@ -427,7 +291,7 @@ fn walk(launcher: &Launcher, argv: &[Word], start: usize) -> Option<Consumed> {
         // Before the subcommand words only global options may appear; after
         // them, a form that takes no options starts its command here.
         if option_word && (!path.is_empty() || launcher.options_after) {
-            at += option(launcher, argv, at, &mut consumed)?;
+            at += option(launcher, argv, at, &mut binding)?;
             continue;
         }
         if option_word || !path.is_empty() {
@@ -435,12 +299,15 @@ fn walk(launcher: &Launcher, argv: &[Word], start: usize) -> Option<Consumed> {
         }
         break;
     }
-    let command = argv.get(at)?;
-    consumed.command = at;
-    consumed.script |= launcher.scripts
-        && [".py", ".pyw"]
-            .iter()
-            .any(|suffix| command.ends_with(suffix));
+    // An unexpanded directory would leave the inner command's cwd unknown.
+    if binding
+        .values
+        .iter()
+        .any(|bound| bound.value.effect == Enter && argv[bound.value.index].expands)
+    {
+        return None;
+    }
+    argv.get(at)?;
     if launcher.interspersed
         && !ended
         && argv[at..]
@@ -449,7 +316,10 @@ fn walk(launcher: &Launcher, argv: &[Word], start: usize) -> Option<Consumed> {
     {
         return None;
     }
-    Some(consumed)
+    Some(Consumed {
+        command: at,
+        binding,
+    })
 }
 
 pub(super) fn resolve(
@@ -458,26 +328,34 @@ pub(super) fn resolve(
     argv: &mut [Word],
     index: &mut usize,
 ) -> bool {
-    let Some(found) = LAUNCHERS
+    let Some((launcher, found)) = LAUNCHERS
         .iter()
         .filter(|launcher| launcher.command[0] == name)
-        .find_map(|launcher| walk(launcher, argv, *index))
+        .find_map(|launcher| Some((launcher, walk(launcher, argv, *index)?)))
     else {
         return false;
     };
     // The launcher resolves its own file options in the directory it enters.
-    let entered = found.directory.map(|(index, prefix)| WrapperFile {
-        index,
-        prefix,
-        effect: Effect::Enter,
-    });
-    let files = found.files.into_iter().map(|(index, prefix)| WrapperFile {
-        index,
-        prefix,
-        effect: Effect::Use,
-    });
+    let entered = found
+        .binding
+        .values
+        .iter()
+        .rev()
+        .find(|bound| bound.value.effect == Enter)
+        .map(|bound| bound.value.clone());
+    let files = found
+        .binding
+        .values
+        .iter()
+        .filter(|bound| bound.value.effect == Use)
+        .map(|bound| bound.value.clone());
     // A script the launcher runs itself is read like an interpreter's script.
-    let script = found.script.then_some(WrapperFile {
+    let script = (launcher.scripts
+        && (SCRIPT_FLAGS.iter().any(|flag| found.binding.has(flag))
+            || [".py", ".pyw"]
+                .iter()
+                .any(|suffix| argv[found.command].ends_with(suffix))))
+    .then_some(OptionValue {
         index: found.command,
         prefix: 0,
         effect: Effect::Read,

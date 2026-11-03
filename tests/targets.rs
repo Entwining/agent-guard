@@ -16,8 +16,8 @@ pub mod curl_urls_after_double_dash_keep_their_read_role;
 pub mod curl_values_keep_url_and_config_reads;
 #[path = "support/differential.rs"]
 pub mod differential;
-#[path = "targets/du_option_files_have_list_role.rs"]
-pub mod du_option_files_have_list_role;
+#[path = "targets/du_option_files_are_read.rs"]
+pub mod du_option_files_are_read;
 #[path = "targets/fd_option_values_and_child_options_do_not_select_hidden_listing.rs"]
 pub mod fd_option_values_and_child_options_do_not_select_hidden_listing;
 #[path = "targets/filters_are_data_and_later_operands_remain_readable.rs"]
@@ -54,6 +54,8 @@ pub mod name_filters_narrow_hidden_walks;
 pub mod native_legacy_client_roles_match_go_without_losing_protection;
 #[path = "targets/opaque_operands_refuse_broad_roots.rs"]
 pub mod opaque_operands_refuse_broad_roots;
+#[path = "targets/option_values_keep_their_roles.rs"]
+pub mod option_values_keep_their_roles;
 #[path = "targets/optional_inplace_suffix_preserves_inline_code.rs"]
 pub mod optional_inplace_suffix_preserves_inline_code;
 #[path = "targets/precommand_wrappers_reach_the_actual_program.rs"]

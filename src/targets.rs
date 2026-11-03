@@ -56,91 +56,51 @@ fn label_options(args: &[Word]) -> std::borrow::Cow<'_, [Word]> {
     labelled
 }
 
-/// The options a getopt_long parser is known to accept: flags, and options
-/// that take a value glued as `-xVALUE` or `--name=VALUE`, or as the next
-/// word. Any other option may take the next word as its value.
-struct Getopt {
-    short_flags: &'static str,
-    short_values: &'static str,
-    flags: &'static [&'static str],
-    values: &'static [&'static str],
+/// How the generic operand role reads the words a program's owner leaves
+/// to it.
+pub(super) struct Operands {
+    pub walk: Walk,
+    /// The words the owner gave a role of its own.
+    pub claimed: Vec<usize>,
+    /// Whether the program takes `@FILE` literally; one whose conventions
+    /// are unknown may read either name.
+    pub literal: bool,
 }
 
-/// The words holding the values of the `wanted` options, spelled `-x` or
-/// `--name`, and the first word whose role the parser could take
-/// differently: one the shell may split, runtime text that could spell an
-/// option, or an option the grammar does not know. A known `--` ends the
-/// options with every role proven.
-fn option_values(args: &[Word], getopt: &Getopt, wanted: &[&str]) -> (Vec<usize>, Option<usize>) {
-    let mut values = Vec::new();
-    let mut index = 0;
-    while let Some(word) = args.get(index) {
-        let at = index;
-        index += 1;
-        let prefix = word.known_prefix();
-        if !word.option_unknown() && (prefix == "-" || !prefix.starts_with('-')) {
+/// Adds a target for each option value `binding` gives a role other than
+/// data, a read keeping the program's operand `walk`, and returns the words
+/// it claims from the generic operand role: the options and their values.
+fn option_targets(
+    args: &[Word],
+    binding: crate::options::Binding,
+    walk: Walk,
+    cwd: &str,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) -> Vec<usize> {
+    for bound in &binding.values {
+        let effect = bound.value.effect;
+        if effect == Effect::Name {
             continue;
         }
-        // Of runtime text, only a known option name with a glued value is
-        // sure to be that option.
-        let (text, glued_only) = match word.exact() {
-            Some(text) => (text, false),
-            None if word.fixed_position => (prefix, true),
-            None => return (values, Some(at)),
-        };
-        if text == "--" && !glued_only {
-            return (values, None);
-        }
-        let (key, holder) = if let Some(long) = text.strip_prefix("--") {
-            let (name, glued) = long
-                .split_once('=')
-                .map_or((long, false), |(name, _)| (name, true));
-            let key = &text[..name.len() + 2];
-            if glued_only && !glued {
-                return (values, Some(at));
-            }
-            if getopt.flags.contains(&key) {
-                continue;
-            }
-            if !getopt.values.contains(&key) {
-                return (values, Some(at));
-            }
-            (key, if glued { at } else { index })
-        } else {
-            if glued_only {
-                return (values, Some(at));
-            }
-            // A short option's key is its letter.
-            let Some((offset, letter)) = text
-                .char_indices()
-                .skip(1)
-                .find(|(_, letter)| !getopt.short_flags.contains(*letter))
-            else {
-                continue;
-            };
-            if !getopt.short_values.contains(letter) {
-                return (values, Some(at));
-            }
-            let end = offset + letter.len_utf8();
-            (
-                &text[offset..end],
-                if end < text.len() { at } else { index },
-            )
-        };
-        if holder == index {
-            if !args.get(index).is_some_and(|value| value.fixed_position) {
-                return (values, Some(index));
-            }
-            index += 1;
-        }
-        if wanted
-            .iter()
-            .any(|option| *option == key || option.strip_prefix('-') == Some(key))
-        {
-            values.push(holder);
-        }
+        let mut target = Target::from_word(
+            &bound.value.word(args),
+            cwd,
+            host,
+            effect,
+            if effect == Effect::Read {
+                walk
+            } else {
+                Walk::None
+            },
+        );
+        target.via = Via::Option;
+        effects.targets.push(target);
     }
-    (values, None)
+    if let Some(start) = binding.unproven {
+        effects.unproven = Some(effects.unproven.map_or(start, |known| known.min(start)));
+    }
+    binding.options
 }
 
 fn modelled_program(program: &str) -> bool {
@@ -208,27 +168,31 @@ pub(crate) fn list_file_sources(command: &CommandRecord) -> Vec<&crate::record::
         .collect()
 }
 
-fn operand_value(word: &Word) -> Option<&str> {
+/// The names a program may read from `word`: its text, or unless the word is
+/// `literal`, the value glued after `=` to an option and the file an `@FILE`
+/// convention names, which only some programs define.
+fn operand_values(word: &Word, literal: bool) -> impl Iterator<Item = &str> {
     let mut value = word.value.as_str();
-    if value.starts_with('-') {
-        value = value.split_once('=')?.1;
+    if !literal && value.starts_with('-') {
+        value = value.split_once('=').map_or("", |(_, value)| value);
     }
-    if let Some(path) = value.strip_prefix('@') {
-        return (!path.is_empty()).then_some(path);
-    }
-    if let Some(at) = value.find('@') {
-        let prefix = &value[..at];
-        if (prefix.ends_with('=') || prefix.ends_with(':'))
-            && prefix
-                .trim_end_matches(['=', ':'])
-                .chars()
-                .all(|c| !matches!(c, '=' | '@') && !space(c))
-            && !prefix.trim_end_matches(['=', ':']).is_empty()
-        {
-            value = &value[at + 1..];
-        }
-    }
-    (!value.is_empty()).then_some(value)
+    let file = if literal {
+        None
+    } else {
+        value.strip_prefix('@').or_else(|| {
+            let at = value.find('@')?;
+            let key = &value[..at];
+            let name = key.trim_end_matches(['=', ':']);
+            (name.len() < key.len()
+                && !name.is_empty()
+                && name.chars().all(|c| !matches!(c, '=' | '@') && !space(c)))
+            .then(|| &value[at + 1..])
+        })
+    };
+    [Some(value), file]
+        .into_iter()
+        .flatten()
+        .filter(|name| !name.is_empty())
 }
 
 fn independent_operands(args: &[Word], operands: &[Word]) -> bool {

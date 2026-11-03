@@ -1,4 +1,6 @@
 use super::*;
+use crate::options::{Grammar, Syntax};
+use crate::record::Effect::{Name, Read, Write};
 
 mod pathspec;
 
@@ -53,68 +55,62 @@ fn infer_subcommand(
             effects.targets.push(target);
         }
     };
-    let keys = file_options(sub);
-    let mut pattern = sub != "grep";
-    let mut options = true;
+    let binding = crate::options::bind(&args[index..], subcommand_options(sub.as_str()));
+    for bound in &binding.values {
+        let value = bound.value.word(&args[index..]);
+        match bound.value.effect {
+            Effect::Name => {}
+            Effect::Read => add(&value.text, &value, Effect::Read, Walk::None, effects),
+            effect => {
+                effects
+                    .targets
+                    .push(Target::from_word(&value, base, host, effect, Walk::None))
+            }
+        }
+    }
+    if let Some(start) = binding.unproven {
+        effects.unproven.get_or_insert(index + start);
+    }
+    // Patterns given as option values leave every operand a pathspec.
+    let mut pattern = sub != "grep"
+        || binding
+            .values
+            .iter()
+            .any(|bound| ["-e", "-f"].contains(&bound.name));
     let mut bundle_action = None;
     let mut bundle_output = false;
-    while index < args.len() {
-        let arg = &args[index];
-        if options && effects.unproven.is_none() && arg.option_unknown() {
-            effects.unproven = Some(index);
-        }
-        // After a word the grammar cannot place, no option consumes a later
-        // word and no operand becomes the grep pattern.
-        let scan = effects.unproven.is_some();
-        pattern |= scan;
-        if options && !scan && sub == "commit" && ["-m", "--message"].contains(&arg.as_str()) {
-            index += 2;
+    for operand in binding.operands {
+        let arg = &args[index + operand];
+        // After a word the grammar cannot place, no operand becomes the grep
+        // pattern.
+        pattern |= binding.unproven.is_some_and(|start| start <= operand);
+        // A bundle action is data; only create's first file is an output.
+        if sub == "bundle" && bundle_action.is_none() {
+            bundle_action = Some(arg.text.clone());
             continue;
         }
-        let mut option_path = None;
-        if sub == "grep" && options {
-            let (skip, path) =
-                grep_option_path(args, arg, &mut index, &mut options, &mut pattern, scan);
-            if skip {
-                continue;
-            }
-            option_path = path;
+        if !pattern {
+            pattern = true;
+            continue;
         }
-        option_path = option_path_for_keys(args, arg, &mut index, keys, scan).or(option_path);
-        if let Some(path) = option_path {
-            add(&path, &path, Effect::Read, Walk::None, effects);
-        } else if !options || !arg.starts_with('-') {
-            // A bundle action is data; only create's first file is an output.
-            if sub == "bundle" && bundle_action.is_none() {
-                bundle_action = Some(arg.text.clone());
-                index += 1;
-                continue;
-            }
-            if !pattern {
-                pattern = true;
-                index += 1;
-                continue;
-            }
-            let output =
-                sub == "bundle" && bundle_action.as_deref() == Some("create") && !bundle_output;
-            bundle_output |= output;
-            let (effect, walk) = if output {
-                (Effect::Write, Walk::None)
-            } else if metadata {
-                (Effect::Meta, Walk::None)
-            } else if names {
-                (Effect::Name, Walk::None)
-            } else {
-                (Effect::Read, Walk::Visible)
-            };
-            match pathspec::parse(arg) {
-                // An exclusion only removes paths from the selected set.
-                Some(magic) if magic.exclude => {}
-                Some(magic) => add(magic.path, arg, effect, walk, effects),
-                None => add(arg, arg, effect, walk, effects),
-            }
+        let output =
+            sub == "bundle" && bundle_action.as_deref() == Some("create") && !bundle_output;
+        bundle_output |= output;
+        let (effect, walk) = if output {
+            (Effect::Write, Walk::None)
+        } else if metadata {
+            (Effect::Meta, Walk::None)
+        } else if names {
+            (Effect::Name, Walk::None)
+        } else {
+            (Effect::Read, Walk::Visible)
+        };
+        match pathspec::parse(arg) {
+            // An exclusion only removes paths from the selected set.
+            Some(magic) if magic.exclude => {}
+            Some(magic) => add(magic.path, arg, effect, walk, effects),
+            None => add(arg, arg, effect, walk, effects),
         }
-        index += 1;
     }
 }
 
@@ -202,70 +198,75 @@ fn global_options(
     (index, base)
 }
 
-/// The options of a subcommand whose value is a file git reads.
-fn file_options(sub: &str) -> &'static [&'static str] {
+/// The value options of a subcommand whose values are not data, and of those
+/// whose data values agents pass in separate words. Git's parse-options binds
+/// `-xVALUE`, `-x VALUE`, `--name=VALUE` and `--name VALUE`; other options
+/// keep the operand roles.
+fn subcommand_options(sub: &str) -> &'static Grammar {
     match sub {
-        "config" => &["-f", "--file", "--blob"],
-        "blame" => &["--contents"],
-        "commit" => &["-F", "--file", "--pathspec-from-file"],
-        "tag" | "merge" => &["-F", "--file"],
-        "add" | "rm" | "restore" | "reset" | "checkout" | "stash" => &["--pathspec-from-file"],
-        _ => &[],
-    }
-}
-
-fn option_path_for_keys(
-    args: &[Word],
-    arg: &Word,
-    index: &mut usize,
-    keys: &[&str],
-    scan: bool,
-) -> Option<Word> {
-    for key in keys {
-        if arg == key && !scan {
-            *index += 1;
-            return args.get(*index).cloned();
+        "config" => &const { Grammar::partial(Syntax::Getopt, &[("-f --file --blob", Read)]) },
+        "blame" => &const { Grammar::partial(Syntax::Getopt, &[("--contents", Read)]) },
+        "commit" => {
+            &const {
+                Grammar::partial(
+                    Syntax::Getopt,
+                    &[
+                        ("-F --file --pathspec-from-file -t --template", Read),
+                        ("-m --message", Name),
+                    ],
+                )
+            }
         }
-        if let Some(path) = arg.strip_prefix(&format!("{key}=")) {
-            return Some(arg.with_text(path.to_owned()));
+        "tag" | "merge" => {
+            &const {
+                Grammar::partial(
+                    Syntax::Getopt,
+                    &[("-F --file", Read), ("-m --message", Name)],
+                )
+            }
         }
-        if !key.starts_with("--")
-            && let Some(path) = arg.strip_prefix(key).filter(|path| !path.is_empty())
-        {
-            return Some(arg.with_text(path.to_owned()));
+        "add" | "rm" | "restore" | "reset" | "checkout" | "stash" => {
+            &const { Grammar::partial(Syntax::Getopt, &[("--pathspec-from-file", Read)]) }
         }
+        "grep" => {
+            &const {
+                Grammar::partial(
+                    Syntax::Getopt,
+                    &[
+                        ("-f", Read),
+                        (
+                            "-e -A --after-context -B --before-context -C --context --max-depth -m --max-count --threads",
+                            Name,
+                        ),
+                    ],
+                )
+            }
+        }
+        "diff" | "log" | "show" | "whatchanged" | "diff-tree" | "diff-index" | "diff-files"
+        | "range-diff" => &const { Grammar::partial(Syntax::Getopt, &[("--output", Write)]) },
+        "archive" => {
+            &const {
+                Grammar::partial(
+                    Syntax::Getopt,
+                    &[
+                        ("-o --output", Write),
+                        ("--add-file", Read),
+                        ("--prefix --format --remote --exec", Name),
+                    ],
+                )
+            }
+        }
+        "format-patch" => {
+            &const {
+                Grammar::partial(
+                    Syntax::Getopt,
+                    &[
+                        ("-o --output-directory --output", Write),
+                        ("--signature-file", Read),
+                    ],
+                )
+            }
+        }
+        _ => &const { Grammar::partial(Syntax::Getopt, &[]) },
     }
-    None
-}
-
-fn grep_option_path(
-    args: &[Word],
-    arg: &Word,
-    index: &mut usize,
-    options: &mut bool,
-    pattern: &mut bool,
-    scan: bool,
-) -> (bool, Option<Word>) {
-    let mut option_path = None;
-    if !scan && arg == "--" {
-        *options = false;
-        *index += 1;
-        return (true, None);
-    }
-    if !scan && arg == "-e" {
-        *pattern = true;
-        *index += 2;
-        return (true, None);
-    }
-    if let Some(path) = arg
-        .strip_prefix("--file=")
-        .or_else(|| arg.strip_prefix("-f="))
-    {
-        option_path = Some(arg.with_text(path.to_owned()));
-    } else if arg == "-f" && !scan {
-        *pattern = true;
-        *index += 1;
-        option_path = args.get(*index).cloned();
-    }
-    (false, option_path)
 }

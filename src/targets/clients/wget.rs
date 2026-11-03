@@ -1,13 +1,12 @@
 use super::*;
 
-pub(super) const WGET_USE: &[(&str, Effect)] = &[
-    ("--ca-certificate", Effect::Use),
-    ("--ca-directory", Effect::Use),
-    ("--certificate", Effect::Use),
-    ("--private-key", Effect::Use),
-    ("--crl-file", Effect::Use),
-    ("--random-file", Effect::Use),
-];
+pub(super) const WGET: Grammar = Grammar::partial(
+    Syntax::Getopt,
+    &[(
+        "--ca-certificate --ca-directory --certificate --private-key --crl-file --random-file",
+        Use,
+    )],
+);
 const WGET_WRITES: &[&str] = &[
     "output-document",
     "output-file",

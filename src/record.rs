@@ -261,20 +261,22 @@ pub struct FindRun {
     pub cwd: String,
     pub args: Vec<Word>,
 }
-/// A file that a precommand wrapper opens itself, such as `xargs -a FILE`
-/// or `uv run --env-file FILE`, or a directory it enters, such as
-/// `env -C DIR`. Each entry resolves against the directory the entries before
-/// it entered, starting from the shell's directory.
+/// The value an option takes, with the role the option gives it, such as a
+/// file a precommand wrapper opens itself (`xargs -a FILE`) or a directory
+/// it enters (`env -C DIR`). A wrapper's entries resolve against the
+/// directory the entries before them entered, starting from the shell's
+/// directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WrapperFile {
-    /// The argv word that holds the path, so the path follows the word when a
-    /// cwd alternative reprojects it.
+pub struct OptionValue {
+    /// The argv word that holds the value, so the value follows the word when
+    /// a cwd alternative reprojects it.
     pub index: usize,
-    /// The length of an `--option=` prefix glued before the path.
+    /// The length of the option spelling glued before the value, as in
+    /// `--option=` or `-o`.
     pub prefix: usize,
     pub effect: Effect,
 }
-impl WrapperFile {
+impl OptionValue {
     pub fn word(&self, argv: &[Word]) -> Word {
         let word = &argv[self.index];
         if self.prefix == 0 {
@@ -285,7 +287,7 @@ impl WrapperFile {
     }
 }
 /// The directory reached from `shell_cwd` after the directories `files` enter.
-pub fn entered(shell_cwd: &str, argv: &[Word], files: &[WrapperFile], home: &str) -> String {
+pub fn entered(shell_cwd: &str, argv: &[Word], files: &[OptionValue], home: &str) -> String {
     files
         .iter()
         .filter(|file| file.effect == Effect::Enter)
@@ -326,7 +328,7 @@ pub struct Command {
     pub shell_cwd: String,
     pub program: Option<usize>,
     pub wrappers: Vec<String>,
-    pub wrapper_files: Vec<WrapperFile>,
+    pub wrapper_files: Vec<OptionValue>,
     /// The first word whose role the wrapper grammar cannot prove; every
     /// word from it on keeps the reads of an unknown program's arguments.
     pub unproven: Option<usize>,

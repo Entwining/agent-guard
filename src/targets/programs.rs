@@ -11,10 +11,15 @@ pub(super) fn infer(
     host: HostFacts<'_>,
     effects: &mut Effects,
     depth: usize,
-) -> (Option<Walk>, Vec<usize>) {
+) -> Option<Operands> {
     let index = command.program.unwrap_or(0);
-    let mut generic_walk = None;
-    let mut claimed = Vec::new();
+    let unknown_conventions = |walk: Walk, claimed: Vec<usize>| {
+        Some(Operands {
+            walk,
+            claimed,
+            literal: false,
+        })
+    };
     match program {
         "__observed_stream__" => effects.gaps.push(CoverageGap::UnresolvedTarget),
         "printf" | "echo" | "print" | "true" | "false" | ":" | "unset" | "local" | "break"
@@ -51,8 +56,7 @@ pub(super) fn infer(
         }
         "cat" | "head" | "tail" | "less" | "more" | "bat" | "sort" | "uniq" | "cut" | "nl"
         | "base64" | "xxd" | "od" | "strings" => {
-            readers::files(args, command, effects);
-            generic_walk = Some(Walk::None);
+            return Some(readers::files(program, args, command, cwd, host, effects));
         }
         "ls" => readers::listing(args, cwd, host, effects),
         "rg" | "grep" | "ag" | "ack" => {
@@ -64,27 +68,18 @@ pub(super) fn infer(
         "fd" | "tree" | "du" | "find" => {
             infer_listing(program, args, command, cwd, host, effects, depth)
         }
-        "tar" => {
-            claimed = infer_tar(args, cwd, host, effects);
-            generic_walk = Some(Walk::Visible);
-        }
-        "jq" | "yq" => {
-            claimed = readers::filter(program, args);
-            generic_walk = Some(Walk::Visible);
-        }
-        "diff" => {
-            readers::unknown(program, args, effects);
-            claimed = readers::diff_patterns(args);
-            generic_walk = Some(Walk::Visible);
-        }
+        "tar" => return unknown_conventions(Walk::Visible, infer_tar(args, cwd, host, effects)),
+        "jq" | "yq" => return unknown_conventions(Walk::Visible, readers::filter(program, args)),
         "gh" | "aws" | "rex" | "sessidx" => {
             readers::unknown(program, args, effects);
-            claimed = match program {
-                "rex" => readers::rex_names(args),
-                "sessidx" => readers::sessidx_queries(args),
-                _ => readers::output_query(program, args),
-            };
-            generic_walk = Some(Walk::Visible);
+            return unknown_conventions(
+                Walk::Visible,
+                match program {
+                    "rex" => readers::rex_names(args),
+                    "sessidx" => readers::sessidx_queries(args),
+                    _ => readers::output_query(program, args),
+                },
+            );
         }
         "rm" | "mv" | "ln" => resource_changes::infer(program, args, cwd, host, effects),
         "git" => infer_git(args, cwd, host, effects),
@@ -105,11 +100,18 @@ pub(super) fn infer(
         _ => {
             if !clients::infer(program, args, cwd, host, effects) {
                 readers::unknown(program, args, effects);
-                generic_walk = Some(Walk::Visible);
+                return Some(readers::options(
+                    program,
+                    args,
+                    Walk::Visible,
+                    cwd,
+                    host,
+                    effects,
+                ));
             }
         }
     }
-    (generic_walk, claimed)
+    None
 }
 
 fn read(word: &Word, cwd: &str, host: HostFacts<'_>, recursive: bool) -> Target {

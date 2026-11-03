@@ -13,6 +13,7 @@ pub mod adapters;
 pub mod entry;
 pub mod filesystem;
 pub mod limits;
+mod options;
 mod policy;
 pub mod record;
 pub mod shell;

@@ -1,6 +1,8 @@
 use super::super::*;
 use super::read;
 
+mod grammars;
+
 pub(super) fn listing(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effects) {
     effects.independent_arguments = independent_operands(args, args);
     let mut recursive = false;
@@ -29,10 +31,23 @@ pub(super) fn listing(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &m
     }
 }
 
-pub(super) fn files(args: &[Word], command: &CommandRecord, effects: &mut Effects) {
+/// A reader of the files its operands name, none of which it takes as an
+/// `@FILE` convention.
+pub(super) fn files(
+    program: &str,
+    args: &[Word],
+    command: &CommandRecord,
+    cwd: &str,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) -> Operands {
     effects.independent_arguments = independent_operands(args, args);
     if command.unresolved() {
         effects.gaps.push(CoverageGap::UnresolvedTarget);
+    }
+    Operands {
+        literal: true,
+        ..options(program, args, Walk::None, cwd, host, effects)
     }
 }
 
@@ -99,77 +114,39 @@ pub(super) fn filter(program: &str, args: &[Word]) -> Vec<usize> {
     claimed
 }
 
-// The options of macOS and GNU diff, from their manuals.
-const DIFF: Getopt = Getopt {
-    short_flags: "aBbcdEefHilNnPpqrsTtuwyZ",
-    short_values: "ACDFILSUWXx",
-    flags: &[
-        "--brief",
-        "--ed",
-        "--expand-tabs",
-        "--forward-ed",
-        "--ignore-all-space",
-        "--ignore-case",
-        "--ignore-space-change",
-        "--ignore-blank-lines",
-        "--ignore-tab-expansion",
-        "--ignore-trailing-space",
-        "--initial-tab",
-        "--minimal",
-        "--no-dereference",
-        "--normal",
-        "--rcs",
-        "--show-c-function",
-        "--speed-large-files",
-        "--strip-trailing-cr",
-        "--text",
-        "--unidirectional-new-file",
-        "--new-file",
-        "--recursive",
-        "--report-identical-files",
-        "--side-by-side",
-        "--suppress-common-lines",
-        "--suppress-blank-empty",
-        "--left-column",
-        "--paginate",
-        "--ignore-file-name-case",
-        "--no-ignore-file-name-case",
-        "--color",
-        "--help",
-        "--version",
-    ],
-    values: &[
-        "--algorithm",
-        "--context",
-        "--ifdef",
-        "--unified",
-        "--show-function-line",
-        "--ignore-matching-lines",
-        "--label",
-        "--width",
-        "--tabsize",
-        "--starting-file",
-        "--exclude",
-        "--exclude-from",
-        "--changed-group-format",
-        "--new-group-format",
-        "--old-group-format",
-        "--unchanged-group-format",
-        "--line-format",
-        "--new-line-format",
-        "--old-line-format",
-        "--unchanged-line-format",
-        "--horizon-lines",
-        "--from-file",
-        "--to-file",
-        "--palette",
-    ],
-};
-
-/// The name patterns of `diff -x` and `--exclude`, which select the
-/// directory entries a recursive comparison skips.
-pub(super) fn diff_patterns(args: &[Word]) -> Vec<usize> {
-    option_values(args, &DIFF, &["-x", "--exclude"]).0
+/// The generic operand roles of a reader whose operands `walk` reads: the
+/// options of a modelled grammar claim their words and take the roles it
+/// declares, and its operands are literal names.
+pub(super) fn options(
+    program: &str,
+    args: &[Word],
+    walk: Walk,
+    cwd: &str,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) -> Operands {
+    let grammar = match program {
+        "sed" => &grammars::SED,
+        "awk" => &grammars::AWK,
+        "sort" => &grammars::SORT,
+        "diff" => &grammars::DIFF,
+        "base64" => &grammars::BASE64,
+        "hexdump" => &grammars::HEXDUMP,
+        "openssl" => &grammars::OPENSSL,
+        _ => {
+            return Operands {
+                walk,
+                claimed: Vec::new(),
+                literal: false,
+            };
+        }
+    };
+    let binding = crate::options::bind(args, grammar);
+    Operands {
+        walk,
+        claimed: option_targets(args, binding, walk, cwd, host, effects),
+        literal: true,
+    }
 }
 
 // gh parses its output formats only in `gh api` and the commands with
