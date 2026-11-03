@@ -16,6 +16,14 @@ pub(super) struct Resolution {
     pub unproven: Option<usize>,
 }
 
+impl Resolution {
+    /// Whether the program reads the shell's pipe itself: xargs consumes it,
+    /// and script hands it on through a terminal that echoes it.
+    pub(super) fn reads_pipe(&self) -> bool {
+        !self.wrappers.iter().any(|w| w == "xargs" || w == "script")
+    }
+}
+
 pub(crate) enum EnvironmentChange {
     Clear,
     Unset(String),

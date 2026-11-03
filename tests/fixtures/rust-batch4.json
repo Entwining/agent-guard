@@ -1729,6 +1729,13 @@
     },
     {
       "cwd": "$H/project",
+      "id": "curl-header-literal-at-control",
+      "partition": "curl",
+      "source": "curl -H 'From: me@.env' https://example.com",
+      "expected": "N"
+    },
+    {
+      "cwd": "$H/project",
       "id": "wget-control",
       "partition": "wget",
       "source": "wget https://example.com",
@@ -1866,6 +1873,27 @@
       "partition": "secret",
       "source": "mk get --help",
       "expected": "UC"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "github-token-for-host",
+      "partition": "secret",
+      "source": "gh auth token -h github.example.com",
+      "expected": "D"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "github-token-help",
+      "partition": "secret",
+      "source": "gh auth token --help",
+      "expected": "UC"
+    },
+    {
+      "cwd": "$H/project",
+      "id": "github-token-help-cleared",
+      "partition": "secret",
+      "source": "gh auth token --help --help=false",
+      "expected": "D"
     },
     {
       "cwd": "$H/project",

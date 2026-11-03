@@ -323,7 +323,19 @@ fn option_target(context: &mut Context<'_>, index: usize, key: &str, value: &str
     match key {
         "d" | "data" | "data-ascii" | "data-binary" | "data-urlencode" | "json" | "H"
         | "header" | "proxy-header" | "url-query" | "variable" => {
-            if let Some((_, path)) = value.split_once('@').filter(|(_, path)| !path.is_empty()) {
+            // A value reads FILE when it starts with `@FILE`; these three
+            // options also take `name@FILE`. Ending the name at the first `=`
+            // or `@` is `--variable`'s grammar and claims every file the
+            // urlencode forms read.
+            let path = if ["data-urlencode", "url-query", "variable"].contains(&key) {
+                value
+                    .find(['=', '@'])
+                    .filter(|&at| value[at..].starts_with('@'))
+                    .map(|at| &value[at + 1..])
+            } else {
+                value.strip_prefix('@')
+            };
+            if let Some(path) = path.filter(|path| !path.is_empty()) {
                 context
                     .add(path, Some(index), Effect::Read, Some(true))
                     .sends = true;

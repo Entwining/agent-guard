@@ -6,7 +6,7 @@ use crate::{
     Advice, CheckError, CheckErrorKind, CoverageGap, DenialRule, EffectRecord, EffectSource,
     Reason,
     filesystem::{self, Identity, Protection},
-    record::{Direction, Effect, PipelineStage, Stdin, Via, Walk},
+    record::{Effect, PipelineStage, Stdin, Via, Walk},
     shell,
     targets::{self, Target},
 };
@@ -327,12 +327,9 @@ impl Inspection<'_> {
         if effects.variable {
             // The next stage decides whether a credential written to the pipe
             // is printed or consumed.
-            let redirected = command
-                .redirects
-                .iter()
-                .any(|redirect| redirect.direction == Direction::Out && redirect.fd != 2);
+            let stdout_redirected = command.redirects.iter().any(|redirect| redirect.fd == 1);
             match command.pipeline {
-                Some(stage) if effects.variable_stdout_only && !redirected => {
+                Some(stage) if effects.variable_stdout_only && !stdout_redirected => {
                     pipes.credential_output.insert(stage, false);
                 }
                 _ => self.credential_variable(),

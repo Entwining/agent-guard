@@ -135,10 +135,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let mut executed_output =
             self.command_builtin(&mut argv, &resolved, scope, &prior, depth)?;
         let shell_source = self.observed_shell_source(&mut argv, scope, &resolved);
-        // xargs consumes its pipe; the command it runs does not read it.
-        let stream = scope.piped
-            && scope.pipeline_input.is_some()
-            && !resolved.wrappers.iter().any(|wrapper| wrapper == "xargs");
+        let stream = scope.piped && scope.pipeline_input.is_some() && resolved.reads_pipe();
         let unresolved = program.is_some_and(|i| argv[i].exact().is_none());
         let function = resolved.wrappers.is_empty()
             && program.is_some_and(|i| self.functions.contains_key(&argv[i].text));

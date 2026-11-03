@@ -247,6 +247,7 @@
  ,{"id":"piped-hidden-search-reads-input","partition":"piped-search","tool":"Bash","input":{"command":"echo hi | rg --hidden foo"},"expected":"N"}
  ,{"id":"unpiped-search-walks-cwd","partition":"piped-search","tool":"Bash","input":{"command":"cd $H/.codex && rg foo"},"expected":"D","reason":"[policy:agent-guard/credential_store]","alternative":"restrict a search to file names"}
  ,{"id":"null-input-search-walks-cwd","partition":"piped-search","tool":"Bash","input":{"command":"cd $H/.codex && echo hi | rg foo < /dev/null"},"expected":"D","reason":"[policy:agent-guard/credential_store]","alternative":"restrict a search to file names"}
+ ,{"id":"terminal-wrapped-search-walks-cwd","partition":"piped-search","tool":"Bash","input":{"command":"cd $H/.codex && echo hi | script -q /dev/null rg foo"},"expected":"D","reason":"[policy:agent-guard/credential_store]","alternative":"restrict a search to file names"}
  ,{"id":"xargs-search-walks-appended-names","partition":"piped-search","tool":"Bash","input":{"command":"cd $H && find .claude -type f -name '*.jsonl' | xargs rg foo"},"expected":"N"}
  ,{"id":"xargs-replace-search-without-marker-walks-cwd","partition":"piped-search","tool":"Bash","input":{"command":"cd $H && find .claude -type f -name '*.jsonl' | xargs -I{} rg foo"},"expected":"D","reason":"[policy:agent-guard/broad_scan]","alternative":"Scope the scan to a project path"}
 ]}

@@ -5,8 +5,11 @@ pub(super) fn infer(program: &str, args: &[Word], effects: &mut Effects) {
     let arg = |index| args.get(index).map_or("", Word::as_str);
     match program {
         "gh" => {
+            // Help is a Cobra boolean, so `--help=false` can clear it.
+            let help = args.iter().any(|arg| arg == "--help")
+                && !args.iter().any(|arg| arg.starts_with("--help="));
             effects.token = arg(0) == "auth"
-                && (arg(1) == "token" || arg(1) == "status" && gh_shows_token(&args[2..]));
+                && (arg(1) == "token" && !help || arg(1) == "status" && gh_shows_token(&args[2..]));
         }
         "glab" => {
             effects.token = arg(0) == "auth"
