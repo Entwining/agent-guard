@@ -170,9 +170,9 @@ fn walk_pipeline(source: &Source<'_>, pipeline: &Pipeline) -> Result<Statement, 
         None
     };
     let mut commands = Vec::new();
-    for command in &pipeline.seq {
+    for (stage, command) in pipeline.seq.iter().enumerate() {
         let mut records = Vec::new();
-        walk_command(source, command, &mut records, id)?;
+        walk_command(source, command, &mut records, id.map(|id| (id, stage)))?;
         commands.push(if records.len() == 1 {
             records.remove(0)
         } else {
@@ -190,7 +190,7 @@ fn walk_command(
     source: &Source<'_>,
     command: &Command,
     output: &mut Vec<Statement>,
-    pipeline: Option<usize>,
+    pipeline: Option<(usize, usize)>,
 ) -> Result<(), CheckError> {
     match command {
         Command::Simple(simple) => {

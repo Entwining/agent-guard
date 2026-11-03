@@ -197,7 +197,11 @@ const CURL_WRITES: &[&str] = &[
     "ssl-sessions",
 ];
 
-pub(super) fn curl(context: &mut Context<'_>) {
+/// Adds curl's targets, and returns whether the request sends standard input
+/// and no other option reads it.
+pub(super) fn curl(context: &mut Context<'_>) -> bool {
+    let mut sends_stdin = false;
+    let mut reads_stdin_otherwise = false;
     let mut index = 0;
     let mut options = true;
     let mut remote_name = false;
@@ -270,7 +274,11 @@ pub(super) fn curl(context: &mut Context<'_>) {
         if key == "output-dir" {
             output_dir = Some(holder);
         } else {
-            option_target(context, holder, key, value);
+            match option_target(context, holder, key, value) {
+                StdinUse::Unread => {}
+                StdinUse::Sent => sends_stdin = true,
+                StdinUse::Other => reads_stdin_otherwise = true,
+            }
         }
         index = if scan { index + 1 } else { holder + 1 };
     }
@@ -283,6 +291,7 @@ pub(super) fn curl(context: &mut Context<'_>) {
         });
         context.add(path, output_dir, Effect::Write, None).walk = Walk::None;
     }
+    sends_stdin && !reads_stdin_otherwise
 }
 
 /// The resource a URL names: `@FILE` reads a list of URLs from FILE, and a
@@ -297,7 +306,20 @@ fn url(context: &mut Context<'_>, index: usize, url: &str) {
     }
 }
 
-fn option_target(context: &mut Context<'_>, index: usize, key: &str, value: &str) {
+/// How an option uses curl's standard input.
+enum StdinUse {
+    Unread,
+    /// The request sends it to the server.
+    Sent,
+    /// It can reach curl's output: a `--variable` through `--expand-*`, a
+    /// `--write-out` format, a URL, a cookie that `--cookie-jar` saves, or a
+    /// `--config` file that turns on tracing.
+    Other,
+}
+
+/// Adds the target an option value names, and returns how the option uses
+/// standard input.
+fn option_target(context: &mut Context<'_>, index: usize, key: &str, value: &str) -> StdinUse {
     match key {
         "d" | "data" | "data-ascii" | "data-binary" | "data-urlencode" | "json" | "H"
         | "header" | "proxy-header" | "url-query" | "variable" => {
@@ -305,11 +327,18 @@ fn option_target(context: &mut Context<'_>, index: usize, key: &str, value: &str
                 context
                     .add(path, Some(index), Effect::Read, Some(true))
                     .sends = true;
+                if path == "-" {
+                    return if key == "variable" {
+                        StdinUse::Other
+                    } else {
+                        StdinUse::Sent
+                    };
+                }
             }
         }
         "F" | "form" => {
-            let file = value.split_once('=').map_or(value, |(_, value)| value);
-            let file = file.strip_prefix(['@', '<']).unwrap_or(file);
+            let content = value.split_once('=').map_or(value, |(_, value)| value);
+            let file = content.strip_prefix(['@', '<']).unwrap_or(content);
             let file = file
                 .strip_prefix('"')
                 .and_then(|file| file.split_once('"').map(|(file, _)| file))
@@ -317,16 +346,35 @@ fn option_target(context: &mut Context<'_>, index: usize, key: &str, value: &str
             context
                 .add(file, Some(index), Effect::Read, Some(true))
                 .sends = true;
+            if file == "-" && content.starts_with(['@', '<']) {
+                return StdinUse::Sent;
+            }
         }
         "T" | "upload-file" | "K" | "config" | "etag-compare" => {
             context.add(value, Some(index), Effect::Read, None).sends = true;
+            if value == "-" {
+                return if ["T", "upload-file"].contains(&key) {
+                    StdinUse::Sent
+                } else {
+                    StdinUse::Other
+                };
+            }
         }
-        "url" => url(context, index, value),
-        "w" | "write-out" if value.starts_with('@') && value.len() > 1 && value != "@-" => {
+        "url" => {
+            url(context, index, value);
+            if value == "@-" {
+                return StdinUse::Other;
+            }
+        }
+        "w" | "write-out" if value == "@-" => return StdinUse::Other,
+        "w" | "write-out" if value.starts_with('@') && value.len() > 1 => {
             context.add(&value[1..], Some(index), Effect::Read, Some(true));
         }
         "b" | "cookie" if !value.is_empty() && !value.contains('=') => {
             context.add(value, Some(index), Effect::Use, None);
+            if value == "-" {
+                return StdinUse::Other;
+            }
         }
         key if CURL_WRITES.contains(&key) && !value.is_empty() => {
             if value != "-" {
@@ -338,6 +386,7 @@ fn option_target(context: &mut Context<'_>, index: usize, key: &str, value: &str
         }
         _ => {}
     }
+    StdinUse::Unread
 }
 
 fn file_url(context: &mut Context<'_>, index: usize, url: &str) {

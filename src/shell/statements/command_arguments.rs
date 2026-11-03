@@ -74,7 +74,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         arguments: &[Vec<Vec<crate::record::Word>>],
         initial: &mut [crate::record::Word],
         scope: &Scope,
-        context: (Option<usize>, bool),
+        context: (Option<crate::record::PipelineStage>, bool),
     ) -> bool {
         let resolution = shell::argv::resolve(
             initial,
@@ -124,7 +124,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         prefixes: Vec<crate::record::Word>,
         arguments: &[Vec<Vec<crate::record::Word>>],
         scope: &Scope,
-        context: (Option<usize>, bool),
+        context: (Option<crate::record::PipelineStage>, bool),
     ) -> Vec<ArgumentAlternative> {
         let mut initial = prefixes.clone();
         for choices in arguments {

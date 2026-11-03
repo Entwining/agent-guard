@@ -6,6 +6,8 @@ pub mod bracket_classes_match_either_case;
 pub mod codefile_home_prefixes_reach_appdata_owner;
 #[path = "policy_contract/credential_globs_and_roots_follow_the_lexical_owner.rs"]
 pub mod credential_globs_and_roots_follow_the_lexical_owner;
+#[path = "policy_contract/credential_pipes_reach_only_stdin_clients.rs"]
+pub mod credential_pipes_reach_only_stdin_clients;
 #[path = "policy_contract/detector_success_and_failure.rs"]
 pub mod detector_success_and_failure;
 #[path = "support/differential.rs"]

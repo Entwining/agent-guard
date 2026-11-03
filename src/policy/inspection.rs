@@ -6,7 +6,7 @@ use crate::{
     Advice, CheckError, CheckErrorKind, CoverageGap, DenialRule, EffectRecord, EffectSource,
     Reason,
     filesystem::{self, Identity, Protection},
-    record::{Effect, Via, Walk},
+    record::{Direction, Effect, PipelineStage, Stdin, Via, Walk},
     shell,
     targets::{self, Target},
 };
@@ -277,18 +277,30 @@ impl Inspection<'_> {
         for value in observation.gaps {
             self.gap(value);
         }
-        let mut hidden_listings = std::collections::BTreeSet::new();
+        let mut pipes = Pipes::default();
         for (command_index, command) in observation.script.commands.into_iter().enumerate() {
             crate::check_deadline(self.deadline)?;
-            self.inspect_command(command_index, &command, &mut hidden_listings, depth)?;
+            self.inspect_command(command_index, &command, &mut pipes, depth)?;
+        }
+        // A credential printed by a pipeline's last stage, or into a stage
+        // that leaves no command record, reaches the output.
+        if pipes.credential_output.values().any(|consumed| !consumed) {
+            self.credential_variable();
         }
         Ok(())
+    }
+    fn credential_variable(&mut self) {
+        self.effect(EffectRecord::CredentialVariable);
+        self.denial.get_or_insert_with(|| Reason {
+            effect: "extract protected credential variable".into(),
+            rule: DenialRule::Variable,
+        });
     }
     fn inspect_command(
         &mut self,
         command_index: usize,
         command: &shell::CommandRecord,
-        hidden_listings: &mut std::collections::BTreeSet<(usize, usize)>,
+        pipes: &mut Pipes,
         depth: usize,
     ) -> Result<(), CheckError> {
         let cwd = &command.cwd;
@@ -301,7 +313,7 @@ impl Inspection<'_> {
                 config_dirs: &self.context.config_dirs,
             },
         );
-        self.pipeline_content(command.pipeline, &effects, hidden_listings);
+        self.pipeline_content(command, &effects, pipes);
         for value in effects.gaps {
             self.gap(value);
         }
@@ -313,11 +325,18 @@ impl Inspection<'_> {
             });
         }
         if effects.variable {
-            self.effect(EffectRecord::CredentialVariable);
-            self.denial.get_or_insert_with(|| Reason {
-                effect: "extract protected credential variable".into(),
-                rule: DenialRule::Variable,
-            });
+            // The next stage decides whether a credential written to the pipe
+            // is printed or consumed.
+            let redirected = command
+                .redirects
+                .iter()
+                .any(|redirect| redirect.direction == Direction::Out && redirect.fd != 2);
+            match command.pipeline {
+                Some(stage) if effects.variable_stdout_only && !redirected => {
+                    pipes.credential_output.insert(stage, false);
+                }
+                _ => self.credential_variable(),
+            }
         }
         if effects.token {
             self.effect(EffectRecord::HostingToken);
@@ -378,15 +397,30 @@ impl Inspection<'_> {
     }
     fn pipeline_content(
         &mut self,
-        pipeline: Option<(usize, usize)>,
+        command: &shell::CommandRecord,
         effects: &targets::Effects,
-        hidden_listings: &mut std::collections::BTreeSet<(usize, usize)>,
+        pipes: &mut Pipes,
     ) {
-        if let Some(pipeline) = pipeline {
-            if effects.hidden_listing {
-                hidden_listings.insert(pipeline);
+        if let Some(stage) = command.pipeline {
+            // Every alternative of the next stage must consume the credential.
+            let producer = stage
+                .index
+                .checked_sub(1)
+                .map(|index| PipelineStage { index, ..stage });
+            if let Some(consumed) =
+                producer.and_then(|producer| pipes.credential_output.get_mut(&producer))
+            {
+                if command.stdin == Stdin::Stream && effects.credential_stdin {
+                    *consumed = true;
+                } else {
+                    self.credential_variable();
+                }
             }
-            if effects.consumes_listing && hidden_listings.contains(&pipeline) {
+            let pipeline = stage.pipeline;
+            if effects.hidden_listing {
+                pipes.hidden_listings.insert(pipeline);
+            }
+            if effects.consumes_listing && pipes.hidden_listings.contains(&pipeline) {
                 self.effect(EffectRecord::HiddenContent);
                 self.denial.get_or_insert_with(|| Reason {
                     effect:
@@ -469,4 +503,14 @@ fn target_rule(
     } else {
         DenialRule::Ssh
     })
+}
+
+/// What one shell source's pipeline stages leave for the stages after them.
+#[derive(Default)]
+struct Pipes {
+    /// Pipelines with a stage that lists hidden files.
+    hidden_listings: std::collections::BTreeSet<(usize, usize)>,
+    /// Stages that write a credential variable to the pipe, and whether the
+    /// next stage has consumed it.
+    credential_output: std::collections::BTreeMap<PipelineStage, bool>,
 }

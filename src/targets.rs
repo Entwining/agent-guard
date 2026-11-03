@@ -25,7 +25,13 @@ pub struct Effects {
     pub code: Vec<String>,
     pub inline: Vec<String>,
     pub dump: bool,
+    /// The program writes a credential variable's value to its output.
     pub variable: bool,
+    /// The program writes that value only to its standard output.
+    pub variable_stdout_only: bool,
+    /// The program takes its standard input as a credential it uses without
+    /// writing it to its output.
+    pub credential_stdin: bool,
     pub token: bool,
     pub keychain: bool,
     pub stored_secret: bool,

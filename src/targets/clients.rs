@@ -298,9 +298,9 @@ pub(super) fn infer(
             }
         }
         "ssh" | "scp" | "sftp" => ssh(program, &mut context),
-        "curl" => curl(&mut context),
+        "curl" => effects.credential_stdin = curl(&mut context),
         "wget" => wget(&mut context),
-        "docker" => docker(&mut context),
+        "docker" => effects.credential_stdin = docker(&mut context),
         "ctags" => ctags(&mut context),
         "cargo" => cargo(&mut context, effects),
         "dd" => {

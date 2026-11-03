@@ -16,6 +16,9 @@ pub(super) fn output(
     );
     effects.variable = !(program != "echo" && args.first().is_some_and(|arg| arg == "-v"))
         && command.variables().any(|name| secret_name(name));
+    // zsh's `print` can write to another descriptor, the history or the
+    // line editor.
+    effects.variable_stdout_only = effects.variable && program != "print";
 }
 
 pub(super) fn metadata(
@@ -143,6 +146,7 @@ pub(super) fn infer(
         "printenv" => {
             effects.dump = args.is_empty();
             effects.variable = args.iter().any(|s| secret_name(s));
+            effects.variable_stdout_only = effects.variable;
         }
         "export" => {
             effects.independent_arguments = args.iter().any(|arg| arg.cardinality_unknown)

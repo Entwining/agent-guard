@@ -94,7 +94,8 @@ enum Statement {
         assignments: Vec<(String, RawWord)>,
         argv: Vec<RawWord>,
         redirects: Vec<RawRedirect>,
-        pipeline: Option<usize>,
+        /// The pipeline's offset in its source and the stage's position.
+        pipeline: Option<(usize, usize)>,
     },
 }
 

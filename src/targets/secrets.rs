@@ -63,6 +63,16 @@ pub(super) fn infer(program: &str, args: &[Word], effects: &mut Effects) {
             .any(|arg| ["--export-secret-keys", "--export-secret-subkeys"].contains(&arg.as_str())),
         _ => false,
     };
+    // curl and docker declare their standard-input values in their own
+    // adapters.
+    effects.credential_stdin = match program {
+        "ssh-add" => args.iter().any(|arg| arg == "-"),
+        "gh" => {
+            arg(0) == "auth" && arg(1) == "login" && args.iter().any(|arg| arg == "--with-token")
+        }
+        "mk" => arg(0) == "set" && args.iter().any(|arg| arg == "--stdin"),
+        _ => false,
+    };
 }
 
 // Cobra accepts `-g` and `--host` before `config`, between `config` and

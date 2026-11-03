@@ -81,7 +81,9 @@ fn docker_command_start(context: &Context<'_>, start: usize) -> usize {
     context.words.len()
 }
 
-pub(super) fn docker(context: &mut Context<'_>) {
+/// Adds docker's targets, and returns whether `docker login` reads its
+/// password from standard input.
+pub(super) fn docker(context: &mut Context<'_>) -> bool {
     let mut start = 0;
     while context
         .words
@@ -152,6 +154,10 @@ pub(super) fn docker(context: &mut Context<'_>) {
         host_option(context, index, sub, compose_sub, text);
         volume_option(context, index, text);
     }
+    sub == "login"
+        && context.words[start..]
+            .iter()
+            .any(|word| word.exact() == Some("--password-stdin"))
 }
 
 fn operand_targets(

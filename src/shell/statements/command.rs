@@ -25,6 +25,10 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         else {
             return self.compound_statement(statement, scope, depth, source_id, nested);
         };
+        let pipeline = pipeline.map(|(id, index)| crate::record::PipelineStage {
+            pipeline: (source_id, id),
+            index,
+        });
         let mut command_bindings = BTreeMap::new();
         let prefixes = self.command_assignments(
             assignments,
@@ -35,7 +39,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         )?;
         let arguments = self.command_arguments(argv, scope, depth)?;
         let alternatives =
-            self.command_alternatives(prefixes, &arguments, scope, (*pipeline, nested));
+            self.command_alternatives(prefixes, &arguments, scope, (pipeline, nested));
         let targets = self.expanded_redirects(redirects, scope, depth)?;
         let entry = scope.clone();
         let mut exits = Vec::new();
@@ -47,7 +51,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 &mut branch,
                 &targets,
                 &command_bindings,
-                (depth, source_id, nested, *pipeline),
+                (depth, nested, pipeline),
             )?);
             exits.push(branch);
         }
@@ -105,9 +109,9 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         scope: &mut Scope,
         targets: &[crate::record::Redirect],
         command_bindings: &BTreeMap<String, Vec<BindingValue>>,
-        context: (usize, usize, bool, Option<usize>),
+        context: (usize, bool, Option<crate::record::PipelineStage>),
     ) -> Result<Output, CheckError> {
-        let (depth, source_id, nested, pipeline) = context;
+        let (depth, nested, pipeline) = context;
         let flow_end = scope.flow_end;
         let input = scope.pipeline_input.clone();
         let input_fds = scope.input_fds.clone();
@@ -156,7 +160,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 (false, true) => Stdin::Inherited,
                 (false, false) => Stdin::None,
             },
-            pipeline: pipeline.map(|id| (source_id, id)),
+            pipeline,
             nested,
         };
         let emitted = self.output.script.commands.len();

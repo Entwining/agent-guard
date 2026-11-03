@@ -210,7 +210,7 @@ pub(super) fn xargs_replacements(left: &[Command], right: &[Command]) -> Vec<Inp
     };
     let mut sources = Vec::new();
     for producer in left.iter().filter(|c| {
-        c.pipeline == first.pipeline
+        c.pipeline.map(|stage| stage.pipeline) == first.pipeline.map(|stage| stage.pipeline)
             && matches!(name(c), Some("printf" | "echo"))
             && c.program.is_some_and(|index| {
                 c.argv[..=index]

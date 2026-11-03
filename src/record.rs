@@ -305,6 +305,14 @@ pub enum Stdin {
     Shell,
     Code,
 }
+/// A command's stage in a pipeline of more than one stage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PipelineStage {
+    /// The source and the offset in it that identify the pipeline.
+    pub pipeline: (usize, usize),
+    /// The stage's position in the pipeline, from 0.
+    pub index: usize,
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flag {
     Recursive,
@@ -336,7 +344,7 @@ pub struct Command {
     pub flags: Vec<Flag>,
     pub items: Option<Items>,
     pub stdin: Stdin,
-    pub pipeline: Option<(usize, usize)>,
+    pub pipeline: Option<PipelineStage>,
     pub nested: bool,
 }
 impl Command {
