@@ -127,6 +127,7 @@ pub(super) fn merge_fragment(out: &mut Expanded, inner: Expanded, offset: usize)
     out.named_tildes.extend(inner.named_tildes);
     out.unset_parameters.extend(inner.unset_parameters);
     out.empty_parameters.extend(inner.empty_parameters);
+    out.word.merge_measured(&inner.word);
     out.word.vars.extend(inner.word.vars);
     out.nested.extend(inner.nested);
     out.arithmetic.extend(inner.arithmetic);

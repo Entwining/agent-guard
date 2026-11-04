@@ -17,8 +17,8 @@ struct Launcher {
     optional: &'static [&'static str],
     /// Options may follow the subcommand words.
     options_after: bool,
-    /// The launcher keeps parsing options after the inner command unless `--`
-    /// ended its options.
+    /// The launcher keeps parsing options after an operand, a selector or the
+    /// inner command, unless `--` ended its options.
     interspersed: bool,
     /// The inner command is a Python script the launcher runs when a script
     /// flag precedes it or its name ends in `.py` or `.pyw`.
@@ -204,6 +204,39 @@ const MK: Launcher = Launcher {
     selectors: true,
 };
 
+// Rex's Cobra commands that start a terminal, from `rex run --help`, `rex
+// split --help`, `rex new --help` and `rex window new --help`, with the global
+// options. pflag booleans take a value only as `--flag=VALUE`. Rex passes the
+// command's argv unchanged, through the login shell or directly. The forms
+// without a command fall back to `REX` in `src/targets/programs/readers.rs`,
+// which lists the same options.
+const REX: Launcher = Launcher {
+    command: &["rex", "run"],
+    grammar: Grammar {
+        syntax: Syntax::Clap,
+        short: "hv",
+        flags: "--help",
+        values: &[
+            ("-c --cwd", Enter),
+            (
+                "-S --server -C --client --timeout --color -s --session -b --block -w --window --split --ratio --shell --label",
+                Name,
+            ),
+        ],
+        attached: &[(
+            "--verbose --autostart --keep-open --focus --json --wait",
+            Name,
+        )],
+        stops: false,
+        complete: true,
+    },
+    optional: &[],
+    options_after: true,
+    interspersed: true,
+    scripts: false,
+    selectors: false,
+};
+
 const LAUNCHERS: &[Launcher] = &[
     UV,
     Launcher {
@@ -257,6 +290,22 @@ const LAUNCHERS: &[Launcher] = &[
     OP,
     DOTENV,
     MK,
+    REX,
+    Launcher {
+        command: &["rex", "split"],
+        ..REX
+    },
+    // The LABEL operand names the session or window.
+    Launcher {
+        command: &["rex", "new"],
+        selectors: true,
+        ..REX
+    },
+    Launcher {
+        command: &["rex", "window", "new"],
+        selectors: true,
+        ..REX
+    },
 ];
 
 /// One option word, or an option and its value in the next word. Returns the
@@ -328,7 +377,10 @@ fn walk(launcher: &Launcher, argv: &[Word], start: usize) -> Option<Consumed> {
         }
         // Before the subcommand words only global options may appear; after
         // them, a form that takes no options starts its command here.
-        if option_word && selectors.is_empty() && (!path.is_empty() || launcher.options_after) {
+        if option_word
+            && (selectors.is_empty() || launcher.interspersed)
+            && (!path.is_empty() || launcher.options_after)
+        {
             at += option(launcher, argv, at, &mut binding)?;
             continue;
         }

@@ -18,9 +18,13 @@ pub(super) struct Resolution {
 
 impl Resolution {
     /// Whether the program reads the shell's pipe itself: xargs consumes it,
-    /// and script hands it on through a terminal that echoes it.
+    /// script hands it on through a terminal that echoes it, and Rex runs
+    /// the program in a new terminal.
     pub(super) fn reads_pipe(&self) -> bool {
-        !self.wrappers.iter().any(|w| w == "xargs" || w == "script")
+        !self
+            .wrappers
+            .iter()
+            .any(|w| w == "xargs" || w == "script" || w == "rex")
     }
 }
 

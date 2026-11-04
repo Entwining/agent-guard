@@ -100,6 +100,11 @@ pub(super) fn infer_at(
     }
     infer_completion(program, args, command, &mut effects);
     infer_cwd(cwd_program, cwd, &mut effects);
+    // A program Rex starts writes to the terminal Rex opens, not to the
+    // shell's redirections or pipe.
+    if command.wrappers.iter().any(|w| w == "rex") {
+        effects.variable_stdout_only = false;
+    }
     effects
 }
 
@@ -376,7 +381,7 @@ fn infer_completion(program: &str, args: &[Word], command: &CommandRecord, effec
             .redirects
             .iter()
             .flat_map(|r| &r.vars)
-            .any(|name| secret_name(name));
+            .any(|name| secret_variable(name));
 }
 
 fn infer_cwd(cwd_program: &str, cwd: &str, effects: &mut Effects) {

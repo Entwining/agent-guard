@@ -324,10 +324,25 @@ impl Inspection<'_> {
                 rule: DenialRule::Dump,
             });
         }
-        if effects.variable {
+        let mut stdout = command
+            .redirects
+            .iter()
+            .filter(|redirect| redirect.fd == 1)
+            .peekable();
+        let stdout_redirected = stdout.peek().is_some();
+        // zsh's MULTIOS writes to every redirection of standard output and to
+        // the pipe as well, where bash keeps only the last; zsh also keeps
+        // writing to the terminal after `1<`.
+        let discarded = effects.variable_stdout_only
+            && command.pipeline.is_none()
+            && stdout_redirected
+            && stdout.all(|redirect| {
+                redirect.direction == crate::record::Direction::Out
+                    && redirect.target == "/dev/null"
+            });
+        if effects.variable && !discarded {
             // The next stage decides whether a credential written to the pipe
             // is printed or consumed.
-            let stdout_redirected = command.redirects.iter().any(|redirect| redirect.fd == 1);
             match command.pipeline {
                 Some(stage) if effects.variable_stdout_only && !stdout_redirected => {
                     pipes.credential_output.insert(stage, false);

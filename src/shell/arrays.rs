@@ -349,6 +349,7 @@ fn indices(text: &str, scope: &Scope) -> Option<Vec<i64>> {
 
 fn snapshot(mut word: Word) -> Word {
     word.vars.clear();
+    word.measured.clear();
     word.binding_candidates.clear();
     // Assignment has consumed lexical tilde expansion. Reading the stored
     // value cannot turn a runtime tilde back into HOME.

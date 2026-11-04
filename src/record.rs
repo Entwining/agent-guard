@@ -30,6 +30,10 @@ pub struct Word {
     // so its argv position is exact.
     pub fixed_position: bool,
     pub vars: Vec<String>,
+    /// The names in `vars` the word reads only for their length or whether
+    /// they are set, as in `${#NAME}` or `${NAME:+word}`, so their values
+    /// never reach the word.
+    pub measured: Vec<String>,
     pub role: Role,
     pub value: String,
     pub pwd: bool,
@@ -63,6 +67,7 @@ impl Word {
             field_count_unknown: false,
             fixed_position: false,
             vars: Vec::new(),
+            measured: Vec::new(),
             role: Role::Arg,
             pwd: false,
             cwd_ranges: Vec::new(),
@@ -70,6 +75,31 @@ impl Word {
             gaps: Vec::new(),
             stream: None,
         }
+    }
+
+    /// Records that the word reads `name`, only for its length or whether it
+    /// is set when `measured`.
+    pub fn reference(&mut self, name: String, measured: bool) {
+        if !measured {
+            self.measured.retain(|known| *known != name);
+        } else if !self.vars.contains(&name) {
+            self.measured.push(name.clone());
+        }
+        self.vars.push(name);
+    }
+
+    /// Stops treating a name as measured once `other`, a fragment of this
+    /// word, reads its value; call before taking `other`'s `vars`.
+    pub fn merge_measured(&mut self, other: &Self) {
+        self.measured
+            .retain(|name| !other.exposed_vars().any(|exposed| exposed == name));
+    }
+
+    /// The names whose values the word may contain.
+    pub fn exposed_vars(&self) -> impl Iterator<Item = &String> {
+        self.vars
+            .iter()
+            .filter(|name| !self.measured.contains(name))
     }
     pub fn as_str(&self) -> &str {
         &self.text
@@ -219,10 +249,16 @@ pub struct Redirect {
     pub shell_matches: bool,
     pub expands: bool,
     pub runtime_unknown: bool,
+    /// The variables whose values a here-document or here-string carries.
     pub vars: Vec<String>,
 }
 impl Redirect {
     pub fn from_word(word: Word, direction: Direction, fd: i32, duplicate: bool) -> Self {
+        let vars = if matches!(direction, Direction::Heredoc | Direction::Herestring) {
+            word.exposed_vars().cloned().collect()
+        } else {
+            Vec::new()
+        };
         Self {
             pattern: (word.globs || word.shell_matches)
                 .then(|| crate::filesystem::shell_pattern(&word.text, &word.quoted_ranges)),
@@ -235,11 +271,7 @@ impl Redirect {
             shell_matches: word.shell_matches,
             expands: word.expands,
             runtime_unknown: word.runtime_unknown,
-            vars: if matches!(direction, Direction::Heredoc | Direction::Herestring) {
-                word.vars
-            } else {
-                Vec::new()
-            },
+            vars,
         }
     }
 }
@@ -354,12 +386,6 @@ impl Command {
                 .redirects
                 .iter()
                 .any(|r| matches!(r.direction, Direction::In | Direction::Out) && r.expands)
-    }
-    pub fn variables(&self) -> impl Iterator<Item = &String> {
-        self.argv
-            .iter()
-            .flat_map(|w| &w.vars)
-            .chain(self.redirects.iter().flat_map(|r| &r.vars))
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -15,7 +15,11 @@ pub(super) fn output(
             .map(|arg| Target::from_word(arg, cwd, host, Effect::Name, Walk::None)),
     );
     effects.variable = !(program != "echo" && args.first().is_some_and(|arg| arg == "-v"))
-        && command.variables().any(|name| secret_name(name));
+        && args
+            .iter()
+            .flat_map(Word::exposed_vars)
+            .chain(command.redirects.iter().flat_map(|r| &r.vars))
+            .any(|name| secret_variable(name));
     // zsh's `print` can write to another descriptor, the history or the
     // line editor.
     effects.variable_stdout_only = effects.variable && program != "print";
@@ -141,7 +145,7 @@ pub(super) fn infer(
                 || args.len() == 1 && args[0].starts_with('-') && args[0].contains(['p', 'x']);
             effects.variable = args
                 .iter()
-                .any(|arg| !arg.starts_with('-') && !arg.contains('=') && secret_name(arg));
+                .any(|arg| !arg.starts_with('-') && !arg.contains('=') && secret_variable(arg));
         }
         "printenv" => {
             effects.dump = args.is_empty();

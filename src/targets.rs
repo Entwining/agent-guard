@@ -134,6 +134,13 @@ fn secret_name(name: &str) -> bool {
         .any(|part| name.contains(part))
 }
 
+/// Environment names carry an uppercase name or prefix, as in
+/// `TF_VAR_db_password`; a name without an uppercase letter is the script's
+/// own variable, such as a loop's `key`.
+fn secret_variable(name: &str) -> bool {
+    name.contains(|c: char| c.is_ascii_uppercase()) && secret_name(name)
+}
+
 pub(crate) fn shows_hidden(args: &[Word]) -> bool {
     args.iter().any(|w| {
         ["--hidden", "--unrestricted"].contains(&w.as_str())

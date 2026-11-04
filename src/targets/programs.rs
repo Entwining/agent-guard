@@ -75,7 +75,7 @@ pub(super) fn infer(
             return unknown_conventions(
                 Walk::Visible,
                 match program {
-                    "rex" => readers::rex_names(args),
+                    "rex" => readers::rex_names(args, cwd, host, effects),
                     "sessidx" => readers::sessidx_queries(args),
                     _ => readers::output_query(program, args),
                 },

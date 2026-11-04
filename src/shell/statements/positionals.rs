@@ -96,6 +96,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             let name = (index + 1).to_string();
             word.raw = format!("${{{name}}}");
             word.vars = vec![name.clone()];
+            word.measured.clear();
             word.binding_candidates = BTreeMap::from([(name, word.text.clone())]);
             word.runtime_unknown |= matches!(
                 binding,

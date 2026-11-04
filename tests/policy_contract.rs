@@ -8,6 +8,8 @@ pub mod codefile_home_prefixes_reach_appdata_owner;
 pub mod credential_globs_and_roots_follow_the_lexical_owner;
 #[path = "policy_contract/credential_pipes_reach_only_stdin_clients.rs"]
 pub mod credential_pipes_reach_only_stdin_clients;
+#[path = "policy_contract/credential_variables_print_only_exposed_values.rs"]
+pub mod credential_variables_print_only_exposed_values;
 #[path = "policy_contract/detector_success_and_failure.rs"]
 pub mod detector_success_and_failure;
 #[path = "support/differential.rs"]

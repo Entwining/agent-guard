@@ -52,7 +52,11 @@ pub(super) fn parameter_piece(
         ) {
             out.unset_parameters.insert(name.clone());
         }
-        out.word.vars.push(name);
+        let measured = matches!(
+            expr,
+            ParameterExpr::ParameterLength { .. } | ParameterExpr::UseAlternativeValue { .. }
+        );
+        out.word.reference(name, measured);
     }
     if let Some(name) = &plain
         && !out.word.vars.contains(name)
@@ -101,7 +105,7 @@ fn modifier_piece(
     if expansion.zsh
         && let Some(modifier) = modifier
     {
-        out.word.vars.push(modifier.name);
+        out.word.reference(modifier.name, false);
         out.word
             .text
             .push_str(&raw[piece.start_index..modifier.end]);

@@ -375,6 +375,7 @@ fn expand_sequence(
         word.cardinality_unknown |= unknown_count;
         word.field_count_unknown |= unknown_count;
         word.vars = observed.word.vars.clone();
+        word.measured = observed.word.measured.clone();
         word.globs |= !quoted && word.text.contains(['*', '?', '[']);
     }
     let word = sequence

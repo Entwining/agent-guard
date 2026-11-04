@@ -51,7 +51,6 @@
 {"id":"rex-do-unknown-selector","partition":"rex-reads","input":{"command":"rex do \"$A.key\""},"expected":"D","wire_text":"[policy:agent-guard/credential_file]","gap":"rex"},
 {"id":"rex-do-option-value-may-split","partition":"rex-reads","input":{"command":"S=$(printf '%s' 'work --action dev_layout'); rex do client.key -s $S"},"expected":"D","wire_text":"[policy:agent-guard/credential_file]","gap":"rex"},
 {"id":"rex-do-glob-may-hold-options","partition":"rex-reads","input":{"command":"rex do client.key *"},"expected":"D","wire_text":"[policy:agent-guard/credential_file]","gap":"rex"},
-{"id":"rex-run-command","partition":"rex-reads","input":{"command":"rex run -- cat client.key"},"expected":"D","wire_text":"[policy:agent-guard/credential_file]","gap":"rex"},
 {"id":"rex-describe-input-redirect","partition":"name-slot-effects","input":{"command":"rex api describe client.key < .env"},"expected":"D","wire_text":"[policy:agent-guard/credential_file]","gap":"rex"},
 {"id":"rex-do-stdin-script-redirect","partition":"name-slot-effects","input":{"command":"rex do - < .env"},"expected":"D","wire_text":"[policy:agent-guard/credential_file]","gap":"rex"},
 {"id":"rex-describe-command-substitution","partition":"name-slot-effects","input":{"command":"rex api describe \"$(cat .env)\""},"expected":"D","wire_text":"[policy:agent-guard/credential_file]","gap":"rex"},

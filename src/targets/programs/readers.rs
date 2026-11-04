@@ -304,8 +304,10 @@ fn parse(args: &[Word], grammar: &Grammar) -> Option<Parsed> {
     })
 }
 
-// Rex's Cobra commands `api describe`, `api call`, `block call` and `do`
-// with the global options, from `rex help`.
+// Rex's Cobra commands `api describe`, `api call`, `block call` and `do`,
+// and those that start a terminal (`new`, `window new`, `run` and `split`),
+// with the global options, from `rex help`. The launcher grammar `REX` in
+// `src/shell/argv/launchers.rs` lists the terminal-starting options too.
 const REX: Grammar = Grammar {
     flags: &[
         "-h",
@@ -316,6 +318,9 @@ const REX: Grammar = Grammar {
         "--json",
         "--all",
         "--fail-fast",
+        "--keep-open",
+        "--focus",
+        "--wait",
     ],
     values: &[
         "-S",
@@ -337,22 +342,74 @@ const REX: Grammar = Grammar {
         "--args",
         "--origin",
         "--for",
+        "-c",
+        "--cwd",
+        "--label",
+        "--shell",
+        "--split",
+        "--ratio",
     ],
 };
 
 /// The METHOD of `rex api describe`, `rex api call` and `rex block call`,
 /// and the ACTION of `rex do`. Their ARGS, `KEY=VALUE` pairs and option
 /// values may name files an action opens, so they keep the unknown role.
-pub(super) fn rex_names(args: &[Word]) -> Vec<usize> {
+/// A form that starts a terminal without a command, which the launcher
+/// table leaves here, names and places a shell with its LABEL and option
+/// values, and enters the `-c` directory without reading it.
+pub(super) fn rex_names(
+    args: &[Word],
+    cwd: &str,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) -> Vec<usize> {
     let Some(parsed) = parse(args, &REX) else {
         return Vec::new();
     };
     let slot = match (parsed.command(args, 0), parsed.command(args, 1)) {
         (Some("api"), Some("describe" | "call")) | (Some("block"), Some("call")) => 2,
         (Some("do"), _) if performs_action(args, &parsed) => 1,
+        (Some("new"), _) => return rex_terminal(args, &parsed, 2, cwd, host, effects),
+        (Some("window"), Some("new")) => return rex_terminal(args, &parsed, 3, cwd, host, effects),
+        (Some("run" | "split"), _) => return rex_terminal(args, &parsed, 1, cwd, host, effects),
         _ => return Vec::new(),
     };
     parsed.positional(args, slot).into_iter().collect()
+}
+
+/// Every word of a terminal-starting form with at most `positionals`
+/// positionals, its subcommand words and LABEL, and none after `--`; more
+/// could be a command.
+fn rex_terminal(
+    args: &[Word],
+    parsed: &Parsed,
+    positionals: usize,
+    cwd: &str,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) -> Vec<usize> {
+    if parsed.positionals.len() > positionals.min(parsed.commands) {
+        return Vec::new();
+    }
+    for &(option, value) in &parsed.options {
+        let Some(index) = value.filter(|_| ["-c", "--cwd"].contains(&option)) else {
+            continue;
+        };
+        let separate = index > 0 && args[index - 1].exact() == Some(option);
+        let value = crate::record::OptionValue {
+            index,
+            prefix: if separate {
+                0
+            } else {
+                option.len() + usize::from(option.starts_with("--"))
+            },
+            effect: Effect::Enter,
+        };
+        let mut target = Target::from_word(&value.word(args), cwd, host, Effect::Enter, Walk::None);
+        target.via = Via::Option;
+        effects.targets.push(target);
+    }
+    (0..args.len()).collect()
 }
 
 /// Whether `rex do` takes its first positional as an action name, or `-`
