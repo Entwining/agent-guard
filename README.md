@@ -2,9 +2,11 @@
 
 Agent Guard checks Claude Code, Codex and Pi tool calls on macOS before they run. It blocks home-directory scans and credential reads, then tells the agent what to do instead.
 
+A scan from `~` enters other apps' data under `~/Library`. macOS records this as App Data access. This can trigger repeated permission prompts. Broad reads can pull `.env` files, private keys or the whole environment into the agent's context.
+
 ## Keep searches inside the project
 
-A scan from `~` can enter other apps' data under `~/Library`. The guard blocks it before the tool runs:
+The guard blocks scans rooted at `~` or `~/Library` before the tool runs:
 
 ```text
 $ rg -n TODO ~
@@ -15,9 +17,9 @@ Project-scoped searches such as `rg -n TODO src` [pass without output](docs/setu
 
 ## Use credentials without printing them
 
-The guard [blocks credential reads and environment dumps](docs/setup.md#how-the-guard-decides). This includes recursive searches that can reach hidden credential files. Clients can still use credential files through modelled options such as `ssh -i`.
+The guard [blocks credential reads, environment dumps and recursive searches that can reach hidden credential files](docs/setup.md#how-the-guard-decides). Clients can still use credential files through modelled options such as `ssh -i`. The guard does not control what the client does with the file's contents.
 
-## Stop when a check fails
+## Fail closed
 
 A check that errors or times out [blocks the tool call](docs/setup.md#how-the-guard-decides). A passing check leaves the runtime's permission rules in force.
 
