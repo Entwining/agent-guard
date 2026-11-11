@@ -314,7 +314,7 @@ The guard refuses these calls because it cannot establish that they are safe, ev
 
 ## Operating system read restrictions
 
-The hook installs no operating system read policy. Paths chosen inside an external script or runtime configuration remain outside a command text preflight check and need an operating system restriction. The [read-enforcement experiment](../experiments/README.md) compares guard decisions and OS restrictions across direct operands, inline literals, external scripts and runtime configuration paths.
+The hook installs no operating system read policy. Paths chosen inside an external script or runtime configuration remain outside a command text preflight check and need an operating system restriction. The [read-enforcement experiment](../experiments/README.md#recorded-results) compares guard decisions and OS restrictions across direct operands, inline literals, external scripts and runtime configuration paths.
 
 The runtimes' own sandboxes are one such restriction: [Claude Code](https://code.claude.com/docs/en/sandboxing) and [Codex's Seatbelt implementation](https://github.com/openai/codex/blob/main/codex-rs/sandboxing/src/seatbelt.rs) use Seatbelt. A sandbox launch failure before the command starts does not establish a read denial or show whether Seatbelt is available on the host.
 
