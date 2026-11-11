@@ -24,4 +24,12 @@ For credential free validation outside the user's Library, use a new synthetic H
 python3 experiments/read-enforcement-comparison.py --guard-mode on --guard "$out/package/bin/agent-guard" --os-mode off --form direct_operand --synthetic-home /private/tmp/agent-guard-validation-home --output /private/tmp/agent-guard-validation.jsonl
 ```
 
-Synthetic mode builds and verifies the native fixture but never launches it. It creates the canary under the supplied new HOME's ordinary `canaries` directory, runs the same access commands and guard preflight, and marks every UI observation `not_observed_synthetic`. It does not recreate the previously blocked synthetic Library/Containers setup or validate App Data rejection. OS on can still exit 3 if this execution context cannot apply the sandbox. Synthetic results validate setup and execution, never TCC.
+Synthetic mode builds and verifies the native fixture but never launches it. It creates the canary under the supplied new HOME's ordinary `canaries` directory, runs the same access commands and guard preflight, and marks every UI observation `not_observed_synthetic`. It does not validate App Data rejection. OS on can still exit 3 if this execution context cannot apply the sandbox. Synthetic results validate setup and execution, never TCC.
+
+## Recorded results
+
+[Commit ec0e4ff](https://github.com/Entwining/agent-guard/blob/ec0e4ff1f9c154ab68f262d252564de377676e6f/docs/setup.md#L176-L178) recorded these local observations on 2026-10-01 (+08:00). The record names macOS 27 and a control inside a sandboxed Codex environment. It does not pin the tested checkout, exact macOS build or execution date.
+
+- The guard alone denied the direct operand and inline literal forms. It allowed paths chosen inside an external script or runtime configuration.
+- Every `sandbox-exec`-wrapped run exited 71 before its command started. The control inside the sandboxed Codex environment failed with `sandbox_apply: Operation not permitted` before `/usr/bin/true` started. No OS-on cell produced a read-denial result. These startup failures do not establish whether Seatbelt was available or enforced a read restriction.
+- No TCC prompt was observed. Whether the shell, hook or child was the responsible client was not established.
