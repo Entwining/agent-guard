@@ -131,9 +131,27 @@ Then uninstall:
 brew uninstall entwining/tap/agent-guard
 ```
 
+## Example decisions
+
+The guard runs as a pre-tool hook. A blocked call never starts. The agent receives the reason and a safe alternative:
+
+```text
+$ rg -n TODO ~
+[policy:agent-guard/broad_scan] DENIED: A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path.
+
+$ cat .env
+[policy:agent-guard/credential_file] DENIED: This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.
+```
+
+`rg -n TODO src` inside a project passes without output. Each block's [reason marker](#reason-markers) names its class and condition so session logs can attribute it without matching the wording.
+
 ## How the guard decides
 
 The guard denies a call when its own check fails or times out because it cannot establish that the call is safe. Exit code `0` means the guard found no objection; it does not override the runtime's own permission rules.
+
+A `rg` or `find` scan started from `~` enters other apps' containers under `~/Library`. macOS records each crossing as App Data access (`SystemPolicyAppDataDetailed`). This can trigger repeated permission prompts. Broad reads can also bring `.env` files, private keys or the whole environment into the agent's context.
+
+The guard blocks reads and listings of protected App Data. It also refuses credential and environment file reads and commands that dump environment variables. Named non-sensitive files remain permitted.
 
 Scans of broad filesystem roots are denied: an unscoped `rg`, `fd`, `ag`, `ack`, or `tree` run from the home directory is refused; pass an explicit project path. `rg` without a path searches the pipe or here-document that feeds it, as ripgrep does, so `git log | rg fix` scans no directory. A search that `xargs` runs without `-I` or `-J` walks the names `xargs` appends rather than its working directory, because macOS `xargs` does not run it on empty input, so `cd ~ && find .claude -type f -name '*.jsonl' | xargs rg foo` is checked as a walk of the names `find` prints. Hidden recursive content searches in shell commands are refused when an operand is or may be a directory, unless name filters bound the files the walk reads. `grep -r --include`, `rg --hidden -g`, and a `find` whose `-name` or `-path` test runs before its `-exec` action or before the names it prints into `xargs` read only files whose names end in the literal text after each filter's last wildcard, such as `*.ts` or `Makefile`. The guard compares those names, and each filter as written, with credential and environment file names at any depth, including inside hidden directories, so `--include='*.json'`, `--include='*.toml'` and `-name '.env*.local'` stay refused because they select files such as `auth.json`, `.cargo/credentials.toml` and `.env.local`. A walk stays unbounded when any positive filter has no literal text after its last wildcard (`*`, `s*`, `src/**`) or takes its value from the shell at run time (`--include="$pat"`), when it has only negative filters, `rg -t` types or `fd` options, or when a `find` expression tests names after its action, in only one branch of `-o`, under `!`, or with a primary the guard does not model. Output that `find` prints through `-exec` or a `-printf` format is unbounded. A consumer that walks the names it is handed walks below each one as it walks its own operands, so `find . -name '*.mjs' | xargs rg foo` is permitted while `xargs grep -r` over the same names, or `rg` over a credential directory a filter names, is refused, unless a `-type f` test before the action limits those names to regular files. A named public file, including a resolved link to one, does not traverse hidden files and remains permitted with recursive flags. The guard checks lexical protection and resolves links before using file metadata to distinguish that file from a directory; metadata failures remain failed checks.
 

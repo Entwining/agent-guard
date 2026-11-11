@@ -1,39 +1,40 @@
 # Agent Guard
 
-`agent-guard` checks Claude Code, Codex and Pi tool calls on macOS before they run. It blocks calls that would scan your home directory, open other apps' data or print credentials, and tells the agent what to do instead.
+Agent Guard checks Claude Code, Codex and Pi tool calls on macOS before they run. It blocks home-directory scans and credential reads, then tells the agent what to do instead.
 
-Agents search broadly by default. A `rg` or `find` started from `~` walks into other apps' containers under `~/Library`; macOS records each crossing as App Data access (`SystemPolicyAppDataDetailed`) and can answer with repeated permission prompts. The same habits read `.env` files, private keys or the whole environment into the agent's context.
+A scan from `~` enters other apps' data under `~/Library`. macOS records this as App Data access. This can trigger repeated permission prompts. Broad reads can pull `.env` files, private keys or the whole environment into the agent's context.
 
-## What a check looks like
+## Keep searches inside the project
 
-The guard runs as a pre-tool hook. A blocked call never starts, and the agent receives the reason together with a safe alternative:
+The guard blocks scans rooted at `~` or `~/Library` before the tool runs:
 
 ```text
 $ rg -n TODO ~
 [policy:agent-guard/broad_scan] DENIED: A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path.
-
-$ cat .env
-[policy:agent-guard/credential_file] DENIED: This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.
 ```
 
-`rg -n TODO src` inside a project passes without output. The leading marker names the class and condition of each block, so session logs can attribute it without matching the wording.
+Project-scoped searches such as `rg -n TODO src` [pass without output](docs/setup.md#example-decisions).
 
-## What it blocks and allows
+## Use credentials without printing them
 
-- **Blocks** walks rooted at `~` or `~/Library`, reads and listings of protected App Data, recursive searches that can reach hidden credential files, credential and environment file reads, and commands that dump environment variables.
-- **Allows** project-scoped searches, named non-sensitive files, public SSH files such as `known_hosts`, and clients that use a credential file through their own option, such as `ssh -i`.
-- **Fails closed.** A check that errors or runs out of time blocks the call. A passing check is not a permission grant; the runtime's own permission rules still apply.
+The guard [blocks credential reads, environment dumps and recursive searches that can reach hidden credential files](docs/setup.md#how-the-guard-decides). Clients can still use credential files through modelled options such as `ssh -i`. The guard does not control what the client does with the file's contents.
 
-## What it is not
+## Fail closed
 
-The guard is a preflight check of the call's text, not a sandbox. It sees only calls that reach a registered hook, and it cannot decide reads that a program chooses while it runs, such as a script opening a file itself. Pair it with operating system read restrictions when those reads matter. The [known limits](docs/setup.md#known-limits) list what falls outside the check.
+A check that errors or times out [blocks the tool call](docs/setup.md#how-the-guard-decides). A passing check leaves the runtime's permission rules in force.
 
 ## Get started
 
-Agent Guard needs Apple Silicon macOS, Homebrew and at least one of Claude Code, Codex or Pi. The [setup guide](docs/setup.md) covers installation, hook registration for each runtime, verification and removal.
+Requires Apple Silicon macOS and Homebrew. [Install Agent Guard and register its hook](docs/setup.md) for Claude Code, Codex or Pi.
 
-Maintainers: see [development and release](docs/development.md).
+## Limits
+
+The guard is a text preflight check, not a sandbox. It only sees [calls that reach a registered hook](docs/setup.md#known-limits). Use [operating system read restrictions](docs/setup.md#operating-system-read-restrictions) for reads a script chooses at runtime.
+
+## Contributing
+
+Contributors [build, test and release the Rust implementation](docs/development.md) from a source checkout.
 
 ## License
 
-[MIT](LICENSE)
+Agent Guard is available under the [MIT license](LICENSE).
