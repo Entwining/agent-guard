@@ -29,7 +29,7 @@ A finding changes the implementation when it is a regression against the previou
 
 Keep the root README focused on purpose and capabilities; installation, registration, removal and verification commands belong in `docs/setup.md`.
 
-Release actions follow the [repository-local release skill](.agents/skills/release/SKILL.md) and the workflow that owns publication. Runtime acceptance does not authorize changing machine permissions. Use type-prefixed commit subjects (`type: summary` or `type(scope): summary`).
+A pull request whose change readers of the release notes need, such as observable behavior, compatibility or a required action, adds or updates its entry in `docs/releases/unreleased.md`, written as the release skill's Release notes section describes; a later pull request that changes the same behavior updates that entry. Release actions follow the [repository-local release skill](.agents/skills/release/SKILL.md) and the workflow that owns publication. Runtime acceptance does not authorize changing machine permissions. Use type-prefixed commit subjects (`type: summary` or `type(scope): summary`).
 
 Prefer merging a pull request by fast-forwarding `main` to its head (`git merge --ff-only`) and pushing, which GitHub records as the pull request's merge and which keeps the commits CI checked, signatures included; when `main` has moved past the branch's base, rebase the branch, push it, and wait for its checks first. GitHub's merge buttons are also fine, but rebase merge drops the signatures.
 
