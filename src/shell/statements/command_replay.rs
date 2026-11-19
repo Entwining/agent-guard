@@ -107,6 +107,25 @@ impl<'a, 'b> Evaluator<'a, 'b> {
     ) -> Result<Option<Output>, CheckError> {
         let (emitted, emitted_end, depth) = context;
         if !command.function
+            && command.stdin == Stdin::Stream
+            && shell::argv::stdin_kind(command) == Stdin::Code
+            && let Some(input) = &scope.pipeline_input
+        {
+            let texts: Vec<String> = self
+                .flow
+                .candidates(input)?
+                .into_iter()
+                .filter(|candidate| candidate.known)
+                .map(|candidate| candidate.text)
+                .collect();
+            if !texts.is_empty() {
+                for record in &mut self.output.script.commands[emitted..emitted_end] {
+                    record.stdin = Stdin::InterpreterStream(texts.clone());
+                }
+            }
+            return Ok(None);
+        }
+        if !command.function
             && shell::argv::stdin_kind(command) == Stdin::Shell
             && let Some(input) = &scope.pipeline_input
         {

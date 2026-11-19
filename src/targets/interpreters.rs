@@ -78,6 +78,19 @@ pub(super) fn interpreter_code(program: &str, args: &[Word]) -> (Vec<String>, Ve
     (found, claimed)
 }
 
+/// Whether the interpreter runs its standard input as its program: it has no
+/// code option, and its first operand, if any, is `-`.
+pub(super) fn reads_program_from_stdin(program: &str, args: &[Word]) -> bool {
+    let (code, claimed) = interpreter_code(program, args);
+    let mut operands = args
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !claimed.contains(index))
+        .map(|(_, arg)| arg)
+        .skip_while(|arg| arg.starts_with('-') && *arg != "-");
+    code.is_empty() && operands.next().is_none_or(|arg| arg == "-")
+}
+
 pub(super) fn perl_exec_argv(args: &[Word]) -> Option<&[Word]> {
     let mut sources = Vec::new();
     let mut index = 0;

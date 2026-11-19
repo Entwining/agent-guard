@@ -228,16 +228,27 @@ fn infer_inputs(
         target.via = Via::Option;
         effects.targets.push(target);
     }
-    if command.stdin == crate::record::Stdin::Code {
-        effects.inline.extend(
+    let args = &command.argv[index + 1..];
+    match &command.stdin {
+        crate::record::Stdin::Code => effects.inline.extend(
             command
                 .redirects
                 .iter()
                 .filter(|r| matches!(r.direction, Direction::Heredoc | Direction::Herestring))
-                .map(|r| {
-                    InlineCode::interpreter(r.target.clone(), program, &command.argv[index + 1..])
-                }),
-        );
+                .map(|r| InlineCode::interpreter(r.target.clone(), program, args)),
+        ),
+        // Piped text is source only when the interpreter takes its program
+        // from standard input; otherwise it is the program's data.
+        crate::record::Stdin::InterpreterStream(texts)
+            if reads_program_from_stdin(program, args) =>
+        {
+            effects.inline.extend(
+                texts
+                    .iter()
+                    .map(|text| InlineCode::interpreter(text.clone(), program, args)),
+            );
+        }
+        _ => {}
     }
 }
 

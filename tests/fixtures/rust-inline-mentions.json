@@ -35,6 +35,16 @@
     {"id":"slash-token-in-code-comment","partition":"interpreter-string","input":{"command":"python3 - <<'EOF'\n# see ~/.claude\nx = 1\nEOF"},"expected":"D","wire_text":"agent-guard/inline_credential_file]"},
     {"id":"store-named-in-prose","partition":"interpreter-string","input":{"command":"python3 - <<'EOF'\ns = \"no ~/.claude for x\"\nEOF"},"expected":"D","wire_text":"agent-guard/inline_credential_file]"},
     {"id":"store-copied-by-shell-string","partition":"interpreter-string","input":{"command":"python3 -c 'import os; os.system(\"cp -R ~/.claude /tmp/x\")'"},"expected":"D","wire_text":"agent-guard/inline_credential_file]"},
-    {"id":"shell-fragment-keeps-dot-names","partition":"shell-fragment","input":{"command":"bash -c \"$X .env\""},"expected":"D","wire_text":"agent-guard/inline_credential_file]"}
+    {"id":"shell-fragment-keeps-dot-names","partition":"shell-fragment","input":{"command":"bash -c \"$X .env\""},"expected":"D","wire_text":"agent-guard/inline_credential_file]"},
+    {"id":"piped-heredoc-as-program","partition":"piped-source","input":{"command":"cat <<'EOF' | python3\nprint(open('.env').read())\nEOF"},"expected":"D","wire_text":"agent-guard/inline_credential_file]"},
+    {"id":"piped-heredoc-to-dash-operand","partition":"piped-source","input":{"command":"cat <<'EOF' | python3 -\nprint(open('.env').read())\nEOF"},"expected":"D","wire_text":"agent-guard/inline_credential_file]"},
+    {"id":"piped-echo-as-program","partition":"piped-source","input":{"command":"echo \"require('fs').readFileSync('.env')\" | node"},"expected":"D","wire_text":"agent-guard/inline_credential_file]"},
+    {"id":"piped-through-tee","partition":"piped-source","input":{"command":"cat <<'EOF' | tee /dev/null | ruby\nputs File.read(\".npmrc\")\nEOF"},"expected":"D","wire_text":"agent-guard/inline_credential_file]"},
+    {"id":"piped-builder-chain","partition":"piped-data","input":{"command":"cat <<'EOF' | python3\ncmd = (Command.new(\"x\")\n    .env(\"A\", \"1\"))\nEOF"},"expected":"UC"},
+    {"id":"piped-to-script","partition":"piped-data","input":{"command":"cat <<'EOF' | python3 script.py\n{\"path\": \".env\"}\nEOF"},"expected":"UC"},
+    {"id":"piped-to-module","partition":"piped-data","input":{"command":"echo '{\"path\": \".env\"}' | python3 -m json.tool"},"expected":"UC"},
+    {"id":"piped-to-code-option","partition":"piped-data","input":{"command":"echo '{\"path\": \".env\"}' | python3 -c 'import sys; print(sys.stdin.read())'"},"expected":"UC"},
+    {"id":"piped-to-search","partition":"piped-data","input":{"command":"cat <<'EOF' | rg x\n.env\nEOF"},"expected":"N"},
+    {"id":"piped-to-filter-without-operands","partition":"piped-data","input":{"command":"cat <<'EOF' | sort\n.env\nEOF"},"expected":"N"}
   ]
 }

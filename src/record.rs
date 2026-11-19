@@ -333,6 +333,8 @@ pub enum Stdin {
     Inherited,
     /// A pipe or a redirected file feeds a pipeline stage's standard input.
     Stream,
+    /// A pipe feeds an interpreter's standard input with these known texts.
+    InterpreterStream(Vec<String>),
     Data(Vec<usize>),
     Shell,
     Code,

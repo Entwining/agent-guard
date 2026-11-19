@@ -289,7 +289,7 @@ pub use code::{InlineCode, mentions};
 use git::infer_git;
 pub use inference::infer;
 use inference::infer_at;
-use interpreters::{interpreter_code, perl_exec_argv};
+use interpreters::{interpreter_code, perl_exec_argv, reads_program_from_stdin};
 use listing::{find_printed_walks, infer_listing};
 use search::infer_search;
 pub(crate) use shells::{ShellSource, shell_invocation};
