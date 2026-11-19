@@ -433,8 +433,6 @@ impl Inspection<'_> {
     }
     fn inline_code(&mut self, code: &targets::InlineCode, cwd: &str) -> Result<(), CheckError> {
         let previous_denial = self.denial.take();
-        // A mention is not a proven read, so it is judged as one: whatever
-        // the code does with the name, the resolver decides its protection.
         for mention in targets::mentions(code) {
             let target = mention.target(cwd, self.context.host());
             self.target(&target, cwd, EffectSource::InlineCode)?;

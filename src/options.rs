@@ -157,8 +157,6 @@ impl Binding {
         2
     }
 
-    /// Binds an option at `at` whose name is one whole word, and returns how
-    /// many words it spans.
     fn words_option(
         &mut self,
         args: &[Word],
@@ -180,8 +178,6 @@ impl Binding {
         1
     }
 
-    /// Binds a Go flag-package option at `at`, spelled `text`, and returns
-    /// how many words it spans.
     fn go_option(
         &mut self,
         args: &[Word],

@@ -1,5 +1,3 @@
-//! Reads interpreter source as code, string content and interpolations.
-
 use std::collections::VecDeque;
 
 use super::syntax::delimited;
@@ -27,7 +25,6 @@ pub(super) enum Close {
     Regex {
         class: bool,
     },
-    /// A heredoc body, which ends at a line holding its terminator.
     Heredoc(String),
     /// A Lua long bracket of the given level.
     LongBracket(usize),
@@ -95,10 +92,10 @@ impl Scanner {
     pub(super) fn scan(mut self) -> Vec<Mention> {
         let mut i = 0;
         while i < self.chars.len() {
-            i = match self.stack.last() {
-                Some(Frame::Code { .. }) => self.code(i),
-                Some(Frame::Text { .. }) => self.text(i),
-                None => break,
+            i = if let Some(Frame::Text { .. }) = self.stack.last() {
+                self.text(i)
+            } else {
+                self.code(i)
             };
         }
         // Unterminated content still holds its mentions.
@@ -113,7 +110,6 @@ impl Scanner {
         self.mentions
     }
 
-    /// Reads code at `i` and returns the index to continue from.
     fn code(&mut self, i: usize) -> usize {
         let ch = self.chars[i];
         if let Some(Frame::Code {
@@ -185,7 +181,6 @@ impl Scanner {
         Some(i + 1)
     }
 
-    /// Reads string content at `i` and returns the index to continue from.
     fn text(&mut self, i: usize) -> usize {
         let ch = self.chars[i];
         let Some(Frame::Text {
@@ -226,8 +221,6 @@ impl Scanner {
         self.close_text(i + width, interpolation)
     }
 
-    /// Ends a heredoc body at a line holding only its terminator, returning
-    /// the index after that line.
     fn heredoc_end(&mut self, i: usize, segment: usize) -> Option<usize> {
         let Some(Frame::Text {
             close: Close::Heredoc(terminator),
@@ -259,7 +252,6 @@ impl Scanner {
         Some(self.next_heredoc(line_end).unwrap_or(line_end))
     }
 
-    /// Whether an interpolation opens at `i`.
     fn opens(&self, i: usize, interpolation: Option<Interpolation>) -> bool {
         let ch = self.chars[i];
         let next = self.chars.get(i + 1);
@@ -329,7 +321,7 @@ impl Scanner {
     }
 
     /// Pops the closed string and opens the next part of a multi-part
-    /// quote-like operator, returning the index to continue from.
+    /// quote-like operator.
     fn close_text(&mut self, next: usize, interpolation: Option<Interpolation>) -> usize {
         let following = match self.stack.pop() {
             Some(Frame::Text {

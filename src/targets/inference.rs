@@ -237,8 +237,6 @@ fn infer_inputs(
                 .filter(|r| matches!(r.direction, Direction::Heredoc | Direction::Herestring))
                 .map(|r| InlineCode::interpreter(r.target.clone(), program, args)),
         ),
-        // Piped text is source only when the interpreter takes its program
-        // from standard input; otherwise it is the program's data.
         crate::record::Stdin::InterpreterStream(texts)
             if reads_program_from_stdin(program, args) =>
         {

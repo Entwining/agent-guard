@@ -5,8 +5,6 @@ use super::Target;
 use crate::record::{Effect, HostFacts, Via, Walk, Word};
 use scanner::Scanner;
 
-/// Code an owner hands to the policy as text, with the syntax its mentions
-/// are read in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InlineCode {
     pub text: String,
@@ -34,7 +32,6 @@ pub enum Language {
 }
 
 impl Language {
-    /// The language a modelled interpreter runs its source in.
     pub fn of(program: &str, args: &[Word]) -> Option<Self> {
         Some(match program {
             "python" | "python3" => Self::Python,
@@ -75,17 +72,16 @@ impl InlineCode {
     }
 }
 
-/// Text in inline code that may name a file. It is evidence for the
-/// resolver to judge, not a proven read.
+/// Text in inline code that may name a file. It is not a proven read, but it
+/// is judged as one so the resolver decides its protection whatever the code
+/// does with the name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mention {
     pub text: String,
-    /// The mention carries a wildcard and selects the names it matches.
     pub pattern: bool,
 }
 
 impl Mention {
-    /// The read the policy judges for this mention.
     pub fn target(&self, cwd: &str, host: HostFacts<'_>) -> Target {
         let mut target = Target::new(
             crate::filesystem::absolute_input(&self.text, cwd, host.home),
@@ -120,7 +116,6 @@ fn path_char(ch: char) -> bool {
     ch.is_alphanumeric() || matches!(ch, '.' | '/' | '~' | '_' | '-' | '$')
 }
 
-/// A `$HOME/` or `${HOME}/` prefix names the home directory.
 fn home_relative(token: &str) -> String {
     ["$HOME/", "${HOME}/"]
         .into_iter()

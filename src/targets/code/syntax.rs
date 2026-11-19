@@ -1,6 +1,3 @@
-//! The syntax each interpreter language uses to open comments and string
-//! content.
-
 use super::Language;
 use super::scanner::{Close, Frame, Heredoc, Interpolation, Scanner};
 
@@ -11,7 +8,6 @@ impl Scanner {
             .all(|(offset, ch)| self.chars.get(at + offset) == Some(&ch))
     }
 
-    /// The end of a comment starting at `at`.
     pub(super) fn comment(&self, at: usize) -> Option<usize> {
         use Language::*;
         let line_end = |from: usize| {
@@ -134,21 +130,21 @@ impl Scanner {
         if self.language != Language::Perl {
             return None;
         }
+        if start > 0
+            && (self.chars[start - 1].is_alphanumeric()
+                || "_$@%&*>:".contains(self.chars[start - 1]))
+        {
+            return None;
+        }
         let end = (start..self.chars.len())
             .find(|index| !self.chars[*index].is_ascii_alphanumeric())
             .unwrap_or(self.chars.len());
-        if start > 0 && (self.chars[start - 1].is_alphanumeric() || self.chars[start - 1] == '_') {
-            return None;
-        }
         let token: String = self.chars[start..end].iter().collect();
         let parts = match token.as_str() {
             "q" | "qq" | "qw" | "qx" | "m" | "qr" => 0,
             "s" | "tr" | "y" => 1,
             _ => return None,
         };
-        if start > 0 && "$@%&*>:".contains(self.chars[start - 1]) {
-            return None;
-        }
         let open = (end..self.chars.len()).find(|index| !self.chars[*index].is_whitespace())?;
         let delimiter = self.chars[open];
         if delimiter.is_alphanumeric()

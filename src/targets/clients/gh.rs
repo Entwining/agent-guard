@@ -1,9 +1,8 @@
 use super::*;
 
 // The options of gh 2.105's `search` commands and `gh api`, from `gh help`.
-// pflag takes a boolean's value only when glued, as `--web=false`. No search
-// option reads a local file: queries, filters and file names are what the
-// search matches on GitHub.
+// No search option reads a local file: queries, filters and file names are
+// what the search matches on GitHub.
 const SEARCH_CODE: Grammar = complete(
     &[(
         "--extension --filename -q --jq --json --language -L --limit --match --owner -R --repo --size -t --template",
@@ -58,8 +57,8 @@ const API: Grammar = complete(
     )],
 );
 
-/// A grammar of every option of a command: pflag's syntax, value options
-/// and booleans, which take a value only when glued.
+/// A grammar of every option of a command, in pflag's syntax, where a
+/// boolean takes a value only when glued, as `--web=false`.
 const fn complete(
     values: &'static [(&'static str, Effect)],
     attached: &'static [(&'static str, Effect)],
