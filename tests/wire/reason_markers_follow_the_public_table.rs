@@ -42,7 +42,7 @@ fn blocking_results() -> Vec<(&'static str, &'static str, Result<Evaluation, Che
     use CoverageGap as G;
     use DenialRule as D;
     let rules = every_variant!(D: ResourceChange, AppData, Broad, File, Store, CodeFile, HiddenSearch,
-        Dump, Variable, Token, Keychain, StoredSecret, Trace, Upload, Ssh, GrepSsh);
+        Dump, Variable, Token, Keychain, StoredSecret, Trace, Upload, Ssh, SshWrite, GrepSsh);
     let gaps = every_variant!(G: InodeAlias, InputByteLimit, NestingLimit, AbsoluteCwdRequired,
         InvalidEncoding, UnknownProgram { program: String::new() }, UnresolvedTarget,
         UnsupportedShellSyntax, ExecutorDivergence, OutsideObservedTool { tool: String::new() },

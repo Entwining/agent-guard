@@ -16,6 +16,7 @@ pub(super) const SECRET_PRINT: &str = "This prints a stored secret or access tok
 const TRACE: &str = "curl verbose or trace output can print HTTP headers including Authorization. Drop -v and --trace; use a normal curl request for the needed result.";
 const UPLOAD: &str = "This sends the contents of a credential file. Send only the required non-sensitive fields explicitly, and let the client obtain authentication from its normal credential source.";
 const SSH: &str = "This reads private material in the named .ssh directory or its filesystem alias. Search public material in the project or request the exact public key or client-config path; ask the user to inspect private material locally if a specific non-sensitive fact is needed.";
+const SSH_WRITE: &str = "This writes into the named .ssh directory or its filesystem alias, where private keys live. Write the key or certificate under a project or temporary directory instead, such as one `mktemp -d` creates, and ask the user to install it if it belongs in .ssh.";
 const GREP_SSH: &str = "Grep would search private material in the named .ssh directory or its filesystem alias. Narrow the search to a project directory or an exact public key, client config, allowed_signers, or known_hosts file.";
 
 impl DenialRule {
@@ -38,6 +39,7 @@ impl DenialRule {
             Self::Trace => TRACE,
             Self::Upload => UPLOAD,
             Self::Ssh => SSH,
+            Self::SshWrite => SSH_WRITE,
             Self::GrepSsh => GREP_SSH,
         }
     }

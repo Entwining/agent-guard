@@ -71,15 +71,7 @@ pub(super) fn infer(
         "tar" => return unknown_conventions(Walk::Visible, infer_tar(args, cwd, host, effects)),
         "jq" | "yq" => return unknown_conventions(Walk::Visible, readers::filter(program, args)),
         "gh" | "aws" | "rex" | "sessidx" => {
-            readers::unknown(program, args, effects);
-            return unknown_conventions(
-                Walk::Visible,
-                match program {
-                    "rex" => readers::rex_names(args, cwd, host, effects),
-                    "sessidx" => readers::sessidx_queries(args),
-                    _ => readers::output_query(program, args),
-                },
-            );
+            return unknown_client(program, args, cwd, host, effects);
         }
         "rm" | "mv" | "ln" => resource_changes::infer(program, args, cwd, host, effects),
         "git" => infer_git(args, cwd, host, effects),
@@ -112,6 +104,29 @@ pub(super) fn infer(
         }
     }
     None
+}
+
+/// A client that stays an unknown program apart from the slots it names.
+fn unknown_client(
+    program: &str,
+    args: &[Word],
+    cwd: &str,
+    host: HostFacts<'_>,
+    effects: &mut Effects,
+) -> Option<Operands> {
+    readers::unknown(program, args, effects);
+    let claimed = match program {
+        // A modelled gh command binds every role itself.
+        "gh" if clients::infer(program, args, cwd, host, effects) => return None,
+        "rex" => readers::rex_names(args, cwd, host, effects),
+        "sessidx" => readers::sessidx_queries(args),
+        _ => readers::output_query(program, args),
+    };
+    Some(Operands {
+        walk: Walk::Visible,
+        claimed,
+        literal: false,
+    })
 }
 
 fn read(word: &Word, cwd: &str, host: HostFacts<'_>, recursive: bool) -> Target {

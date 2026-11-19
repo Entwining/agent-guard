@@ -475,7 +475,7 @@ fn target_rule(
     } else if target.effect == Effect::Change {
         DenialRule::ResourceChange
     } else if target.effect == Effect::Write {
-        DenialRule::Ssh
+        DenialRule::SshWrite
     } else if target.effect == Effect::Read && resolver.reads_store(target, home) {
         DenialRule::Store
     } else if target.walk == Walk::Hidden && target.effect == Effect::Read {

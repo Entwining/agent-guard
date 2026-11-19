@@ -18,6 +18,10 @@ pub(crate) enum Syntax {
     /// Every option is one whole word, such as OpenSSL's `-out`, whose value
     /// is the next word.
     Words,
+    /// Go's flag package: an option is one whole word after one dash or two,
+    /// such as `-cert-file`, whose value is glued as `-name=VALUE` or is the
+    /// next word; a boolean takes a value only when glued.
+    Go,
 }
 
 pub(crate) struct Grammar {
@@ -153,6 +157,68 @@ impl Binding {
         2
     }
 
+    /// Binds an option at `at` whose name is one whole word, and returns how
+    /// many words it spans.
+    fn words_option(
+        &mut self,
+        args: &[Word],
+        at: usize,
+        exact: Option<&str>,
+        grammar: &Grammar,
+    ) -> usize {
+        let Some(text) = exact else {
+            self.unproven.get_or_insert(at);
+            return 1;
+        };
+        if let Some((name, effect)) = find(grammar.values, text) {
+            return self.next(args, at, name, effect);
+        } else if named(grammar.flags, text) {
+            self.flags.push(text.to_owned());
+        } else {
+            self.unknown(at, grammar);
+        }
+        1
+    }
+
+    /// Binds a Go flag-package option at `at`, spelled `text`, and returns
+    /// how many words it spans.
+    fn go_option(
+        &mut self,
+        args: &[Word],
+        at: usize,
+        text: &str,
+        exact: bool,
+        grammar: &Grammar,
+    ) -> usize {
+        let spelled = text
+            .strip_prefix('-')
+            .filter(|name| name.starts_with('-'))
+            .unwrap_or(text);
+        let (name, glued) = match spelled.split_once('=') {
+            Some((name, _)) => (name, Some(text.len() - spelled.len() + name.len() + 1)),
+            None => (spelled, None),
+        };
+        if !exact && glued.is_none() {
+            self.unproven.get_or_insert(at);
+        } else if let Some((name, effect)) = find(grammar.values, name) {
+            return match glued {
+                Some(prefix) => {
+                    self.bind(name, effect, at, prefix);
+                    1
+                }
+                None => self.next(args, at, name, effect),
+            };
+        } else if let Some((name, effect)) = find(grammar.attached, name) {
+            match glued {
+                Some(prefix) => self.bind(name, effect, at, prefix),
+                None => self.flags.push(name.to_owned()),
+            }
+        } else {
+            self.unknown(at, grammar);
+        }
+        1
+    }
+
     /// Binds the option at `at` when the parser reads that word as one, and
     /// returns how many words it spans; `None` leaves the word an operand.
     /// The caller handles `--`.
@@ -167,17 +233,10 @@ impl Binding {
             return None;
         }
         self.options.push(at);
-        if grammar.syntax == Syntax::Words {
-            if exact.is_none() {
-                self.unproven.get_or_insert(at);
-            } else if let Some((name, effect)) = find(grammar.values, text) {
-                return Some(self.next(args, at, name, effect));
-            } else if named(grammar.flags, text) {
-                self.flags.push(text.to_owned());
-            } else {
-                self.unknown(at, grammar);
-            }
-            return Some(1);
+        match grammar.syntax {
+            Syntax::Words => return Some(self.words_option(args, at, exact, grammar)),
+            Syntax::Go => return Some(self.go_option(args, at, text, exact.is_some(), grammar)),
+            _ => {}
         }
         if text.starts_with("--") {
             let (spelled, glued) = match text.split_once('=') {

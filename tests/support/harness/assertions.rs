@@ -32,9 +32,14 @@ pub(super) fn assert_effect_or_failure(row: &Value, actual: &Value, conditional:
                     effect["protection"] == "AppData" && effect["source"] == "Nested"
                 }))
     } else if required.contains("SSH") || required.contains("private-key") {
-        protected("SshPrivate", required.contains("write"))
-            && (stderr.contains("credential or environment file")
-                || stderr.contains("private material in the named .ssh directory"))
+        let write = required.contains("write");
+        protected("SshPrivate", write)
+            && if write {
+                stderr.contains("writes into the named .ssh directory")
+            } else {
+                stderr.contains("credential or environment file")
+                    || stderr.contains("private material in the named .ssh directory")
+            }
     } else if required.contains("broad") {
         effects.iter().any(|effect| effect["kind"] == "BroadRoot")
             && stderr.contains("home directory")

@@ -15,6 +15,7 @@
     {"class": "policy", "kind": "Trace", "id": "curl_trace", "entry": true},
     {"class": "policy", "kind": "Upload", "id": "credential_upload", "entry": true},
     {"class": "policy", "kind": "Ssh", "id": "ssh_private", "entry": true},
+    {"class": "policy", "kind": "SshWrite", "id": "ssh_private_write", "entry": true},
     {"class": "policy", "kind": "GrepSsh", "id": "grep_ssh_private", "entry": true},
     {"class": "coverage", "kind": "InputByteLimit", "id": "input_byte_limit", "entry": true},
     {"class": "coverage", "kind": "NestingLimit", "id": "nesting_limit", "entry": true},

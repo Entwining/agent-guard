@@ -56,3 +56,18 @@ fn sessidx_queries_and_cwd_filters_are_not_paths() {
 fn sessidx_transcripts_files_and_unparsed_words_keep_read_roles() {
     keeps_unknown_program_gap("sessidx-reads");
 }
+
+#[test]
+fn gh_search_terms_endpoints_and_literal_fields_are_not_paths() {
+    keeps_unknown_program_gap("gh-names");
+}
+
+#[test]
+fn gh_file_inputs_and_unparsed_words_keep_read_roles() {
+    keeps_unknown_program_gap("gh-reads");
+}
+
+#[test]
+fn mkcert_writes_outputs_reads_its_csr_and_names_hosts() {
+    crate::program_contract::partition("mkcert", ROWS);
+}

@@ -35,6 +35,18 @@ const SSH_KEYGEN: Grammar = Grammar::partial(Syntax::Getopt, &[("-f", Use)]);
 const KUBECTL: Grammar = Grammar::partial(Syntax::Clap, &[("--kubeconfig", Use)]);
 const NPM: Grammar = Grammar::partial(Syntax::Getopt, &[("--userconfig", Use)]);
 const DOCKER: Grammar = Grammar::partial(Syntax::Clap, &[("--env-file", Use)]);
+// mkcert 1.4.4's flags, from its `main.go`; its operands name the hosts and
+// addresses a certificate covers.
+const MKCERT: Grammar = Grammar {
+    values: &[("-cert-file -key-file -p12-file", Write), ("-csr", Read)],
+    attached: &[(
+        "-install -uninstall -pkcs12 -ecdsa -client -help -CAROOT -version",
+        Name,
+    )],
+    stops: true,
+    complete: true,
+    ..Grammar::partial(Syntax::Go, &[])
+};
 
 // The options of openrsync and rsync that agents use, from their manuals.
 const RSYNC: Grammar = Grammar {
@@ -109,8 +121,14 @@ fn spec(program: &str, words: &[Word]) -> Option<Spec> {
             spec.operand = Effect::Name;
             spec.options = Some(&DOCKER);
         }
+        "mkcert" => {
+            spec.operand = Effect::Name;
+            spec.walk = Walk::None;
+            spec.options = Some(&MKCERT);
+        }
         "sftp" | "ctags" => {}
         "cargo" => return cargo::spec(words),
+        "gh" => return gh::spec(words),
         "diskutil" | "tmutil" | "dscl" => return query_verbs::spec(program, words),
         _ => return None,
     }
@@ -303,6 +321,7 @@ pub(super) fn infer(
         "docker" => effects.credential_stdin = docker(&mut context),
         "ctags" => ctags(&mut context),
         "cargo" => cargo(&mut context, effects),
+        "gh" => gh::api(&mut context),
         "dd" => {
             for (index, word) in words.iter().enumerate() {
                 context.claimed[index] = true;
@@ -358,6 +377,7 @@ fn short_value(text: &str, wanted: char) -> Option<&str> {
 mod cargo;
 mod curl;
 mod docker;
+mod gh;
 mod query_verbs;
 mod ssh;
 mod wget;

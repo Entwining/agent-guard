@@ -58,7 +58,7 @@
  ,{"id":"link-key-target","partition":"resource-change","tool":"Bash","input":{"command":"ln -s input.txt $H/.ssh/id_rsa"},"expected":"N"}
  ,{"id":"copy-credential-source","partition":"resource-change","tool":"Bash","input":{"command":"cp .env public"},"expected":"D","reason":"credential or environment file","alternative":"ask the user to inspect the file"}
  ,{"id":"copy-credential-target","partition":"resource-change","tool":"Bash","input":{"command":"cp input.txt .env"},"expected":"N"}
- ,{"id":"copy-option-target","partition":"resource-change","tool":"Bash","input":{"command":"cp -t $H/.ssh input.txt"},"expected":"D","reason":"private material","alternative":"exact public key or client-config path"}
+ ,{"id":"copy-option-target","partition":"resource-change","tool":"Bash","input":{"command":"cp -t $H/.ssh input.txt"},"expected":"D","reason":"writes into the named .ssh directory","alternative":"mktemp -d"}
  ,{"id":"chmod-key","partition":"resource-change","tool":"Bash","input":{"command":"chmod 600 $H/.ssh/id_rsa"},"expected":"N"}
  ,{"id":"chown-key","partition":"resource-change","tool":"Bash","input":{"command":"chown fixture $H/.ssh/id_rsa"},"expected":"N"}
  ,{"id":"touch-key","partition":"resource-change","tool":"Bash","input":{"command":"touch $H/.ssh/id_rsa"},"expected":"N"}

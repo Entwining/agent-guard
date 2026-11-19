@@ -128,6 +128,7 @@ pub enum DenialRule {
     Trace,
     Upload,
     Ssh,
+    SshWrite,
     GrepSsh,
 }
 
@@ -152,6 +153,7 @@ impl DenialRule {
             Self::Trace => "curl_trace",
             Self::Upload => "credential_upload",
             Self::Ssh => "ssh_private",
+            Self::SshWrite => "ssh_private_write",
             Self::GrepSsh => "grep_ssh_private",
         }
     }
