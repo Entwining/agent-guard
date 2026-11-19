@@ -230,7 +230,7 @@ pub(super) fn lexical_candidate(
         }
     }
     let base = parts.last().copied().unwrap_or("");
-    if base == ".env.example" || base == ".env.age" {
+    if lexical_state::environment_example(base) {
         return None;
     }
     if state.environment

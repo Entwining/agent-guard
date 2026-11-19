@@ -14,6 +14,8 @@ pub mod credential_variables_print_only_exposed_values;
 pub mod detector_success_and_failure;
 #[path = "support/differential.rs"]
 pub mod differential;
+#[path = "policy_contract/environment_templates_keep_the_example_exemption.rs"]
+pub mod environment_templates_keep_the_example_exemption;
 #[path = "policy_contract/full_case_folding_reaches_protected_names.rs"]
 pub mod full_case_folding_reaches_protected_names;
 #[path = "policy_contract/literal_for_lists_execute_each_value_exactly.rs"]

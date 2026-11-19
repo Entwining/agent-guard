@@ -308,6 +308,14 @@ impl Lexical {
     }
 }
 
+/// Whether a folded name is exempt from the environment-file rule because by
+/// convention it carries no plaintext values: the age-encrypted `.env.age`, or
+/// a template named after the file it seeds with a final `.example` segment,
+/// such as `.env.local.example`.
+pub(super) fn environment_example(name: &str) -> bool {
+    name == ".env.age" || name.starts_with(".env.") && name.ends_with(".example")
+}
+
 #[derive(Clone, Copy, Default)]
 pub(super) struct LiteralState {
     parts: usize,
@@ -345,7 +353,7 @@ impl LiteralState {
             .ssh_depth
             .is_some_and(|depth| depth > 1 || depth == 1 && !super::ssh_public(original));
         self.environment |= part == ".env" || part.starts_with(".env.");
-        self.environment_example = [".env.example", ".env.age"].contains(&part.as_str());
+        self.environment_example = environment_example(&part);
         // A path is a credential from the component that completes a catalog
         // entry onward, so what lies below the match stays protected for
         // callers that judge only the whole path, such as items, filters,

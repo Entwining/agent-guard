@@ -1,0 +1,15 @@
+{
+  "rows": [
+    {"id":"local-template","partition":"environment-template","input":{"command":"cat .env.local.example"},"expected":"N"},
+    {"id":"case-folded-template","partition":"environment-template","input":{"command":"cat .ENV.LOCAL.EXAMPLE"},"expected":"N"},
+    {"id":"git-diff-template","partition":"environment-template","input":{"command":"git diff -- .env.local.example"},"expected":"N"},
+    {"id":"copy-template-to-environment-file","partition":"environment-template","input":{"command":"cp .env.local.example .env.local"},"expected":"N"},
+    {"id":"template-under-directory-glob","partition":"environment-template","input":{"command":"cat apps/*/.env.staging.eu.example"},"expected":"N"},
+    {"id":"example-not-last-segment","partition":"environment-template","input":{"command":"cat .env.example.local"},"expected":"D"},
+    {"id":"example-without-separator","partition":"environment-template","input":{"command":"cat .env.localexample"},"expected":"D"},
+    {"id":"environment-file-under-directory-glob","partition":"environment-template","input":{"command":"cat apps/*/.env.example.local"},"expected":"D"},
+    {"id":"credential-variant-ending-in-example","partition":"environment-template","input":{"command":"cat ~/.aws/credentials.example"},"expected":"D"},
+    {"id":"credential-variant-ending-in-example-under-glob","partition":"environment-template","input":{"command":"cat ~/.aw[s]/credentials.example"},"expected":"D"},
+    {"id":"environment-glob","partition":"environment-template","input":{"command":"cat .env.*"},"expected":"D"}
+  ]
+}
