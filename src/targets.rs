@@ -23,7 +23,7 @@ pub struct Effects {
     pub targets: Vec<Target>,
     pub gaps: Vec<CoverageGap>,
     pub code: Vec<String>,
-    pub inline: Vec<String>,
+    pub inline: Vec<InlineCode>,
     pub dump: bool,
     /// The program writes a credential variable's value to its output.
     pub variable: bool,
@@ -285,7 +285,7 @@ mod tests;
 mod wrappers;
 
 use archive::infer_tar;
-pub use code::code_paths;
+pub use code::{InlineCode, mentions};
 use git::infer_git;
 pub use inference::infer;
 use inference::infer_at;

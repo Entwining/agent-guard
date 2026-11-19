@@ -25,6 +25,16 @@ pub struct Context {
     pub shell_observation_entries: std::cell::Cell<usize>,
 }
 
+impl Context {
+    fn host(&self) -> crate::record::HostFacts<'_> {
+        crate::record::HostFacts {
+            home: &self.home,
+            user: self.user.as_deref(),
+            config_dirs: &self.config_dirs,
+        }
+    }
+}
+
 pub struct Event<'a> {
     pub bytes: &'a [u8],
     pub context: &'a Context,

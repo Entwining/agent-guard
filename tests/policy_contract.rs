@@ -18,6 +18,8 @@ pub mod differential;
 pub mod environment_templates_keep_the_example_exemption;
 #[path = "policy_contract/full_case_folding_reaches_protected_names.rs"]
 pub mod full_case_folding_reaches_protected_names;
+#[path = "policy_contract/inline_mentions_follow_the_source_syntax.rs"]
+pub mod inline_mentions_follow_the_source_syntax;
 #[path = "policy_contract/literal_for_lists_execute_each_value_exactly.rs"]
 pub mod literal_for_lists_execute_each_value_exactly;
 #[path = "policy_contract/nested_parameter_flags_refuse_without_checker_faults.rs"]

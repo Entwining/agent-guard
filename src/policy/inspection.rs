@@ -260,11 +260,7 @@ impl Inspection<'_> {
         let observation = shell::observe_with_deadline(
             source,
             self.arm,
-            crate::record::HostFacts {
-                home: &self.context.home,
-                user: self.context.user.as_deref(),
-                config_dirs: &self.context.config_dirs,
-            },
+            self.context.host(),
             cwd,
             self.context.zsh_executor,
             self.deadline,
@@ -304,15 +300,7 @@ impl Inspection<'_> {
         depth: usize,
     ) -> Result<(), CheckError> {
         let cwd = &command.cwd;
-        let effects = targets::infer(
-            command,
-            &command.shell_cwd,
-            crate::record::HostFacts {
-                home: &self.context.home,
-                user: self.context.user.as_deref(),
-                config_dirs: &self.context.config_dirs,
-            },
-        );
+        let effects = targets::infer(command, &command.shell_cwd, self.context.host());
         self.pipeline_content(command, &effects, pipes);
         for value in effects.gaps {
             self.gap(value);
@@ -443,19 +431,13 @@ impl Inspection<'_> {
             }
         }
     }
-    fn inline_code(&mut self, code: &str, cwd: &str) -> Result<(), CheckError> {
+    fn inline_code(&mut self, code: &targets::InlineCode, cwd: &str) -> Result<(), CheckError> {
         let previous_denial = self.denial.take();
-        for path in targets::code_paths(code) {
-            self.target(
-                &Target::new(
-                    filesystem::absolute_input(&path, cwd, &self.context.home),
-                    Effect::Read,
-                    Walk::None,
-                    Via::Code,
-                ),
-                cwd,
-                EffectSource::InlineCode,
-            )?;
+        // A mention is not a proven read, so it is judged as one: whatever
+        // the code does with the name, the resolver decides its protection.
+        for mention in targets::mentions(code) {
+            let target = mention.target(cwd, self.context.host());
+            self.target(&target, cwd, EffectSource::InlineCode)?;
         }
         if self.denial.is_some() {
             self.gaps

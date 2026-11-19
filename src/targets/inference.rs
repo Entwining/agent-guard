@@ -234,7 +234,9 @@ fn infer_inputs(
                 .redirects
                 .iter()
                 .filter(|r| matches!(r.direction, Direction::Heredoc | Direction::Herestring))
-                .map(|r| r.target.clone()),
+                .map(|r| {
+                    InlineCode::interpreter(r.target.clone(), program, &command.argv[index + 1..])
+                }),
         );
     }
 }
@@ -368,7 +370,10 @@ fn infer_completion(program: &str, args: &[Word], command: &CommandRecord, effec
     {
         effects.gaps.push(CoverageGap::UnsupportedShellSyntax);
     }
-    effects.dump |= effects.inline.iter().any(|code| printenv_signature(code));
+    effects.dump |= effects
+        .inline
+        .iter()
+        .any(|code| printenv_signature(&code.text));
     let display = READERS
         .split_whitespace()
         .chain(["echo", "printf", "print"])
