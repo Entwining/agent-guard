@@ -7,8 +7,10 @@ ignore = []
 [licenses]
 allow = ["MIT", "Apache-2.0"]
 exceptions = [
-    { crate = "unicode-ident@1.0.26", allow = ["Unicode-3.0"] },
+    { crate = "unicode-ident@1.0.27", allow = ["Unicode-3.0"] },
     { crate = "foldhash@0.2.0", allow = ["Zlib"] },
+    # Only psm's build script uses it, so the package does not ship it.
+    { crate = "ar_archive_writer@0.5.5", allow = ["Apache-2.0 WITH LLVM-exception"] },
 ]
 
 [bans]

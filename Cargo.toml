@@ -60,13 +60,16 @@ test = false
 brush-parser = "=0.4.0"
 serde_json = "=1.0.154"
 serde = { version = "=1.0.229", features = ["derive"] }
-tree-sitter = "=0.27.0"
-tree-sitter-bash = "=0.25.1"
-sha2 = "=0.10.9"
+sha2 = "=0.11.1"
 signal-hook = "=0.4.6"
 tempfile = "=3.27.0"
 nix = { version = "=0.31.3", default-features = false, features = ["fs", "signal", "process"] }
 rustix = { version = "=1.1.6", features = ["process", "fs"] }
+
+# The parser-comparison test and the calibration example check brush-parser's spans against tree-sitter-bash.
+[dev-dependencies]
+tree-sitter = "=0.27.2"
+tree-sitter-bash = "=0.25.1"
 
 [profile.dev]
 # Tests run the checker under its production deadline, and an unoptimized build runs it about ten times slower than the package.

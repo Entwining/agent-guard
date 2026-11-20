@@ -1,10 +1,9 @@
-use super::Result;
+use super::{Result, sha256_hex};
 use rustix::{
     fs::{OFlags, fcntl_getfl, fcntl_setfl},
     process::{Pid, Signal, kill_process, kill_process_group, test_kill_process},
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::{
     env,
     fs::{self, File, OpenOptions},
@@ -266,7 +265,7 @@ pub struct Binding {
 pub fn hash_file(path: &Path, name: &str) -> Result<Binding> {
     Ok(Binding {
         path: name.into(),
-        sha256: format!("{:x}", Sha256::digest(fs::read(path)?)),
+        sha256: sha256_hex(&fs::read(path)?),
         mode: fs::metadata(path)?.permissions().mode() & 0o777,
     })
 }

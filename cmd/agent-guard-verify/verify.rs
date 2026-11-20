@@ -98,7 +98,12 @@ fn installed(args: &[String]) -> Result<Installation, String> {
     executable(&native)?;
     let hash = |path: &Path| {
         fs::read(path)
-            .map(|body| format!("{:x}", Sha256::digest(body)))
+            .map(|body| {
+                Sha256::digest(body)
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect::<String>()
+            })
             .map_err(|error| path_error("open", path, &error))
     };
     let entry_hash = hash(&entry)?;

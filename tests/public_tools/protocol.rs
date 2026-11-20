@@ -90,8 +90,11 @@ fn installation_resolves_aliases_and_binds_both_executable_hashes() {
         ("Native", root.path().join("package/bin/agent-guard-native")),
     ] {
         assert!(out.contains(&format!(
-            "{label} SHA256: {:x}\n",
+            "{label} SHA256: {}\n",
             Sha256::digest(fs::read(path).unwrap())
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
         )));
     }
 }

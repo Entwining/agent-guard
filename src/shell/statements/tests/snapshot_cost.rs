@@ -54,6 +54,10 @@ fn saved_binding_states_do_not_copy_entries() {
     for samples in [4, 8, 16] {
         let (scope, counter) = seeded(samples * 16);
         let states = (0..samples).map(|_| scope.state()).collect::<Vec<_>>();
+        #[expect(
+            clippy::redundant_clone,
+            reason = "cloning saved states is the operation whose copies this test counts"
+        )]
         let copies = states.clone();
         let restored = copies
             .into_iter()

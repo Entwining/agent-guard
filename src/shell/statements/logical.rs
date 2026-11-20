@@ -54,7 +54,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             let choice = self.flow.choice_id();
             let mut left_exit = scope.clone();
             Rc::make_mut(&mut left_exit.flow_guard).insert(choice, 0);
-            let mut skipped = before.clone();
+            let mut skipped = before;
             Rc::make_mut(&mut skipped.flow_guard).insert(choice, 0);
             let mut after = scope.branch();
             Rc::make_mut(&mut after.flow_guard).insert(choice, 1);
