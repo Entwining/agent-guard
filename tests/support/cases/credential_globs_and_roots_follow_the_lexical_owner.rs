@@ -1,5 +1,5 @@
 pub(crate) use crate::support;
-pub use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell::Arm};
+pub use agent_guard_rust::{Event, adapters, evaluate};
 pub use serde_json::{Value, json};
 
 pub fn partition(name: &str) {
@@ -18,14 +18,11 @@ pub fn partition(name: &str) {
             let context = fixture.context(&json!({"consumer":consumer,"cwd":row["cwd"]}));
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer=="pi" {"bash"} else {"Bash"},"tool_input":{"command":row["source"]}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 row["expected"],

@@ -1,5 +1,5 @@
 use crate::support;
-use agent_guard_rust::shell::{self, Arm};
+use agent_guard_rust::shell;
 use serde_json::Value;
 use std::collections::BTreeSet;
 
@@ -15,7 +15,6 @@ fn partition(name: &str) {
     for row in rows {
         let result = shell::observe(
             row["source"].as_str().unwrap(),
-            Arm::Brush,
             "/h",
             row["cwd"].as_str().unwrap(),
             true,
@@ -205,7 +204,7 @@ fn split_cwd_origin_tracks_each_word() {
 
 #[test]
 fn decided_pwd_and_cdpath_wire_contracts() {
-    use agent_guard_rust::{Event, adapters, evaluate_with_arm};
+    use agent_guard_rust::{Event, adapters, evaluate};
     use serde_json::json;
     let packet: Value = serde_json::from_str(include_str!("../fixtures/rust-m2-cwd.json")).unwrap();
     let fixture = support::Fixture::new();
@@ -228,14 +227,11 @@ fn decided_pwd_and_cdpath_wire_contracts() {
             let context = fixture.context(&json!({"consumer":consumer,"cwd":cwd}));
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer=="pi" {"bash"} else {"Bash"},"tool_input":{"command":row["source"]}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 row["expected"],

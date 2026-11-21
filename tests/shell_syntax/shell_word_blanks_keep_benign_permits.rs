@@ -1,9 +1,8 @@
 use crate::support;
 
 use agent_guard_rust::{
-    Coverage, EffectRecord, EffectSource, Event, Outcome, adapters, evaluate_with_arm,
-    filesystem::Protection,
-    shell::{self, Arm},
+    Coverage, EffectRecord, EffectSource, Event, Outcome, adapters, evaluate,
+    filesystem::Protection, shell,
 };
 use serde_json::{Value, json};
 
@@ -32,14 +31,11 @@ fn rows(owner: &str, expected: &[&str]) {
             };
             let bytes = input(source);
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             let wire = adapters::render(context.consumer, &result);
             let class = support::class(&result);
             println!(
@@ -49,22 +45,18 @@ fn rows(owner: &str, expected: &[&str]) {
             match row["expected"].as_str().unwrap() {
                 "data-control" => {
                     let bytes = input(row["control"].as_str().unwrap());
-                    let control = evaluate_with_arm(
-                        Event {
-                            bytes: &bytes,
-                            context: &context,
-                            probe: &mut probe,
-                        },
-                        Arm::Brush,
-                    );
+                    let control = evaluate(Event {
+                        bytes: &bytes,
+                        context: &context,
+                        probe: &mut probe,
+                    });
                     assert_eq!(
                         class,
                         support::class(&control),
                         "heredoc data reading: {row}"
                     );
                     let observation =
-                        shell::observe(source, Arm::Brush, &fixture.home, &fixture.project, true)
-                            .unwrap();
+                        shell::observe(source, &fixture.home, &fixture.project, true).unwrap();
                     assert!(
                         !observation
                             .script

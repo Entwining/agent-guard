@@ -25,14 +25,11 @@ fn tar_glued_directory_is_an_extraction_write_root() {
         let context = fixture.context(&json!({"consumer":consumer, "cwd":"$P"}));
         let bytes =
             br#"{"tool_name":"Bash","tool_input":{"command":"tar -xf x.tar -C$HOME/.ssh"}}"#;
-        let result = evaluate_with_arm(
-            Event {
-                bytes,
-                context: &context,
-                probe: &mut support::RecordingProbe::literal_for_quoted_paths(&fixture),
-            },
-            Arm::Brush,
-        )
+        let result = evaluate(Event {
+            bytes,
+            context: &context,
+            probe: &mut support::RecordingProbe::literal_for_quoted_paths(&fixture),
+        })
         .unwrap();
         let agent_guard_rust::Outcome::ProtectedDenial { reason, .. } = &result.outcome else {
             panic!("missing extraction denial")

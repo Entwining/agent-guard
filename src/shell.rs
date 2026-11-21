@@ -13,15 +13,6 @@ use crate::{CheckError, CheckErrorKind, CoverageGap, limits::MAX_NESTING};
 use std::ops::Range;
 use std::rc::Rc;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Arm {
-    StructuredOnly,
-    Brush,
-}
-
-/// Parse comparators never contribute semantic observations.
-pub const ACCEPTANCE_ARMS: &[Arm] = &[Arm::Brush];
-
 #[derive(Debug, Clone)]
 enum WordSyntax {
     ProcessInput(Box<ProcessInput>),
@@ -220,19 +211,12 @@ pub fn check_nesting(source: &str) -> Result<(), CheckError> {
     Ok(())
 }
 
-pub fn observe(
-    source: &str,
-    arm: Arm,
-    home: &str,
-    cwd: &str,
-    zsh: bool,
-) -> Result<Observation, CheckError> {
-    observe_with_user(source, arm, home, cwd, None, zsh)
+pub fn observe(source: &str, home: &str, cwd: &str, zsh: bool) -> Result<Observation, CheckError> {
+    observe_with_user(source, home, cwd, None, zsh)
 }
 
 pub fn observe_with_user(
     source: &str,
-    arm: Arm,
     home: &str,
     cwd: &str,
     user: Option<&str>,
@@ -240,7 +224,6 @@ pub fn observe_with_user(
 ) -> Result<Observation, CheckError> {
     observe_with_deadline(
         source,
-        arm,
         crate::record::HostFacts {
             home,
             user,
@@ -254,7 +237,6 @@ pub fn observe_with_user(
 
 pub(crate) fn observe_with_deadline(
     source: &str,
-    arm: Arm,
     host: crate::record::HostFacts<'_>,
     cwd: &str,
     zsh: bool,
@@ -262,7 +244,7 @@ pub(crate) fn observe_with_deadline(
 ) -> Result<Observation, CheckError> {
     let mut observation = Observation::default();
     let mut scope = statements::Scope::for_host(host, cwd);
-    let mut evaluator = statements::Evaluator::new(Frontend { arm, zsh, host }, &mut observation);
+    let mut evaluator = statements::Evaluator::new(Frontend { zsh, host }, &mut observation);
     evaluator.deadline = deadline;
     evaluator.source(source, &mut scope, 0)?;
     evaluator.finish();
@@ -271,7 +253,6 @@ pub(crate) fn observe_with_deadline(
 
 #[derive(Clone, Copy)]
 struct Frontend<'a> {
-    arm: Arm,
     zsh: bool,
     host: crate::record::HostFacts<'a>,
 }

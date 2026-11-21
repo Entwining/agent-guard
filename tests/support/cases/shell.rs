@@ -2,7 +2,7 @@ pub(crate) use crate::support;
 pub use agent_guard_rust::{
     Event, Outcome,
     adapters::{recovery_value, render},
-    evaluate_with_arm,
+    evaluate,
     filesystem::DiskProbe,
 };
 pub use serde_json::{Value, json};
@@ -14,66 +14,56 @@ pub fn check_group(group: &str) {
     let selected: Vec<_> = cases.iter().filter(|case| case["group"] == group).collect();
     assert!(!selected.is_empty(), "missing group {group}");
     for case in selected {
-        for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-            let fixture = support::Fixture::new();
-            let home_alias = fixture.root.join("home-alias");
-            std::os::unix::fs::symlink(&fixture.home, &home_alias).unwrap();
-            use std::os::unix::ffi::OsStrExt;
-            std::os::unix::fs::symlink(
-                std::ffi::OsStr::from_bytes(b"bad-directory-\xff"),
-                format!("{}/bad-link", fixture.project),
-            )
-            .unwrap();
-            let consumer = case["consumer"].as_str().unwrap_or("codex");
-            let tool =
-                case["tool"]
-                    .as_str()
-                    .unwrap_or(if consumer == "pi" { "bash" } else { "Bash" });
-            let mut context=fixture.context(&json!({"consumer":consumer,"cwd":case["cwd"].as_str().unwrap_or("$P"),"task_objective":"review input","tool":tool,"provenance_form":"event"}));
-            if case["setup"] == "home-alias" {
-                context.home = home_alias.to_str().unwrap().into();
-            }
-            let mut event=case.get("event").cloned().unwrap_or_else(|| json!({"tool_name":tool,"tool_input":case.get("input").cloned().unwrap_or_else(||json!({"command":case["command"].as_str().unwrap_or("")}))}));
-            if let Some(cwd) = case.get("event_cwd") {
-                event["cwd"] = cwd.clone();
-            }
-            let event = fixture.expand_value(&event);
-            let bytes = case["raw"]
-                .as_str()
-                .map(|s| s.as_bytes().to_vec())
-                .unwrap_or_else(|| serde_json::to_vec(&event).unwrap());
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut DiskProbe,
-                },
-                arm,
-            );
-            let wire = render(context.consumer, &result);
-            let coverage = support::coverage(&result);
-            let (reason, recovery) = match &result {
-                Ok(e) => match &e.outcome {
-                    Outcome::ProtectedDenial { reason, recovery } => {
-                        (reason.effect.clone(), recovery_value(recovery))
-                    }
-                    Outcome::CoverageInsufficient { recovery, .. } => (
-                        String::new(),
-                        recovery.as_ref().map(recovery_value).unwrap_or(Value::Null),
-                    ),
-                    _ => (String::new(), Value::Null),
-                },
-                Err(error) => (error.to_string(), Value::Null),
-            };
-            let class = support::class(&result);
-            let problems = case_problems(case, class, &wire, &coverage, &reason, &recovery);
-            println!(
-                "{}",
-                json!({"id":case["id"],"finding":case["finding"],"arm":format!("{arm:?}"),"problems":problems,"class":class,"coverage":coverage,"reason":reason,"recovery":recovery})
-            );
-            if !problems.is_empty() {
-                failures.push(format!("{} {arm:?} {problems:?}", case["id"]));
-            }
+        let fixture = support::Fixture::new();
+        let home_alias = fixture.root.join("home-alias");
+        std::os::unix::fs::symlink(&fixture.home, &home_alias).unwrap();
+        use std::os::unix::ffi::OsStrExt;
+        std::os::unix::fs::symlink(
+            std::ffi::OsStr::from_bytes(b"bad-directory-\xff"),
+            format!("{}/bad-link", fixture.project),
+        )
+        .unwrap();
+        let consumer = case["consumer"].as_str().unwrap_or("codex");
+        let tool = case["tool"]
+            .as_str()
+            .unwrap_or(if consumer == "pi" { "bash" } else { "Bash" });
+        let mut context=fixture.context(&json!({"consumer":consumer,"cwd":case["cwd"].as_str().unwrap_or("$P"),"task_objective":"review input","tool":tool,"provenance_form":"event"}));
+        if case["setup"] == "home-alias" {
+            context.home = home_alias.to_str().unwrap().into();
+        }
+        let mut event=case.get("event").cloned().unwrap_or_else(|| json!({"tool_name":tool,"tool_input":case.get("input").cloned().unwrap_or_else(||json!({"command":case["command"].as_str().unwrap_or("")}))}));
+        if let Some(cwd) = case.get("event_cwd") {
+            event["cwd"] = cwd.clone();
+        }
+        let event = fixture.expand_value(&event);
+        let bytes = case["raw"]
+            .as_str()
+            .map(|s| s.as_bytes().to_vec())
+            .unwrap_or_else(|| serde_json::to_vec(&event).unwrap());
+        let result = evaluate(Event {
+            bytes: &bytes,
+            context: &context,
+            probe: &mut DiskProbe,
+        });
+        let wire = render(context.consumer, &result);
+        let coverage = support::coverage(&result);
+        let (reason, recovery) = match &result {
+            Ok(e) => match &e.outcome {
+                Outcome::ProtectedDenial { reason, recovery } => {
+                    (reason.effect.clone(), recovery_value(recovery))
+                }
+                _ => (String::new(), Value::Null),
+            },
+            Err(error) => (error.to_string(), Value::Null),
+        };
+        let class = support::class(&result);
+        let problems = case_problems(case, class, &wire, &coverage, &reason, &recovery);
+        println!(
+            "{}",
+            json!({"id":case["id"],"finding":case["finding"],"problems":problems,"class":class,"coverage":coverage,"reason":reason,"recovery":recovery})
+        );
+        if !problems.is_empty() {
+            failures.push(format!("{} {problems:?}", case["id"]));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
@@ -87,13 +77,14 @@ fn case_problems(
     reason: &str,
     recovery: &Value,
 ) -> Vec<&'static str> {
-    let expected_exit = case["exit"].as_i64().unwrap_or(
-        if ["D", "F", "UO"].contains(&case["class"].as_str().unwrap()) {
-            2
-        } else {
-            0
-        },
-    );
+    let expected_exit =
+        case["exit"]
+            .as_i64()
+            .unwrap_or(if ["D", "F"].contains(&case["class"].as_str().unwrap()) {
+                2
+            } else {
+                0
+            });
     let mut problems = Vec::new();
     if class != case["class"] {
         problems.push("class");

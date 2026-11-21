@@ -1,4 +1,4 @@
-use crate::{CoverageGap, DenialRule};
+use crate::{DenialRule, Refusal};
 
 // Public sentences carry the safe alternatives; diagnostic effect text
 // stays internal and must not replace them in consumer output.
@@ -43,37 +43,19 @@ impl DenialRule {
     }
 }
 
-pub(crate) fn refusal_message(cause: &CoverageGap) -> &'static str {
+pub(crate) fn refusal_message(cause: &Refusal) -> &'static str {
     match cause {
-        CoverageGap::InodeAlias => {
-            "The guard cannot inspect an inode-addressed /.vol path. Name the file by its ordinary file path, then recheck the call."
-        }
-        CoverageGap::InspectionBudget => {
-            "This command exceeds the guard's inspection budget. Split loops, function calls or brace alternatives into smaller commands with explicit public paths, then recheck each command."
-        }
-        CoverageGap::IdentityBound => {
-            "The guard cannot resolve this path through bounded or cyclic aliases. Name the file by an ordinary absolute path without the cyclic or deep alias chain, then recheck the call."
-        }
-        CoverageGap::InputByteLimit => {
+        Refusal::InputByteLimit => {
             "This event exceeds the input byte limit. Split the call into smaller requests, then recheck each request."
         }
-        CoverageGap::NestingLimit => {
+        Refusal::NestingLimit => {
             "Shell nesting exceeds the supported depth of 64. Shorten the nesting or split the command, then recheck each command."
         }
-        CoverageGap::AbsoluteCwdRequired => {
+        Refusal::AbsoluteCwdRequired => {
             "The event requires an absolute cwd. Use an absolute cwd, then recheck the call."
         }
-        CoverageGap::InvalidEncoding => {
+        Refusal::InvalidEncoding => {
             "The event is not valid UTF-8. Encode the request as UTF-8, then recheck the call."
-        }
-        CoverageGap::UnsupportedShellSyntax => {
-            "The agent guard cannot inspect this shell syntax. Rewrite it as a Bash-compatible command with explicit paths, or run a narrower command that the guard can inspect."
-        }
-        CoverageGap::ExecutionOwnerUnavailable => {
-            "The agent guard cannot verify the execution owner for this operation. Have the owner establish and verify the execution boundary, then recheck the call."
-        }
-        _ => {
-            "The agent guard cannot inspect this unsupported or unresolved operation. Replace the unsupported construct with a Bash-compatible command naming an explicit public path, then recheck it."
         }
     }
 }

@@ -11,7 +11,6 @@ fn gate_a_zero_starts_and_bypass_negative() {
         &fixture,
         &ctx,
         &mut probe,
-        Arm::Brush,
         &format!("ls '{}/data.txt'", fixture.container),
     );
     assert_eq!(support::class(&result), "D");

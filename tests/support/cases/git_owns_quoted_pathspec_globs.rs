@@ -1,9 +1,9 @@
 pub(crate) use crate::support;
 pub use agent_guard_rust::{
-    Event, evaluate_with_arm,
+    Event, evaluate,
     filesystem::{self, Probe},
     record::{Direction, Effect, HostFacts, Target, Via, Walk},
-    shell::{self, Arm},
+    shell,
 };
 pub use serde_json::{Value, json};
 pub use std::{panic::AssertUnwindSafe, path::Path};
@@ -23,14 +23,11 @@ pub fn regressions(owner: &str) {
             }))
             .unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &body,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &body,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 row["expected"],

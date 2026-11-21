@@ -1,8 +1,5 @@
 use crate::support;
-use agent_guard_rust::{
-    Event, evaluate_with_arm,
-    shell::{self, Arm},
-};
+use agent_guard_rust::{Event, evaluate, shell};
 use serde_json::{Value, json};
 
 #[test]
@@ -18,14 +15,11 @@ fn quoted_tilde_runtime_prefix_stays_relative() {
             let source = row["source"].as_str().unwrap();
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer=="pi" {"bash"} else {"Bash"},"tool_input":{"command":source}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             let class = support::class(&result);
             let good = if row["expected"] == "allow" {
                 ["N", "UC"].contains(&class)
@@ -36,16 +30,10 @@ fn quoted_tilde_runtime_prefix_stays_relative() {
                 good,
                 "{}: {consumer}: {result:?}; records={:?}",
                 row["id"],
-                shell::observe(
-                    source,
-                    Arm::Brush,
-                    &context.home,
-                    &context.cwd,
-                    context.zsh_executor
-                )
-                .unwrap()
-                .script
-                .commands
+                shell::observe(source, &context.home, &context.cwd, context.zsh_executor)
+                    .unwrap()
+                    .script
+                    .commands
             );
             let wire = agent_guard_rust::adapters::render(context.consumer, &result);
             assert_eq!(wire.exit, if row["expected"] == "allow" { 0 } else { 2 });

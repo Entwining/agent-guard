@@ -9,14 +9,7 @@ fn identical_sources_share_syntax_but_observe_each_context() {
             user: None,
             config_dirs: &[],
         };
-        let mut evaluator = statements::Evaluator::new(
-            Frontend {
-                arm: Arm::Brush,
-                zsh: true,
-                host,
-            },
-            &mut output,
-        );
+        let mut evaluator = statements::Evaluator::new(Frontend { zsh: true, host }, &mut output);
         for index in 0..width {
             let mut scope = statements::Scope::new(host.home, &format!("/synthetic/dir{index}"));
             scope.assign(
@@ -47,14 +40,7 @@ fn alternative_environments_store_only_binding_deltas() {
             user: None,
             config_dirs: &[],
         };
-        let mut evaluator = statements::Evaluator::new(
-            Frontend {
-                arm: Arm::Brush,
-                zsh: false,
-                host,
-            },
-            &mut output,
-        );
+        let mut evaluator = statements::Evaluator::new(Frontend { zsh: false, host }, &mut output);
         let mut scope = statements::Scope::new(host.home, "/synthetic/project");
         for index in 0..width {
             scope.assign(
@@ -102,14 +88,7 @@ fn syntax_cache_hits_keep_depth_deadline_and_failure_checks() {
         user: None,
         config_dirs: &[],
     };
-    let mut evaluator = statements::Evaluator::new(
-        Frontend {
-            arm: Arm::Brush,
-            zsh: false,
-            host,
-        },
-        &mut output,
-    );
+    let mut evaluator = statements::Evaluator::new(Frontend { zsh: false, host }, &mut output);
     let mut scope = statements::Scope::new(host.home, "/synthetic/project");
     evaluator.source("printf public", &mut scope, 0).unwrap();
     assert_eq!(
@@ -141,7 +120,6 @@ fn syntax_cache_hits_keep_depth_deadline_and_failure_checks() {
 fn quoted_star_preserves_unknown_argument_metadata() {
     let observation = observe(
         "f() { cat \"$*\"; }; f $value public",
-        Arm::Brush,
         "/synthetic/home",
         "/synthetic/project",
         true,
@@ -156,25 +134,19 @@ fn quoted_star_preserves_unknown_argument_metadata() {
 }
 #[test]
 fn complete_alternative_argv() {
+    let obs = observe("p='public protected'; cat $p", "/h", "/h/p", true).unwrap();
     assert!(
-        !ACCEPTANCE_ARMS.is_empty(),
-        "missing acceptance parser arms"
+        obs.script
+            .commands
+            .iter()
+            .any(|c| c.argv == ["cat", "public", "protected"])
     );
-    for &arm in ACCEPTANCE_ARMS {
-        let obs = observe("p='public protected'; cat $p", arm, "/h", "/h/p", true).unwrap();
-        assert!(
-            obs.script
-                .commands
-                .iter()
-                .any(|c| c.argv == ["cat", "public", "protected"])
-        );
-        assert!(
-            obs.script
-                .commands
-                .iter()
-                .any(|c| c.argv == ["cat", "public protected"])
-        );
-    }
+    assert!(
+        obs.script
+            .commands
+            .iter()
+            .any(|c| c.argv == ["cat", "public protected"])
+    );
 }
 #[test]
 fn doubled_values_stop_growing_past_the_expansion_bounds() {
@@ -185,7 +157,7 @@ fn doubled_values_stop_growing_past_the_expansion_bounds() {
     ] {
         let sizes = steps.map(|steps| {
             let source = format!("{seed}{} cat $a \"$@\"", step.repeat(steps));
-            let output = observe(&source, Arm::Brush, "/h", "/h/p", false).unwrap();
+            let output = observe(&source, "/h", "/h/p", false).unwrap();
             assert!(
                 output.gaps.contains(&CoverageGap::InspectionBudget),
                 "{seed}"

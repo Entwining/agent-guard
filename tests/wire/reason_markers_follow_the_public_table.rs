@@ -1,6 +1,6 @@
 use agent_guard_rust::{
-    Advice, CheckError, CheckErrorKind, Coverage, CoverageGap, DenialRule, Disposition, Evaluation,
-    Outcome, Reason, Recovery, RecoveryStep,
+    Advice, CheckError, CheckErrorKind, Coverage, CoverageGap, DenialRule, Evaluation, Outcome,
+    Reason, Recovery, RecoveryStep, Refusal,
     adapters::{Consumer, render},
 };
 use serde_json::Value;
@@ -28,26 +28,14 @@ fn evaluation(outcome: Outcome) -> Result<Evaluation, CheckError> {
     })
 }
 
-fn refusal(cause: CoverageGap, disposition: Disposition) -> Result<Evaluation, CheckError> {
-    evaluation(Outcome::CoverageInsufficient {
-        cause,
-        disposition,
-        recovery: None,
-    })
-}
-
 /// Every blocking result the adapter can render, keyed by fixture class and kind.
 fn blocking_results() -> Vec<(&'static str, &'static str, Result<Evaluation, CheckError>)> {
     use CheckErrorKind as E;
-    use CoverageGap as G;
     use DenialRule as D;
     let rules = every_variant!(D: ResourceChange, AppData, Broad, File, Store, HiddenSearch,
         Dump, Variable, Token, Keychain, StoredSecret, Trace, Upload, Ssh, SshWrite, GrepSsh);
-    let gaps = every_variant!(G: InodeAlias, InputByteLimit, NestingLimit, AbsoluteCwdRequired,
-        InvalidEncoding, UnknownProgram { program: String::new() }, UnresolvedTarget,
-        UnsupportedShellSyntax, ExecutorDivergence, OutsideObservedTool { tool: String::new() },
-        ExecutionOwnerUnavailable, IdentityBound, InspectionBudget, InterpreterChosenRead,
-        UnsupportedDialectConstruct);
+    let refusals = every_variant!(Refusal: InputByteLimit, NestingLimit, AbsoluteCwdRequired,
+        InvalidEncoding);
     let errors = every_variant!(E: RelativeCwd, InvalidEncoding, MalformedInput, InputFailure,
         GuardFault, ProbeFault, ResourceLimit, InspectionBudget, Deadline);
     let denial = |rule| {
@@ -70,14 +58,13 @@ fn blocking_results() -> Vec<(&'static str, &'static str, Result<Evaluation, Che
     let rules = rules
         .into_iter()
         .map(|(kind, rule)| ("policy", kind, denial(rule)));
-    let gaps = gaps.into_iter().map(|(kind, cause)| {
-        let result = refusal(cause, Disposition::RejectUnsupportedSyntax);
-        ("coverage", kind, result)
-    });
+    let refusals = refusals
+        .into_iter()
+        .map(|(kind, cause)| ("coverage", kind, evaluation(Outcome::Refused(cause))));
     let errors = errors
         .into_iter()
         .map(|(kind, kind_value)| ("error", kind, Err(CheckError { kind: kind_value })));
-    rules.chain(gaps).chain(errors).collect()
+    rules.chain(refusals).chain(errors).collect()
 }
 
 fn marker(stderr: &str) -> (&str, &str, &str) {
@@ -164,10 +151,9 @@ fn proceeding_outcomes_carry_no_marker() {
         for result in [
             evaluation(Outcome::NoObjection),
             evaluation(Outcome::SoftAdvice(vec![Advice::RgInclude])),
-            refusal(
-                CoverageGap::UnresolvedTarget,
-                Disposition::ContinueLimitedPreflight,
-            ),
+            evaluation(Outcome::CoverageInsufficient {
+                cause: CoverageGap::UnresolvedTarget,
+            }),
         ] {
             let wire = render(consumer, &result);
             assert_eq!(wire.exit, 0, "{consumer:?}");
@@ -177,8 +163,8 @@ fn proceeding_outcomes_carry_no_marker() {
     }
 }
 
-/// `entry` is false for kinds the native entry never renders: non-blocking
-/// gaps proceed, `evaluate_native` turns relative cwd, invalid encoding and
+/// `entry` is false for error kinds the native entry never renders:
+/// `evaluate_native` turns relative cwd, invalid encoding and
 /// resource limits into coverage refusals, policy turns an inspection-budget
 /// error into a refusal, the entry never requires an execution owner, and no
 /// entry path produces the remaining error kinds.

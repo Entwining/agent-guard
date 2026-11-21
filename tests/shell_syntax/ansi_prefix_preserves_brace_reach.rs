@@ -1,8 +1,5 @@
 use crate::support;
-use agent_guard_rust::{
-    CoverageGap, Event, Outcome, evaluate_with_arm,
-    shell::{self, Arm},
-};
+use agent_guard_rust::{CoverageGap, Event, Outcome, evaluate, shell};
 use serde_json::{Value, json};
 
 fn regressions(owner: &str) {
@@ -17,7 +14,6 @@ fn regressions(owner: &str) {
             if let Some(divergent) = row["divergent"].as_bool() {
                 let observation = shell::observe_with_user(
                     row["source"].as_str().unwrap(),
-                    Arm::Brush,
                     &fixture.home,
                     &fixture.project,
                     context.user.as_deref(),
@@ -43,14 +39,11 @@ fn regressions(owner: &str) {
             };
             let bytes = serde_json::to_vec(&event).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 row["expected"],
@@ -104,14 +97,11 @@ fn credential_directory_walk_requires_read() {
                 .unwrap();
         let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         assert_eq!(
-            support::class(&evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe
-                },
-                Arm::Brush
-            )),
+            support::class(&evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe
+            })),
             "D",
             "{source}"
         );

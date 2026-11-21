@@ -11,7 +11,6 @@ fn unbounded_array_append_converges_by_resource_identity() {
         }
         let output = crate::shell::observe(
             &format!("A=(prefix); {body} cat \"${{A[@]}}\""),
-            crate::shell::Arm::Brush,
             "/synthetic/home",
             "/synthetic/project",
             true,
@@ -51,7 +50,6 @@ fn equal_array_executor_readings_share_one_projection() {
     let count = |expansion| {
         let output = crate::shell::observe(
             &format!("A=(first second); cat {expansion}"),
-            crate::shell::Arm::Brush,
             "/synthetic/home",
             "/synthetic/project",
             true,
@@ -68,7 +66,6 @@ fn equal_array_executor_readings_share_one_projection() {
     assert_eq!(count("\"${A[1]}\""), 2);
     let output = crate::shell::observe(
         "A=(first second); for f in \"${A[@]}\"; do cat \"$f\"; done",
-        crate::shell::Arm::Brush,
         "/synthetic/home",
         "/synthetic/project",
         true,
@@ -95,14 +92,8 @@ fn array_repetition_projects_loop_candidates_once() {
         let source = format!(
             "cd public && say() {{ printf '%s' public | cat; }} && A=({items}); for f in \"${{A[@]}}\"; do x=$(say | grep -oF \"$f\"); y=$(say | grep -oF \"$f\"); z=$(say | grep -oF \"$f\"); printf '%s' \"$f\"; done"
         );
-        let output = crate::shell::observe(
-            &source,
-            crate::shell::Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/project",
-            true,
-        )
-        .unwrap();
+        let output =
+            crate::shell::observe(&source, "/synthetic/home", "/synthetic/project", true).unwrap();
         assert!(
             !output.gaps.contains(&crate::CoverageGap::InspectionBudget),
             "width={width}: {:?}",
@@ -134,14 +125,8 @@ fn array_candidate_work_grows_polynomially() {
         let source = format!(
             "A=(base); for f in {items}; do test -f public || A+=(\"$f\"); done; cat \"${{A[@]}}\""
         );
-        let output = crate::shell::observe(
-            &source,
-            crate::shell::Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/project",
-            true,
-        )
-        .unwrap();
+        let output =
+            crate::shell::observe(&source, "/synthetic/home", "/synthetic/project", true).unwrap();
         assert!(
             !output.gaps.contains(&crate::CoverageGap::InspectionBudget),
             "width={width}: {:?}",

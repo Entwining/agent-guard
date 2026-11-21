@@ -21,14 +21,9 @@ fn equal_cooked_paths_with_different_quotes_keep_distinct_identities() {
         .iter()
         .map(|id| {
             let row = rows.iter().find(|row| row["id"] == *id).unwrap();
-            let observation = crate::shell::observe(
-                row["input"]["command"].as_str().unwrap(),
-                crate::shell::Arm::Brush,
-                "/h",
-                "/p",
-                true,
-            )
-            .unwrap();
+            let observation =
+                crate::shell::observe(row["input"]["command"].as_str().unwrap(), "/h", "/p", true)
+                    .unwrap();
             crate::record::Target::from_word(
                 &observation.script.commands.last().unwrap().argv[1],
                 "/p",
@@ -66,14 +61,9 @@ fn quoted_pattern_width_does_not_multiply_local_candidates() {
         for depth in [1, 2, 4, 8] {
             let groups = format!("({})", vec!["public"; width].join("|"));
             let source = format!("cat 'public{}'*.txt", groups.repeat(depth));
-            let observation = crate::shell::observe(
-                &source,
-                crate::shell::Arm::Brush,
-                "/synthetic/home",
-                "/synthetic/project",
-                true,
-            )
-            .unwrap();
+            let observation =
+                crate::shell::observe(&source, "/synthetic/home", "/synthetic/project", true)
+                    .unwrap();
             let word = &observation.script.commands.last().unwrap().argv[1];
             let target = crate::record::Target::from_word(
                 word,

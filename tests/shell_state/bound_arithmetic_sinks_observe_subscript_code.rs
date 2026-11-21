@@ -1,8 +1,5 @@
 use crate::support;
-use agent_guard_rust::{
-    Event, adapters, evaluate_with_arm,
-    shell::{self, Arm},
-};
+use agent_guard_rust::{Event, adapters, evaluate, shell};
 use serde_json::{Value, json};
 
 fn rows() -> Vec<Value> {
@@ -10,20 +7,14 @@ fn rows() -> Vec<Value> {
 }
 
 fn bodies(source: &str) -> Vec<String> {
-    shell::observe(
-        source,
-        Arm::Brush,
-        "/synthetic/home",
-        "/synthetic/home/project",
-        true,
-    )
-    .unwrap()
-    .script
-    .commands
-    .into_iter()
-    .filter(|c| c.nested)
-    .filter_map(|c| c.argv.first().map(|w| w.text.clone()))
-    .collect()
+    shell::observe(source, "/synthetic/home", "/synthetic/home/project", true)
+        .unwrap()
+        .script
+        .commands
+        .into_iter()
+        .filter(|c| c.nested)
+        .filter_map(|c| c.argv.first().map(|w| w.text.clone()))
+        .collect()
 }
 
 #[test]
@@ -53,14 +44,11 @@ fn arithmetic_effects_and_consumer_wire() {
         for row in &rows {
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer == "pi" {"bash"} else {"Bash"},"tool_input":{"command":row["source"]}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 row["expected"],

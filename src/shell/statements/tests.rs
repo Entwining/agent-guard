@@ -1,5 +1,5 @@
 use super::*;
-use crate::{CoverageGap, record::HostFacts, shell::Arm};
+use crate::{CoverageGap, record::HostFacts};
 fn fixture() -> serde_json::Value {
     serde_json::from_str(include_str!(
         "../../../tests/fixtures/rust-m2-scope-bounds.json"
@@ -24,7 +24,6 @@ fn seeded_scope() -> Scope {
 fn observation(source: &str, scope: &mut Scope) -> Observation {
     let mut output = Observation::default();
     let frontend = Frontend {
-        arm: Arm::Brush,
         zsh: true,
         host: HostFacts {
             home: "/h",

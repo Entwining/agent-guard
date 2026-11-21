@@ -1,5 +1,5 @@
 use crate::support;
-use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell::Arm};
+use agent_guard_rust::{Event, adapters, evaluate};
 use serde_json::{Value, json};
 
 fn partition(name: &str) {
@@ -28,14 +28,11 @@ fn partition(name: &str) {
                     .unwrap();
                 let bytes = serde_json::to_vec(&json!({"tool_name":if consumer == "pi" {"bash"} else {"Bash"},"tool_input":{"command":fixture.expand(source)}})).unwrap();
                 let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-                let result = evaluate_with_arm(
-                    Event {
-                        bytes: &bytes,
-                        context: &context,
-                        probe: &mut probe,
-                    },
-                    Arm::Brush,
-                );
+                let result = evaluate(Event {
+                    bytes: &bytes,
+                    context: &context,
+                    probe: &mut probe,
+                });
                 let expected = row[if zsh { "expected_zsh" } else { "expected_bash" }]
                     .as_str()
                     .or_else(|| row["expected"].as_str())
@@ -110,7 +107,6 @@ fn assert_array_observation(
     if let Some(argv) = row["argv"].as_array() {
         let observation = agent_guard_rust::shell::observe(
             &fixture.expand(source),
-            Arm::Brush,
             &context.home,
             &context.cwd,
             zsh,
@@ -137,7 +133,6 @@ fn assert_array_observation(
     if let Some(unknown) = row["unknown_count"].as_bool() {
         let observation = agent_guard_rust::shell::observe(
             &fixture.expand(source),
-            Arm::Brush,
             &context.home,
             &context.cwd,
             zsh,

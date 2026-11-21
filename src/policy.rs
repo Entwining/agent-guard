@@ -1,11 +1,11 @@
 use crate::{
-    Advice, CheckError, CheckErrorKind, Coverage, CoverageGap, DenialRule, Disposition,
-    EffectRecord, EffectSource, Evaluation, Outcome, Reason, Recovery, RecoveryStep,
+    Advice, CheckError, CheckErrorKind, Coverage, CoverageGap, DenialRule, EffectRecord,
+    EffectSource, Evaluation, Outcome, Reason, Recovery, RecoveryStep, Refusal,
     adapters::{self, Consumer, Operation},
     filesystem::{self, Probe, Protection},
     limits::MAX_INPUT_BYTES,
     record::{Effect, Via, Walk},
-    shell::{self, Arm},
+    shell,
     targets::Target,
 };
 
@@ -21,7 +21,6 @@ pub struct Context {
     pub config_dirs: Vec<crate::record::ConfigDir>,
     pub cwd: String,
     pub zsh_executor: bool,
-    pub require_execution_owner: bool,
     pub shell_observation_entries: std::cell::Cell<usize>,
 }
 
@@ -42,13 +41,8 @@ pub struct Event<'a> {
 }
 
 pub fn evaluate(event: Event<'_>) -> Result<Evaluation, CheckError> {
-    evaluate_with_arm(event, Arm::Brush)
-}
-
-pub fn evaluate_with_arm(event: Event<'_>, arm: Arm) -> Result<Evaluation, CheckError> {
     evaluate_with_catalog_loader(
         event,
-        arm,
         filesystem::FirmlinkTable::load,
         None,
         adapters::Protocol::Tool,
@@ -61,7 +55,6 @@ pub fn evaluate_with_deadline(
 ) -> Result<Evaluation, CheckError> {
     evaluate_with_catalog_loader(
         event,
-        Arm::Brush,
         filesystem::FirmlinkTable::load,
         Some(deadline),
         adapters::Protocol::Tool,
@@ -73,36 +66,31 @@ pub(crate) fn evaluate_native(
     deadline: std::time::Instant,
 ) -> Result<Evaluation, CheckError> {
     if event.bytes.len() > MAX_INPUT_BYTES {
-        return Ok(native_refusal(CoverageGap::InputByteLimit));
+        return Ok(native_refusal(Refusal::InputByteLimit));
     }
     match evaluate_with_catalog_loader(
         event,
-        Arm::Brush,
         filesystem::FirmlinkTable::load,
         Some(deadline),
         adapters::Protocol::Native,
     ) {
         Err(CheckError {
             kind: CheckErrorKind::ResourceLimit,
-        }) => Ok(native_refusal(CoverageGap::NestingLimit)),
+        }) => Ok(native_refusal(Refusal::NestingLimit)),
         Err(CheckError {
             kind: CheckErrorKind::RelativeCwd,
-        }) => Ok(native_refusal(CoverageGap::AbsoluteCwdRequired)),
+        }) => Ok(native_refusal(Refusal::AbsoluteCwdRequired)),
         Err(CheckError {
             kind: CheckErrorKind::InvalidEncoding,
-        }) => Ok(native_refusal(CoverageGap::InvalidEncoding)),
+        }) => Ok(native_refusal(Refusal::InvalidEncoding)),
         result => result,
     }
 }
 
-fn native_refusal(cause: CoverageGap) -> Evaluation {
+fn native_refusal(cause: Refusal) -> Evaluation {
     Evaluation {
-        outcome: Outcome::CoverageInsufficient {
-            cause: cause.clone(),
-            disposition: Disposition::RejectUnsupportedSyntax,
-            recovery: None,
-        },
-        coverage: Coverage::LimitedPreflight(vec![cause]),
+        outcome: Outcome::Refused(cause),
+        coverage: Coverage::SupportedPreflight,
         effects: Vec::new(),
     }
 }
@@ -110,15 +98,13 @@ fn native_refusal(cause: CoverageGap) -> Evaluation {
 /// Typed host metadata for isolated evaluations; hook request input has no catalog field.
 pub fn evaluate_with_catalog(
     event: Event<'_>,
-    arm: Arm,
     catalog: filesystem::FirmlinkTable,
 ) -> Result<Evaluation, CheckError> {
-    evaluate_with_catalog_loader(event, arm, || Ok(catalog), None, adapters::Protocol::Tool)
+    evaluate_with_catalog_loader(event, || Ok(catalog), None, adapters::Protocol::Tool)
 }
 
 fn evaluate_with_catalog_loader(
     event: Event<'_>,
-    arm: Arm,
     load: impl FnOnce() -> Result<filesystem::FirmlinkTable, CheckError>,
     deadline: Option<std::time::Instant>,
     protocol: adapters::Protocol,
@@ -140,22 +126,8 @@ fn evaluate_with_catalog_loader(
         return Ok(Evaluation {
             outcome: Outcome::CoverageInsufficient {
                 cause: CoverageGap::OutsideObservedTool { tool: tool.clone() },
-                disposition: Disposition::ContinueLimitedPreflight,
-                recovery: None,
             },
             coverage: Coverage::OutsideObservedToolCoverage { tool: tool.clone() },
-            effects: Vec::new(),
-        });
-    }
-    if context.require_execution_owner {
-        let gap = CoverageGap::ExecutionOwnerUnavailable;
-        return Ok(Evaluation {
-            outcome: Outcome::CoverageInsufficient {
-                cause: gap.clone(),
-                disposition: Disposition::RequireVerifiedExecutionOwner,
-                recovery: Some(recovery(context, &decoded.cwd, "execution_owner")),
-            },
-            coverage: Coverage::LimitedPreflight(vec![gap]),
             effects: Vec::new(),
         });
     }
@@ -169,7 +141,6 @@ fn evaluate_with_catalog_loader(
             deadline,
             &context.config_dirs,
         ),
-        arm,
         gaps: Vec::new(),
         denial: None,
         appdata_reason: None,
@@ -197,7 +168,6 @@ struct Inspection<'a> {
     context: &'a Context,
     probe: &'a mut dyn Probe,
     resolver: filesystem::Resolver<'a>,
-    arm: Arm,
     gaps: Vec<CoverageGap>,
     denial: Option<Reason>,
     /// The App Data rule and the path that first reached it.
@@ -218,14 +188,7 @@ fn recovery(context: &Context, cwd: &str, effect: &str) -> Recovery {
         format!("{}/.ssh", context.home),
         "protected environment-file and credential-file contents".into(),
     ];
-    let description = if effect == "execution_owner" {
-        excluded_scope = vec![
-            "dynamic protected reads".into(),
-            "out-of-domain writes/deletes".into(),
-            "later interactive input".into(),
-        ];
-        "Establish and validate the named execution owner, then recheck. Hook-only preflight cannot enforce this domain."
-    } else if effect.starts_with("broad recursive") {
+    let description = if effect.starts_with("broad recursive") {
         excluded_scope.insert(0, format!("HOME {} outside a separately verified public scope; a whole-HOME task remains incomplete", context.home));
         "The agent must select an explicit public root outside the excluded HOME scope and recheck its operation through the same consumer. A narrowed result does not complete the whole-HOME task."
     } else if effect == "extract protected environment dump" {
@@ -335,8 +298,6 @@ fn finish_inspection(mut inspection: Inspection<'_>, cwd: &str) -> Evaluation {
         return Evaluation {
             outcome: Outcome::CoverageInsufficient {
                 cause: cause.clone(),
-                disposition: Disposition::ContinueLimitedPreflight,
-                recovery: None,
             },
             coverage,
             effects: inspection.effects,

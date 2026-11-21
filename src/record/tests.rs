@@ -17,7 +17,6 @@ fn projected_cwd_ranges_describe_current_word_bytes() {
     for row in packet["rows"].as_array().unwrap() {
         let result = crate::shell::observe(
             row["source"].as_str().unwrap(),
-            crate::shell::Arm::Brush,
             "/h",
             row["cwd"].as_str().unwrap(),
             true,
@@ -48,9 +47,7 @@ fn projected_cwd_ranges_describe_current_word_bytes() {
 #[test]
 fn field_width_and_unfixed_bytes_decide_option_position_separately() {
     let arguments = |source: &str| {
-        let result =
-            crate::shell::observe(source, crate::shell::Arm::Brush, "/h", "/h/project", true)
-                .unwrap();
+        let result = crate::shell::observe(source, "/h", "/h/project", true).unwrap();
         result
             .script
             .commands

@@ -3,14 +3,9 @@ fn single_choice_argv_copies_grow_linearly() {
     for prefix in ["cat", "F=public cat", "env F=public cat", "cat -n"] {
         let counts = [64, 128, 256].map(|width| {
             let source = format!("{prefix} {}", vec!["pub.txt"; width].join(" "));
-            let output = crate::shell::observe(
-                &source,
-                crate::shell::Arm::Brush,
-                "/synthetic/home",
-                "/synthetic/project",
-                true,
-            )
-            .unwrap();
+            let output =
+                crate::shell::observe(&source, "/synthetic/home", "/synthetic/project", true)
+                    .unwrap();
             assert!(output.gaps.is_empty(), "{prefix}: {:?}", output.gaps);
             let copies = output.argv_prefix_word_copies;
             println!("{prefix}: width={width}, argv word copies={copies}");
@@ -30,14 +25,8 @@ fn single_choice_argv_copies_grow_linearly() {
 fn literal_argv_compatibility_checks_grow_linearly() {
     for width in [64, 128, 256] {
         let source = format!("cat {}", vec!["pub.txt"; width].join(" "));
-        let output = crate::shell::observe(
-            &source,
-            crate::shell::Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/project",
-            true,
-        )
-        .unwrap();
+        let output =
+            crate::shell::observe(&source, "/synthetic/home", "/synthetic/project", true).unwrap();
         let checks = output.argument_compatibility_checks;
         println!("width={width}, argv compatibility checks={checks}");
         assert!(checks <= 2 * (width + 1), "{checks}");
@@ -51,14 +40,8 @@ fn compatible_bound_argv_extensions_grow_linearly() {
             "if true; then p=public; else p=other; fi; cat {}",
             vec!["\"$p\""; width].join(" ")
         );
-        let output = crate::shell::observe(
-            &source,
-            crate::shell::Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/project",
-            true,
-        )
-        .unwrap();
+        let output =
+            crate::shell::observe(&source, "/synthetic/home", "/synthetic/project", true).unwrap();
         assert!(output.gaps.is_empty(), "{:?}", output.gaps);
         let commands = output
             .script
@@ -118,14 +101,8 @@ fn unknown_loop_candidates_converge_before_nested_branching() {
         }
         source.push_str("out=$(inspect \"$path\"); cat \"$path\"; ");
         source.push_str(&"done; ".repeat(depth + 1));
-        let output = crate::shell::observe(
-            &source,
-            crate::shell::Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/project",
-            false,
-        )
-        .unwrap();
+        let output =
+            crate::shell::observe(&source, "/synthetic/home", "/synthetic/project", false).unwrap();
         assert!(
             !output.gaps.contains(&crate::CoverageGap::InspectionBudget),
             "width={width} depth={depth}: {:?}",
@@ -167,14 +144,7 @@ fn substitution_body_is_observed_once_per_candidate_union() {
             user: None,
             config_dirs: &[],
         };
-        let mut evaluator = super::Evaluator::new(
-            super::Frontend {
-                arm: crate::shell::Arm::Brush,
-                zsh: true,
-                host,
-            },
-            &mut output,
-        );
+        let mut evaluator = super::Evaluator::new(super::Frontend { zsh: true, host }, &mut output);
         let mut scope = super::Scope::new(host.home, "/synthetic/project");
         for name in ["a", "b"] {
             scope.assign(
@@ -214,14 +184,8 @@ fn nested_substitution_work_grows_polynomially() {
         }
         source.push_str(");");
         source.push_str(&" done;".repeat(levels));
-        let output = crate::shell::observe(
-            &source,
-            crate::shell::Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/work",
-            true,
-        )
-        .unwrap();
+        let output =
+            crate::shell::observe(&source, "/synthetic/home", "/synthetic/work", true).unwrap();
         assert!(
             output
                 .script
@@ -265,8 +229,7 @@ fn repeated_binding_work_grows_quadratically() {
             .join(" ");
         let source =
             format!("for id in {items}; do curl https://example.test/$id -o file_$id -w $id; done");
-        let output =
-            crate::shell::observe(&source, crate::shell::Arm::Brush, "/h", "/h/p", true).unwrap();
+        let output = crate::shell::observe(&source, "/h", "/h/p", true).unwrap();
         assert!(output.gaps.is_empty(), "{:?}", output.gaps);
         output.candidate_pairs
     };
@@ -291,8 +254,7 @@ fn glob_directory_work_stays_bounded() {
             let body = if isolated { format!("({body})") } else { body };
             source.push_str(&format!("for d{n} in public*/; do {body}; done;"));
         }
-        let output =
-            crate::shell::observe(&source, crate::shell::Arm::Brush, "/h", "/h/p", true).unwrap();
+        let output = crate::shell::observe(&source, "/h", "/h/p", true).unwrap();
         if isolated {
             assert!(output.gaps.is_empty(), "{:?}", output.gaps);
         } else {

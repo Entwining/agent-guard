@@ -41,7 +41,6 @@ fn word_context_product_has_a_finite_bound() {
     let mut scope = seeded_scope();
     let mut output = Observation::default();
     let frontend = Frontend {
-        arm: Arm::Brush,
         zsh: true,
         host: HostFacts {
             home: "/h",

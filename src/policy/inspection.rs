@@ -259,7 +259,6 @@ impl Inspection<'_> {
             .set(self.context.shell_observation_entries.get() + 1);
         let observation = shell::observe_with_deadline(
             source,
-            self.arm,
             self.context.host(),
             cwd,
             self.context.zsh_executor,

@@ -1,6 +1,5 @@
 use crate::{
-    CheckError, CheckErrorKind, Disposition, EffectRecord, Evaluation, Outcome, Recovery,
-    RecoveryStep,
+    CheckError, CheckErrorKind, EffectRecord, Evaluation, Outcome, Recovery, RecoveryStep,
 };
 use serde_json::{Value, json};
 
@@ -246,11 +245,8 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
                     },
                 )
             }
-            Outcome::CoverageInsufficient {
-                disposition: Disposition::ContinueLimitedPreflight,
-                ..
-            } => return wire,
-            Outcome::CoverageInsufficient { cause, .. } => (
+            Outcome::CoverageInsufficient { .. } => return wire,
+            Outcome::Refused(cause) => (
                 "coverage",
                 cause.id(),
                 crate::policy::refusal_message(cause).into(),

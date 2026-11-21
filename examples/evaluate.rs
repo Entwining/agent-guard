@@ -3,11 +3,10 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
 
 use agent_guard_rust::{
-    Context, Coverage, CoverageGap, Disposition, Event, Outcome,
+    Context, Coverage, CoverageGap, Event, Outcome,
     adapters::{self, Consumer, Operation},
-    evaluate_with_arm,
+    evaluate,
     filesystem::DiskProbe,
-    shell::Arm,
 };
 use serde_json::{Value, json};
 use std::{
@@ -27,7 +26,6 @@ pub(crate) enum Mode {
 
 pub(crate) struct Request {
     id: String,
-    arm: Arm,
     context: Context,
     bytes: Vec<u8>,
 }
@@ -55,11 +53,6 @@ pub(crate) fn request(value: &Value) -> Result<Request, &'static str> {
         "pi" => Consumer::Pi,
         _ => return Err("unknown consumer"),
     };
-    let arm = match string(value, "arm")?.as_str() {
-        "structured" => Arm::StructuredOnly,
-        "brush" => Arm::Brush,
-        _ => return Err("unknown arm"),
-    };
     let home = string(value, "home")?;
     let cwd = string(value, "cwd")?;
     let bytes = match (value.get("event"), value.get("event_raw")) {
@@ -86,7 +79,6 @@ pub(crate) fn request(value: &Value) -> Result<Request, &'static str> {
     }
     Ok(Request {
         id,
-        arm,
         context: Context {
             consumer,
             home,
@@ -100,7 +92,6 @@ pub(crate) fn request(value: &Value) -> Result<Request, &'static str> {
                 .transpose()?,
             cwd,
             zsh_executor: boolean(metadata, "zsh_executor", consumer != Consumer::Pi)?,
-            require_execution_owner: false,
             config_dirs: Vec::new(),
             shell_observation_entries: Cell::new(0),
         },
@@ -119,14 +110,11 @@ fn gap_name(gap: &CoverageGap) -> String {
 pub(crate) fn guard(request: &Request) -> Value {
     let mut probe = DiskProbe;
     let started = Instant::now();
-    let result = evaluate_with_arm(
-        Event {
-            bytes: &request.bytes,
-            context: &request.context,
-            probe: &mut probe,
-        },
-        request.arm,
-    );
+    let result = evaluate(Event {
+        bytes: &request.bytes,
+        context: &request.context,
+        probe: &mut probe,
+    });
     let wire = adapters::render(request.context.consumer, &result);
     let evaluate_ns = started.elapsed().as_nanos();
     let mut response = json!({
@@ -172,23 +160,17 @@ pub(crate) fn guard(request: &Request) -> Value {
                     response["reason"] = json!(reason.effect);
                     response["recovery"] = adapters::recovery_value(&recovery);
                 }
-                Outcome::CoverageInsufficient {
-                    cause,
-                    disposition,
-                    recovery,
-                } => {
+                Outcome::CoverageInsufficient { cause } => {
                     response["outcome"] = json!("CoverageInsufficient");
-                    response["class"] = json!(match disposition {
-                        Disposition::ContinueLimitedPreflight => "UC",
-                        Disposition::RejectUnsupportedSyntax => "UR",
-                        Disposition::RequireVerifiedExecutionOwner => "UO",
-                    });
+                    response["class"] = json!("UC");
                     response["cause"] = json!(gap_name(&cause));
-                    response["disposition"] = json!(format!("{disposition:?}"));
-                    response["recovery"] = recovery
-                        .as_ref()
-                        .map(adapters::recovery_value)
-                        .unwrap_or(Value::Null);
+                    response["recovery"] = Value::Null;
+                }
+                Outcome::Refused(cause) => {
+                    response["outcome"] = json!("Refused");
+                    response["class"] = json!("UR");
+                    response["cause"] = json!(cause.id());
+                    response["recovery"] = Value::Null;
                 }
             }
         }
@@ -197,10 +179,8 @@ pub(crate) fn guard(request: &Request) -> Value {
 }
 
 fn parse_only(request: &Request) -> Value {
-    let mut response = json!({"id":request.id,"parse_status":"outside_arm_coverage","parse_ns":null,"error_kind":null});
-    if request.arm == Arm::StructuredOnly {
-        return response;
-    }
+    let mut response =
+        json!({"id":request.id,"parse_status":"not_shell","parse_ns":null,"error_kind":null});
     let source = match adapters::decode(
         request.context.consumer,
         &request.bytes,

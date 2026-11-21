@@ -1,8 +1,5 @@
 use crate::support;
-use agent_guard_rust::{
-    filesystem::{self, Identity, Metadata, Probe},
-    shell::Arm,
-};
+use agent_guard_rust::filesystem::{self, Identity, Metadata, Probe};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
@@ -117,7 +114,6 @@ fn injected_host_catalog_reaches_all_consumer_boundaries() {
                 user: None,
                 cwd: row["cwd"].as_str().unwrap_or("/project").into(),
                 zsh_executor: consumer != Consumer::Pi,
-                require_execution_owner: false,
                 config_dirs: Vec::new(),
                 shell_observation_entries: std::cell::Cell::new(0),
             };
@@ -157,7 +153,6 @@ fn injected_host_catalog_reaches_all_consumer_boundaries() {
                     context: &context,
                     probe: &mut probe,
                 },
-                Arm::Brush,
                 filesystem::FirmlinkTable::from_text(row["catalog"].as_str().unwrap()),
             );
             // Claude Code and Pi remove `..` from a tool path before any link
@@ -184,7 +179,7 @@ fn injected_host_catalog_reaches_all_consumer_boundaries() {
 
 #[test]
 fn directory_targets_keep_name_glob_and_enter_contracts() {
-    use agent_guard_rust::{Event, adapters, evaluate_with_arm};
+    use agent_guard_rust::{Event, adapters, evaluate};
     let packet: Value =
         serde_json::from_str(include_str!("../fixtures/rust-m2-filesystem.json")).unwrap();
     let fixture = support::Fixture::new();
@@ -200,14 +195,11 @@ fn directory_targets_keep_name_glob_and_enter_contracts() {
                 .replace("/h/", &format!("{}/", fixture.home));
             let event = serde_json::to_vec(&serde_json::json!({"tool_name": if consumer == "pi" {"bash"} else {"Bash"}, "tool_input":{"command": source}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &event,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &event,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 row["expected"],

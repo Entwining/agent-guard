@@ -2,20 +2,18 @@ use crate::differential;
 use crate::support;
 use agent_guard_rust::{
     record::{Direction, Stdin},
-    shell::{self, Arm},
+    shell,
 };
 
 fn required(ids: &[&str]) {
-    for &arm in shell::ACCEPTANCE_ARMS {
-        for row in differential::selected_report(arm, ids) {
-            assert!(row["scope"].is_null());
-            for observation in row["observations"].as_array().unwrap() {
-                assert_ne!(
-                    observation["category"], "Rust_defect",
-                    "{}: {observation}",
-                    row["id"]
-                );
-            }
+    for row in differential::selected_report(ids) {
+        assert!(row["scope"].is_null());
+        for observation in row["observations"].as_array().unwrap() {
+            assert_ne!(
+                observation["category"], "Rust_defect",
+                "{}: {observation}",
+                row["id"]
+            );
         }
     }
 }
@@ -23,7 +21,6 @@ fn required(ids: &[&str]) {
 fn argv(source: &str) -> Vec<agent_guard_rust::record::Word> {
     shell::observe_with_user(
         source,
-        Arm::Brush,
         "/synthetic/home",
         "/synthetic/home/project",
         Some("fixture-user"),
@@ -78,15 +75,8 @@ fn user_is_a_host_fact() {
     let words = argv("ls ~fixture-user/Library/Containers ~foreign-user/public");
     assert_eq!(words[1].text, "/synthetic/home/Library/Containers");
     assert_eq!(words[2].text, "~foreign-user/public");
-    let absent = shell::observe_with_user(
-        "echo ~unknown ~fixture-user",
-        Arm::Brush,
-        "/h",
-        "/p",
-        None,
-        false,
-    )
-    .unwrap();
+    let absent =
+        shell::observe_with_user("echo ~unknown ~fixture-user", "/h", "/p", None, false).unwrap();
     assert_eq!(absent.script.commands[0].argv[1].text, "/h");
     assert_eq!(absent.script.commands[0].argv[2].text, "~fixture-user");
     let rebound = argv("USER=foreign-user; ls ~fixture-user/Library/Containers");
@@ -141,7 +131,6 @@ fn word_piece_record_transport() {
     assert_eq!(words[2].text, ".env");
     let observation = shell::observe(
         "cat < '$HOME/*.pub' <<'EOF'\nliteral '$HOME'\nEOF",
-        Arm::Brush,
         "/h",
         "/p",
         false,
@@ -165,18 +154,15 @@ fn word_piece_record_transport() {
         )
         .unwrap();
         let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        let result = agent_guard_rust::evaluate_with_arm(
-            agent_guard_rust::Event {
-                bytes: &bytes,
-                context: &context,
-                probe: &mut probe,
-            },
-            Arm::Brush,
-        );
+        let result = agent_guard_rust::evaluate(agent_guard_rust::Event {
+            bytes: &bytes,
+            context: &context,
+            probe: &mut probe,
+        });
         assert_eq!(support::class(&result), expected);
     }
     assert!(
-        shell::observe("if then", Arm::Brush, "/h", "/p", false)
+        shell::observe("if then", "/h", "/p", false)
             .unwrap()
             .script
             .parse_failed
@@ -187,5 +173,4 @@ fn word_piece_record_transport() {
 #[test]
 fn acceptance_selects_the_complete_shell_parser() {
     required(&["credentials[266]", "options[8]", "appdata[85]"]);
-    assert_eq!(shell::ACCEPTANCE_ARMS, &[Arm::Brush]);
 }

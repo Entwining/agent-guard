@@ -29,14 +29,7 @@ fn observe(source: &str, scope: &mut Scope) -> Observation {
         user: None,
         config_dirs: &[],
     };
-    let mut evaluator = Evaluator::new(
-        Frontend {
-            arm: crate::shell::Arm::Brush,
-            zsh: true,
-            host,
-        },
-        &mut output,
-    );
+    let mut evaluator = Evaluator::new(Frontend { zsh: true, host }, &mut output);
     evaluator.source(source, scope, 0).unwrap();
     assert!(output.gaps.is_empty(), "{:?}", output.gaps);
     assert!(!output.script.commands.is_empty());
@@ -230,14 +223,7 @@ fn isolated_sources_share_function_tables_and_bodies() {
         user: None,
         config_dirs: &[],
     };
-    let mut evaluator = Evaluator::new(
-        Frontend {
-            arm: crate::shell::Arm::Brush,
-            zsh: true,
-            host,
-        },
-        &mut output,
-    );
+    let mut evaluator = Evaluator::new(Frontend { zsh: true, host }, &mut output);
     evaluator
         .source("inspect() { printf public; }", &mut scope, 0)
         .unwrap();

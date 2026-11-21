@@ -10,8 +10,7 @@ use crate::support::{Fixture, RecordingProbe, class, coverage};
 use agent_guard_rust::{
     Context, Event,
     adapters::{Consumer, render},
-    evaluate_with_arm,
-    shell::Arm,
+    evaluate,
 };
 use serde_json::{Value, json};
 use std::{
@@ -57,15 +56,15 @@ use classification::{go_reason_rule, outside_slice, reason_partition};
 mod observations;
 use observations::observe_contract;
 
-pub fn report(arm: Arm) -> Vec<Value> {
-    report_rows(arm, None)
+pub fn report() -> Vec<Value> {
+    report_rows(None)
 }
 
-pub fn selected_report(arm: Arm, ids: &[&str]) -> Vec<Value> {
-    report_rows(arm, Some(ids))
+pub fn selected_report(ids: &[&str]) -> Vec<Value> {
+    report_rows(Some(ids))
 }
 
-fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
+fn report_rows(selected: Option<&[&str]>) -> Vec<Value> {
     let legacy: Vec<Value> = include_str!("../fixtures/contract.jsonl")
         .lines()
         .map(|s| serde_json::from_str(s).unwrap())
@@ -123,7 +122,7 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
                 target,
                 fixture.expand(item["source"]["target"].as_str().unwrap())
             );
-            report.push(json!({"id":id,"family":"filesystem_link","arm":format!("{arm:?}"),"status":"metadata_match","verdict":item["verdict"],"rule_id":item["rule_id"],"scope":"setup metadata; no operation verdict inferred"}));
+            report.push(json!({"id":id,"family":"filesystem_link","status":"metadata_match","verdict":item["verdict"],"rule_id":item["rule_id"],"scope":"setup metadata; no operation verdict inferred"}));
             continue;
         }
         let row = &legacy[id];
@@ -137,10 +136,10 @@ fn report_rows(arm: Arm, selected: Option<&[&str]>) -> Vec<Value> {
             ("pi", Consumer::Pi),
         ] {
             observations.push(observe_contract(
-                &fixture, row, &item, &outside, arm, name, consumer,
+                &fixture, row, &item, &outside, name, consumer,
             ));
         }
-        report.push(json!({"id":id,"family":row["family"],"arm":format!("{arm:?}"),"verdict":item["verdict"],"rule_id":item["rule_id"],"scope":outside,"observations":observations}));
+        report.push(json!({"id":id,"family":row["family"],"verdict":item["verdict"],"rule_id":item["rule_id"],"scope":outside,"observations":observations}));
     }
     assert_eq!(
         ids, expected_ids,

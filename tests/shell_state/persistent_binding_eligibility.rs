@@ -1,5 +1,5 @@
 use crate::support;
-use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell::Arm};
+use agent_guard_rust::{Event, adapters, evaluate};
 use serde_json::{Value, json};
 
 fn rows() -> Vec<Value> {
@@ -21,14 +21,11 @@ fn partition(name: &str) {
             let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer=="pi" {"bash"} else {"Bash"},"tool_input":{"command":row["source"]}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 row["expected"],
@@ -186,14 +183,9 @@ fn loop_values_keep_unsplit_dialect_candidate() {
         .into_iter()
         .find(|r| r["id"] == "loop-split-union")
         .unwrap();
-    let observation = agent_guard_rust::shell::observe(
-        row["source"].as_str().unwrap(),
-        Arm::Brush,
-        "/h",
-        "/p",
-        true,
-    )
-    .unwrap();
+    let observation =
+        agent_guard_rust::shell::observe(row["source"].as_str().unwrap(), "/h", "/p", true)
+            .unwrap();
     let values: Vec<_> = observation
         .script
         .commands

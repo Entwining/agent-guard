@@ -1,8 +1,6 @@
 use crate::support;
 use agent_guard_rust::{
-    EffectRecord, EffectSource, Event, Outcome, adapters, evaluate_with_arm,
-    filesystem::Protection,
-    shell::{self, Arm},
+    EffectRecord, EffectSource, Event, Outcome, adapters, evaluate, filesystem::Protection, shell,
 };
 use serde_json::{Value, json};
 
@@ -22,7 +20,7 @@ fn partition(name: &str) {
     assert!(!rows.is_empty(), "missing partition {name}");
     for row in rows {
         let source = row["source"].as_str().unwrap();
-        let observation = shell::observe(source, Arm::Brush, "/h", "/h/project", true).unwrap();
+        let observation = shell::observe(source, "/h", "/h/project", true).unwrap();
         let nested_read = observation.script.commands.iter().any(|command| {
             command.nested && command.program.is_some_and(|i| command.argv[i] == "cat")
         });
@@ -31,14 +29,11 @@ fn partition(name: &str) {
             let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer=="pi" {"bash"} else {"Bash"},"tool_input":{"command":source}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 row["expected"],

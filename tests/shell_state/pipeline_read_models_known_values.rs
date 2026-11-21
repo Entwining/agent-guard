@@ -1,5 +1,5 @@
 use crate::support;
-use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell::Arm};
+use agent_guard_rust::{Event, adapters, evaluate};
 use serde_json::{Value, json};
 
 fn rows() -> Vec<Value> {
@@ -59,7 +59,6 @@ fn partition(name: &str) {
             if row["expand_markers"] == true {
                 let observation = agent_guard_rust::shell::observe(
                     source.as_str().unwrap(),
-                    Arm::Brush,
                     &context.home,
                     &context.cwd,
                     context.zsh_executor,
@@ -80,14 +79,11 @@ fn partition(name: &str) {
             }
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer=="pi" {"bash"} else {"Bash"},"tool_input":{"command":source}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 row["expected"],
@@ -258,14 +254,9 @@ fn dynamic_array_indices_keep_their_variable_names() {
         .into_iter()
         .find(|row| row["id"] == "dynamic-index-control")
         .unwrap();
-    let result = agent_guard_rust::shell::observe(
-        row["source"].as_str().unwrap(),
-        Arm::Brush,
-        "/h",
-        "/h/project",
-        true,
-    )
-    .unwrap();
+    let result =
+        agent_guard_rust::shell::observe(row["source"].as_str().unwrap(), "/h", "/h/project", true)
+            .unwrap();
     let word = result
         .script
         .commands
@@ -301,7 +292,6 @@ fn positional_and_indexed_values_materialize() {
         let row = rows().into_iter().find(|row| row["id"] == id).unwrap();
         let result = agent_guard_rust::shell::observe(
             row["source"].as_str().unwrap(),
-            Arm::Brush,
             "/h",
             "/h/project",
             true,

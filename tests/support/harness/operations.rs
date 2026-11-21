@@ -118,14 +118,8 @@ fn closed_shell_operation(
     let data = &input["tool_input"];
     let command = data["command"].as_str().unwrap_or("");
     let objective = text(row, "task_objective");
-    let observation = agent_guard_rust::shell::observe(
-        command,
-        Arm::Brush,
-        &fixture.home,
-        &fixture.project,
-        true,
-    )
-    .unwrap();
+    let observation =
+        agent_guard_rust::shell::observe(command, &fixture.home, &fixture.project, true).unwrap();
     if command.contains("<<") {
         let body = command
             .split_once('\n')
@@ -282,7 +276,7 @@ fn closed_shell_reads(
     contents
 }
 
-pub(super) fn verify_recovery(fixture: &Fixture, row: &Value, recovery: &Value, arm: Arm) -> Value {
+pub(super) fn verify_recovery(fixture: &Fixture, row: &Value, recovery: &Value) -> Value {
     if recovery.is_null() {
         return Value::Null;
     }
@@ -295,23 +289,16 @@ pub(super) fn verify_recovery(fixture: &Fixture, row: &Value, recovery: &Value, 
     let next = fixture.expand_value(next);
     let mut context = fixture.context(row);
     context.cwd = fixture.project.clone();
-    context.require_execution_owner = false;
     let body = serde_json::to_vec(
         &json!({"tool_name":next["tool"],"tool_input":next["input"],"cwd":fixture.project}),
     )
     .unwrap();
     let mut probe = RecordingProbe::literal_for_quoted_paths(fixture);
-    let result = evaluate_with_arm(
-        Event {
-            bytes: &body,
-            context: &context,
-            probe: &mut probe,
-        },
-        arm,
-    );
-    if arm == Arm::StructuredOnly && matches!(next["tool"].as_str(), Some("Bash" | "bash")) {
-        return json!({"state":"unsupported_arm","class":class(&result)});
-    }
+    let result = evaluate(Event {
+        bytes: &body,
+        context: &context,
+        probe: &mut probe,
+    });
     assert_eq!(
         class(&result),
         "N",

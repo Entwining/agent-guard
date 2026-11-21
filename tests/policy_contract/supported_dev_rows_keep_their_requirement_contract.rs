@@ -10,12 +10,10 @@ fn supported_dev_rows_keep_their_requirement_contract() {
         .collect();
     assert!(!rows.is_empty(), "missing supported evaluator partition");
     for row in &rows {
-        for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-            let result = support::run(row, arm);
-            checked += 1;
-            if std::panic::catch_unwind(|| support::assert_tuple(row, &result)).is_err() {
-                failures.push(format!("{} {:?}: {}", row["id"], arm, result["library"]));
-            }
+        let result = support::run(row);
+        checked += 1;
+        if std::panic::catch_unwind(|| support::assert_tuple(row, &result)).is_err() {
+            failures.push(format!("{} {}", row["id"], result["library"]));
         }
     }
     assert!(checked > 0, "supported evaluator partition ran no checks");
@@ -43,26 +41,24 @@ fn declared_metamorphic_variants_preserve_the_contract() {
             .iter()
             .find(|r| r["id"] == variant["metamorphic_variant"]["base_row_id"])
             .unwrap();
-        for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-            let base_result = support::run(base, arm);
-            let variant_result = support::run(variant, arm);
-            for field in [
-                "class",
-                "coverage",
-                "exit",
-                "stdout",
-                "operation_start_count",
-            ] {
-                assert_eq!(
-                    base_result[field], variant_result[field],
-                    "{} metamorphic {field}",
-                    variant["id"]
-                );
-            }
+        let base_result = support::run(base);
+        let variant_result = support::run(variant);
+        for field in [
+            "class",
+            "coverage",
+            "exit",
+            "stdout",
+            "operation_start_count",
+        ] {
             assert_eq!(
-                base_result["effects"]["protected_access_count"],
-                variant_result["effects"]["protected_access_count"]
+                base_result[field], variant_result[field],
+                "{} metamorphic {field}",
+                variant["id"]
             );
         }
+        assert_eq!(
+            base_result["effects"]["protected_access_count"],
+            variant_result["effects"]["protected_access_count"]
+        );
     }
 }

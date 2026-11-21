@@ -1,5 +1,5 @@
 use crate::support;
-use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell::Arm};
+use agent_guard_rust::{Event, adapters, evaluate};
 use serde_json::{Value, json};
 
 #[test]
@@ -18,14 +18,11 @@ fn consumer_path_spellings_reach_the_opened_file() {
         )
         .unwrap();
         let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        let result = evaluate_with_arm(
-            Event {
-                bytes: &bytes,
-                context: &context,
-                probe: &mut probe,
-            },
-            Arm::Brush,
-        );
+        let result = evaluate(Event {
+            bytes: &bytes,
+            context: &context,
+            probe: &mut probe,
+        });
         if support::class(&result) != row["expected"] {
             mismatches.push(format!("{}: {result:?}", row["id"]));
             continue;

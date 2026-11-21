@@ -10,7 +10,6 @@ mod message_roles {
         };
         let observation = crate::shell::observe(
             "git commit -m 'public message'",
-            crate::shell::Arm::Brush,
             host.home,
             "/synthetic/project",
             true,
@@ -29,17 +28,12 @@ mod process_arguments {
     use super::*;
 
     fn command(argv: Vec<Word>) -> CommandRecord {
-        let mut record = crate::shell::observe(
-            "true",
-            crate::shell::Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/project",
-            true,
-        )
-        .unwrap()
-        .script
-        .commands
-        .remove(0);
+        let mut record =
+            crate::shell::observe("true", "/synthetic/home", "/synthetic/project", true)
+                .unwrap()
+                .script
+                .commands
+                .remove(0);
         record.argv = argv;
         record
     }
@@ -126,9 +120,7 @@ mod record_tests {
             config_dirs: &[],
         };
         for source in ["break", "continue", "return", "D=public true"] {
-            let observation =
-                crate::shell::observe(source, crate::shell::Arm::Brush, host.home, "/p", true)
-                    .unwrap();
+            let observation = crate::shell::observe(source, host.home, "/p", true).unwrap();
             let command = observation
                 .script
                 .commands
@@ -157,14 +149,9 @@ mod record_tests {
             .collect();
         assert!(!rows.is_empty(), "missing compound use partition");
         for row in rows {
-            let observation = crate::shell::observe(
-                row["source"].as_str().unwrap(),
-                crate::shell::Arm::Brush,
-                host.home,
-                "/h/p",
-                true,
-            )
-            .unwrap();
+            let observation =
+                crate::shell::observe(row["source"].as_str().unwrap(), host.home, "/h/p", true)
+                    .unwrap();
             let command = observation
                 .script
                 .commands
@@ -182,14 +169,9 @@ mod record_tests {
             .iter()
             .find(|row| row["id"] == "assignment-data-control")
             .unwrap();
-        let observation = crate::shell::observe(
-            row["source"].as_str().unwrap(),
-            crate::shell::Arm::Brush,
-            host.home,
-            "/h/p",
-            true,
-        )
-        .unwrap();
+        let observation =
+            crate::shell::observe(row["source"].as_str().unwrap(), host.home, "/h/p", true)
+                .unwrap();
         let assignment = observation
             .script
             .commands
@@ -208,16 +190,9 @@ mod record_tests {
             user: Some("fixture-user"),
             config_dirs: &[],
         };
-        let script = crate::shell::observe_with_user(
-            source,
-            crate::shell::Arm::Brush,
-            host.home,
-            "/p",
-            host.user,
-            false,
-        )
-        .unwrap()
-        .script;
+        let script = crate::shell::observe_with_user(source, host.home, "/p", host.user, false)
+            .unwrap()
+            .script;
         infer(&script.commands[0], "/p", host).targets
     }
     #[test]

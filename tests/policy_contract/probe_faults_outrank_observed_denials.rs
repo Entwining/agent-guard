@@ -1,6 +1,4 @@
-use agent_guard_rust::{
-    CheckErrorKind, Event, Outcome, adapters, evaluate_with_arm, filesystem, shell::Arm,
-};
+use agent_guard_rust::{CheckErrorKind, Event, Outcome, adapters, evaluate, filesystem};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
@@ -38,20 +36,16 @@ fn evaluate_with(
         cwd: "/synthetic/home/project".into(),
         user: None,
         zsh_executor: true,
-        require_execution_owner: false,
         config_dirs: Vec::new(),
         shell_observation_entries: std::cell::Cell::new(0),
     };
     let bytes =
         serde_json::to_vec(&json!({"tool_name":"Bash","tool_input":{"command":SOURCE}})).unwrap();
-    evaluate_with_arm(
-        Event {
-            bytes: &bytes,
-            context: &context,
-            probe,
-        },
-        Arm::Brush,
-    )
+    evaluate(Event {
+        bytes: &bytes,
+        context: &context,
+        probe,
+    })
 }
 
 #[test]

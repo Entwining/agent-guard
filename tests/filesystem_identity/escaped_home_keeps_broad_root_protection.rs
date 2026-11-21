@@ -1,5 +1,5 @@
 use crate::support;
-use agent_guard_rust::{Event, Outcome, adapters, evaluate_with_arm, shell::Arm};
+use agent_guard_rust::{Event, Outcome, adapters, evaluate};
 use serde_json::{Value, json};
 use std::path::Path;
 
@@ -47,14 +47,11 @@ fn check_rows(select: impl Fn(&Value) -> bool) {
             }))
             .unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 row["expected"],

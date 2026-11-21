@@ -1,5 +1,4 @@
 use crate::support;
-use agent_guard_rust::shell::Arm;
 use std::{
     fs::File,
     io::{Read, Write},
@@ -26,7 +25,7 @@ fn nesting_frontier_completes_on_default_test_stack() {
         .collect();
     if std::env::var(CHILD).as_deref() == Ok("1") {
         for row in &rows {
-            support::assert_tuple(row, &support::run(row, Arm::Brush));
+            support::assert_tuple(row, &support::run(row));
         }
         println!("frontier_receipt={}", serde_json::to_string(&ids).unwrap());
         return;

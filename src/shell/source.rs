@@ -56,7 +56,7 @@ impl statements::Evaluator<'_, '_> {
         {
             self.output.source_entries += 1;
         }
-        let Frontend { arm, zsh, .. } = self.frontend;
+        let Frontend { zsh, .. } = self.frontend;
         scope.zsh = zsh;
         // NUL is ignored even inside a word, rather than splitting its bytes.
         let without_nul = source.contains('\0').then(|| source.replace('\0', ""));
@@ -66,10 +66,6 @@ impl statements::Evaluator<'_, '_> {
             return Err(CheckError {
                 kind: CheckErrorKind::ResourceLimit,
             });
-        }
-        if arm == Arm::StructuredOnly {
-            self.output.gap(CoverageGap::UnsupportedShellSyntax);
-            return Ok(Default::default());
         }
         let parsed = self.parsed_source(source)?;
         crate::check_deadline(self.deadline)?;

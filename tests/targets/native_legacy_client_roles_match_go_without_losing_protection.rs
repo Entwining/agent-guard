@@ -24,7 +24,6 @@ fn native_legacy_client_roles_match_go_without_losing_protection() {
                 user: Some("fixture-user".into()),
                 cwd: fixture.project.clone(),
                 zsh_executor: consumer != Consumer::Pi,
-                require_execution_owner: false,
                 config_dirs: Vec::new(),
                 shell_observation_entries: Cell::new(0),
             };

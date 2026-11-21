@@ -52,7 +52,6 @@ pub(super) fn observe_contract(
     row: &Value,
     item: &Value,
     outside: &Option<String>,
-    arm: Arm,
     name: &str,
     consumer: Consumer,
 ) -> Value {
@@ -64,7 +63,6 @@ pub(super) fn observe_contract(
         user: Some("fixture-user".into()),
         cwd: fixture.expand(row["cwd"].as_str().unwrap()),
         zsh_executor: consumer != Consumer::Pi,
-        require_execution_owner: false,
         config_dirs: Vec::new(),
         shell_observation_entries: Cell::new(0),
     };
@@ -73,14 +71,11 @@ pub(super) fn observe_contract(
     if id == "appdata[115]" {
         probe.fault = Some(format!("{}/locked", fixture.project));
     }
-    let actual = evaluate_with_arm(
-        Event {
-            bytes: &body,
-            context: &context,
-            probe: &mut probe,
-        },
-        arm,
-    );
+    let actual = evaluate(Event {
+        bytes: &body,
+        context: &context,
+        probe: &mut probe,
+    });
     let wire = render(consumer, &actual);
     let old = &row["expected"][name];
     let old_reason = old["reason"].as_str().unwrap();
@@ -125,7 +120,7 @@ pub(super) fn observe_contract(
     };
     let recovery = recovery(&actual);
     let changed_contract_match =
-        changed_contract_matches(fixture, &context, item, &actual, &wire, name, arm);
+        changed_contract_matches(fixture, &context, item, &actual, &wire, name);
     let matched = permission_match && reason_match && advice_match && changed_contract_match;
     let category = if matched && item["verdict"] == "CHANGE" {
         "intended_change".into()
@@ -146,7 +141,6 @@ fn changed_contract_matches(
     actual: &Result<agent_guard_rust::Evaluation, agent_guard_rust::CheckError>,
     wire: &agent_guard_rust::adapters::Wire,
     name: &str,
-    arm: Arm,
 ) -> bool {
     let actual_class = class(actual);
     let effect = denial_effect(actual);
@@ -171,14 +165,11 @@ fn changed_contract_matches(
             )
             .unwrap();
             let mut recheck_probe = RecordingProbe::literal_for_quoted_paths(fixture);
-            changed_contract_match &= class(&evaluate_with_arm(
-                Event {
-                    bytes: &recheck,
-                    context,
-                    probe: &mut recheck_probe,
-                },
-                arm,
-            )) == "N";
+            changed_contract_match &= class(&evaluate(Event {
+                bytes: &recheck,
+                context,
+                probe: &mut recheck_probe,
+            })) == "N";
         }
     }
     changed_contract_match
@@ -199,11 +190,9 @@ fn denial_effect(
 fn recovery(actual: &Result<agent_guard_rust::Evaluation, agent_guard_rust::CheckError>) -> Value {
     match actual {
         Ok(e) => match &e.outcome {
-            agent_guard_rust::Outcome::ProtectedDenial { recovery, .. }
-            | agent_guard_rust::Outcome::CoverageInsufficient {
-                recovery: Some(recovery),
-                ..
-            } => agent_guard_rust::adapters::recovery_value(recovery),
+            agent_guard_rust::Outcome::ProtectedDenial { recovery, .. } => {
+                agent_guard_rust::adapters::recovery_value(recovery)
+            }
             _ => Value::Null,
         },
         Err(_) => Value::Null,

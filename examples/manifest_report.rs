@@ -1,6 +1,4 @@
-use agent_guard_rust::{
-    CheckError, Disposition, Evaluation, Event, Outcome, adapters, evaluate_with_arm, shell::Arm,
-};
+use agent_guard_rust::{CheckError, Evaluation, Event, Outcome, adapters, evaluate};
 use serde_json::{Value, json};
 pub fn class(result: &Result<Evaluation, CheckError>) -> &'static str {
     match result {
@@ -9,18 +7,8 @@ pub fn class(result: &Result<Evaluation, CheckError>) -> &'static str {
             Outcome::NoObjection => "N",
             Outcome::SoftAdvice(_) => "A",
             Outcome::ProtectedDenial { .. } => "D",
-            Outcome::CoverageInsufficient {
-                disposition: Disposition::ContinueLimitedPreflight,
-                ..
-            } => "UC",
-            Outcome::CoverageInsufficient {
-                disposition: Disposition::RejectUnsupportedSyntax,
-                ..
-            } => "UR",
-            Outcome::CoverageInsufficient {
-                disposition: Disposition::RequireVerifiedExecutionOwner,
-                ..
-            } => "UO",
+            Outcome::CoverageInsufficient { .. } => "UC",
+            Outcome::Refused(_) => "UR",
         },
     }
 }
@@ -54,7 +42,6 @@ fn main() {
             cwd: "/synthetic/home/project".into(),
             user: Some("fixture-user".into()),
             zsh_executor: consumer != "pi",
-            require_execution_owner: false,
             config_dirs: Vec::new(),
             shell_observation_entries: std::cell::Cell::new(0),
         };
@@ -68,14 +55,11 @@ fn main() {
                 event["tool_name"] = json!("bash");
             }
             let bytes = serde_json::to_vec(&event).unwrap();
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut NoIoProbe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut NoIoProbe,
+            });
             let wire = adapters::render(context.consumer, &result);
             println!(
                 "{}",

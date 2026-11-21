@@ -33,24 +33,6 @@
       "sentence": "The agent guard could not complete this check, so the call is blocked. Ask the checker owner to run `agent-guard --version` and check a single public file, repair the reported fault, then recheck the call before running it."
     }
   ],
-  "refusals": [
-    {
-      "kind": "IdentityBound",
-      "sentence": "The guard cannot resolve this path through bounded or cyclic aliases. Name the file by an ordinary absolute path without the cyclic or deep alias chain, then recheck the call."
-    },
-    {
-      "kind": "InspectionBudget",
-      "sentence": "This command exceeds the guard's inspection budget. Split loops, function calls or brace alternatives into smaller commands with explicit public paths, then recheck each command."
-    },
-    {
-      "kind": "ExecutorDivergence",
-      "sentence": "The agent guard cannot inspect this unsupported or unresolved operation. Replace the unsupported construct with a Bash-compatible command naming an explicit public path, then recheck it."
-    },
-    {
-      "kind": "UnsupportedDialectConstruct",
-      "sentence": "The agent guard cannot inspect this unsupported or unresolved operation. Replace the unsupported construct with a Bash-compatible command naming an explicit public path, then recheck it."
-    }
-  ],
   "shell_fault": {
     "reason": "guard failed",
     "alternative": "Split the work into smaller calls naming explicit public targets",

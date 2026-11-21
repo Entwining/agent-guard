@@ -1,14 +1,8 @@
 use super::*;
 
 fn invocation(command: &str) -> ShellInvocation {
-    let mut observation = crate::shell::observe(
-        command,
-        crate::shell::Arm::Brush,
-        "/synthetic/home",
-        "/synthetic/project",
-        true,
-    )
-    .unwrap();
+    let mut observation =
+        crate::shell::observe(command, "/synthetic/home", "/synthetic/project", true).unwrap();
     let record = observation.script.commands.remove(0);
     let index = record.program.unwrap();
     shell_invocation(

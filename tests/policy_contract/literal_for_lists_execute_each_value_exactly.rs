@@ -9,14 +9,11 @@ fn rg_include_advice_follows_go() {
     for consumer in ["claude", "codex", "pi"] {
         let context = fixture.context(&json!({"consumer":consumer, "cwd":"$P"}));
         let bytes = br#"{"tool_name":"Bash","tool_input":{"command":"rg --include '*.rs' needle public; rg --include '*.rs' needle public; rg 'a\\|b' public"}}"#;
-        let result = evaluate_with_arm(
-            Event {
-                bytes,
-                context: &context,
-                probe: &mut support::RecordingProbe::literal_for_quoted_paths(&fixture),
-            },
-            Arm::Brush,
-        );
+        let result = evaluate(Event {
+            bytes,
+            context: &context,
+            probe: &mut support::RecordingProbe::literal_for_quoted_paths(&fixture),
+        });
         let agent_guard_rust::Outcome::SoftAdvice(advice) = &result.as_ref().unwrap().outcome
         else {
             panic!("missing advice: {result:?}")

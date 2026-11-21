@@ -1,6 +1,6 @@
 mod support;
 
-use agent_guard_rust::{CoverageGap, Event, Outcome, adapters, evaluate_with_arm, shell};
+use agent_guard_rust::{CoverageGap, Event, Outcome, adapters, evaluate};
 use serde_json::{Value, json};
 
 #[test]
@@ -25,14 +25,11 @@ fn wide_identifier_headers_and_logical_chains_stop_at_the_budget() {
         for consumer in ["claude", "codex", "pi"] {
             let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &body,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                shell::Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &body,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 "UC",

@@ -13,14 +13,8 @@ const GETOPT: Grammar = Grammar {
 
 /// The arguments after the program in `command`, as the shell records them.
 fn args(command: &str) -> Vec<Word> {
-    let observation = crate::shell::observe(
-        command,
-        crate::shell::Arm::Brush,
-        "/synthetic/home",
-        "/synthetic/project",
-        true,
-    )
-    .unwrap();
+    let observation =
+        crate::shell::observe(command, "/synthetic/home", "/synthetic/project", true).unwrap();
     observation.script.commands[0].argv[1..].to_vec()
 }
 

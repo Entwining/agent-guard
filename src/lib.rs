@@ -19,9 +19,7 @@ pub mod record;
 pub mod shell;
 mod targets;
 
-pub use policy::{
-    Context, Event, evaluate, evaluate_with_arm, evaluate_with_catalog, evaluate_with_deadline,
-};
+pub use policy::{Context, Event, evaluate, evaluate_with_catalog, evaluate_with_deadline};
 
 pub(crate) fn check_deadline(deadline: Option<std::time::Instant>) -> Result<(), CheckError> {
     if deadline.is_some_and(|deadline| std::time::Instant::now() >= deadline) {
@@ -73,11 +71,31 @@ pub enum Outcome {
         reason: Reason,
         recovery: Recovery,
     },
+    /// Inspection was incomplete and the call proceeds.
     CoverageInsufficient {
         cause: CoverageGap,
-        disposition: Disposition,
-        recovery: Option<Recovery>,
     },
+    Refused(Refusal),
+}
+
+/// A native entry refusal: the event cannot be inspected, so the call is blocked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refusal {
+    InputByteLimit,
+    NestingLimit,
+    AbsoluteCwdRequired,
+    InvalidEncoding,
+}
+
+impl Refusal {
+    pub const fn id(&self) -> &'static str {
+        match self {
+            Self::InputByteLimit => "input_byte_limit",
+            Self::NestingLimit => "nesting_limit",
+            Self::AbsoluteCwdRequired => "absolute_cwd_required",
+            Self::InvalidEncoding => "invalid_encoding",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -183,13 +201,6 @@ pub enum RecoveryStep {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Disposition {
-    ContinueLimitedPreflight,
-    RejectUnsupportedSyntax,
-    RequireVerifiedExecutionOwner,
-}
-
 /// Supported means supported preflight observation, never arbitrary-code confinement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Coverage {
@@ -201,16 +212,11 @@ pub enum Coverage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CoverageGap {
     InodeAlias,
-    InputByteLimit,
-    NestingLimit,
-    AbsoluteCwdRequired,
-    InvalidEncoding,
     UnknownProgram { program: String },
     UnresolvedTarget,
     UnsupportedShellSyntax,
     ExecutorDivergence,
     OutsideObservedTool { tool: String },
-    ExecutionOwnerUnavailable,
     IdentityBound,
     InspectionBudget,
     InterpreterChosenRead,
@@ -221,17 +227,12 @@ impl CoverageGap {
     pub const fn id(&self) -> &'static str {
         match self {
             Self::InodeAlias => "inode_alias",
-            Self::InputByteLimit => "input_byte_limit",
-            Self::NestingLimit => "nesting_limit",
-            Self::AbsoluteCwdRequired => "absolute_cwd_required",
-            Self::InvalidEncoding => "invalid_encoding",
             Self::UnknownProgram { .. } => "unknown_program",
             Self::UnresolvedTarget => "unresolved_target",
             Self::UnsupportedShellSyntax => "unsupported_shell_syntax",
             // The executor set only selects which name the gap carries.
             Self::ExecutorDivergence | Self::UnsupportedDialectConstruct => "executor_divergence",
             Self::OutsideObservedTool { .. } => "outside_observed_tool",
-            Self::ExecutionOwnerUnavailable => "execution_owner_unavailable",
             Self::IdentityBound => "identity_bound",
             Self::InspectionBudget => "inspection_budget",
             Self::InterpreterChosenRead => "interpreter_chosen_read",

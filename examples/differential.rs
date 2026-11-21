@@ -9,9 +9,7 @@ fn main() {
         Some("brush") => {}
         _ => panic!("expected brush"),
     };
-    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-        for row in differential::report(arm) {
-            println!("{row}");
-        }
+    for row in differential::report() {
+        println!("{row}");
     }
 }

@@ -4,12 +4,10 @@
 )]
 
 use agent_guard_rust::{
-    CheckError, CheckErrorKind, Context, Coverage, CoverageGap, Disposition, Evaluation, Event,
-    Outcome,
+    CheckError, CheckErrorKind, Context, Coverage, CoverageGap, Evaluation, Event, Outcome,
     adapters::{Consumer, render},
-    evaluate_with_arm,
+    evaluate,
     filesystem::{self, Probe},
-    shell::Arm,
 };
 use serde_json::{Value, json};
 use std::{
@@ -47,18 +45,8 @@ pub fn class(result: &Result<Evaluation, CheckError>) -> &'static str {
             Outcome::NoObjection => "N",
             Outcome::SoftAdvice(_) => "A",
             Outcome::ProtectedDenial { .. } => "D",
-            Outcome::CoverageInsufficient {
-                disposition: Disposition::ContinueLimitedPreflight,
-                ..
-            } => "UC",
-            Outcome::CoverageInsufficient {
-                disposition: Disposition::RejectUnsupportedSyntax,
-                ..
-            } => "UR",
-            Outcome::CoverageInsufficient {
-                disposition: Disposition::RequireVerifiedExecutionOwner,
-                ..
-            } => "UO",
+            Outcome::CoverageInsufficient { .. } => "UC",
+            Outcome::Refused(_) => "UR",
         },
     }
 }
@@ -106,7 +94,7 @@ impl Gate {
     }
 }
 
-pub fn run(row: &Value, arm: Arm) -> Value {
+pub fn run(row: &Value) -> Value {
     let fixture = Fixture::new();
     fixture.setup(row);
     let context = fixture.context(row);
@@ -127,14 +115,11 @@ pub fn run(row: &Value, arm: Arm) -> Value {
             lifecycle = worker_fault(&fixture, kind);
             Err(CheckError { kind })
         }
-        _ => evaluate_with_arm(
-            Event {
-                bytes: &body,
-                context: &context,
-                probe: &mut probe,
-            },
-            arm,
-        ),
+        _ => evaluate(Event {
+            bytes: &body,
+            context: &context,
+            probe: &mut probe,
+        }),
     };
     let wire = render(context.consumer, &result);
     let elapsed_ns = start.elapsed().as_nanos();
@@ -152,23 +137,15 @@ pub fn run(row: &Value, arm: Arm) -> Value {
         Ok(Evaluation {
             outcome: Outcome::ProtectedDenial { recovery, .. },
             ..
-        })
-        | Ok(Evaluation {
-            outcome:
-                Outcome::CoverageInsufficient {
-                    recovery: Some(recovery),
-                    ..
-                },
-            ..
         }) => agent_guard_rust::adapters::recovery_value(recovery),
         _ => Value::Null,
     };
-    let recovery_receipt = verify_recovery(&fixture, row, &recovery, arm);
+    let recovery_receipt = verify_recovery(&fixture, row, &recovery);
     let observed_effects = result
         .as_ref()
         .map(|evaluation| agent_guard_rust::adapters::effects_value(&evaluation.effects))
         .unwrap_or_else(|_| json!([]));
-    json!({"id":row["id"],"consumer":row["consumer"],"arm":format!("{arm:?}"),"class":class(&result),"coverage":coverage(&result),"library":format!("{result:?}"),"recovery":recovery,"recovery_receipt":recovery_receipt,"exit":wire.exit,"stdout":wire.stdout,"stderr":wire.stderr,"probe_calls":probe.calls,"shell_observation_entries":context.shell_observation_entries.get(),"operation_start_count":gate.operation_start_count,"task_result":task_result,"task_witness_scope":if matches!(&result,Ok(Evaluation {coverage:Coverage::OutsideObservedToolCoverage {..},..})) || text(row,"id").contains("dynamic-chooser") {"known-public control; original task incomplete"} else {"closed fixture operation surrogate"},"observed_effects":observed_effects,"effects":witness.value(&fixture),"elapsed_ns":elapsed_ns,"lifecycle":lifecycle,"evidence_owner":if is_lifecycle_row(row) {"harness-only"} else {"evaluator"}})
+    json!({"id":row["id"],"consumer":row["consumer"],"class":class(&result),"coverage":coverage(&result),"library":format!("{result:?}"),"recovery":recovery,"recovery_receipt":recovery_receipt,"exit":wire.exit,"stdout":wire.stdout,"stderr":wire.stderr,"probe_calls":probe.calls,"shell_observation_entries":context.shell_observation_entries.get(),"operation_start_count":gate.operation_start_count,"task_result":task_result,"task_witness_scope":if matches!(&result,Ok(Evaluation {coverage:Coverage::OutsideObservedToolCoverage {..},..})) || text(row,"id").contains("dynamic-chooser") {"known-public control; original task incomplete"} else {"closed fixture operation surrogate"},"observed_effects":observed_effects,"effects":witness.value(&fixture),"elapsed_ns":elapsed_ns,"lifecycle":lifecycle,"evidence_owner":if is_lifecycle_row(row) {"harness-only"} else {"evaluator"}})
 }
 
 pub fn is_lifecycle_row(row: &Value) -> bool {
@@ -231,7 +208,7 @@ pub fn assert_preflight_tuple(row: &Value, actual: &Value) {
         }
     }
     let class = actual["class"].as_str().unwrap();
-    let expected_exit = if ["F", "D", "UR", "UO"].contains(&class) {
+    let expected_exit = if ["F", "D", "UR"].contains(&class) {
         2
     } else {
         0

@@ -15,7 +15,6 @@ fn expand_candidates(
     let result = {
         let mut evaluator = Evaluator::new(
             Frontend {
-                arm: Arm::Brush,
                 zsh: true,
                 host: HostFacts {
                     home: "/h",
@@ -78,7 +77,6 @@ fn independently_detected_code_obeys_the_source_recursion_frontier() {
     let mut scope = Scope::new("/h", "/p");
     let mut evaluator = Evaluator::new(
         Frontend {
-            arm: Arm::Brush,
             zsh: true,
             host: HostFacts {
                 home: "/h",
@@ -148,7 +146,6 @@ fn assigned_pwd_does_not_duplicate_non_tilde_words() {
     let mut output = Observation::default();
     let mut evaluator = Evaluator::new(
         Frontend {
-            arm: Arm::Brush,
             zsh: true,
             host: HostFacts {
                 home: "/h",

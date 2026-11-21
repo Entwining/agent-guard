@@ -26,14 +26,11 @@ fn unterminated_parameter_sources_proceed_without_a_decision() {
             }))
             .unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &body,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &body,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(support::class(&result), "UC", "{consumer}: {source}");
             let Coverage::LimitedPreflight(gaps) = &result.as_ref().unwrap().coverage else {
                 panic!("missing malformed-input coverage: {source}");
@@ -83,7 +80,6 @@ fn assignment_subscript_forwards_code() {
     mechanism_rows("assignment");
     let observation = agent_guard_rust::shell::observe(
         "a[$(cat .env)]=public",
-        Arm::Brush,
         "/synthetic/home",
         "/synthetic/home/project",
         true,
@@ -99,7 +95,6 @@ fn assignment_subscript_forwards_code() {
     );
     let data = agent_guard_rust::shell::observe(
         "a[1]='$(cat .env)'",
-        Arm::Brush,
         "/synthetic/home",
         "/synthetic/home/project",
         true,
@@ -188,7 +183,6 @@ fn original_parameter_regions_have_supported_or_unsupported_coverage() {
     use agent_guard_rust::shell;
     let supported = shell::observe(
         "echo ${v:-x}",
-        Arm::Brush,
         "/synthetic/home",
         "/synthetic/home/project",
         true,
@@ -212,14 +206,8 @@ fn original_parameter_regions_have_supported_or_unsupported_coverage() {
         ("echo \\${x}", false),
         ("echo $(echo ${w:-x})", true),
     ] {
-        let observation = shell::observe(
-            source,
-            Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/home/project",
-            true,
-        )
-        .unwrap();
+        let observation =
+            shell::observe(source, "/synthetic/home", "/synthetic/home/project", true).unwrap();
         if active {
             assert!(
                 !observation.word_coverage.is_empty(),
@@ -247,14 +235,8 @@ fn original_parameter_regions_have_supported_or_unsupported_coverage() {
         );
     }
     let source = "echo '${inactive}' ${v@Z}";
-    let observation = shell::observe(
-        source,
-        Arm::Brush,
-        "/synthetic/home",
-        "/synthetic/home/project",
-        true,
-    )
-    .unwrap();
+    let observation =
+        shell::observe(source, "/synthetic/home", "/synthetic/home/project", true).unwrap();
     assert_eq!(observation.gaps, [CoverageGap::UnsupportedShellSyntax]);
     assert_eq!(observation.word_coverage.len(), 1);
     let active = &observation.word_coverage[0];
@@ -309,14 +291,8 @@ fn assert_unsupported_parameter_regions() {
         ),
     ] {
         let source = format!("echo {body}");
-        let observation = shell::observe(
-            &source,
-            Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/home/project",
-            true,
-        )
-        .unwrap();
+        let observation =
+            shell::observe(&source, "/synthetic/home", "/synthetic/home/project", true).unwrap();
         assert_eq!(
             observation.gaps,
             [cause],

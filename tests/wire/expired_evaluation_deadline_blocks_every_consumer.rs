@@ -13,7 +13,6 @@ fn check(deadline: Instant) -> Result<agent_guard_rust::Evaluation, agent_guard_
         cwd: "/synthetic-project".into(),
         user: None,
         zsh_executor: true,
-        require_execution_owner: false,
         config_dirs: Vec::new(),
         shell_observation_entries: Cell::new(0),
     };

@@ -18,14 +18,11 @@ fn structured_targets_do_not_infer_shell_globs() {
             .unwrap();
     let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
     assert_eq!(
-        support::class(&evaluate_with_arm(
-            Event {
-                bytes: &bytes,
-                context: &context,
-                probe: &mut probe
-            },
-            Arm::Brush
-        )),
+        support::class(&evaluate(Event {
+            bytes: &bytes,
+            context: &context,
+            probe: &mut probe
+        })),
         "N"
     );
 }
@@ -42,16 +39,10 @@ fn glob_probe_oracle_uses_word_provenance() {
         ("cat $HOME/Library/{Containers,CloudStorage}/x", true),
         ("cat \"$HOME/Library/{Containers,CloudStorage}/x\"", false),
     ] {
-        let script = shell::observe_with_user(
-            source,
-            Arm::Brush,
-            &fixture.home,
-            &fixture.project,
-            host.user,
-            true,
-        )
-        .unwrap()
-        .script;
+        let script =
+            shell::observe_with_user(source, &fixture.home, &fixture.project, host.user, true)
+                .unwrap()
+                .script;
         let word = &script.commands[0].argv[1];
         assert_eq!(word.globs, patterned);
         let target = Target::from_word(word, &fixture.project, host, Effect::Read, Walk::None);

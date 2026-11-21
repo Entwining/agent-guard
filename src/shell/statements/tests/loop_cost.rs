@@ -6,8 +6,7 @@ fn header_membership_work_grows_subquadratically() {
             .collect::<Vec<_>>()
             .join(" ");
         let source = format!("for f in {items}; do printf public; done");
-        let output =
-            crate::shell::observe(&source, crate::shell::Arm::Brush, "/h", "/h/p", true).unwrap();
+        let output = crate::shell::observe(&source, "/h", "/h/p", true).unwrap();
         assert!(output.header_comparisons > 0);
         output.header_comparisons
     });
@@ -24,8 +23,7 @@ fn unconditional_literal_append_keeps_exact_string() {
             .collect::<Vec<_>>()
             .join(" ");
         let source = format!("M=prefix; for f in {items}; do M=\"$M $f\"; done; echo \"$M\"");
-        let output =
-            crate::shell::observe(&source, crate::shell::Arm::Brush, "/h", "/h/p", true).unwrap();
+        let output = crate::shell::observe(&source, "/h", "/h/p", true).unwrap();
         let echo = output.script.commands.last().unwrap();
         assert_eq!(echo.argv[1].text, format!("prefix {items}"));
         assert!(!echo.argv[1].cardinality_unknown);
@@ -49,14 +47,9 @@ fn conditional_literal_accumulation_work_grows_polynomially() {
             let source = format!(
                 "M=prefix; {header}; do test -f public || M=\"$M $f\"; done; echo \"[$M]\""
             );
-            let output = crate::shell::observe(
-                &source,
-                crate::shell::Arm::Brush,
-                "/synthetic/home",
-                "/synthetic/project",
-                true,
-            )
-            .unwrap();
+            let output =
+                crate::shell::observe(&source, "/synthetic/home", "/synthetic/project", true)
+                    .unwrap();
             assert!(
                 !output.gaps.contains(&crate::CoverageGap::InspectionBudget),
                 "bound={bound} width={width}: {:?}",
@@ -91,14 +84,8 @@ fn unknown_fragment_repetition_converges_before_branching() {
         let source = format!(
             "for f in {items}; do Q=\"\"; while read id; do Q=\"${{Q}}&x=${{id}}\"; done < \"$f\"; for c in true false; do curl \"https://example.test/?c=${{c}}${{Q}}\" -o public.json; done; done"
         );
-        let output = crate::shell::observe(
-            &source,
-            crate::shell::Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/project",
-            true,
-        )
-        .unwrap();
+        let output =
+            crate::shell::observe(&source, "/synthetic/home", "/synthetic/project", true).unwrap();
         assert!(
             !output.gaps.contains(&crate::CoverageGap::InspectionBudget),
             "width={width}: {:?}",
@@ -125,14 +112,8 @@ fn repeated_unknown_hits_converge_before_the_record_budget() {
         let source = format!(
             "hit=\"\"; for p in {items}; do for c in $(printf public); do [ \"$(printf public)\" = public ] && hit=\"$hit ${{c:0:7}}:$p\"; done; done; echo \"$hit\""
         );
-        let observation = crate::shell::observe(
-            &source,
-            crate::shell::Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/project",
-            true,
-        )
-        .unwrap();
+        let observation =
+            crate::shell::observe(&source, "/synthetic/home", "/synthetic/project", true).unwrap();
         assert!(
             !observation
                 .gaps
@@ -154,14 +135,8 @@ fn loop_directory_work_grows_polynomially() {
             .join(" ");
         let source =
             format!("for r in a b c d; do for b in {items}; do cd $r/$b && ls; done; done");
-        let observation = crate::shell::observe(
-            &source,
-            crate::shell::Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/project",
-            true,
-        )
-        .unwrap();
+        let observation =
+            crate::shell::observe(&source, "/synthetic/home", "/synthetic/project", true).unwrap();
         println!(
             "width={width}, cwd={}, gaps={:?}",
             observation.cwd_candidates, observation.gaps

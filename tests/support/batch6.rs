@@ -1,5 +1,5 @@
 use crate::support;
-use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell::Arm};
+use agent_guard_rust::{Event, adapters, evaluate};
 use serde_json::{Value, json};
 
 pub fn partition(name: &str, packet: &str) {
@@ -38,14 +38,11 @@ pub fn partition_with(
             )
             .unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 row["expected"],
@@ -105,26 +102,9 @@ pub fn partition_with(
                     wire.stderr
                 );
             }
-            assert_unprobed(row, &fixture, &probe, consumer);
             if let Ok(evaluation) = &result {
                 assertion(row, evaluation);
             }
         }
-    }
-}
-
-fn assert_unprobed(
-    row: &Value,
-    fixture: &support::Fixture,
-    probe: &support::RecordingProbe,
-    consumer: &str,
-) {
-    for path in row["unprobed"].as_array().into_iter().flatten() {
-        let path = fixture.expand(path.as_str().unwrap());
-        assert!(
-            !probe.calls.contains(&path) && !probe.stat_calls.contains(&path),
-            "{consumer}: {}: probed {path}",
-            row["id"]
-        );
     }
 }

@@ -22,7 +22,6 @@ fn unchanged_resource_domains_share_broad_root_checks() {
         cwd: "/project".into(),
         user: None,
         zsh_executor: true,
-        require_execution_owner: false,
         config_dirs: Vec::new(),
         shell_observation_entries: std::cell::Cell::new(0),
     };
@@ -33,7 +32,6 @@ fn unchanged_resource_domains_share_broad_root_checks() {
             context: &context,
             probe: &mut probe,
             resolver: filesystem::Resolver::new(&context.home, &table),
-            arm: Arm::Brush,
             gaps: Vec::new(),
             denial: None,
             appdata_reason: None,
@@ -60,7 +58,6 @@ fn inspection_recursion_frontier_is_independent_of_delimiter_depth() {
         cwd: "/p".into(),
         user: None,
         zsh_executor: true,
-        require_execution_owner: false,
         config_dirs: Vec::new(),
         shell_observation_entries: std::cell::Cell::new(0),
     };
@@ -70,7 +67,6 @@ fn inspection_recursion_frontier_is_independent_of_delimiter_depth() {
         context: &context,
         probe: &mut probe,
         resolver: filesystem::Resolver::new(&context.home, &table),
-        arm: Arm::Brush,
         gaps: Vec::new(),
         denial: None,
         appdata_reason: None,
@@ -99,7 +95,6 @@ fn literal_eval_bodies_are_observed_once_in_their_scope() {
         user: None,
         cwd: "/project".into(),
         zsh_executor: true,
-        require_execution_owner: false,
         config_dirs: Vec::new(),
         shell_observation_entries: std::cell::Cell::new(0),
     };
@@ -110,7 +105,6 @@ fn literal_eval_bodies_are_observed_once_in_their_scope() {
             context: &context,
             probe: &mut probe,
             resolver: filesystem::Resolver::new(&context.home, &catalog),
-            arm: Arm::Brush,
             gaps: Vec::new(),
             denial: None,
             appdata_reason: None,
@@ -150,7 +144,6 @@ fn catalog_initialization_fault_blocks_supported_request() {
         user: None,
         cwd: "/project".into(),
         zsh_executor: true,
-        require_execution_owner: false,
         config_dirs: Vec::new(),
         shell_observation_entries: std::cell::Cell::new(0),
     };
@@ -162,7 +155,6 @@ fn catalog_initialization_fault_blocks_supported_request() {
             context: &context,
             probe: &mut probe,
         },
-        Arm::Brush,
         || {
             loads.set(loads.get() + 1);
             Err(CheckError {

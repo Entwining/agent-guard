@@ -62,8 +62,6 @@ pub(super) fn assert_effect_or_failure(row: &Value, actual: &Value, conditional:
             && stderr.contains("unsupported")
     } else if required.contains("parse failure") || required.contains("redirection lacks") {
         gap("UnsupportedShellSyntax") && stderr.contains("shell syntax")
-    } else if required.contains("execution owner") {
-        gap("ExecutionOwnerUnavailable") && stderr.contains("execution owner")
     } else {
         false
     };
@@ -78,7 +76,7 @@ pub(super) fn assert_observers(row: &Value, actual: &Value) {
     let id = text(row, "id");
     let class = actual["class"].as_str().unwrap();
     let stderr = actual["stderr"].as_str().unwrap();
-    if ["D", "UR", "UO", "F"].contains(&class) {
+    if ["D", "UR", "F"].contains(&class) {
         assert_eq!(actual["effects"]["protected_access_count"], 0);
     }
     if class == "D" {

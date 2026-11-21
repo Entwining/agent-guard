@@ -15,14 +15,8 @@ fn quoted_parentheses_stay_literal() {
 #[test]
 fn redirect_variables_follow_direction() {
     regressions("redirect");
-    let observation = shell::observe(
-        "cat < $SECRET > $SECRET <<< $SECRET",
-        Arm::Brush,
-        "/h",
-        "/p",
-        false,
-    )
-    .unwrap();
+    let observation =
+        shell::observe("cat < $SECRET > $SECRET <<< $SECRET", "/h", "/p", false).unwrap();
     let redirects = &observation.script.commands[0].redirects;
     for redirect in &redirects[..2] {
         assert!(matches!(redirect.direction, Direction::In | Direction::Out));

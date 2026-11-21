@@ -1,6 +1,6 @@
 pub(crate) use crate::support;
 
-pub use agent_guard_rust::{Coverage, CoverageGap, Event, adapters, evaluate_with_arm, shell::Arm};
+pub use agent_guard_rust::{Coverage, CoverageGap, Event, adapters, evaluate};
 pub use serde_json::{Value, json};
 
 pub fn check_rows() {
@@ -17,14 +17,11 @@ pub fn check_rows() {
             }))
             .unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &body,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &body,
+                context: &context,
+                probe: &mut probe,
+            });
             let wire = adapters::render(context.consumer, &result);
             let class = support::class(&result);
             if class != row["expected"] {
@@ -56,14 +53,11 @@ pub fn mechanism_rows(owner: &str) {
             let source = fixture.expand(row["source"].as_str().unwrap());
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer == "pi" {"bash"} else {"Bash"},"tool_input":{"command":source}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             let wire = adapters::render(context.consumer, &result);
             let expected = row["expected"].as_str().unwrap();
             if support::class(&result) != expected

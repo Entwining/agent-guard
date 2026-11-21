@@ -1,10 +1,7 @@
 use crate::support;
 use agent_guard_rust::{
-    Event, evaluate_with_arm,
-    shell::{
-        Arm,
-        lexer::{LexError, Lexed, Quote},
-    },
+    Event, evaluate,
+    shell::lexer::{LexError, Lexed, Quote},
 };
 use brush_parser::SourceSpan;
 use brush_parser::word::{self, WordPiece, WordPieceWithSource};
@@ -26,14 +23,11 @@ fn regressions(owner: &str) {
             )
             .unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &body,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &body,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(
                 support::class(&result),
                 row["expected"],
@@ -77,14 +71,11 @@ fn equals_process_substitution_extracts_nested_targets() {
     let fixture = support::Fixture::new();
     let context = fixture.context(&row);
     let bytes = serde_json::to_vec(&row["event"]).unwrap();
-    let result = evaluate_with_arm(
-        Event {
-            bytes: &bytes,
-            context: &context,
-            probe: &mut support::RecordingProbe::literal_for_quoted_paths(&fixture),
-        },
-        Arm::Brush,
-    )
+    let result = evaluate(Event {
+        bytes: &bytes,
+        context: &context,
+        probe: &mut support::RecordingProbe::literal_for_quoted_paths(&fixture),
+    })
     .unwrap();
     assert!(matches!(
         result.outcome,
@@ -127,14 +118,11 @@ fn unterminated_quotes_proceed_without_a_decision() {
         let body = serde_json::to_vec(&json!({"tool_name":"Bash","tool_input":{"command":source}}))
             .unwrap();
         let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        let result = evaluate_with_arm(
-            Event {
-                bytes: &body,
-                context: &context,
-                probe: &mut probe,
-            },
-            Arm::Brush,
-        );
+        let result = evaluate(Event {
+            bytes: &body,
+            context: &context,
+            probe: &mut probe,
+        });
         assert_eq!(support::class(&result), "UC", "{source}");
         let wire = agent_guard_rust::adapters::render(context.consumer, &result);
         assert_eq!(

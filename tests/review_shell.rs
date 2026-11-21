@@ -1,6 +1,6 @@
 mod support;
 
-use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell};
+use agent_guard_rust::{Event, adapters, evaluate, shell};
 use serde_json::{Value, json};
 
 #[test]
@@ -39,14 +39,11 @@ fn partition(name: &str) {
             }))
             .unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                shell::Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             let expected = row
                 .get("expected_pi")
                 .filter(|_| consumer == "pi")
@@ -183,14 +180,11 @@ fn quoted_delimiters_are_data_and_real_nesting_stays_bounded() {
                 serde_json::to_vec(&json!({"tool_name":"bash","tool_input":{"command":source}}))
                     .unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                shell::Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             assert_eq!(support::class(&result), "N", "{source}: {result:?}");
             let wire = adapters::render(context.consumer, &result);
             assert_eq!(wire.exit, 0);
@@ -208,14 +202,11 @@ fn quoted_delimiters_are_data_and_real_nesting_stays_bounded() {
         let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
         let bytes = serde_json::to_vec(&json!({"tool_name":"bash","tool_input":{"command":format!("{}true{}", "(".repeat(65), ")".repeat(65))}})).unwrap();
         let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        let result = evaluate_with_arm(
-            Event {
-                bytes: &bytes,
-                context: &context,
-                probe: &mut probe,
-            },
-            shell::Arm::Brush,
-        );
+        let result = evaluate(Event {
+            bytes: &bytes,
+            context: &context,
+            probe: &mut probe,
+        });
         assert_eq!(
             result.as_ref().unwrap_err().kind,
             agent_guard_rust::CheckErrorKind::ResourceLimit
@@ -268,7 +259,6 @@ fn assert_parameter_fields(
     if let Some(word) = row["word"].as_str() {
         let observed = shell::observe_with_user(
             input["command"].as_str().unwrap(),
-            shell::Arm::Brush,
             &context.home,
             &context.cwd,
             context.user.as_deref(),
@@ -298,7 +288,6 @@ fn assert_parameter_fields(
         let prefix = expected.split(' ').next().unwrap();
         let observed = shell::observe_with_user(
             input["command"].as_str().unwrap(),
-            shell::Arm::Brush,
             &context.home,
             &context.cwd,
             context.user.as_deref(),

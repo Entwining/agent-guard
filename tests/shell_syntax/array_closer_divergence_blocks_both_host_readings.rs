@@ -1,8 +1,8 @@
 use crate::support;
 
 use agent_guard_rust::{
-    CoverageGap, EffectRecord, EffectSource, Event, Outcome, adapters, evaluate_with_arm,
-    shell::{Arm, lexer::Lexed},
+    CoverageGap, EffectRecord, EffectSource, Event, Outcome, adapters, evaluate,
+    shell::lexer::Lexed,
 };
 use serde_json::{Value, json};
 
@@ -23,14 +23,11 @@ fn rows(owner: &str) {
             let source = row["source"].as_str().unwrap();
             let bytes = serde_json::to_vec(&json!({"tool_name":if consumer == "pi" {"bash"} else {"Bash"},"tool_input":{"command":source}})).unwrap();
             let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &bytes,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                Arm::Brush,
-            );
+            let result = evaluate(Event {
+                bytes: &bytes,
+                context: &context,
+                probe: &mut probe,
+            });
             let wire = adapters::render(context.consumer, &result);
             let class = support::class(&result);
             println!(
@@ -145,7 +142,6 @@ fn array_tail_region_reaches_divergence_observation() {
     for source in ["a=(x)#X", "typeset a=(x)\"y\""] {
         let observation = agent_guard_rust::shell::observe(
             source,
-            Arm::Brush,
             "/synthetic/home",
             "/synthetic/home/project",
             true,
@@ -170,7 +166,6 @@ fn array_tail_control_bytes_have_divergence_cause() {
             for zsh in [true, false] {
                 let observation = agent_guard_rust::shell::observe(
                     &source,
-                    Arm::Brush,
                     "/synthetic/home",
                     "/synthetic/home/project",
                     zsh,

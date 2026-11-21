@@ -9,14 +9,7 @@ fn unknown_defaults_use_one_context_as_parameter_count_grows() {
             user: None,
             config_dirs: &[],
         };
-        let mut evaluator = statements::Evaluator::new(
-            Frontend {
-                arm: Arm::Brush,
-                zsh: false,
-                host,
-            },
-            &mut output,
-        );
+        let mut evaluator = statements::Evaluator::new(Frontend { zsh: false, host }, &mut output);
         let mut scope = statements::Scope::new(host.home, "/synthetic/project");
         let mut raw = String::new();
         for index in 0..width {
@@ -61,14 +54,8 @@ fn presence_assumptions_add_one_context_each_as_parameter_count_grows() {
                 user: None,
                 config_dirs: &[],
             };
-            let mut evaluator = statements::Evaluator::new(
-                Frontend {
-                    arm: Arm::Brush,
-                    zsh: false,
-                    host,
-                },
-                &mut output,
-            );
+            let mut evaluator =
+                statements::Evaluator::new(Frontend { zsh: false, host }, &mut output);
             let mut scope = statements::Scope::new(host.home, "/synthetic/project");
             let mut raw = String::new();
             for index in 0..width {
@@ -121,14 +108,7 @@ fn opaque_default_representatives_do_not_split_into_known_runtime_fields() {
         user: None,
         config_dirs: &[],
     };
-    let mut evaluator = statements::Evaluator::new(
-        Frontend {
-            arm: Arm::Brush,
-            zsh: false,
-            host,
-        },
-        &mut output,
-    );
+    let mut evaluator = statements::Evaluator::new(Frontend { zsh: false, host }, &mut output);
     let mut scope = statements::Scope::new(host.home, "/synthetic/project");
     scope.assign(
         "p".into(),

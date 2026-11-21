@@ -94,7 +94,6 @@ pub fn check(
             config_dirs,
             cwd,
             zsh_executor: consumer != Consumer::Pi,
-            require_execution_owner: false,
             shell_observation_entries: Cell::new(0),
         };
         let result = crate::policy::evaluate_native(

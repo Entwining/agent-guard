@@ -1,5 +1,5 @@
 use super::*;
-use crate::shell::{Arm, lexer::Lexed};
+use crate::shell::lexer::Lexed;
 use serde_json::{Value, json};
 
 fn fragments(pieces: &[WordPieceWithSource], entries: &mut Vec<Value>) {
@@ -55,7 +55,6 @@ fn brush_production_fragments_of_supported_words_add_no_gap() {
         calls += entries.len();
         let observation = crate::shell::observe(
             row["source"].as_str().unwrap(),
-            Arm::Brush,
             "/synthetic/home",
             "/synthetic/home/project",
             true,
@@ -164,7 +163,6 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
         user: None,
         cwd: "/synthetic/home/project".into(),
         zsh_executor: true,
-        require_execution_owner: false,
         config_dirs: Vec::new(),
         shell_observation_entries: std::cell::Cell::new(0),
     };
@@ -177,7 +175,6 @@ fn genuine_piece_fault_is_f_and_retains_independent_code() {
             context: &context,
             probe: &mut NoProbe,
         },
-        Arm::Brush,
         crate::filesystem::FirmlinkTable::from_text(""),
     )
     .unwrap();

@@ -4,14 +4,8 @@ fn logical_directory_guard_work_grows_linearly() {
         let source = std::iter::repeat_n("true", width)
             .collect::<Vec<_>>()
             .join(" && ");
-        let output = crate::shell::observe(
-            &source,
-            crate::shell::Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/project",
-            true,
-        )
-        .unwrap();
+        let output =
+            crate::shell::observe(&source, "/synthetic/home", "/synthetic/project", true).unwrap();
         assert!(output.gaps.is_empty());
         output.logical_guard_visits
     });
@@ -34,14 +28,8 @@ fn failure_collection_has_polynomial_cost() {
                 .chain(std::iter::repeat_n("echo public", parts))
                 .collect::<Vec<_>>()
                 .join(" && ");
-            let observation = crate::shell::observe(
-                &source,
-                crate::shell::Arm::Brush,
-                "/synthetic/home",
-                "/synthetic/work",
-                zsh,
-            )
-            .unwrap();
+            let observation =
+                crate::shell::observe(&source, "/synthetic/home", "/synthetic/work", zsh).unwrap();
             assert!(observation.gaps.is_empty());
             observation.failure_copies
         };
@@ -59,13 +47,6 @@ fn failure_collection_has_polynomial_cost() {
 
 #[test]
 fn shell_frontend_removes_only_dot_segments() {
-    let result = crate::shell::observe(
-        "printf public",
-        crate::shell::Arm::Brush,
-        "/h",
-        "/a/./link/../tail",
-        true,
-    )
-    .unwrap();
+    let result = crate::shell::observe("printf public", "/h", "/a/./link/../tail", true).unwrap();
     assert_eq!(result.script.commands[0].cwd, "/a/link/../tail");
 }

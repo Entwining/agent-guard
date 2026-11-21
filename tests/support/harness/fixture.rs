@@ -135,7 +135,6 @@ impl Fixture {
             user: Some("fixture-user".into()),
             cwd: self.expand(text(row, "cwd")),
             zsh_executor: consumer != Consumer::Pi,
-            require_execution_owner: row["provenance_form"] == "required_execution_domain",
             config_dirs: self.config_dirs(row),
             shell_observation_entries: Cell::new(0),
         }

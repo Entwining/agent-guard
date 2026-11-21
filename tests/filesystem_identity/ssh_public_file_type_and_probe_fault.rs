@@ -2,7 +2,7 @@ use crate::support;
 use agent_guard_rust::{
     CheckErrorKind, Event, Outcome,
     adapters::render,
-    evaluate_with_arm,
+    evaluate,
     filesystem::{self, FileKind, Identity, Metadata, Probe, Protection},
 };
 use serde_json::json;
@@ -27,51 +27,39 @@ fn ssh_public_file_type_and_probe_fault() {
         format!("{}/.ssh/config.work", fixture.home),
     )
     .unwrap();
-    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-        let context = fixture.context(&json!({"consumer":"codex", "cwd":"$P"}));
-        for (name, expected) in [
-            ("config.d", "D"),
-            ("directory.pub", "D"),
-            ("known_hosts.backup", "D"),
-            ("config", "N"),
-            ("config.work", "N"),
-        ] {
-            let body = serde_json::to_vec(&json!({"tool_name":"Bash", "tool_input":{"command":format!("cat {}/.ssh/{name}", fixture.home)}})).unwrap();
-            let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-            let result = evaluate_with_arm(
-                Event {
-                    bytes: &body,
-                    context: &context,
-                    probe: &mut probe,
-                },
-                arm,
-            );
-            assert_eq!(
-                support::class(&result),
-                expected,
-                "{name} {arm:?}: {result:?}"
-            );
-            assert!(
-                probe
-                    .stat_calls
-                    .contains(&format!("{}/.ssh/{name}", fixture.home))
-            );
-        }
-        let body = serde_json::to_vec(&json!({"tool_name":"Bash", "tool_input":{"command":format!("cat {}/.ssh/config", fixture.home)}})).unwrap();
-        let mut probe = StatFault {
-            inner: support::RecordingProbe::literal_for_quoted_paths(&fixture),
-        };
-        let result = evaluate_with_arm(
-            Event {
-                bytes: &body,
-                context: &context,
-                probe: &mut probe,
-            },
-            arm,
+    let context = fixture.context(&json!({"consumer":"codex", "cwd":"$P"}));
+    for (name, expected) in [
+        ("config.d", "D"),
+        ("directory.pub", "D"),
+        ("known_hosts.backup", "D"),
+        ("config", "N"),
+        ("config.work", "N"),
+    ] {
+        let body = serde_json::to_vec(&json!({"tool_name":"Bash", "tool_input":{"command":format!("cat {}/.ssh/{name}", fixture.home)}})).unwrap();
+        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
+        let result = evaluate(Event {
+            bytes: &body,
+            context: &context,
+            probe: &mut probe,
+        });
+        assert_eq!(support::class(&result), expected, "{name}: {result:?}");
+        assert!(
+            probe
+                .stat_calls
+                .contains(&format!("{}/.ssh/{name}", fixture.home))
         );
-        assert_eq!(render(context.consumer, &result).exit, 2);
-        assert_eq!(result.unwrap_err().kind, CheckErrorKind::ProbeFault);
     }
+    let body = serde_json::to_vec(&json!({"tool_name":"Bash", "tool_input":{"command":format!("cat {}/.ssh/config", fixture.home)}})).unwrap();
+    let mut probe = StatFault {
+        inner: support::RecordingProbe::literal_for_quoted_paths(&fixture),
+    };
+    let result = evaluate(Event {
+        bytes: &body,
+        context: &context,
+        probe: &mut probe,
+    });
+    assert_eq!(render(context.consumer, &result).exit, 2);
+    assert_eq!(result.unwrap_err().kind, CheckErrorKind::ProbeFault);
 }
 
 struct StatFault {
@@ -132,24 +120,22 @@ fn resolved_ssh_root_and_parent_inode_identity() {
         .unwrap(),
         Identity::Protected(Protection::SshPrivate)
     );
-    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-        let context = fixture.context(&json!({"consumer":"codex", "cwd":"$P"}));
-        let body = serde_json::to_vec(&json!({"tool_name":"Bash", "tool_input":{"command":format!("cat {}", root.display())}})).unwrap();
-        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        let result = evaluate_with_arm(
-            Event {
-                bytes: &body,
-                context: &context,
-                probe: &mut probe,
-            },
-            arm,
-        );
-        assert!(matches!(
-            result.as_ref().unwrap().outcome,
-            Outcome::ProtectedDenial { .. }
-        ));
-        assert_eq!(render(context.consumer, &result).exit, 2);
-    }
+    let context = fixture.context(&json!({"consumer":"codex", "cwd":"$P"}));
+    let body = serde_json::to_vec(
+        &json!({"tool_name":"Bash", "tool_input":{"command":format!("cat {}", root.display())}}),
+    )
+    .unwrap();
+    let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
+    let result = evaluate(Event {
+        bytes: &body,
+        context: &context,
+        probe: &mut probe,
+    });
+    assert!(matches!(
+        result.as_ref().unwrap().outcome,
+        Outcome::ProtectedDenial { .. }
+    ));
+    assert_eq!(render(context.consumer, &result).exit, 2);
     // A metadata identity alias models the same-file comparison without relying
     // on directory hard links, which the host does not permit creating.
     let alias = root.join("alias/config.pub");

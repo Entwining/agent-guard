@@ -5,9 +5,8 @@ use crate::support;
 use agent_guard_rust::{
     Event, Outcome,
     adapters::{self, Consumer},
-    evaluate_with_arm,
+    evaluate,
     filesystem::DiskProbe,
-    shell::Arm,
 };
 use interface::{Mode, guard, handle_requests, request};
 use serde_json::{Value, json};
@@ -24,42 +23,30 @@ fn jsonl_dev_contract_and_parser_boundary() {
     ];
     let input = assert_guard_responses(&fixture, &rows, &ids);
 
-    let shell = json!({"id":"parser","consumer":"claude","arm":"brush","home":fixture.home,"cwd":fixture.project,"event":{"tool_name":"Bash","tool_input":{"command":format!("cat '{}'",fixture.container)}}});
-    for arm in ["brush", "structured"] {
-        let mut request = shell.clone();
-        request["arm"] = json!(arm);
-        let mut output = Vec::new();
-        handle_requests(
-            Mode::ParseOnly,
-            io::Cursor::new(request.to_string()),
-            &mut output,
-        )
-        .unwrap();
-        let response: Value = serde_json::from_slice(&output).unwrap();
-        assert_eq!(
-            response["parse_status"],
-            if arm == "structured" {
-                "outside_arm_coverage"
-            } else {
-                "parsed"
-            }
-        );
-        assert_eq!(response["parse_ns"].is_null(), arm == "structured");
-        assert!(response.get("class").is_none() && response.get("evaluate_ns").is_none());
-        if arm != "structured" {
-            request["event"]["tool_input"]["command"] = json!("if then");
-            let mut output = Vec::new();
-            handle_requests(
-                Mode::ParseOnly,
-                io::Cursor::new(request.to_string()),
-                &mut output,
-            )
-            .unwrap();
-            let response: Value = serde_json::from_slice(&output).unwrap();
-            assert_eq!(response["parse_status"], "parse_failed");
-            assert!(response["parse_ns"].as_u64().is_some());
-        }
-    }
+    let shell = json!({"id":"parser","consumer":"claude","home":fixture.home,"cwd":fixture.project,"event":{"tool_name":"Bash","tool_input":{"command":format!("cat '{}'",fixture.container)}}});
+    let mut parser_request = shell.clone();
+    let mut output = Vec::new();
+    handle_requests(
+        Mode::ParseOnly,
+        io::Cursor::new(parser_request.to_string()),
+        &mut output,
+    )
+    .unwrap();
+    let response: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(response["parse_status"], "parsed");
+    assert!(!response["parse_ns"].is_null());
+    assert!(response.get("class").is_none() && response.get("evaluate_ns").is_none());
+    parser_request["event"]["tool_input"]["command"] = json!("if then");
+    let mut output = Vec::new();
+    handle_requests(
+        Mode::ParseOnly,
+        io::Cursor::new(parser_request.to_string()),
+        &mut output,
+    )
+    .unwrap();
+    let response: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(response["parse_status"], "parse_failed");
+    assert!(response["parse_ns"].as_u64().is_some());
     let mut host_request = shell;
     host_request["context"] = json!({"user":"fixture-user"});
     host_request["event"]["tool_input"]["command"] = json!("ls ~fixture-user/Library/Containers");
@@ -67,8 +54,6 @@ fn jsonl_dev_contract_and_parser_boundary() {
     host_request["context"]["user"] = json!(false);
     assert!(request(&host_request).is_err());
     host_request["context"] = json!({});
-    host_request["arm"] = json!("tree");
-    assert!(request(&host_request).is_err());
 
     let mut invalid = b"{\n{}\n\xff\n".to_vec();
     invalid.extend(input.split_inclusive(|byte| *byte == b'\n').next().unwrap());
@@ -92,7 +77,7 @@ fn assert_guard_responses(fixture: &support::Fixture, rows: &[Value], ids: &[&st
     let mut input = Vec::new();
     for (index, id) in ids.iter().enumerate() {
         let row = rows.iter().find(|r| r["id"] == *id).unwrap();
-        let mut request = json!({"id":id,"consumer":row["consumer"],"arm":"brush","home":fixture.home,"cwd":fixture.expand(support::text(row,"cwd"))});
+        let mut request = json!({"id":id,"consumer":row["consumer"],"home":fixture.home,"cwd":fixture.expand(support::text(row,"cwd"))});
         let body = fixture.body(row);
         if index == 1 {
             request["event"] = serde_json::from_slice(&body).unwrap();
@@ -115,14 +100,11 @@ fn assert_guard_responses(fixture: &support::Fixture, rows: &[Value], ids: &[&st
         assert_eq!(response["id"], *id);
         support::assert_preflight_tuple(row, response);
         let mut probe = DiskProbe;
-        let result = evaluate_with_arm(
-            Event {
-                bytes: &fixture.body(row),
-                context: &fixture.context(row),
-                probe: &mut probe,
-            },
-            Arm::Brush,
-        );
+        let result = evaluate(Event {
+            bytes: &fixture.body(row),
+            context: &fixture.context(row),
+            probe: &mut probe,
+        });
         let wire = adapters::render(Consumer::Claude, &result);
         assert_eq!(response["exit"], wire.exit);
         assert_eq!(response["stdout"], wire.stdout);
