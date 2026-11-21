@@ -17,7 +17,7 @@ Project-scoped searches such as `rg -n TODO src` [pass without output](docs/setu
 
 ## Use credentials without printing them
 
-The guard [blocks credential reads, environment dumps and recursive searches that can reach hidden credential files](docs/setup.md#how-the-guard-decides). Clients can still use credential files through modelled options such as `ssh -i`. The guard does not control what the client does with the file's contents.
+The guard [blocks credential reads, environment dumps and recursive searches that select credential files or walk credential directories](docs/setup.md#how-the-guard-decides). Clients can still use credential files through modelled options such as `ssh -i`. The guard does not control what the client does with the file's contents.
 
 ## Fail closed
 
@@ -29,7 +29,7 @@ Requires Apple Silicon macOS and Homebrew. [Install Agent Guard and register its
 
 ## Limits
 
-The guard is a text preflight check, not a sandbox. It only sees [calls that reach a registered hook](docs/setup.md#known-limits). Use [operating system read restrictions](docs/setup.md#operating-system-read-restrictions) for reads a script chooses at runtime.
+The guard is a text preflight check, not a sandbox. It denies only the protected targets and secret output it recognizes, so a program it does not know or shell syntax it does not model passes. It only sees [calls that reach a registered hook](docs/setup.md#known-limits). Use [operating system read restrictions](docs/setup.md#operating-system-read-restrictions) for reads a script chooses at runtime.
 
 ## Contributing
 

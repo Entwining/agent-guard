@@ -46,21 +46,22 @@ consumer wire, probes, recovery and closed-operation witnesses.
 | `id`, `consumer` | Unique case identity and `claude`, `codex`, `pi`, or `owned-writer`. |
 | `tool`, `input`, `cwd` | Consumer-native input and synthetic cwd; malformed cases may provide `raw_event_bytes`. |
 | `dialect_executor_assumption` | Trusted fixture executor context; tool names are not executor attestation. |
-| `provenance_form` | Input mechanism, including the required-execution-owner boundary. |
+| `provenance_form` | Input mechanism. |
 | `task_objective`, `synthetic_setup` | Intended task and base profile with case-specific resources. |
 | `outcome_class`, `expected_coverage` | Expected typed decision and coverage; a failed check has no completed Evaluation. |
 | `reason_contract`, `advice_expectation` | Required semantic reason and concrete alternative, or absence of reason/advice. |
 | `recovery_objective` | Rechecked same-consumer operation or owner action, result, excluded scope and automatic-application boundary. |
 | `allowed_effects`, `prohibited_effects`, `observer` | Closed-witness requirements; their declarations are not recorded passes. |
-| `conditional_outcome` | Unsupported active syntax refuses; independently identified protected effects must still deny. |
+| `conditional_outcome` | A protected effect identified independently of the row's main outcome must still deny. |
 | `metamorphic_variant` | Base case and varied fact whose unchanged behavior is checked. |
 | `fault_injection`, `writer_state` | Explicit synthetic fault or durable fixture-writer state. |
 | `status`, `coverage_limit` | Label status and evidence scope, including unresolved cases. |
 
 N permits quietly; A permits with applicable advice; D denies a protected effect.
-U-C preserves a limited-preflight gap with quiet wire; U-R rejects an unsupported
-syntax, inspection-budget or identity case; U-O requires a verified execution
-owner. F blocks on operational failure. W describes the harness-owned writer,
+U-C permits quietly with a coverage gap recorded, such as an unknown program,
+unmodelled syntax or an exhausted inspection budget; U-R refuses an event over
+a size or nesting limit, or one without an absolute cwd or valid UTF-8. F blocks
+on operational failure. W describes the harness-owned writer,
 not production write preservation. A project-scoped continuation does not
 complete a whole-HOME task. A coverage gap is not proof of runtime confinement.
 
