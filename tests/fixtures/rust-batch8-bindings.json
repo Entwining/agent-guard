@@ -7,7 +7,7 @@
  {"id":"literal-space-control","partition":"control","expected":"N","input":{"command":"p='public one'; echo $p"}},
  {"id":"known-prefix","partition":"control","expected":"D","input":{"command":"p=$C/$(echo public); cat $p"}},
  {"id":"known-fields-with-unknown","partition":"control","expected":"D","input":{"command":"p=$(echo public); known=\"public $C/\"; cat $known$p"}},
- {"id":"known-branch","partition":"control","expected":"D","input":{"command":"p=$(echo public); if true; then p=$C/data.txt; fi; cat $p"}},
+ {"id":"known-branch","partition":"control","expected":"D","input":{"command":"p=$(echo public); if true; then p=$C/data.txt; fi; ls $p"}},
  {"id":"nested-read","partition":"control","expected":"D","input":{"command":"p=$(cat .env); echo $p"}},
- {"id":"pwd-value","partition":"control","expected":"D","input":{"command":"cd $C; p=$(pwd); cat $p/data.txt"}}
+ {"id":"pwd-value","partition":"control","expected":"D","input":{"command":"cd $C; p=$(pwd); ls $p/data.txt"}}
 ]}

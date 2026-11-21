@@ -1,0 +1,19 @@
+{"rows":[
+{"id":"cat-named-file","partition":"reader","input":{"command":"cat $C/data.txt"},"expected":"N"},
+{"id":"sed-print-line","partition":"reader","input":{"command":"sed -n 1p $C/data.txt"},"expected":"UC"},
+{"id":"awk-named-file","partition":"reader","input":{"command":"awk 'NR==1' $C/data.txt"},"expected":"UC"},
+{"id":"jq-named-file","partition":"reader","input":{"command":"jq . $C/data.json"},"expected":"N"},
+{"id":"plutil-named-file","partition":"reader","input":{"command":"plutil -p $C/prefs.plist"},"expected":"UC"},
+{"id":"tee-named-file","partition":"reader","input":{"command":"echo done | tee $C/out.txt"},"expected":"N"},
+{"id":"ls-named-path","partition":"walk","input":{"command":"ls $C/data.txt"},"expected":"D","wire_text":"[policy:agent-guard/app_data]"},
+{"id":"rg-named-path","partition":"walk","input":{"command":"rg foo $C/data.txt"},"expected":"D","wire_text":"[policy:agent-guard/app_data]"},
+{"id":"diff-named-path","partition":"walk","input":{"command":"diff $C/data.txt data.txt"},"expected":"D","wire_text":"[policy:agent-guard/app_data]"},
+{"id":"zgrep-recursive","partition":"walk","input":{"command":"zgrep -r foo $C/logs"},"expected":"D","wire_text":"[policy:agent-guard/app_data]"},
+{"id":"ssh-directory-listing","partition":"walk","input":{"command":"ls $C/.ssh"},"expected":"D","wire_text":"[policy:agent-guard/app_data]"},
+{"id":"environment-directory-listing","partition":"walk","input":{"command":"ls -R $C/.env.fixture"},"expected":"D","wire_text":"[policy:agent-guard/app_data]"},
+{"id":"openssl-rehash","partition":"walk","input":{"command":"openssl rehash $C/certs"},"expected":"D","wire_text":"[policy:agent-guard/app_data]"},
+{"id":"environment-file-in-container","partition":"secret","input":{"command":"cat $C/.env"},"expected":"D","wire_text":"[policy:agent-guard/credential_file]"},
+{"id":"private-key-in-container","partition":"secret","input":{"command":"cat $C/.ssh/id_rsa"},"expected":"D","wire_text":"[policy:agent-guard/credential_file]"},
+{"id":"key-file-in-container","partition":"secret","input":{"command":"cat $C/server.pem"},"expected":"D","wire_text":"[policy:agent-guard/credential_file]"},
+{"id":"store-file-in-container","partition":"secret","config_dirs":{"GLAB_CONFIG_DIR":"$C/glab"},"input":{"command":"cat $C/glab/config.yml"},"expected":"D","wire_text":"[policy:agent-guard/credential_file]"}
+]}

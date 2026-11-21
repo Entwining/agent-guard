@@ -10,6 +10,8 @@ pub mod credential_globs_and_roots_follow_the_lexical_owner;
 pub mod ctags_atfile_values_read_and_global_values_remain_names;
 #[path = "targets/ctags_owns_its_option_file_references.rs"]
 pub mod ctags_owns_its_option_file_references;
+#[path = "targets/curl_traces_refuse_only_requests_with_credentials.rs"]
+pub mod curl_traces_refuse_only_requests_with_credentials;
 #[path = "targets/curl_urls_after_double_dash_keep_their_read_role.rs"]
 pub mod curl_urls_after_double_dash_keep_their_read_role;
 #[path = "targets/curl_values_keep_url_and_config_reads.rs"]
@@ -18,8 +20,8 @@ pub mod curl_values_keep_url_and_config_reads;
 pub mod differential;
 #[path = "targets/du_option_files_are_read.rs"]
 pub mod du_option_files_are_read;
-#[path = "targets/fd_option_values_and_child_options_do_not_select_hidden_listing.rs"]
-pub mod fd_option_values_and_child_options_do_not_select_hidden_listing;
+#[path = "targets/fd_option_values_are_not_search_roots.rs"]
+pub mod fd_option_values_are_not_search_roots;
 #[path = "targets/filters_are_data_and_later_operands_remain_readable.rs"]
 pub mod filters_are_data_and_later_operands_remain_readable;
 #[path = "targets/find_leading_options_preserve_roots.rs"]
@@ -52,12 +54,12 @@ pub mod metadata_operands_do_not_read_credential_contents;
 pub mod name_filters_narrow_hidden_walks;
 #[path = "targets/native_legacy_client_roles_match_go_without_losing_protection.rs"]
 pub mod native_legacy_client_roles_match_go_without_losing_protection;
+#[path = "targets/only_known_readers_read_their_operands.rs"]
+pub mod only_known_readers_read_their_operands;
 #[path = "targets/opaque_operands_refuse_broad_roots.rs"]
 pub mod opaque_operands_refuse_broad_roots;
 #[path = "targets/option_values_keep_their_roles.rs"]
 pub mod option_values_keep_their_roles;
-#[path = "targets/optional_inplace_suffix_preserves_inline_code.rs"]
-pub mod optional_inplace_suffix_preserves_inline_code;
 #[path = "targets/precommand_wrappers_reach_the_actual_program.rs"]
 pub mod precommand_wrappers_reach_the_actual_program;
 #[path = "targets/process_names_and_perl_argv_preserve_roles.rs"]
@@ -75,5 +77,9 @@ pub mod tar_short_values_keep_their_read_or_write_roles;
 pub mod tracked_cwd_entry_follows_go_named_target_rule;
 #[path = "targets/uncertain_words_keep_grammar_positions.rs"]
 pub mod uncertain_words_keep_grammar_positions;
+#[path = "targets/variable_dumps_advise_listing_names.rs"]
+pub mod variable_dumps_advise_listing_names;
+#[path = "targets/words_that_name_no_scan_root_are_not_broad.rs"]
+pub mod words_that_name_no_scan_root_are_not_broad;
 #[path = "targets/wrapper_assignment_operands_are_unknown_programs.rs"]
 pub mod wrapper_assignment_operands_are_unknown_programs;

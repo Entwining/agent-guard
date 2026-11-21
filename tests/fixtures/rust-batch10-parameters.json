@@ -1,6 +1,6 @@
 {"rows":[
  {"id":"public-prefix","partition":"prefix","expected":"N","input":{"command":"A=1 B=$A echo public"}},
- {"id":"protected-prefix","partition":"prefix","expected":"D","input":{"command":"A=$C B=$A sh -c 'cat \"$B/x\"'"}},
+ {"id":"protected-prefix","partition":"prefix","expected":"D","input":{"command":"A=$C B=$A sh -c 'ls \"$B/x\"'"}},
  {"id":"prefix-restore","partition":"prefix","expected":"N","input":{"command":"A=public; A=1 B=$A echo public; cat \"$A\""}},
  {"id":"pid-default","partition":"pid","expected":"N","input":{"command":"bash -c 'p=\"${child_pid:-${!:-}}\"; echo \"$p\"'"}},
  {"id":"pid-default-code","partition":"pid","expected":"D","input":{"command":"printf '%s' \"${child_pid:-${!:-$(cat .env)}}\""}},

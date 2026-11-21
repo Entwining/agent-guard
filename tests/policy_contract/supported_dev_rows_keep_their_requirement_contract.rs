@@ -59,17 +59,10 @@ fn declared_metamorphic_variants_preserve_the_contract() {
                     variant["id"]
                 );
             }
-            if base_result["class"] == "UR" {
-                assert_eq!(
-                    base_result["recovery_receipt"]["task_result"],
-                    variant_result["recovery_receipt"]["task_result"]
-                );
-            } else {
-                assert_eq!(
-                    base_result["effects"]["protected_access_count"],
-                    variant_result["effects"]["protected_access_count"]
-                );
-            }
+            assert_eq!(
+                base_result["effects"]["protected_access_count"],
+                variant_result["effects"]["protected_access_count"]
+            );
         }
     }
 }

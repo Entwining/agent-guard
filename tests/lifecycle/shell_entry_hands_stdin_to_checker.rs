@@ -113,7 +113,7 @@ fn shell_entry_keeps_outcomes_hook_cwd_and_version() {
     for consumer in ["claude", "codex", "pi"] {
         for (event, status, marker, reason) in [
             (br#"{"tool_name":"Bash","tool_input":{"command":"true"}}"#.as_slice(), 0, "", ""),
-            (br#"{"tool_name":"Read","tool_input":{"file_path":"Library/Containers/synthetic/data"}}"#.as_slice(), 2, "[policy:agent-guard/app_data] ", "protected macOS app-data"),
+            (br#"{"tool_name":"Bash","tool_input":{"command":"ls Library/Containers/synthetic"}}"#.as_slice(), 2, "[policy:agent-guard/app_data] ", "protected macOS app-data"),
             (br#"{"tool_name":"Bash","tool_input":{"command":"printenv"}}"#.as_slice(), 2, "[policy:agent-guard/variable_dump] ", "dumps environment"),
             (b"{", 2, "[error:agent-guard/malformed_input] ", "update the guard for this runtime's hook event"),
         ] {

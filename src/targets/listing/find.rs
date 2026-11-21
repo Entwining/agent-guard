@@ -24,6 +24,22 @@ pub(super) struct Bounds {
     pub printed: Handed,
 }
 
+/// The names a name filter selects; `None` when the shell fills it in at run
+/// time, so it selects unknown names.
+pub(super) fn filter_names(filter: &Word) -> Bound {
+    if filter.expands || filter.runtime_unknown {
+        return None;
+    }
+    // Every name the filter selects matches the filter itself, so `.env*`
+    // bounds a walk by the name it spells even without fixed text after its
+    // last wildcard.
+    let mut names = crate::filesystem::name_bounds(filter).unwrap_or_default();
+    if !names.contains(&filter.text) {
+        names.push(filter.text.clone());
+    }
+    Some(names)
+}
+
 /// Bounds for the expression starting at `start`, or `None` when it is empty
 /// or uses a primary or syntax this model does not know.
 pub(super) fn bounds(args: &[Word], start: usize) -> Option<Bounds> {
@@ -152,18 +168,8 @@ impl Parser<'_> {
         let primary = self.value()?.exact()?;
         match primary {
             "-name" | "-iname" | "-path" | "-ipath" | "-wholename" | "-iwholename" => {
-                let filter = self.value()?;
-                // A filter the shell fills in at run time selects unknown names.
-                if filter.expands || filter.runtime_unknown {
-                    return Some(Handed::default());
-                }
                 return Some(Handed {
-                    names: crate::filesystem::name_bounds(filter).map(|mut names| {
-                        if !names.contains(&filter.text) {
-                            names.push(filter.text.clone());
-                        }
-                        names
-                    }),
+                    names: filter_names(self.value()?),
                     files: false,
                 });
             }

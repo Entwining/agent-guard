@@ -8,8 +8,5 @@
  {"id":"repeat-outer","partition":"nested","expected":"N","input":{"command":"f(){ g(){ echo public; }; g; }; f; f"}},
  {"id":"definition-not-active","partition":"activation","expected":"UC","input":{"command":"f(){ g(){ echo public; }; }; g"}},
  {"id":"definition-now-active","partition":"activation","expected":"N","input":{"command":"f(){ g(){ echo public; }; }; f; g"}},
- {"id":"body-still-inspected","partition":"kept","expected":"D","input":{"command":"f(){ g(){ cat .env; }; };"}},
- {"id":"conditional-definition","partition":"fallback","expected":"UR","input":{"command":"f(){ if true; then g(){ echo public; }; fi; g; }; f"}},
- {"id":"isolated-definition","partition":"fallback","expected":"UR","input":{"command":"( g(){ echo public; }; g; )"}},
- {"id":"recursion","partition":"fallback","expected":"UR","input":{"command":"f(){ f; }; f"}}
+ {"id":"body-still-inspected","partition":"kept","expected":"D","input":{"command":"f(){ g(){ cat .env; }; };"}}
 ]}

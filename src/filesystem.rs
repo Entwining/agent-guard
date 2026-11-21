@@ -84,8 +84,8 @@ pub(crate) use paths::{
 };
 pub use paths::{expand_home, normalize};
 use paths::{unfirmlink, unfirmlink_path};
+pub(crate) use protection::appdata_reason;
 use protection::{CARGO_STORE, SENSITIVE, broad_prepared, lexical_candidate, sensitive_root};
-pub(crate) use protection::{Reach, appdata_reason};
 pub use protection::{appdata_fragment, broad_root, lexical, lexical_literal};
 #[cfg(test)]
 use protection::{lexical_pattern, lexical_pattern_checked, lexical_pattern_mode};

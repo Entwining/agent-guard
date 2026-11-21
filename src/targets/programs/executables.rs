@@ -1,5 +1,5 @@
 use super::super::*;
-use super::read;
+use super::{expanded_names, read};
 
 pub(super) fn interpreter(
     program: &str,
@@ -22,18 +22,19 @@ pub(super) fn interpreter(
         infer_forwarded(forwarded, command, cwd, host, effects, depth);
     } else {
         effects.gaps.push(CoverageGap::InterpreterChosenRead);
-        let (code, mut claimed) = interpreter_code(program, args);
-        for code in code {
-            if code.contains("json.load") {
-                effects.gaps.push(CoverageGap::UnresolvedTarget);
-            }
-            effects
-                .inline
-                .push(InlineCode::interpreter(code, program, args));
+        let (code, mut claimed, line_loop) = interpreter_code(program, args);
+        // Inline code is the program, so every operand is one of its arguments.
+        let mut program_chosen = !code.is_empty();
+        effects.inline |= program_chosen;
+        if code.iter().any(|code| code.contains("json.load")) {
+            effects.gaps.push(CoverageGap::UnresolvedTarget);
         }
         // Runtime options end at `--` or at the entry script, which `-` names
         // for stdin. An option value taken for the entry script only ends them
         // early, which reads the separate file word below instead of using it.
+        // Words after the entry script are the program's own arguments, whose
+        // use only the program decides, unless `-n` or `-p` reads them as
+        // input files.
         let mut options = true;
         for (index, arg) in args.iter().enumerate() {
             if claimed.contains(&index) {
@@ -62,10 +63,20 @@ pub(super) fn interpreter(
                 effects
                     .targets
                     .push(Target::from_word(&path, cwd, host, Effect::Use, Walk::None));
-            } else if arg == "--" || arg == "-" {
+            } else if arg == "--" && options {
                 options = false;
-            } else if !arg.starts_with('-') {
+            } else if arg == "-" && options {
                 options = false;
+                program_chosen = true;
+            } else if !options || !arg.starts_with('-') {
+                if program_chosen && !line_loop {
+                    effects
+                        .targets
+                        .extend(expanded_names(&args[index..], cwd, host));
+                    break;
+                }
+                options = false;
+                program_chosen = true;
                 effects.targets.push(read(arg, cwd, host, false));
             }
         }
@@ -80,7 +91,7 @@ pub(super) fn eval(args: &[Word], command: &CommandRecord, effects: &mut Effects
     if args.iter().any(|arg| arg.role == Role::ObservedShellCode) {
         // Its source owner re-expanded it in this shell's scope.
     } else if args.iter().any(|arg| arg.exact().is_none()) {
-        effects.inline.push(InlineCode::shell_fragment(code));
+        effects.inline = true;
     } else if !command.shell {
         effects.code.push(code);
     }
@@ -122,9 +133,7 @@ pub(super) fn shell(
             } else if word.exact().is_none() {
                 // A representative is lexical evidence of the code, not
                 // code to parse.
-                effects
-                    .inline
-                    .push(InlineCode::shell_fragment(word.text.clone()));
+                effects.inline = true;
                 effects.gaps.push(CoverageGap::UnresolvedTarget);
             } else {
                 effects.code.push(word.text.clone());
@@ -138,9 +147,7 @@ pub(super) fn shell(
             operands.end = (invocation.operands + 1).min(args.len());
             for word in candidates.iter().map(|index| &args[*index]) {
                 if word.exact().is_none() {
-                    effects
-                        .inline
-                        .push(InlineCode::shell_fragment(word.text.clone()));
+                    effects.inline = true;
                     effects.gaps.push(CoverageGap::UnresolvedTarget);
                 } else if !invocation.posix {
                     effects.code.push(word.text.clone());

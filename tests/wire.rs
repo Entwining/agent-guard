@@ -1,5 +1,7 @@
 #[path = "wire/consumer_path_spellings_reach_the_opened_file.rs"]
 pub mod consumer_path_spellings_reach_the_opened_file;
+#[path = "wire/denials_name_their_trigger.rs"]
+pub mod denials_name_their_trigger;
 #[path = "wire/detector_success_and_failure.rs"]
 pub mod detector_success_and_failure;
 #[path = "support/differential.rs"]

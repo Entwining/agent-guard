@@ -67,13 +67,6 @@ fn every_legacy_row_is_accounted_for() {
                     row["id"],
                     observation["consumer"]
                 );
-                if observation["same_denial_rule"] == true {
-                    assert_eq!(
-                        observation["consumer_text_match"], true,
-                        "{} {} {}: consumer reason differs from Go",
-                        row["id"], observation["consumer"], observation["go_rule"]
-                    );
-                }
             }
         }
         assert_no_slice_defects(&report, arm);

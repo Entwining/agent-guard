@@ -55,30 +55,11 @@ fn partition(name: &str) {
                             },
                         ) | ("EnvironmentDump", EffectRecord::EnvironmentDump)
                             | ("CredentialVariable", EffectRecord::CredentialVariable)
-                            | ("HiddenContent", EffectRecord::HiddenContent)
                     )),
                     "{}: {result:?}",
                     row["id"]
                 );
                 assert!(!wire.stderr.is_empty());
-                if row["go_expected"][consumer]["reason"]
-                    .as_str()
-                    .is_some_and(|reason| reason.starts_with("This inline code"))
-                {
-                    assert!(
-                        wire.stderr.contains("inline code"),
-                        "{}: {}",
-                        row["id"],
-                        wire.stderr
-                    );
-                    assert!(effects.iter().any(|effect| matches!(
-                        effect,
-                        EffectRecord::ProtectedTarget {
-                            source: agent_guard_rust::EffectSource::InlineCode,
-                            ..
-                        }
-                    )));
-                }
             }
             assert!(
                 !matches!(

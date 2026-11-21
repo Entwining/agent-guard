@@ -1,7 +1,6 @@
 [
   {
     "id": "F2-leading-continuation-double",
-    "source": "echo \\\n\"${(f)v}\"",
-    "expected": "UR"
+    "source": "echo \\\n\"${(f)v}\""
   }
 ]

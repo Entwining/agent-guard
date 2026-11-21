@@ -64,7 +64,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
         let effects = crate::targets::infer(&command, &command.shell_cwd, self.frontend.host);
         let cwd_dependent = command.argv.iter().any(|word| word.pwd)
             || !effects.code.is_empty()
-            || !effects.inline.is_empty()
+            || effects.inline
             || effects
                 .targets
                 .iter()
@@ -139,7 +139,7 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             if command.argv.iter().any(|word| word.pwd)
                 || effects.targets != relocated.targets
                 || !effects.code.is_empty()
-                || !effects.inline.is_empty()
+                || effects.inline
             {
                 self.output.gap(gap.clone());
             }

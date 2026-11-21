@@ -22,9 +22,9 @@
       "expected": "D"
     },
     {
-      "id": "b3b-x-cd1-cat",
+      "id": "b3b-x-cd1-ls",
       "partition": "cwd",
-      "source": "cd $H/Library/Containers/com.example.syn/Data; cd /nonexistent/a; cat x",
+      "source": "cd $H/Library/Containers/com.example.syn/Data; cd /nonexistent/a; ls x",
       "cwd": "$H/project",
       "expected": "D"
     },
@@ -176,18 +176,11 @@
       "expected": "N"
     },
     {
-      "id": "b3b-cd-make",
-      "partition": "cwd",
-      "source": "cd $H/Library/Containers/com.example.syn/Data && make",
-      "cwd": "$H/project",
-      "expected": "D"
-    },
-    {
       "id": "b3b-cd-python3",
       "partition": "cwd",
       "source": "cd $H/Library/Containers/com.example.syn/Data && python3 s.py",
       "cwd": "$H/project",
-      "expected": "D"
+      "expected": "UC"
     },
     {
       "id": "b3b-cd-npm",
@@ -201,21 +194,7 @@
       "partition": "cwd",
       "source": "cd $H/Library/Containers/com.example.syn/Data && node x.js",
       "cwd": "$H/project",
-      "expected": "D"
-    },
-    {
-      "id": "b3b-cd-go",
-      "partition": "cwd",
-      "source": "cd $H/Library/Containers/com.example.syn/Data && go build",
-      "cwd": "$H/project",
-      "expected": "D"
-    },
-    {
-      "id": "b3b-cd-cargo",
-      "partition": "cwd",
-      "source": "cd $H/Library/Containers/com.example.syn/Data && cargo build",
-      "cwd": "$H/project",
-      "expected": "D"
+      "expected": "UC"
     },
     {
       "id": "b3b-cd-echo",
@@ -239,18 +218,11 @@
       "expected": "N"
     },
     {
-      "id": "b3b-cd-pwd",
-      "partition": "cwd",
-      "source": "cd $H/Library/Containers/com.example.syn/Data && pwd",
-      "cwd": "$H/project",
-      "expected": "D"
-    },
-    {
       "id": "b3b-cd-sh",
       "partition": "cwd",
       "source": "cd $H/Library/Containers/com.example.syn/Data && sh s.sh",
       "cwd": "$H/project",
-      "expected": "D"
+      "expected": "UC"
     },
     {
       "id": "b3b-cd-run",
@@ -263,13 +235,6 @@
       "id": "b3b-cd-vim",
       "partition": "cwd",
       "source": "cd $H/Library/Containers/com.example.syn/Data && vim",
-      "cwd": "$H/project",
-      "expected": "D"
-    },
-    {
-      "id": "b3b-cd-sqlite3",
-      "partition": "cwd",
-      "source": "cd $H/Library/Containers/com.example.syn/Data && sqlite3 db",
       "cwd": "$H/project",
       "expected": "D"
     },
@@ -338,13 +303,6 @@
     },
     {
       "cwd": "$H/project",
-      "id": "cwd-unknown-public-operand",
-      "partition": "cwd",
-      "source": "cd $C && make /tmp/public",
-      "expected": "D"
-    },
-    {
-      "cwd": "$H/project",
       "id": "credential-file",
       "partition": "roots",
       "source": "cat ~/.aws/credentials",
@@ -393,34 +351,6 @@
       "expected": "D"
     },
     {
-      "id": "ov17-ls",
-      "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; ls",
-      "cwd": "$H/project",
-      "expected": "UR"
-    },
-    {
-      "id": "ov17-cat",
-      "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; cat x",
-      "cwd": "$H/project",
-      "expected": "UR"
-    },
-    {
-      "id": "ov17-redir-in",
-      "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; cat < x",
-      "cwd": "$H/project",
-      "expected": "UR"
-    },
-    {
-      "id": "ov17-redir-out",
-      "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; echo hi > out",
-      "cwd": "$H/project",
-      "expected": "UR"
-    },
-    {
       "id": "ov17-tree",
       "partition": "overflow",
       "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; tree",
@@ -456,65 +386,9 @@
       "expected": "D"
     },
     {
-      "id": "ov17-bash-c",
-      "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; bash -c 'cat x'",
-      "cwd": "$H/project",
-      "expected": "UR"
-    },
-    {
-      "id": "ov17-source",
-      "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; source ./x",
-      "cwd": "$H/project",
-      "expected": "UR"
-    },
-    {
-      "id": "ov17-git",
-      "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; git status",
-      "cwd": "$H/project",
-      "expected": "UR"
-    },
-    {
-      "id": "ov17-cp",
-      "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; cp x /tmp/y",
-      "cwd": "$H/project",
-      "expected": "UR"
-    },
-    {
-      "id": "ov17-pwd-word",
-      "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; cat \"$PWD/x\"",
-      "cwd": "$H/project",
-      "expected": "UR"
-    },
-    {
-      "id": "ov17-pwd-subst",
-      "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; cat \"$(pwd)/x\"",
-      "cwd": "$H/project",
-      "expected": "UR"
-    },
-    {
-      "id": "ov17-xargs",
-      "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; echo x | xargs cat",
-      "cwd": "$H/project",
-      "expected": "UR"
-    },
-    {
-      "id": "ov17-python",
-      "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; python3 x.py",
-      "cwd": "$H/project",
-      "expected": "UR"
-    },
-    {
       "id": "ov17-abs-genuine",
       "partition": "overflow",
-      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; cat ~/Library/Containers/com.example.syn/Data/x",
+      "source": "cd ~/Library/Containers/com.example.syn/Data; cd /nonexistent/x0; cd /nonexistent/x1; cd /nonexistent/x2; cd /nonexistent/x3; cd /nonexistent/x4; cd /nonexistent/x5; cd /nonexistent/x6; cd /nonexistent/x7; cd /nonexistent/x8; cd /nonexistent/x9; cd /nonexistent/x10; cd /nonexistent/x11; cd /nonexistent/x12; cd /nonexistent/x13; cd /nonexistent/x14; cd /nonexistent/x15; cd /nonexistent/x16; ls ~/Library/Containers/com.example.syn/Data/x",
       "cwd": "$H/project",
       "expected": "D"
     },

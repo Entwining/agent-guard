@@ -1,7 +1,7 @@
 {"rows":[
 {"id":"process-xargs","partition":"xargs","input":{"command":"xargs cat < <(echo $H/.ssh/id_rsa)"},"expected":"D"},
 {"id":"process-xargs-marker","partition":"xargs","input":{"command":"xargs -I{} cat {} < <(echo $H/.aws/credentials)"},"expected":"D"},
-{"id":"process-xargs-appdata","partition":"xargs","input":{"command":"xargs cat < <(echo $H/Library/Containers/com.x/Data/f)"},"expected":"D"},
+{"id":"process-xargs-appdata","partition":"xargs","input":{"command":"xargs ls < <(echo $H/Library/Containers/com.x/Data/f)"},"expected":"D"},
 {"id":"process-xargs-file","partition":"xargs","input":{"command":"xargs -a <(echo .env) cat"},"expected":"D"},
 {"id":"process-tar","partition":"list","input":{"command":"tar -cf o.tar -T <(echo $H/.ssh/id_rsa)"},"expected":"D"},
 {"id":"process-tar-long","partition":"list","input":{"command":"tar -cf o.tar --files-from=<(echo .env)"},"expected":"D"},

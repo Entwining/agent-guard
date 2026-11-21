@@ -136,7 +136,6 @@ pub struct Observation {
     pub gaps: Vec<CoverageGap>,
     pub parse_successes: usize,
     pub parse_failures: usize,
-    pub executable_qualifier: bool,
     pub word_coverage: Vec<WordCoverage>,
     pub array_tail_regions: Vec<ArrayTailRegions>,
     #[cfg(test)]

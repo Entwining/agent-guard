@@ -1,5 +1,22 @@
 use super::*;
-use crate::record::FindRun;
+use crate::record::WalkRun;
+use std::collections::BTreeMap;
+
+/// What a listing's arguments say about its walk.
+struct Listing {
+    /// The paths it walks.
+    paths: Vec<Word>,
+    /// The directory it resolves them in.
+    base: String,
+    /// Where an fd command to run starts.
+    child_at: Option<usize>,
+    /// Whether it shows hidden names.
+    hidden: bool,
+    /// Where a find expression starts.
+    expression: usize,
+    /// The names its filters let through to each command and to its output.
+    bounds: Option<find::Bounds>,
+}
 
 pub(super) fn infer_listing(
     program: &str,
@@ -10,8 +27,14 @@ pub(super) fn infer_listing(
     effects: &mut Effects,
     depth: usize,
 ) {
-    let (paths, base, child_at, hidden, expression) =
-        listing_arguments(program, args, cwd, host, effects);
+    let Listing {
+        paths,
+        base,
+        child_at,
+        hidden,
+        expression,
+        bounds,
+    } = listing_arguments(program, args, cwd, host, effects);
     if program == "find" {
         find_outputs(args, expression, cwd, host, effects);
     }
@@ -27,16 +50,8 @@ pub(super) fn infer_listing(
             Walk::Visible,
         ));
     }
-    // A name bound limits what find hands on to the files it can name, as a
-    // search filter limits a walk, so those files are read instead.
-    let bounds = (program == "find")
-        .then(|| find::bounds(args, expression))
-        .flatten();
-    // An item consumer reads what a bounded find prints through `Items`.
-    effects.hidden_listing = hidden
-        && !bounds
-            .as_ref()
-            .is_some_and(|bounds| bounds.printed.names.is_some());
+    // A name bound limits what a walk hands on to the files it can name, as
+    // a search filter limits a walk, so those files are read instead.
     let children: Vec<(usize, usize)> = if let Some(index) = child_at {
         vec![(index, args.len())]
     } else if program == "find" {
@@ -75,38 +90,32 @@ pub(super) fn infer_listing(
         if program == "fd" {
             nested.items = Some(crate::record::Items {
                 root: item_root.clone(),
-                listed: if shows_hidden(args) {
-                    crate::record::Listed::Hidden
-                } else {
-                    crate::record::Listed::Visible
-                },
+                listed: crate::record::Listed::Visible,
             });
         }
         let result = infer_at(&nested, &base, host, depth + 1);
-        if hidden && args.get(start).is_some_and(|name| content_consumer(name)) {
-            match bounds
+        if hidden
+            && args.get(start).is_some_and(|name| content_consumer(name))
+            && let Some(find::Handed {
+                names: Some(names),
+                files,
+            }) = bounds
                 .as_ref()
                 .and_then(|bounds| bounds.execs.get(&(start - 1)))
-            {
-                Some(find::Handed {
-                    names: Some(names),
-                    files,
-                }) => effects.targets.extend(handed(
-                    paths
-                        .iter()
-                        .map(|path| narrowed_walk(path, names, cwd, host))
-                        .collect(),
-                    &result.targets,
-                    *files,
-                )),
-                _ => effects.hidden_content = true,
-            }
+        {
+            effects.targets.extend(handed(
+                paths
+                    .iter()
+                    .map(|path| narrowed_walk(path, names, cwd, host))
+                    .collect(),
+                &result.targets,
+                *files,
+            ));
         }
         effects.targets.extend(result.targets);
         effects.gaps.extend(result.gaps);
         effects.code.extend(result.code);
-        effects.inline.extend(result.inline);
-        effects.hidden_content |= result.hidden_content;
+        effects.inline |= result.inline;
     }
 }
 
@@ -141,28 +150,52 @@ fn content_consumer(name: &str) -> bool {
     .contains(&name)
 }
 
-/// The walks that read what `run` prints, narrowed to the names its
-/// expression bounds, and whether it prints only regular files; `None` when
-/// it may print any name.
-pub(super) fn find_printed_walks(
-    run: &FindRun,
-    host: HostFacts<'_>,
-    effects: &mut Effects,
-) -> Option<(Vec<Target>, bool)> {
-    let (mut paths, base, _, _, expression) =
-        listing_arguments("find", &run.args, &run.cwd, host, effects);
-    let printed = find::bounds(&run.args, expression)?.printed;
-    let names = printed.names?;
+/// The hidden names a walk prints.
+pub(super) enum Printed {
+    NoHidden,
+    /// It may print any hidden name.
+    Unbounded,
+    /// The walks that read them, narrowed to the names its filters bound, and
+    /// whether it prints only regular files.
+    Bounded(Vec<Target>, bool),
+}
+
+pub(super) fn printed_walks(run: &WalkRun, host: HostFacts<'_>) -> Printed {
+    // The producer's own effects belong to its own command record, and its
+    // argv positions mean nothing to the consumer.
+    let Listing {
+        mut paths,
+        base,
+        hidden,
+        bounds,
+        ..
+    } = listing_arguments(
+        &run.program,
+        &run.args,
+        &run.cwd,
+        host,
+        &mut Effects::default(),
+    );
+    if !hidden {
+        return Printed::NoHidden;
+    }
+    let Some(find::Handed {
+        names: Some(names),
+        files,
+    }) = bounds.map(|bounds| bounds.printed)
+    else {
+        return Printed::Unbounded;
+    };
     if paths.is_empty() {
         paths.push(Word::literal(base));
     }
-    Some((
+    Printed::Bounded(
         paths
             .iter()
             .map(|path| narrowed_walk(path, &names, &run.cwd, host))
             .collect(),
-        printed.files,
-    ))
+        files,
+    )
 }
 
 /// Where a find expression starts, after its options and paths.
@@ -190,16 +223,13 @@ fn find_expression(args: &[Word]) -> usize {
     args.len()
 }
 
-/// The paths a listing walks, the directory it resolves them in, where an
-/// fd command to run starts, whether the listing shows hidden names, and
-/// where a find expression starts.
 fn listing_arguments(
     program: &str,
     args: &[Word],
     cwd: &str,
     host: HostFacts<'_>,
     effects: &mut Effects,
-) -> (Vec<Word>, String, Option<usize>, bool, usize) {
+) -> Listing {
     if program == "find" {
         return find_arguments(args, cwd);
     }
@@ -266,17 +296,80 @@ fn listing_arguments(
     if paths.is_empty() && !fromfile {
         paths.push(Word::literal(base.clone()));
     }
-    (
+    let bounds = (program == "fd").then(|| {
+        fd_bounds(
+            &binding,
+            options,
+            pattern.then(|| &options[binding.operands[0]]),
+            child_at,
+        )
+    });
+    Listing {
         paths,
         base,
-        child_at.map(|index| index + 1),
+        child_at: child_at.map(|index| index + 1),
         hidden,
-        args.len(),
-    )
+        expression: args.len(),
+        bounds,
+    }
+}
+
+/// fd hands on only names that match its glob pattern and one of its
+/// extensions, so each of them bounds the names; a regex pattern does not.
+fn fd_bounds(
+    binding: &crate::options::Binding,
+    options: &[Word],
+    pattern: Option<&Word>,
+    exec: Option<usize>,
+) -> find::Bounds {
+    let known = |word: &Word| !word.expands && !word.runtime_unknown;
+    let values = |names: [&str; 2]| {
+        binding
+            .values
+            .iter()
+            .filter(move |bound| names.contains(&bound.name))
+            .map(|bound| bound.value.word(options))
+            .collect::<Vec<_>>()
+    };
+    // The last of `--glob` and `--regex` decides how fd reads its pattern.
+    let glob = binding
+        .flags
+        .iter()
+        .rev()
+        .find(|flag| ["-g", "--glob", "--regex"].contains(&flag.as_str()))
+        .is_some_and(|flag| flag != "--regex");
+    let mut names = pattern.filter(|_| glob).and_then(find::filter_names);
+    let extensions = values(["-e", "--extension"]);
+    if !extensions.is_empty() && extensions.iter().all(known) {
+        names.get_or_insert_with(Vec::new).extend(
+            extensions
+                .iter()
+                .map(|extension| format!("*.{}", extension.trim_start_matches('.'))),
+        );
+    }
+    let types = values(["-t", "--type"]);
+    let handed = find::Handed {
+        names,
+        files: !types.is_empty()
+            && types
+                .iter()
+                .all(|kind| matches!(kind.exact(), Some("f" | "file"))),
+    };
+    match exec {
+        // The command's output replaces the names fd would print.
+        Some(index) => find::Bounds {
+            execs: BTreeMap::from([(index, handed)]),
+            printed: find::Handed::default(),
+        },
+        None => find::Bounds {
+            execs: BTreeMap::new(),
+            printed: handed,
+        },
+    }
 }
 
 /// The paths before a find expression and where the expression starts.
-fn find_arguments(args: &[Word], cwd: &str) -> (Vec<Word>, String, Option<usize>, bool, usize) {
+fn find_arguments(args: &[Word], cwd: &str) -> Listing {
     let expression = find_expression(args);
     let mut paths = Vec::new();
     let mut index = 0;
@@ -293,7 +386,14 @@ fn find_arguments(args: &[Word], cwd: &str) -> (Vec<Word>, String, Option<usize>
     if paths.is_empty() {
         paths.push(Word::literal(cwd.to_owned()));
     }
-    (paths, cwd.to_owned(), None, true, expression)
+    Listing {
+        paths,
+        base: cwd.to_owned(),
+        child_at: None,
+        hidden: true,
+        expression,
+        bounds: find::bounds(args, expression),
+    }
 }
 
 /// The files the output primaries of a find expression write.

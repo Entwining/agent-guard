@@ -14,8 +14,8 @@ pub mod bound_arithmetic_sinks_observe_subscript_code;
 pub mod conditional_literal_accumulation_preserves_targets;
 #[path = "support/differential.rs"]
 pub mod differential;
-#[path = "shell_state/doubled_values_refuse_past_the_expansion_bounds.rs"]
-pub mod doubled_values_refuse_past_the_expansion_bounds;
+#[path = "shell_state/doubled_values_past_the_expansion_bounds_leave_their_command_unchecked.rs"]
+pub mod doubled_values_past_the_expansion_bounds_leave_their_command_unchecked;
 #[path = "shell_state/eval_runtime_output_is_unresolved_code.rs"]
 pub mod eval_runtime_output_is_unresolved_code;
 #[path = "shell_state/executable_flow.rs"]
@@ -40,8 +40,8 @@ pub mod nested_functions_follow_dynamic_local_scope;
 pub mod ordinary_small_command_cost;
 #[path = "shell_state/persistent_binding_eligibility.rs"]
 pub mod persistent_binding_eligibility;
-#[path = "shell_state/pipeline_read_models_known_values_and_refuses_unmodelled_armed_reads.rs"]
-pub mod pipeline_read_models_known_values_and_refuses_unmodelled_armed_reads;
+#[path = "shell_state/pipeline_read_models_known_values.rs"]
+pub mod pipeline_read_models_known_values;
 #[path = "shell_state/pipeline_read_receives_protected_and_armed_producer_values.rs"]
 pub mod pipeline_read_receives_protected_and_armed_producer_values;
 #[path = "shell_state/prefix_assignments_use_prior_prefix_values.rs"]

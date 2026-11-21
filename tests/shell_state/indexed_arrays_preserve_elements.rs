@@ -47,19 +47,9 @@ fn partition(name: &str) {
                     row["id"]
                 );
                 let wire = adapters::render(context.consumer, &result);
-                assert_eq!(
-                    wire.exit,
-                    if matches!(expected, "D" | "UR" | "F") {
-                        2
-                    } else {
-                        0
-                    }
-                );
+                assert_eq!(wire.exit, if matches!(expected, "D" | "F") { 2 } else { 0 });
                 assert!(wire.stdout.is_empty());
-                assert_eq!(
-                    wire.stderr.is_empty(),
-                    !matches!(expected, "D" | "UR" | "F")
-                );
+                assert_eq!(wire.stderr.is_empty(), !matches!(expected, "D" | "F"));
                 if let Some(reason) = row["reason"].as_str() {
                     assert!(
                         wire.stderr.contains(reason),

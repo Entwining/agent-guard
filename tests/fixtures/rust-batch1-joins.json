@@ -106,13 +106,6 @@
       "cwd": "/h/project"
     },
     {
-      "id": "c-cond-call",
-      "partition": "batch1-join",
-      "source": "true && f(){ x='a[$(cat .env)]'; }; a=(0); echo $((x))",
-      "expected": "UR",
-      "cwd": "/h/project"
-    },
-    {
       "id": "g41-local-unset",
       "partition": "batch1-join",
       "source": "f(){ local u; s=$(echo x); E=\"$u$s\"; cat \"$E\"; }; f",

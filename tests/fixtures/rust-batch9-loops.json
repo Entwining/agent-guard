@@ -1,8 +1,8 @@
 {
   "rows": [
-    {"id":"protected-loop-candidate","partition":"control","expected":"D","wire_reason":"App Data","input":{"command":"for a in public $C/data; do for b in 1 2; do cat \"$a\"; done; done"}},
+    {"id":"protected-loop-candidate","partition":"control","expected":"D","wire_reason":"App Data","input":{"command":"for a in public $C/data; do for b in 1 2; do ls \"$a\"; done; done"}},
+    {"id":"exhausted-budget-later-listing","partition":"control","expected":"D","wire_reason":"App Data","input":{"command":"s=public; while true; do s=\"$s/public\"; done; ls \"$C\""}},
     {"id":"directory-loop-candidate","partition":"control","expected":"D","wire_reason":"App Data","input":{"command":"for a in public $C; do for b in Data public; do cd \"$a\"; ls \"$b\"; done; done"}},
-    {"id":"unknown-loop-directory","partition":"control","expected":"UR","input":{"command":"for a in */; do for b in 1 2; do cd \"$a\"; ls; done; done"}},
     {
       "id": "literal-5",
       "partition": "benign",

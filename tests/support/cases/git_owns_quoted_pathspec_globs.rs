@@ -37,14 +37,7 @@ pub fn regressions(owner: &str) {
                 "{consumer}: {row}"
             );
             let wire = agent_guard_rust::adapters::render(context.consumer, &result);
-            assert_eq!(
-                wire.exit,
-                if row["expected"] == "D" || row["expected"] == "UR" {
-                    2
-                } else {
-                    0
-                }
-            );
+            assert_eq!(wire.exit, if row["expected"] == "D" { 2 } else { 0 });
             assert!(wire.stdout.is_empty(), "unexpected advice: {row}");
             assert_eq!(
                 wire.stderr.is_empty(),

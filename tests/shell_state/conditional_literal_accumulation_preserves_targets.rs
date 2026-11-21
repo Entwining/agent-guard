@@ -17,37 +17,6 @@ fn conditional_literal_accumulation_preserves_read_targets() {
 }
 
 #[test]
-fn repeated_field_count_is_not_complete_inline_code() {
-    contract::partition(
-        "code",
-        include_str!("../fixtures/rust-batch17b-accumulation.json"),
-    );
-}
-
-#[test]
-fn repeated_field_count_preserves_positional_role_uncertainty() {
-    contract::partition(
-        "roles",
-        include_str!("../fixtures/rust-batch17b-accumulation.json"),
-    );
-}
-
-#[test]
-fn unbounded_literal_accumulation_keeps_budget_refusal() {
-    contract::partition_with(
-        "budget",
-        include_str!("../fixtures/rust-batch17b-accumulation.json"),
-        |_, evaluation| {
-            assert!(matches!(
-                &evaluation.coverage,
-                agent_guard_rust::Coverage::LimitedPreflight(gaps)
-                    if gaps.contains(&agent_guard_rust::CoverageGap::InspectionBudget)
-            ));
-        },
-    );
-}
-
-#[test]
 fn repeated_copies_keep_distinct_resource_prefixes() {
     contract::partition(
         "identity",

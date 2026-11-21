@@ -23,11 +23,3 @@ fn nested_local_restoration_keeps_the_armed_outer_binding() {
         include_str!("../fixtures/rust-batch8-functions.json"),
     );
 }
-
-#[test]
-fn nested_definitions_keep_ruled_conservative_fallbacks() {
-    batch8::partition(
-        "fallback",
-        include_str!("../fixtures/rust-batch8-functions.json"),
-    );
-}

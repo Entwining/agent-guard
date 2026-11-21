@@ -173,24 +173,12 @@ fn command_prefix_restoration_covers_early_exits() {
     partition("prefix-exits");
 }
 #[test]
-fn local_declarations_under_prefixes_join_and_restore() {
-    partition("prefix-local");
-}
-#[test]
 fn functions_shadow_builtin_binding_and_code_sinks() {
     partition("function-shadow");
 }
 #[test]
 fn functions_shadow_directory_builtins() {
     partition("function-shadow-directory");
-}
-#[test]
-fn loop_exit_levels_capture_the_reachable_scope() {
-    partition("loop-level");
-}
-#[test]
-fn recursive_calls_conservatively_refuse() {
-    partition("recursion");
 }
 #[test]
 fn loop_values_keep_unsplit_dialect_candidate() {

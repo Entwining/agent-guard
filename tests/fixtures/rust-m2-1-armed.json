@@ -4,13 +4,12 @@
   "rows": [
     {"id":"local-array-new-element","partition":"armed-array-local","source":"arr=(public); f(){ local arr=0; arr[1]='a[$(cat .env)]'; }; f; echo $((arr))","expected":"N"},
     {"id":"local-array-shadow","partition":"armed-array-scope","source":"arr=('a[$(cat .env)]'); a=(0); f(){ local arr=0; echo $((arr)); }; f","expected":"N"},
-    {"id":"positional-target-value","partition":"armed-positional-value","source":"set -- ~/Library/Containers/com.example.syn/Data; cat \"$1/notes.txt\"","expected":"D","reason":"App Data"},
-    {"id":"indexed-target-value","partition":"armed-indexed-value","source":"arr=(~/Library/Containers/com.example.syn/Data); cat \"${arr[0]}/notes.txt\"","expected":"D","reason":"App Data"},
+    {"id":"positional-target-value","partition":"armed-positional-value","source":"set -- ~/Library/Containers/com.example.syn/Data; ls \"$1/notes.txt\"","expected":"D","reason":"App Data"},
+    {"id":"indexed-target-value","partition":"armed-indexed-value","source":"arr=(~/Library/Containers/com.example.syn/Data); ls \"${arr[0]}/notes.txt\"","expected":"D","reason":"App Data"},
     {"id":"unarmed-read-unmodeled","partition":"armed-read-delimiter","source":"read -d ';' x <<< public; echo x","expected":"N"},
     {"id":"unarmed-positional-value","partition":"armed-positional","source":"set -- public; printf '%s' \"$1\"","expected":"N"},
     {"id":"unarmed-array-value","partition":"armed-array","source":"arr=(public); printf '%s' \"${arr[0]}\"","expected":"N"},
     {"id":"unarmed-printf-unmodeled","partition":"armed-printf-fallback","source":"printf -v x '%s%s' pub lic; echo x","expected":"N"},
-    {"id":"armed-append-budget","partition":"armed-append-budget","source":"A=public; B=public; AS='a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21'; BS='b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 b16 b17 b18 b19 b20 b21 b22 b23'; for A in $AS; do :; done; for B in $BS; do :; done; A+=$B","expected":"UR","gap":"InspectionBudget"},
     {
       "id": "unarmed-dollar-control",
       "partition": "armed-expansion",

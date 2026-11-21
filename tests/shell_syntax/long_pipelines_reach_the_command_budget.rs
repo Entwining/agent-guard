@@ -6,7 +6,7 @@ fn long_pipelines_reach_the_command_budget() {
         "pipeline-stages",
         include_str!("../fixtures/rust-pipeline-stage-budget.json"),
         |row, evaluation| {
-            if row["expected"] == "UR" {
+            if row["expected"] == "UC" {
                 assert!(
                     matches!(
                         &evaluation.outcome,

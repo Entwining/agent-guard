@@ -5,8 +5,25 @@ use crate::record::Effect::{Name, Read, Write};
 mod pathspec;
 
 pub(super) fn infer_git(args: &[Word], cwd: &str, host: HostFacts<'_>, effects: &mut Effects) {
+    let first = effects.targets.len();
     let (index, base) = global_options(args, cwd, host, effects);
+    // A subcommand that only names refs or settings, or reads history from
+    // the object store, does not walk the directories its global options
+    // select.
+    if args.get(index).is_some_and(|sub| {
+        names_only(sub.as_str()) || ["log", "shortlog", "show"].contains(&sub.as_str())
+    }) {
+        for target in &mut effects.targets[first..] {
+            target.walk = Walk::None;
+        }
+    }
     infer_subcommand(args, index, &base, cwd, host, effects);
+}
+
+fn names_only(sub: &str) -> bool {
+    "branch tag remote switch push fetch pull merge rebase cherry-pick revert reflog rev-parse describe bisect init clone submodule worktree config lfs sparse-checkout"
+        .split_whitespace()
+        .any(|name| name == sub)
 }
 
 fn infer_subcommand(
@@ -27,7 +44,7 @@ fn infer_subcommand(
     // Credential fill exposes stored secrets without naming a file to read.
     effects.stored_secret |=
         sub == "credential" && args.get(index).is_some_and(|arg| arg == "fill");
-    let names="branch tag remote switch push fetch pull merge rebase cherry-pick revert reflog rev-parse describe bisect init clone submodule worktree config lfs sparse-checkout".split_whitespace().any(|name|name==sub.as_str());
+    let names = names_only(sub.as_str());
     let metadata="add rm mv restore checkout reset stash check-ignore check-attr update-index ls-files status clean commit".split_whitespace().any(|name|name==sub.as_str());
     let pathspec = !names && sub != "grep";
     let add = |path: &str, word: &Word, effect: Effect, walk: Walk, effects: &mut Effects| {
@@ -99,7 +116,8 @@ fn infer_subcommand(
         let (effect, walk) = if output {
             (Effect::Write, Walk::None)
         } else if metadata {
-            (Effect::Meta, Walk::None)
+            // A directory pathspec selects every file below it.
+            (Effect::Meta, Walk::Visible)
         } else if names {
             (Effect::Name, Walk::None)
         } else {
@@ -122,11 +140,6 @@ fn global_options(
 ) -> (usize, String) {
     let mut index = 0;
     let mut base = cwd.to_owned();
-    let option_walk = if args.iter().any(|arg| arg == "config") {
-        Walk::None
-    } else {
-        Walk::Visible
-    };
     while let Some(arg) = args.get(index).filter(|arg| arg.starts_with('-')) {
         if effects.unproven.is_none() && arg.option_unknown() {
             effects.unproven = Some(index);
@@ -158,7 +171,7 @@ fn global_options(
                 cwd,
                 host,
                 Effect::Enter,
-                option_walk,
+                Walk::Visible,
             ));
         }
         // Repository-directory values retain the read role at the command cwd,
@@ -177,7 +190,7 @@ fn global_options(
                 cwd,
                 host,
                 Effect::Read,
-                option_walk,
+                Walk::Visible,
             ));
         }
         if takes
@@ -190,7 +203,7 @@ fn global_options(
                 cwd,
                 host,
                 Effect::Read,
-                option_walk,
+                Walk::Visible,
             ));
         }
         index += if takes { 2 } else { 1 };

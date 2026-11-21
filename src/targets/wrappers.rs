@@ -45,27 +45,17 @@ pub(super) fn at(path: &str, base: &str) -> String {
     }
 }
 
-pub(super) fn xargs_content_consumer(name: &str) -> bool {
-    [
-        "cat", "head", "tail", "less", "more", "bat", "sed", "awk", "jq", "yq", "base64", "xxd",
-        "od", "strings", "sort", "uniq", "cut", "nl", "sh", "bash", "zsh",
-    ]
-    .contains(&name)
-}
-
 fn merge_effects(effects: &mut Effects, result: Effects) {
     effects.targets.extend(result.targets);
     effects.gaps.extend(result.gaps);
     effects.code.extend(result.code);
-    effects.inline.extend(result.inline);
+    effects.inline |= result.inline;
     effects.dump |= result.dump;
     effects.variable |= result.variable;
     effects.token |= result.token;
     effects.keychain |= result.keychain;
     effects.stored_secret |= result.stored_secret;
     effects.trace |= result.trace;
-    effects.hidden_listing |= result.hidden_listing;
-    effects.hidden_content |= result.hidden_content;
     effects.replace_advice |= result.replace_advice;
     effects.include_advice |= result.include_advice;
     effects.bre_advice |= result.bre_advice;

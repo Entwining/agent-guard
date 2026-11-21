@@ -198,8 +198,8 @@ pub(super) fn expand_scoped(
         })
     });
     // Stored expansions feed later ones, so either quantity can double per
-    // statement. The gap refuses the call; the remaining model only needs to
-    // stay small.
+    // statement. The gap leaves this command unchecked and empties its words so
+    // the model stays small for the statements after it.
     if fields > crate::limits::MAX_EXPANSION_FIELDS || oversized {
         evaluator.output.gap(CoverageGap::InspectionBudget);
         words.truncate(1);

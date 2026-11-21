@@ -26,7 +26,9 @@ pub fn partition_with(
         let fixture = support::Fixture::new();
         fixture.setup(row);
         for consumer in ["claude", "codex", "pi"] {
-            let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
+            let cwd = row["cwd"].as_str().unwrap_or("$P");
+            let context = fixture
+                .context(&json!({"consumer":consumer,"cwd":cwd,"config_dirs":row["config_dirs"]}));
             let tool =
                 row["tool"]
                     .as_str()
@@ -53,7 +55,7 @@ pub fn partition_with(
             let wire = adapters::render(context.consumer, &result);
             assert_eq!(
                 wire.exit,
-                if row["expected"] == "D" || row["expected"] == "UR" || row["expected"] == "F" {
+                if row["expected"] == "D" || row["expected"] == "F" {
                     2
                 } else {
                     0
@@ -69,7 +71,7 @@ pub fn partition_with(
             );
             assert_eq!(
                 wire.stderr.is_empty(),
-                row["expected"] != "D" && row["expected"] != "UR" && row["expected"] != "F",
+                row["expected"] != "D" && row["expected"] != "F",
                 "{consumer}: {}",
                 row["id"]
             );
@@ -97,7 +99,7 @@ pub fn partition_with(
             }
             if let Some(text) = row["wire_text"].as_str() {
                 assert!(
-                    wire.stderr.contains(text),
+                    wire.stderr.contains(&fixture.expand(text)),
                     "{consumer}: {}: {}",
                     row["id"],
                     wire.stderr

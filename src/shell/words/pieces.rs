@@ -204,6 +204,9 @@ fn substitution_piece(
         out.word.text.push_str(&value);
     } else {
         out.word.text.push_str(&raw[piece.start_index..right + 1]);
+        // The spelling stands in for unknown output; its own blanks must not
+        // split words of the command it runs into operands of this one.
+        out.lexical_ranges.push(start..out.word.text.len());
         out.word.expands = true;
         unknown_run(out, start, false);
     }

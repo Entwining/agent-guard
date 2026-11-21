@@ -1,4 +1,5 @@
 use super::super::*;
+use super::expanded_names;
 
 pub(super) fn output(
     program: &str,
@@ -9,11 +10,7 @@ pub(super) fn output(
     command: &CommandRecord,
 ) {
     effects.independent_arguments = args.iter().all(|arg| !arg.starts_with('-'));
-    effects.targets.extend(
-        args.iter()
-            .filter(|arg| arg.globs && !arg.starts_with('-'))
-            .map(|arg| Target::from_word(arg, cwd, host, Effect::Name, Walk::None)),
-    );
+    effects.targets.extend(expanded_names(args, cwd, host));
     effects.variable = !(program != "echo" && args.first().is_some_and(|arg| arg == "-v"))
         && args
             .iter()
@@ -32,13 +29,13 @@ pub(super) fn metadata(
     host: HostFacts<'_>,
     effects: &mut Effects,
 ) {
-    // Metadata and content-read roles have different credential decisions;
-    // visible walks still check protected App Data ownership.
-    let walk = if ["df", "stat", "test", "[", "mkdir", "readlink"].contains(&program) {
-        Walk::None
-    } else {
-        Walk::Visible
-    };
+    // Only a recursive ownership or mode change walks below its operands,
+    // which reaches every file of an App Data container.
+    let recursive = ["chmod", "chown", "chgrp", "chflags"].contains(&program)
+        && args
+            .iter()
+            .any(|arg| arg.starts_with('-') && !arg.starts_with("--") && arg.contains('R'));
+    let walk = if recursive { Walk::Visible } else { Walk::None };
     effects.targets.extend(args.iter().flat_map(|word| {
         operand_values(word, false).map(move |value| {
             Target::from_word(&word.with_text(value.into()), cwd, host, Effect::Meta, walk)

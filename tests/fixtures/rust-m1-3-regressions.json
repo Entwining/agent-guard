@@ -21,18 +21,6 @@
     "protection": "private-key"
   },
   {
-    "id": "flag-double-apostrophe",
-    "owner": "double_context",
-    "source": "printf %s \"it's\" \"${(f)v}\"",
-    "expected": "UR"
-  },
-  {
-    "id": "flag-double-dollar-apostrophe",
-    "owner": "double_context",
-    "source": "printf %s \"$'\" \"${(f)v}\"",
-    "expected": "UR"
-  },
-  {
     "id": "qualifier-balanced-statement",
     "owner": "qualifier",
     "source": "echo \"it's\"; printf %s *(e:'cat ~/.ssh/id_rsa':)",
@@ -59,18 +47,6 @@
     "source": "printf %s \"it's\" ~/project/*(e:'cat ~/.ssh/id_rsa':)",
     "expected": "D",
     "protection": "private-key"
-  },
-  {
-    "id": "qualifier-plus",
-    "owner": "qualifier",
-    "source": "printf %s \"it's\" ~/project/*(+f)",
-    "expected": "UR"
-  },
-  {
-    "id": "setopt-extendedglob",
-    "owner": "command_gate",
-    "source": "echo \"it's\"; setopt extendedglob; echo ~/.ssh/id_*(.)",
-    "expected": "UR"
   },
   {
     "id": "setopt-globsubst",
@@ -165,21 +141,9 @@
     "expected": "N"
   },
   {
-    "id": "nested-command",
-    "owner": "masking",
-    "source": "printf %s \"$(printf %s \"it's\" \"${(f)v}\")\"",
-    "expected": "UR"
-  },
-  {
     "id": "quoted-end-tag",
     "owner": "masking",
     "source": "cat <<'${(f)v}'\nDATA\n${(f)v}",
     "expected": "N"
-  },
-  {
-    "id": "active-after-end-tag",
-    "owner": "masking",
-    "source": "cat <<'${(f)v}'\nDATA\n${(f)v}\nprintf %s \"${(f)v}\"",
-    "expected": "UR"
   }
 ]

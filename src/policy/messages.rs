@@ -2,18 +2,17 @@ use crate::{CoverageGap, DenialRule};
 
 // Public sentences carry the safe alternatives; diagnostic effect text
 // stays internal and must not replace them in consumer output.
-const APPDATA: &str = "This reads a protected macOS app-data directory. Name a specific non-sensitive file under ~/Library/Application Support instead, or ask the user to inspect the protected file and share the needed fact.";
+const APPDATA: &str = "This reaches more than one file in a protected macOS app-data container, or a path in one known only at run time. Name the one file you need by its literal path instead, or ask the user to inspect the container and share the needed fact.";
 const BROAD: &str = "A scan rooted at the home directory or ~/Library reaches every app-data entry. Scope the scan to a project path.";
 const FILE: &str = "This reads a credential or environment file. If a client the guard models only needs to use the file, pass it through that program's own option, such as `--env-file`, `--kubeconfig`, or `ssh -i`; the guard does not control what the client does with the contents. Otherwise read a non-sensitive config file, or ask the user to inspect the file and share only the fact needed.";
 const STORE: &str = "This reads a directory that holds a client's credential store, such as `~/.config/gh`. Name the subdirectory or file you need, such as `~/.config/nvim`; restrict a search to file names that select no credential file, such as `-g '*.lua'`, `--include='*.lua'` or a Grep `glob` of `*.lua`; or ask the user to inspect the store and share only the fact needed.";
-const CODE_FILE: &str = "This inline code names a credential or environment file. To write text that mentions the file, use the Write or Edit tool; to run code that needs its values, pass the file through a modelled runtime's option, such as `node --env-file=.env`, though the guard does not control what the runtime does with the contents; otherwise ask the user to inspect the file and share only the fact needed.";
-const HIDDEN_SEARCH: &str = "This recursive search can reach hidden credential files. Use rg without --hidden on a project path, naming any hidden project directory it needs, such as `rg PATTERN src .github`; restrict grep -r or find to source file names, such as `--include='*.ts'` or `-name '*.ts'`; or drop recursive flags when the operands are files.";
-const DUMP: &str = "This dumps environment or shell variables, including secrets. Name the non-sensitive variable needed and read only that variable.";
+const HIDDEN_SEARCH: &str = "This recursive search walks a credential directory, where keys and tokens can have any name, so name filters do not make it safe. Search a project path outside that directory, list the directory with `ls`, or read a non-secret file in it by name, such as `~/.gnupg/gpg.conf`.";
+const DUMP: &str = "This dumps environment or shell variables, including secrets. List variable names without values with `compgen -e` in Bash, or name the non-sensitive variable needed and read only that variable.";
 const VARIABLE: &str = "This prints the value of a credential variable. Ask the user for the specific non-sensitive fact needed, or let the authorized client consume the credential without printing it.";
 pub(super) const TOKEN: &str = "This prints a Git hosting token. Use auth status without token-display flags; if authentication needs repair, ask the user to update the credential in their terminal.";
 const KEYCHAIN: &str = "This extracts a password from the macOS Keychain. State the intended use and run the authorized client that consumes it without printing it.";
 pub(super) const SECRET_PRINT: &str = "This prints a stored secret or access token. Run the command that uses the credential without printing it, or ask the user to run it in their own terminal and share only the non-secret fact needed.";
-const TRACE: &str = "curl verbose or trace output can print HTTP headers including Authorization. Drop -v and --trace; use a normal curl request for the needed result.";
+const TRACE: &str = "This curl call combines verbose or trace output, which can print request headers, with an input the guard treats as a credential. Drop -v and --trace; use a normal curl request for the needed result.";
 const UPLOAD: &str = "This sends the contents of a credential file. Send only the required non-sensitive fields explicitly, and let the client obtain authentication from its normal credential source.";
 const SSH: &str = "This reads private material in the named .ssh directory or its filesystem alias. Search public material in the project or request the exact public key or client-config path; ask the user to inspect private material locally if a specific non-sensitive fact is needed.";
 const SSH_WRITE: &str = "This writes into the named .ssh directory or its filesystem alias, where private keys live. Write the key or certificate under a project or temporary directory instead, such as one `mktemp -d` creates, and ask the user to install it if it belongs in .ssh.";
@@ -29,7 +28,6 @@ impl DenialRule {
             Self::Broad => BROAD,
             Self::File => FILE,
             Self::Store => STORE,
-            Self::CodeFile => CODE_FILE,
             Self::HiddenSearch => HIDDEN_SEARCH,
             Self::Dump => DUMP,
             Self::Variable => VARIABLE,

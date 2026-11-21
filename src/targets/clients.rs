@@ -105,8 +105,14 @@ fn spec(program: &str, words: &[Word]) -> Option<Spec> {
             spec.remote = true;
             spec.options = Some(&RSYNC);
         }
-        "tee" => spec.operand = Effect::Write,
-        "ssh-add" => spec.operand = Effect::Use,
+        "tee" => {
+            spec.operand = Effect::Write;
+            spec.walk = Walk::None;
+        }
+        "ssh-add" => {
+            spec.operand = Effect::Use;
+            spec.walk = Walk::None;
+        }
         "dotenvx" => spec.options = Some(&DOTENVX),
         "dd" => spec.walk = Walk::None,
         "ssh-keygen" => spec.options = Some(&SSH_KEYGEN),
@@ -316,7 +322,7 @@ pub(super) fn infer(
             }
         }
         "ssh" | "scp" | "sftp" => ssh(program, &mut context),
-        "curl" => effects.credential_stdin = curl(&mut context),
+        "curl" => curl(&mut context, effects),
         "wget" => wget(&mut context),
         "docker" => effects.credential_stdin = docker(&mut context),
         "ctags" => ctags(&mut context),
@@ -382,7 +388,6 @@ mod query_verbs;
 mod ssh;
 mod wget;
 use cargo::cargo;
-pub(super) use curl::CURL_VALUE_LETTERS;
 use curl::curl;
 use docker::docker;
 use ssh::ssh;

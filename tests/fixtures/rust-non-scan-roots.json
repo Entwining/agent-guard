@@ -1,0 +1,12 @@
+{"rows":[
+{"id":"flattened-copy-name","partition":"substitution","input":{"command":"d=$P/out; for f in a/b.go c/d.go; do cp $f $d/$(echo $f | tr / _); done"},"expected":"N"},
+{"id":"set-operand-names-no-file","partition":"substitution","input":{"command":"d=$P/out; cat $d/$(tr ~/.env _ < list.txt)"},"expected":"UC"},
+{"id":"operand-beside-substitution","partition":"substitution-operand","input":{"command":"d=$P/out; cat $d$(cat list.txt) ~/.env"},"expected":"D","wire_text":"Triggered by `$H/.env`."},
+{"id":"root-toplevel","partition":"git-names","input":{"command":"git -C / rev-parse --show-toplevel"},"expected":"N"},
+{"id":"home-toplevel","partition":"git-names","input":{"command":"git -C $H rev-parse --show-toplevel"},"expected":"N"},
+{"id":"home-config","partition":"git-names","input":{"command":"git -C $H config --get user.name"},"expected":"N"},
+{"id":"root-log","partition":"git-history","input":{"command":"git -C / log -1"},"expected":"N"},
+{"id":"home-show","partition":"git-history","input":{"command":"git -C $H show HEAD --stat"},"expected":"N"},
+{"id":"history-of-env-file","partition":"git-history","input":{"command":"git -C $P log -p -- .env"},"expected":"D","wire_text":"credential_file"},
+{"id":"home-status","partition":"git-walk","input":{"command":"git -C $H status"},"expected":"D","wire_text":"broad_scan"}
+]}

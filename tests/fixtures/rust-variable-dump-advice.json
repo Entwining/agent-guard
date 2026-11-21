@@ -1,0 +1,5 @@
+{"rows":[
+{"id":"names-through-cut","partition":"dump","input":{"command":"env | cut -d= -f1"},"expected":"D","wire_text":"`compgen -e`"},
+{"id":"printenv-all","partition":"dump","input":{"command":"printenv"},"expected":"D","wire_text":"`compgen -e`"},
+{"id":"compgen-names","partition":"names","input":{"command":"compgen -e"},"expected":"UC"}
+]}

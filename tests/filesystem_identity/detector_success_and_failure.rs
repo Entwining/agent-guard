@@ -6,11 +6,16 @@ use cases::*;
 fn lexical_protection_precedes_probe() {
     let fixture = support::Fixture::new();
     let ctx = context(&fixture);
-    for path in [
-        format!("{}/data.txt", fixture.container),
-        format!("{}/.ssh/id_rsa", fixture.home),
-        format!("{}/.env", fixture.project),
-        format!("/System/Volumes/Data{}/data.txt", fixture.container),
+    // A single App Data file is allowed, but its lexical identity still
+    // settles the decision before any probe.
+    for (path, expected) in [
+        (format!("{}/data.txt", fixture.container), "N"),
+        (format!("{}/.ssh/id_rsa", fixture.home), "D"),
+        (format!("{}/.env", fixture.project), "D"),
+        (
+            format!("/System/Volumes/Data{}/data.txt", fixture.container),
+            "N",
+        ),
     ] {
         let body = serde_json::to_vec(&json!({"tool_name":"Read","tool_input":{"file_path":path}}))
             .unwrap();
@@ -23,8 +28,11 @@ fn lexical_protection_precedes_probe() {
             },
             Arm::Brush,
         );
-        assert_eq!(support::class(&result), "D");
-        assert!(probe.calls.is_empty() && probe.stat_calls.is_empty());
+        assert_eq!(support::class(&result), expected, "{path}");
+        assert!(
+            probe.calls.is_empty() && probe.stat_calls.is_empty(),
+            "{path}"
+        );
     }
 }
 
@@ -41,37 +49,19 @@ fn identity_depth_bound_is_not_syntax_or_success() {
             .links
             .insert(format!("{}/loop-b", fixture.project), "loop-a".into());
         let result = check(&fixture, &ctx, &mut probe, arm, "cat loop-a");
-        let Ok(Evaluation {
-            outcome:
-                Outcome::CoverageInsufficient {
-                    recovery: Some(recovery),
-                    ..
-                },
-            ..
-        }) = &result
-        else {
-            panic!("missing identity-bound recovery");
-        };
-        assert!(
-            recovery.excluded_scope.iter().any(|scope| scope
-                == "unresolved resource identity from bounded or cyclic alias traversal")
-        );
-        assert!(
-            render(ctx.consumer, &result)
-                .stderr
-                .contains("ordinary absolute path")
-        );
         assert!(matches!(
             result,
             Ok(Evaluation {
                 outcome: Outcome::CoverageInsufficient {
                     cause: CoverageGap::IdentityBound,
-                    disposition: Disposition::RejectUnsupportedSyntax,
+                    disposition: Disposition::ContinueLimitedPreflight,
                     ..
                 },
                 ..
             })
         ));
+        let wire = render(ctx.consumer, &result);
+        assert_eq!((wire.exit, wire.stderr.as_str()), (0, ""));
         assert_eq!(
             probe
                 .calls

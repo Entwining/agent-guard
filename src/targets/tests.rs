@@ -136,16 +136,7 @@ mod record_tests {
                 .find(|c| c.program.is_some())
                 .unwrap();
             let effects = infer(command, &command.shell_cwd, host);
-            if source == "D=public true" {
-                assert!(effects.targets.is_empty(), "{source}: {effects:?}");
-            } else {
-                assert_eq!(effects.targets.len(), 1, "{source}: {effects:?}");
-                let target = &effects.targets[0];
-                assert_eq!(target.path, command.cwd);
-                assert_eq!(target.effect, Effect::Enter);
-                assert_eq!(target.via, Via::Cwd);
-                assert_eq!(target.walk, Walk::None);
-            }
+            assert!(effects.targets.is_empty(), "{source}: {effects:?}");
             assert!(effects.gaps.is_empty(), "{source}: {effects:?}");
         }
     }

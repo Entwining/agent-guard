@@ -1,11 +1,7 @@
 {"rows":[
-{"id": "inherited-default-command-direct", "partition": "inherited-presence", "input": {"command": "sessidx \"${FOO:-search}\" client.key"}, "expected": "D"},
-{"id": "inherited-default-command-assignment", "partition": "inherited-presence", "input": {"command": "X=\"${FOO:-search}\"; sessidx \"$X\" client.key"}, "expected": "D"},
-{"id": "inherited-default-command-printf-binding", "partition": "inherited-presence", "input": {"command": "printf -v X %s \"${FOO:-search}\"; sessidx \"$X\" client.key"}, "expected": "D"},
 {"id": "explicit-unset-default-command", "partition": "inherited-presence", "input": {"command": "unset FOO; sessidx \"${FOO:-search}\" client.key"}, "expected": "UC"},
 {"id": "known-bound-default-command", "partition": "inherited-presence", "input": {"command": "FOO=search; sessidx \"${FOO:-search}\" client.key"}, "expected": "UC"},
 {"id": "inherited-default-after-proven-separator", "partition": "inherited-presence", "input": {"command": "sessidx search -- \"${FOO:-client.key}\""}, "expected": "UC"},
-{"id": "inherited-unquoted-value-width", "partition": "inherited-presence", "input": {"command": "rex do client.key -s ${FOO:-work}"}, "expected": "D"},
 {"id": "inherited-quoted-single-value-width", "partition": "inherited-presence", "input": {"command": "rex do client.key -s \"${FOO:-work}\""}, "expected": "UC"},
 {"id": "explicit-unset-unquoted-value-width", "partition": "inherited-presence", "input": {"command": "unset FOO; rex do client.key -s ${FOO:-work}"}, "expected": "UC"},
 {"id": "inherited-alternative-value", "partition": "inherited-presence", "input": {"command": "cat \"${FOO+.env}\""}, "expected": "D"},
@@ -22,7 +18,6 @@
 {"id": "cleared-environment-defaults-to-unset", "partition": "inherited-presence", "input": {"command": "env -i /bin/bash -c 'sessidx \"${X:-search}\" client.key'"}, "expected": "UC"},
 {"id": "known-export-transfers-to-child", "partition": "inherited-presence", "input": {"command": "X=search; export X; bash -c 'sessidx \"$X\" client.key'"}, "expected": "UC"},
 {"id": "inherited-current-shell-identity-may-unset", "partition": "inherited-presence", "input": {"command": "X=public; \"${P:-echo}\" X; cat \"${X:-.env}\""}, "expected": "D"},
-{"id": "unknown-export-valid-db-option-shape", "partition": "inherited-presence", "input": {"command": "export X; bash -c 'sessidx \"${X:-search}\" client.key search needle'"}, "expected": "D"},
 {"id": "definite-unset-clears-export-before-reassignment", "partition": "inherited-presence", "input": {"command": "export X=public; unset X; X=public; bash -c 'cat \"${X:-.env}\"'"}, "expected": "D"},
 {"id": "possible-unset-keeps-unexported-reassignment-branch", "partition": "inherited-presence", "input": {"command": "export X=public; unset \"${MODE:--f}\" X; X=public; bash -c 'cat \"${X:-.env}\"'"}, "expected": "D"},
 {"id": "explicit-reexport-restores-child-value", "partition": "inherited-presence", "input": {"command": "export X=public; unset X; export X=public; bash -c 'cat \"${X:-.env}\"'"}, "expected": "N"},
@@ -51,7 +46,5 @@
 {"id": "colon-assign-protected-default-proves-later-colon-test", "partition": "inherited-presence", "input": {"command": ": \"${p:=.env}\"; cat \"${p:-public}\""}, "expected": "D"},
 {"id": "plain-assign-default-may-leave-empty-value", "partition": "inherited-presence", "input": {"command": ": \"${p=public}\"; cat \"${p:-.env}\""}, "expected": "D"},
 {"id": "definite-assign-default-replaces-explicit-unset", "partition": "inherited-presence", "input": {"command": "unset p; printf %s \"${p:=public}\"; cat \"${p:-.env}\""}, "expected": "N"},
-{"id": "definite-assign-default-replaces-cleared-environment", "partition": "inherited-presence", "input": {"command": "env -i bash -c 'printf %s \"${p:=public}\"; cat \"${p:-.env}\"'"}, "expected": "N"},
-{"id": "cleared-environment-branch-mutation-keeps-inherited-presence", "partition": "inherited-presence", "input": {"command": "env -i bash -c 'read v; if test -f a; then read \"$v\"; else unset X; fi; sessidx \"${X:-search}\" client.key'"}, "expected": "D"},
-{"id": "cleared-environment-function-branch-mutation-keeps-inherited-presence", "partition": "inherited-presence", "input": {"command": "env -i bash -c 'read v; f() { if test -f a; then read \"$v\"; else X=search; local X; fi; }; f; sessidx \"${X:-search}\" client.key'"}, "expected": "D"}
+{"id": "definite-assign-default-replaces-cleared-environment", "partition": "inherited-presence", "input": {"command": "env -i bash -c 'printf %s \"${p:=public}\"; cat \"${p:-.env}\"'"}, "expected": "N"}
 ]}

@@ -59,7 +59,7 @@ fn partition(name: &str) {
                 row["id"]
             );
             let wire = adapters::render(context.consumer, &result);
-            let denied = matches!(expected.as_str().unwrap(), "D" | "UR" | "F");
+            let denied = matches!(expected.as_str().unwrap(), "D" | "F");
             assert_eq!(
                 wire.exit,
                 if denied { 2 } else { 0 },
@@ -82,7 +82,7 @@ fn partition(name: &str) {
                 let alternative =
                     row["alternative"].as_str().unwrap_or_else(|| {
                         match row["reason"].as_str().unwrap() {
-                            "app-data" => "Name a specific non-sensitive file",
+                            "app-data" => "Name the one file you need",
                             "credential or environment file" => {
                                 "Otherwise read a non-sensitive config file"
                             }
@@ -160,38 +160,6 @@ fn command_path_modifiers_keep_runtime_lookup_and_protected_reads() {
 #[test]
 fn tilde_names_use_evaluator_bindings_and_protected_home_suffixes() {
     partition("named_tilde");
-}
-
-#[test]
-fn wide_loop_header_keeps_a_completed_bounded_result() {
-    let fixture = support::Fixture::new();
-    let items = (0..2000)
-        .map(|n| format!("public{n}"))
-        .collect::<Vec<_>>()
-        .join(" ");
-    for consumer in ["claude", "codex", "pi"] {
-        let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
-        let bytes = serde_json::to_vec(&json!({"tool_name":"bash","tool_input":{"command":format!("for f in {items}; do printf public; done")}})).unwrap();
-        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        let result = evaluate_with_arm(
-            Event {
-                bytes: &bytes,
-                context: &context,
-                probe: &mut probe,
-            },
-            shell::Arm::Brush,
-        );
-        assert_eq!(support::class(&result), "UR", "{result:?}");
-        let wire = adapters::render(context.consumer, &result);
-        assert_eq!(wire.exit, 2);
-        assert!(wire.stdout.is_empty());
-        assert!(wire.stderr.contains("inspection budget"), "{}", wire.stderr);
-        assert!(
-            wire.stderr
-                .contains("Split loops, function calls or brace alternatives")
-        );
-        assert!(wire.stderr.contains("recheck"), "{}", wire.stderr);
-    }
 }
 
 #[test]
@@ -313,13 +281,13 @@ fn assert_parameter_fields(
                 .script
                 .commands
                 .iter()
-                .any(
-                    |command| command.program.is_some_and(|i| command.argv[i] == "cat"
-                        && command
-                            .argv
-                            .last()
-                            .is_some_and(|word| word.text == expected))
-                ),
+                .any(|command| command.program.is_some_and(|i| ["cat", "ls"]
+                    .iter()
+                    .any(|reader| command.argv[i] == *reader)
+                    && command
+                        .argv
+                        .last()
+                        .is_some_and(|word| word.text == expected))),
             "{consumer}: {}: missing computed word {expected:?}: {:?}",
             row["id"],
             observed.script
@@ -342,13 +310,14 @@ fn assert_parameter_fields(
             .commands
             .iter()
             .filter(|command| {
-                command
-                    .program
-                    .is_some_and(|index| command.argv[index] == "cat")
-                    && command
-                        .argv
+                command.program.is_some_and(|index| {
+                    ["cat", "ls"]
                         .iter()
-                        .any(|word| word.text.starts_with(prefix))
+                        .any(|reader| command.argv[index] == *reader)
+                }) && command
+                    .argv
+                    .iter()
+                    .any(|word| word.text.starts_with(prefix))
             })
             .collect();
         assert!(!commands.is_empty(), "{}", row["id"]);

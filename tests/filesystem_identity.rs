@@ -1,3 +1,5 @@
+#[path = "filesystem_identity/app_data_named_files_are_readable_except_secrets.rs"]
+pub mod app_data_named_files_are_readable_except_secrets;
 #[path = "filesystem_identity/cargo_home_is_the_only_cargo_store.rs"]
 pub mod cargo_home_is_the_only_cargo_store;
 #[path = "filesystem_identity/credential_globs_and_roots_follow_the_lexical_owner.rs"]

@@ -48,40 +48,6 @@
     "expected": "N"
   },
   {
-    "id": "ansi-active-qualifier",
-    "owner": "divergence_closing",
-    "source": "printf %s *(e:printf $'it\\'s':)",
-    "expected": "UR"
-  },
-  {
-    "id": "ansi-heredoc-literal",
-    "owner": "divergence_heredoc",
-    "source": "cat <<$'EOF'\n${(f)v}\nEOF",
-    "expected": "UR",
-    "divergent": false
-  },
-  {
-    "id": "gettext-heredoc-literal",
-    "owner": "divergence_heredoc",
-    "source": "cat <<$\"EOF\"\n${(f)v}\nEOF",
-    "expected": "UR",
-    "divergent": false
-  },
-  {
-    "id": "ansi-heredoc-escaped-delimiter",
-    "owner": "divergence_heredoc",
-    "source": "cat <<$'E\\'OF'\n${(f)v}\nE'OF",
-    "expected": "UR",
-    "divergent": false
-  },
-  {
-    "id": "ansi-heredoc-active-tail",
-    "owner": "divergence_heredoc",
-    "source": "cat <<$'EOF'\n${(f)v}\nEOF\nprintf %s \"${(f)v}\"",
-    "expected": "UR",
-    "divergent": true
-  },
-  {
     "id": "list-docker",
     "owner": "credential_effect",
     "source": "ls -R ~/.docker",

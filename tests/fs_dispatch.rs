@@ -264,7 +264,7 @@ fn assert_dispatch_contract(
     let wire = adapters::render(context.consumer, result);
     assert_eq!(
         wire.exit,
-        if matches!(row["expected"].as_str(), Some("D" | "UR" | "F")) {
+        if matches!(row["expected"].as_str(), Some("D" | "F")) {
             2
         } else {
             0

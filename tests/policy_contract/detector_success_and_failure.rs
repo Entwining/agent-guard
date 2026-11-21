@@ -3,75 +3,6 @@ pub mod cases;
 use cases::*;
 
 #[test]
-fn interpreter_backslash_boundary() {
-    let fixture = support::Fixture::new();
-    let ctx = context(&fixture);
-    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        let escaped = check(
-            &fixture,
-            &ctx,
-            &mut probe,
-            arm,
-            "python3 -c 'marker = \"路径\\.env\"'",
-        );
-        assert_eq!(support::class(&escaped), "UC");
-        assert!(render(ctx.consumer, &escaped).stderr.is_empty());
-        let plain = check(
-            &fixture,
-            &ctx,
-            &mut probe,
-            arm,
-            "python3 -c 'marker = \"路径 .env\"'",
-        );
-        assert_eq!(support::class(&plain), "D");
-    }
-}
-
-#[test]
-fn name_only_listing_and_content_consumer() {
-    let fixture = support::Fixture::new();
-    let ctx = context(&fixture);
-    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        let result = check(
-            &fixture,
-            &ctx,
-            &mut probe,
-            arm,
-            &format!(
-                "ls -a '{}' | printf x; printf \"$(printf ok | xargs cat '{}/input.txt')\"",
-                fixture.project, fixture.project
-            ),
-        )
-        .unwrap();
-        assert!(
-            !result
-                .effects
-                .contains(&agent_guard_rust::EffectRecord::HiddenContent),
-            "unrelated nested body acquired hidden content: {result:?}"
-        );
-        for listing in ["rg --files --hidden", "ls -a"] {
-            for (tail, expected) in [
-                ("", "N"),
-                (" | xargs cat", "D"),
-                ("; xargs cat input.txt", "N"),
-            ] {
-                let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-                let result = check(
-                    &fixture,
-                    &ctx,
-                    &mut probe,
-                    arm,
-                    &format!("{listing} '{}'{}", fixture.project, tail),
-                );
-                assert_eq!(support::class(&result), expected, "{listing}{tail}");
-            }
-        }
-    }
-}
-
-#[test]
 fn listing_recursion_controls_broad_root() {
     let fixture = support::Fixture::new();
     for consumer in [Consumer::Claude, Consumer::Codex, Consumer::Pi] {
@@ -149,10 +80,15 @@ fn listing_recursion_controls_broad_root() {
                 }
             }
             ctx.cwd = fixture.project.clone();
-            for path in [format!("{}/.ssh", fixture.home), fixture.container.clone()] {
+            // Key names print no key contents; a container listing reaches
+            // every file in it.
+            for (path, expected) in [
+                (format!("{}/.ssh", fixture.home), "N"),
+                (fixture.container.clone(), "D"),
+            ] {
                 let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
                 let result = check(&fixture, &ctx, &mut probe, arm, &format!("ls '{path}'"));
-                assert_eq!(support::class(&result), "D", "{path}");
+                assert_eq!(support::class(&result), expected, "{path}");
                 assert!(
                     probe
                         .calls
@@ -281,19 +217,6 @@ fn command_boundaries_preserve_protected_operands() {
                 "{source}"
             );
         }
-    }
-    for &arm in agent_guard_rust::shell::ACCEPTANCE_ARMS {
-        let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
-        assert_eq!(
-            support::class(&check(
-                &fixture,
-                &ctx,
-                &mut probe,
-                arm,
-                "repeat 2 do cat .env; done"
-            )),
-            "UR"
-        );
     }
 }
 

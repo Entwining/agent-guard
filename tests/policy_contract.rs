@@ -1,9 +1,7 @@
-#[path = "policy_contract/brace_alternatives_past_the_bound_refuse.rs"]
-pub mod brace_alternatives_past_the_bound_refuse;
+#[path = "policy_contract/brace_alternatives_past_the_bound_end_inspection.rs"]
+pub mod brace_alternatives_past_the_bound_end_inspection;
 #[path = "policy_contract/bracket_classes_match_either_case.rs"]
 pub mod bracket_classes_match_either_case;
-#[path = "policy_contract/codefile_home_prefixes_reach_appdata_owner.rs"]
-pub mod codefile_home_prefixes_reach_appdata_owner;
 #[path = "policy_contract/credential_globs_and_roots_follow_the_lexical_owner.rs"]
 pub mod credential_globs_and_roots_follow_the_lexical_owner;
 #[path = "policy_contract/credential_pipes_reach_only_stdin_clients.rs"]
@@ -18,12 +16,10 @@ pub mod differential;
 pub mod environment_templates_keep_the_example_exemption;
 #[path = "policy_contract/full_case_folding_reaches_protected_names.rs"]
 pub mod full_case_folding_reaches_protected_names;
-#[path = "policy_contract/inline_mentions_follow_the_source_syntax.rs"]
-pub mod inline_mentions_follow_the_source_syntax;
 #[path = "policy_contract/literal_for_lists_execute_each_value_exactly.rs"]
 pub mod literal_for_lists_execute_each_value_exactly;
-#[path = "policy_contract/nested_parameter_flags_refuse_without_checker_faults.rs"]
-pub mod nested_parameter_flags_refuse_without_checker_faults;
+#[path = "policy_contract/probe_faults_outrank_observed_denials.rs"]
+pub mod probe_faults_outrank_observed_denials;
 #[path = "support/batch6.rs"]
 pub mod program_contract;
 #[path = "policy_contract/search_globs_keep_their_directories.rs"]

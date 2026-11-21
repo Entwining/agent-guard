@@ -44,14 +44,7 @@ fn partition(name: &str) {
                 );
             }
             let wire = adapters::render(context.consumer, &result);
-            assert_eq!(
-                wire.exit,
-                if row["expected"] == "D" || row["expected"] == "UR" {
-                    2
-                } else {
-                    0
-                }
-            );
+            assert_eq!(wire.exit, if row["expected"] == "D" { 2 } else { 0 });
             assert!(wire.stdout.is_empty());
             if row["expected"] == "D" {
                 assert!(!wire.stderr.is_empty());

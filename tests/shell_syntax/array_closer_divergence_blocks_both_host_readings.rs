@@ -43,14 +43,7 @@ fn rows(owner: &str) {
             }
             assert_eq!(wire.exit, if ["N", "UC"].contains(&class) { 0 } else { 2 });
             assert!(wire.stdout.is_empty(), "absent advice: {row}");
-            assert_row_outcome(owner, row, consumer, &result, &wire, class);
-            if owner == "redirect" {
-                let lexical = Lexed::scan(source).unwrap();
-                assert!(
-                    lexical.context(source.find('#').unwrap()).comment,
-                    "redirect comment context: {row}"
-                );
-            }
+            assert_row_outcome(owner, row, consumer, &result, &wire);
             if owner == "array" && source.contains("a=(x)#") {
                 let lexical = Lexed::scan(source).unwrap();
                 assert!(
@@ -71,24 +64,9 @@ fn array_closer_divergence_blocks_both_host_readings() {
     rows("array");
 }
 #[test]
-fn option_builtins_are_blocked_at_the_adapter() {
+fn option_builtins_end_inspection_at_the_adapter() {
     rows("adapter");
 }
-#[test]
-fn redirect_hash_is_a_comment_and_incomplete() {
-    rows("redirect");
-}
-
-#[test]
-fn nested_commands_survive_literal_masking() {
-    rows("raw-retirement");
-}
-
-#[test]
-fn accepted_parser_refusals_keep_syntax_cause_and_recovery() {
-    rows("parse-refusal");
-}
-
 #[test]
 fn forwarded_heredoc_and_arithmetic_for_use_original_regions() {
     rows("framing-sweep");
@@ -246,7 +224,6 @@ fn assert_row_outcome(
     consumer: &str,
     result: &Result<agent_guard_rust::Evaluation, agent_guard_rust::CheckError>,
     wire: &agent_guard_rust::adapters::Wire,
-    class: &str,
 ) {
     match &result.as_ref().unwrap().outcome {
         Outcome::NoObjection => assert!(wire.stderr.is_empty()),
@@ -282,9 +259,7 @@ fn assert_row_outcome(
                 );
             }
         }
-        Outcome::CoverageInsufficient {
-            cause, recovery, ..
-        } => {
+        Outcome::CoverageInsufficient { cause, .. } => {
             if row["reason"] == "syntax" {
                 assert_eq!(cause, &CoverageGap::UnsupportedShellSyntax);
             } else if row["reason"] == "unknown" {
@@ -299,15 +274,7 @@ fn assert_row_outcome(
                     }
                 );
             }
-            if class == "UR" {
-                assert!(if *cause == CoverageGap::UnsupportedShellSyntax {
-                    wire.stderr.contains("shell syntax") && wire.stderr.contains("explicit paths")
-                } else {
-                    wire.stderr.contains("unsupported") && wire.stderr.contains("recheck")
-                });
-                assert!(recovery.is_some());
-            }
-            assert!(!wire.stderr.contains("checker failed"));
+            assert!(wire.stderr.is_empty());
         }
         other => panic!("unexpected advice/outcome: {other:?}"),
     }

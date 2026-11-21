@@ -57,14 +57,7 @@ fn regressions(owner: &str) {
                 "{consumer}: {row}"
             );
             let wire = agent_guard_rust::adapters::render(context.consumer, &result);
-            assert_eq!(
-                wire.exit,
-                if matches!(row["expected"].as_str(), Some("D" | "UR")) {
-                    2
-                } else {
-                    0
-                }
-            );
+            assert_eq!(wire.exit, if row["expected"] == "D" { 2 } else { 0 });
             assert!(wire.stdout.is_empty(), "no advice expected: {row}");
             if row["expected"] == "D" {
                 let Outcome::ProtectedDenial { reason, recovery } =
@@ -95,14 +88,6 @@ fn ansi_member_preserves_brace_reach() {
 #[test]
 fn ansi_literal_is_inert_to_divergence() {
     regressions("divergence_literal");
-}
-#[test]
-fn ansi_qualifier_keeps_parenthesis_pairing() {
-    regressions("divergence_closing");
-}
-#[test]
-fn quoted_heredoc_body_is_inert_to_divergence() {
-    regressions("divergence_heredoc");
 }
 #[test]
 fn credential_directory_walk_requires_read() {

@@ -208,8 +208,7 @@ const MK: Launcher = Launcher {
 // split --help`, `rex new --help` and `rex window new --help`, with the global
 // options. pflag booleans take a value only as `--flag=VALUE`. Rex passes the
 // command's argv unchanged, through the login shell or directly. The forms
-// without a command fall back to `REX` in `src/targets/programs/readers.rs`,
-// which lists the same options.
+// without a command run nothing the guard models.
 const REX: Launcher = Launcher {
     command: &["rex", "run"],
     grammar: Grammar {

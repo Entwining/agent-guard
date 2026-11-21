@@ -20,9 +20,7 @@ pub(super) fn infer_search(
     if pathless {
         operands.push(Word::literal(cwd.to_owned()));
     }
-    effects.hidden_listing = names && hidden;
     let hidden_walk = recursive || matches!(program, "rg" | "ag") && hidden;
-    effects.hidden_content = hidden && !names && !hidden_walk;
     let walk = if hidden_walk && !names {
         Walk::Hidden
     } else if program != "grep" || hidden {

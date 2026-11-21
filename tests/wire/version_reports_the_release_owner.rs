@@ -167,7 +167,7 @@ fn native_protocol_checks_codex_shell_and_rejects_other_raw_envelopes() {
         ("claude", r#"{"tool_name":"Outside","tool_input":null}"#, 2),
         (
             "codex",
-            r#"{"tool_name":"exec_command","tool_input":{"cmd":"("}}"#,
+            r#"{"tool_name":"exec_command","tool_input":{"cmd":"cat .env"}}"#,
             2,
         ),
     ] {

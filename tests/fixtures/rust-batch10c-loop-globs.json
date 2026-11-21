@@ -14,7 +14,5 @@
  {"id":"ssh-key-loop-cd","partition":"cwd","expected":"D","input":{"command":"for d in ~/.ssh/*/; do (cd \"$d\" && cat id_ed25519); done"}},
  {"id":"unused-relative-glob-cwd","partition":"cwd","expected":"N","input":{"command":"for d in */; do cd /tmp; ls; done"}},
  {"id":"isolated-relative-glob-and-fixed-cwd","partition":"cwd","expected":"N","input":{"command":"for d in */; do (cd \"$d\"; ls); cd /tmp; ls; done"}},
- {"id":"conditional-carried-relative-glob-cwd","partition":"cwd","expected":"UR","input":{"command":"for d in public*/; do if printf public; then cd \"$d\"; fi; ls; done"}},
- {"id":"logical-carried-relative-glob-cwd","partition":"cwd","expected":"UR","input":{"command":"for d in public*/; do printf public && cd \"$d\"; ls; done"}},
  {"id":"public-loop-text","partition":"public","expected":"N","input":{"command":"for f in ~/project/*.txt; do cat \"$f\"; done"}}
 ]}

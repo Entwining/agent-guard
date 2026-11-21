@@ -166,29 +166,14 @@ pub(super) fn broad_prepared(
     Ok(false)
 }
 
-/// Which names a pattern's wildcards reach below its fixed directories.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Reach {
-    /// Wildcards skip dot names.
-    Visible,
-    /// Wildcards match dot names, and a generic file name identifies a
-    /// credential only where the pattern spells its directory.
-    Hidden,
-    /// `**` also descends through every hidden directory, as a hidden walk
-    /// narrowed by name filters does, so a generic file name identifies a
-    /// credential at any depth.
-    Walk,
-}
-
 pub(super) fn lexical_candidate(
     path: &str,
     domain: &lexical_state::Domain,
     locations: &[Location],
     patterned: bool,
-    reach: Reach,
+    hidden: bool,
     matcher: &mut glob::Matcher,
 ) -> Option<Protection> {
-    let hidden = reach != Reach::Visible;
     let stores = || domain.stores.iter().chain(locations);
     // Quoting and brace expansion escape literal text, which root, directory
     // and filename comparisons need as the matcher reads it.
@@ -203,9 +188,12 @@ pub(super) fn lexical_candidate(
     let spelling = spelling.as_ref();
     let state = lexical_state::LiteralState::path(spelling, &domain.library_parts);
     if !patterned {
-        return state.protection().or_else(|| {
-            stores::holds(stores(), &super::fold(spelling)).then_some(Protection::Credential)
-        });
+        return state
+            .secret()
+            .or_else(|| {
+                stores::holds(stores(), &super::fold(spelling)).then_some(Protection::Credential)
+            })
+            .or(state.appdata.then_some(Protection::AppData));
     }
     let path = glob::fold_pattern(spelling);
     let parts: Vec<_> = path.split('/').collect();
@@ -262,20 +250,13 @@ pub(super) fn lexical_candidate(
             continue;
         }
         let last = tail[tail.len() - 1];
-        if if reach == Reach::Walk {
-            // A walk reads each file under its stored name, so selecting the
-            // listed name is enough; a variant that the entry's trailing `*`
-            // covers still needs a pattern that identifies it.
-            (glob::visible_intersects(base, last.trim_end_matches('*'), true)
-                || identifies(base, listed, hidden, matcher))
-                && (tail.len() == 1
-                    || spells_listed_directory(&parts[..parts.len() - 1], listed, reach, matcher))
-        } else if tail.len() > 1 {
+        let named = if tail.len() > 1 {
             glob::visible_intersects(base, last, hidden)
-                && spells_listed_directory(&parts[..parts.len() - 1], listed, reach, matcher)
+                && spells_listed_directory(&parts[..parts.len() - 1], listed, hidden, matcher)
         } else {
             identifies(base, listed, hidden, matcher)
-        } {
+        };
+        if named {
             return Some(Protection::Credential);
         }
     }
@@ -289,10 +270,13 @@ fn identifies(
     matcher: &mut glob::Matcher,
 ) -> bool {
     let last = listed.tail[listed.tail.len() - 1];
-    // A witness fills a trailing `*` with text, which `*auth.json` misses
-    // although it selects `auth.json` itself.
-    matcher.visible_component(base, &listed.witnesses[listed.tail.len() - 1], hidden)
-        || matcher.identifies_component(base, last) && glob::visible_intersects(base, last, hidden)
+    // A filter that only shares a suffix, as `*.json*` does with
+    // `auth.json*`, does not name the credential file. A witness fills a
+    // trailing `*` with text, which `*auth.json` misses although it selects
+    // `auth.json` itself.
+    matcher.identifies_component(base, last)
+        && (matcher.visible_component(base, &listed.witnesses[listed.tail.len() - 1], hidden)
+            || glob::visible_intersects(base, last, hidden))
 }
 
 fn selects_environment(
@@ -315,8 +299,7 @@ fn selects_environment(
 }
 
 /// Whether pattern directories can end in a catalog entry's directories, with
-/// `**` spanning any number of them, while a component spells one of them or
-/// a walk's `**` passes through them.
+/// `**` spanning any number of them, while a component spells one of them.
 /// Generic names such as `config.json` identify a credential only with their
 /// directory: a positive search glob only narrows its root, so
 /// `*/config.json` reaches nothing the root alone does not. A dot-leading
@@ -324,10 +307,9 @@ fn selects_environment(
 fn spells_listed_directory(
     pattern: &[&str],
     entry: &lexical_state::Sensitive,
-    reach: Reach,
+    hidden: bool,
     matcher: &mut glob::Matcher,
 ) -> bool {
-    let hidden = reach != Reach::Visible;
     // States are unmatched pattern and entry components, matched from the
     // end, and whether a component spelled a directory so far. Components
     // left before the match fall under the entry's leading `**/`.
@@ -351,7 +333,7 @@ fn spells_listed_directory(
         if part == "**" {
             pending.push((unmatched - 1, remaining, spelled));
             if hidden || !protected.starts_with('.') {
-                pending.push((unmatched, remaining - 1, spelled || reach == Reach::Walk));
+                pending.push((unmatched, remaining - 1, spelled));
             }
         } else if matcher.visible_component(part, &entry.witnesses[remaining - 1], hidden) {
             let spells = protected.starts_with('.') && part.starts_with('.')

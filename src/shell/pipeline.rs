@@ -1,4 +1,4 @@
-use crate::record::{Command, FindRun, Items, Listed, Word};
+use crate::record::{Command, Items, Listed, WalkRun, Word};
 
 pub(super) struct InputSource {
     pub source: String,
@@ -250,57 +250,28 @@ pub(super) fn xargs_here_input(command: &Command, body: &str) -> Vec<InputSource
     )
 }
 
-fn hidden_name(text: &str) -> bool {
-    let name = text.trim_end_matches('/').rsplit('/').next().unwrap_or("");
-    name.starts_with('.') && name != "." && name != ".."
-}
-
+/// Hands the names that find or fd prints to an xargs consumer, whose reads
+/// are then bounded by their name filters.
 pub(super) fn mark_walked_input(left: &[Command], right: &mut [Command]) {
     let walkers: Vec<_> = left
         .iter()
-        .filter(|c| {
-            let Some(index) = c.program else {
-                return false;
-            };
-            let args = &c.argv[index + 1..];
-            name(c) == Some("find")
-                || name(c) == Some("fd") && crate::targets::shows_hidden(args)
-                || args.iter().any(|w| match name(c) {
-                    Some("ls") => {
-                        ["--all", "--almost-all"].contains(&w.as_str())
-                            || w.starts_with('-')
-                                && !w.starts_with("--")
-                                && w[1..].chars().all(|ch| ch.is_ascii_alphanumeric())
-                                && w.contains(['a', 'A'])
-                            || !w.starts_with('-') && hidden_name(w)
-                    }
-                    Some("echo" | "printf") => !w.starts_with('-') && w.globs && hidden_name(w),
-                    _ => false,
-                })
+        .filter_map(|c| {
+            let program = name(c).filter(|name| matches!(*name, "find" | "fd"))?;
+            Some(WalkRun {
+                program: program.to_owned(),
+                cwd: c.cwd.clone(),
+                args: c.argv[c.program? + 1..].to_vec(),
+            })
         })
         .collect();
-    let Some(walker) = walkers.first() else {
+    let Some(root) = walkers.first().map(|walker| walker.cwd.clone()) else {
         return;
     };
-    // Every walker hands its names to the same consumer, so an expression
-    // can bound them only when each walker is a find.
-    let listed = if walkers.iter().all(|c| name(c) == Some("find")) {
-        Listed::Find(
-            walkers
-                .iter()
-                .map(|c| FindRun {
-                    cwd: c.cwd.clone(),
-                    args: c.argv[c.program.unwrap_or(0) + 1..].to_vec(),
-                })
-                .collect(),
-        )
-    } else {
-        Listed::Hidden
-    };
+    let listed = Listed::Walks(walkers);
     for command in right {
         if command.wrappers.iter().any(|w| w == "xargs") {
             command.items = Some(Items {
-                root: walker.cwd.clone(),
+                root: root.clone(),
                 listed: listed.clone(),
             });
         }

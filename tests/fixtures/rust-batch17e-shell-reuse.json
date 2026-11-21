@@ -30,7 +30,7 @@
       "id": "cached-substitution-cwd",
       "partition": "reuse",
       "input": {
-        "command": "for dir in \"$P\" \"$H/Library/Containers\"; do (cd \"$dir\"; value=$(cat file)); done"
+        "command": "for dir in \"$P\" \"$H/Library/Containers\"; do (cd \"$dir\"; value=$(ls file)); done"
       },
       "expected": "D",
       "wire_reason": "App Data"
@@ -103,14 +103,6 @@
       },
       "expected": "D",
       "wire_reason": "credential"
-    },
-    {
-      "id": "recursive-function-keeps-bound",
-      "partition": "reuse",
-      "input": {
-        "command": "inspect() { inspect; }; for k in $(printf public); do inspect; done"
-      },
-      "expected": "UR"
     },
     {
       "id": "literal-pipeline-code-candidates",

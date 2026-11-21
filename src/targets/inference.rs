@@ -31,14 +31,6 @@ pub(super) fn infer_at(
         }
         return effects;
     }
-    // A program the shell does not fix proves no owner's roles, and neither
-    // does a wrapper word its grammar cannot place.
-    let unproven = command.unproven.or(command
-        .program
-        .filter(|index| command.argv[*index].exact().is_none()));
-    if let Some(start) = unproven {
-        infer_unproven(&command.argv[start..], cwd, host, &mut effects);
-    }
     if command.program.is_none() {
         infer_unselected(command, cwd, host, &mut effects);
         return effects;
@@ -70,7 +62,6 @@ pub(super) fn infer_at(
     infer_inputs(program, command, cwd, host, &mut effects);
     let hidden_items_read = infer_items(program, command, host, &mut effects);
     let consumer = effects.targets.len();
-    infer_xargs(program, command, &mut effects);
     secrets::infer(program, args, &mut effects);
     if let Some(operands) = programs::infer(program, args, command, cwd, host, &mut effects, depth)
     {
@@ -79,24 +70,21 @@ pub(super) fn infer_at(
     if let Some(start) = effects.unproven {
         infer_unproven(&args[start..], cwd, host, &mut effects);
     }
-    match hidden_items_read {
-        Some(Some((walks, files))) => {
-            let walks = listing::handed(walks, &effects.targets[consumer..], files);
-            // The consumer reads its items only through these walks.
-            if let Some(items) = effects.targets[..consumer]
+    if let Some((walks, files, bounded)) = hidden_items_read {
+        let walks = listing::handed(walks, &effects.targets[consumer..], files);
+        // The consumer reads its items only through these walks.
+        if bounded
+            && let Some(items) = effects.targets[..consumer]
                 .iter_mut()
                 .find(|target| target.via == Via::Items)
-            {
-                items.bounds = walks
-                    .iter()
-                    .map(|walk| walk.bounds.clone())
-                    .collect::<Option<Vec<_>>>()
-                    .map(|bounds| bounds.concat());
-            }
-            effects.targets.extend(walks);
+        {
+            items.bounds = walks
+                .iter()
+                .map(|walk| walk.bounds.clone())
+                .collect::<Option<Vec<_>>>()
+                .map(|bounds| bounds.concat());
         }
-        Some(None) => effects.hidden_content = true,
-        None => {}
+        effects.targets.extend(walks);
     }
     infer_completion(program, args, command, &mut effects);
     infer_cwd(cwd_program, cwd, &mut effects);
@@ -230,35 +218,31 @@ fn infer_inputs(
     }
     let args = &command.argv[index + 1..];
     match &command.stdin {
-        crate::record::Stdin::Code => effects.inline.extend(
-            command
+        crate::record::Stdin::Code => {
+            effects.inline |= command
                 .redirects
                 .iter()
-                .filter(|r| matches!(r.direction, Direction::Heredoc | Direction::Herestring))
-                .map(|r| InlineCode::interpreter(r.target.clone(), program, args)),
-        ),
+                .any(|r| matches!(r.direction, Direction::Heredoc | Direction::Herestring));
+        }
         crate::record::Stdin::InterpreterStream(texts)
             if reads_program_from_stdin(program, args) =>
         {
-            effects.inline.extend(
-                texts
-                    .iter()
-                    .map(|text| InlineCode::interpreter(text.clone(), program, args)),
-            );
+            effects.inline |= !texts.is_empty();
         }
         _ => {}
     }
 }
 
-/// The hidden walk an item consumer reads through: `None` when it reads
-/// none, `Some(None)` when the walk may hand it any name, and otherwise the
-/// walks narrowed to the names the producers' bounds allow.
+/// The walks through which an item consumer reads the hidden names its
+/// producers print, narrowed to the names their filters bound; whether those
+/// producers print only regular files; and whether every producer is bounded,
+/// so that the walks are all it reads. `None` when it reads no hidden name.
 fn infer_items(
     program: &str,
     command: &CommandRecord,
     host: HostFacts<'_>,
     effects: &mut Effects,
-) -> Option<Option<(Vec<Target>, bool)>> {
+) -> Option<(Vec<Target>, bool, bool)> {
     if let Some(items) = &command.items {
         let effect = match program {
             "echo" | "printf" | "print" | ":" | "true" | "false" | "export" | "set" | "unset"
@@ -269,39 +253,43 @@ fn infer_items(
             | "dirname" => Effect::Meta,
             "ls" | "tree" | "du" | "find" | "fd" => Effect::List,
             "pushd" | "popd" => Effect::Enter,
+            // Only a modelled program's operands are files it reads, as for
+            // the operands written on its command line.
             _ => clients::operand(program, &command.argv[command.program.unwrap_or(0) + 1..])
-                .unwrap_or(Effect::Read),
+                .unwrap_or(if modelled_program(program) {
+                    Effect::Read
+                } else {
+                    Effect::Name
+                }),
         };
-        let walk = if items.listed == Listed::Visible {
-            Walk::Visible
-        } else {
-            Walk::Hidden
+        let printed: Vec<_> = match &items.listed {
+            Listed::Visible => Vec::new(),
+            Listed::Walks(runs) => runs.iter().map(|run| printed_walks(run, host)).collect(),
         };
+        let hidden = printed
+            .iter()
+            .any(|printed| !matches!(printed, Printed::NoHidden));
+        let walk = if hidden { Walk::Hidden } else { Walk::Visible };
         effects
             .targets
             .push(Target::new(items.root.clone(), effect, walk, Via::Items));
-        (effect == Effect::Read && walk == Walk::Hidden).then(|| match &items.listed {
-            Listed::Find(runs) => runs
-                .iter()
-                .map(|run| find_printed_walks(run, host, effects))
-                .collect::<Option<Vec<_>>>()
-                .map(|runs| {
-                    let files = runs.iter().all(|(_, files)| *files);
-                    (
-                        runs.into_iter().flat_map(|(walks, _)| walks).collect(),
-                        files,
-                    )
-                }),
-            _ => None,
-        })
+        if effect != Effect::Read || !hidden {
+            return None;
+        }
+        let bounded = printed
+            .iter()
+            .all(|printed| matches!(printed, Printed::Bounded(..)));
+        let mut walks = Vec::new();
+        let mut files = true;
+        for printed in printed {
+            if let Printed::Bounded(narrowed, regular) = printed {
+                walks.extend(narrowed);
+                files &= regular;
+            }
+        }
+        Some((walks, files, bounded))
     } else {
         None
-    }
-}
-
-fn infer_xargs(program: &str, command: &CommandRecord, effects: &mut Effects) {
-    if command.wrappers.iter().any(|w| w == "xargs") {
-        effects.consumes_listing = xargs_content_consumer(program);
     }
 }
 
@@ -379,10 +367,6 @@ fn infer_completion(program: &str, args: &[Word], command: &CommandRecord, effec
     {
         effects.gaps.push(CoverageGap::UnsupportedShellSyntax);
     }
-    effects.dump |= effects
-        .inline
-        .iter()
-        .any(|code| printenv_signature(&code.text));
     let display = READERS
         .split_whitespace()
         .chain(["echo", "printf", "print"])
@@ -399,8 +383,8 @@ fn infer_completion(program: &str, args: &[Word], command: &CommandRecord, effec
 }
 
 fn infer_cwd(cwd_program: &str, cwd: &str, effects: &mut Effects) {
-    // Unknown programs also enter the command cwd; identifying their readable
-    // arguments does not model the rest of their behavior.
+    // A modelled program that names no target works in the command cwd; what
+    // an unknown program does there only the program decides.
     let named = effects.targets.iter().any(|target| {
         matches!(target.via, Via::Operand | Via::Cwd | Via::Scan)
             && !matches!(target.effect, Effect::Enter | Effect::Name)
@@ -409,7 +393,8 @@ fn infer_cwd(cwd_program: &str, cwd: &str, effects: &mut Effects) {
         .split_whitespace()
         .any(|name| name == cwd_program)
         && !["cd", "pushd", "popd"].contains(&cwd_program)
-        && (!named || !modelled_program(cwd_program))
+        && !named
+        && modelled_program(cwd_program)
     {
         effects.targets.push(Target::new(
             cwd.to_owned(),

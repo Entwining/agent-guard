@@ -247,8 +247,8 @@ impl<'a, 'b> Evaluator<'a, 'b> {
             self.output.gap(CoverageGap::UnsupportedShellSyntax);
         }
         let mut inner = scope.isolated();
-        // Body inspection must not publish nested definitions or create
-        // an isolated-shell refusal for an ordinary function frame.
+        // Body inspection must not publish nested definitions or record an
+        // isolated-shell gap for an ordinary function frame.
         inner.isolated = scope.isolated;
         inner.defining = true;
         inner.captured = false;

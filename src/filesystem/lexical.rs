@@ -1,7 +1,7 @@
 mod stores;
 
 use super::stores::Location;
-use super::{CheckError, Protection, Reach, glob};
+use super::{CheckError, Protection, glob};
 use crate::record::ConfigDir;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -65,7 +65,7 @@ pub(super) struct Domain {
     pub broad_witnesses: Vec<String>,
     pub stores: Vec<Location>,
     paths: BTreeMap<String, PathResults>,
-    candidates: BTreeMap<String, [Option<Option<Protection>>; 6]>,
+    candidates: BTreeMap<String, [Option<Option<Protection>>; 4]>,
 }
 
 pub(super) struct Root {
@@ -126,7 +126,7 @@ pub(super) struct Lexical {
 #[derive(Default)]
 struct PathResults {
     // Outer None means unobserved; Some(None) is a cached public spelling.
-    protected: [Option<Option<Protection>>; 6],
+    protected: [Option<Option<Protection>>; 4],
     broad: [Option<bool>; 2],
 }
 
@@ -160,6 +160,12 @@ impl Lexical {
         LiteralWalk::new(home_parts, resolved_parts)
     }
 
+    /// Whether a literal path lies in another app's container.
+    pub fn appdata(&mut self, path: &str, home: &str) -> bool {
+        self.prepare(home);
+        LiteralState::path(path, &self.domains[home].library_parts).appdata
+    }
+
     pub fn check(
         &mut self,
         path: &str,
@@ -167,27 +173,8 @@ impl Lexical {
         patterned: bool,
         hidden: bool,
     ) -> Result<Option<Protection>, CheckError> {
-        self.check_reach(
-            path,
-            home,
-            patterned,
-            if hidden {
-                Reach::Hidden
-            } else {
-                Reach::Visible
-            },
-        )
-    }
-
-    pub fn check_reach(
-        &mut self,
-        path: &str,
-        home: &str,
-        patterned: bool,
-        reach: Reach,
-    ) -> Result<Option<Protection>, CheckError> {
         crate::check_deadline(self.deadline)?;
-        let mode = usize::from(patterned) * 3 + reach as usize;
+        let mode = usize::from(patterned) * 2 + usize::from(hidden);
         if let Some(result) = self
             .domains
             .get(home)
@@ -208,7 +195,7 @@ impl Lexical {
         for candidate in glob::alternatives(path, patterned)? {
             crate::check_deadline(self.deadline)?;
             let candidate_patterned = patterned || candidate != path;
-            let mode = usize::from(candidate_patterned) * 3 + reach as usize;
+            let mode = usize::from(candidate_patterned) * 2 + usize::from(hidden);
             let kind = if let Some(result) = domain
                 .candidates
                 .get(candidate.as_str())
@@ -226,13 +213,13 @@ impl Lexical {
                     domain,
                     &self.locations,
                     candidate_patterned,
-                    reach,
+                    hidden,
                     &mut self.matcher,
                 );
                 if let Some(results) = domain.candidates.get_mut(candidate.as_str()) {
                     results[mode] = Some(result);
                 } else {
-                    let mut results = [None; 6];
+                    let mut results = [None; 4];
                     results[mode] = Some(result);
                     domain.candidates.insert(candidate, results);
                 }
@@ -374,10 +361,16 @@ impl LiteralState {
         self
     }
 
+    /// A secret's own protection comes before App Data, because a single named
+    /// App Data file may be read while a key or environment file in a
+    /// container may not.
     pub fn protection(self) -> Option<Protection> {
-        if self.appdata {
-            Some(Protection::AppData)
-        } else if self.ssh_private {
+        self.secret()
+            .or(self.appdata.then_some(Protection::AppData))
+    }
+
+    pub fn secret(self) -> Option<Protection> {
+        if self.ssh_private {
             Some(Protection::SshPrivate)
         } else if self.environment_example {
             None

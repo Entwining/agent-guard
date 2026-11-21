@@ -84,8 +84,6 @@ fn subcommand(words: &[Word]) -> Option<Option<&str>> {
 pub(super) fn spec(words: &[Word]) -> Option<Spec> {
     let operand = match subcommand(words)? {
         Some("new" | "init" | "vendor") => Effect::Write,
-        // `cargo run` passes its operands to the program it runs.
-        Some("run" | "r") => Effect::Read,
         _ => Effect::Name,
     };
     Some(Spec {
@@ -99,25 +97,12 @@ pub(super) fn spec(words: &[Word]) -> Option<Spec> {
 }
 
 /// Words after `--`, and the operands of `cargo run`, go to the program cargo
-/// builds or runs.
+/// builds or runs, which the guard does not know, so they are names.
 pub(super) fn cargo(context: &mut Context<'_>, effects: &mut Effects) {
     let runs = matches!(subcommand(context.words), Some(Some("run" | "r")));
     let separator = context.words.iter().position(|word| word == "--");
     if let Some(separator) = separator {
-        context.claimed[separator] = true;
-        for index in separator + 1..context.words.len() {
-            context.claimed[index] = true;
-            let word = &context.words[index];
-            for value in operand_values(word, false) {
-                context.targets.push(Target::from_word(
-                    &word.with_text(value.into()),
-                    context.cwd,
-                    context.host,
-                    Effect::Read,
-                    Walk::Visible,
-                ));
-            }
-        }
+        context.claimed[separator..].fill(true);
     }
     if runs || separator.is_some() {
         effects.gaps.push(CoverageGap::UnknownProgram {

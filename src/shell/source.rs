@@ -82,7 +82,7 @@ impl statements::Evaluator<'_, '_> {
         }
         let Some(detection) = &parsed.detection else {
             self.output.gap(CoverageGap::UnsupportedShellSyntax);
-            return Ok(Default::default());
+            return self.runnable_prefix(source, scope, depth);
         };
         if !detection.array_tail_spans.is_empty() {
             self.output.array_tail_regions.push(ArrayTailRegions {
@@ -90,7 +90,6 @@ impl statements::Evaluator<'_, '_> {
                 ranges: detection.array_tail_spans.clone(),
             });
         }
-        self.output.executable_qualifier |= detection.executable_qualifier;
         if detection.divergent {
             self.output.gap(if zsh {
                 CoverageGap::ExecutorDivergence
@@ -104,11 +103,38 @@ impl statements::Evaluator<'_, '_> {
             if !detection.divergent {
                 self.output.gap(CoverageGap::UnsupportedShellSyntax);
             }
-            Default::default()
+            if parsed.original.is_some() {
+                Default::default()
+            } else {
+                self.runnable_prefix(source, scope, depth)?
+            }
         };
         for code in &detection.code {
             self.isolated_source(code, scope, depth + 1)?;
         }
         Ok(output)
+    }
+
+    /// Bash runs the complete commands before a syntax error, so the lines
+    /// before the first one brush cannot parse are checked as their own source.
+    fn runnable_prefix(
+        &mut self,
+        source: &str,
+        scope: &mut statements::Scope,
+        depth: usize,
+    ) -> Result<crate::record::stream::Output, CheckError> {
+        let mut end = source.len();
+        while let Some(line) = brush::failure_line(&source[..end]) {
+            crate::check_deadline(self.deadline)?;
+            end = source[..end]
+                .split_inclusive('\n')
+                .take(line - 1)
+                .map(str::len)
+                .sum();
+        }
+        if end == 0 || end == source.len() {
+            return Ok(Default::default());
+        }
+        self.source(&source[..end], scope, depth)
     }
 }

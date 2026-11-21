@@ -1,0 +1,7 @@
+{"rows":[
+ {"id":"read-before-unterminated-quote","partition":"runnable-prefix","expected":"D","input":{"command":"cat .env\necho \"x"},"wire_text":"agent-guard/credential_file]"},
+ {"id":"dump-before-unterminated-quote","partition":"runnable-prefix","expected":"D","input":{"command":"env\necho 'a"},"wire_text":"agent-guard/variable_dump]"},
+ {"id":"read-before-unclosed-compound","partition":"runnable-prefix","expected":"D","input":{"command":"echo ok\ncat .env\nif true; then\necho x"},"wire_text":"agent-guard/credential_file]"},
+ {"id":"read-on-the-failing-line","partition":"unrun-lines","expected":"UC","input":{"command":"cat .env; echo \"x"}},
+ {"id":"read-inside-the-unterminated-quote","partition":"unrun-lines","expected":"UC","input":{"command":"echo ok\necho \"x\ncat .env"}}
+]}

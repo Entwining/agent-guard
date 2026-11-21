@@ -1,0 +1,21 @@
+{"rows":[
+{"id":"environment-file","partition":"path","input":{"command":"cat $P/.env"},"expected":"D","wire_text":"Triggered by `$P/.env`."},
+{"id":"private-key","partition":"path","input":{"command":"cat ~/.ssh/id_rsa"},"expected":"D","wire_text":"Triggered by `$H/.ssh/id_rsa`."},
+{"id":"environment-file-link","partition":"path","synthetic_setup":{"files":{"$P/.env":"A=1\n"},"links":[["$P/settings-link","$P/.env"]]},"input":{"command":"cat $P/settings-link"},"expected":"D","wire_text":"Triggered by `$P/settings-link`."},
+{"id":"container-listing","partition":"path","input":{"command":"ls $C"},"expected":"D","wire_text":"Triggered by `$C`."},
+{"id":"container-cwd","partition":"path","input":{"command":"cd $C && ls"},"expected":"D","wire_text":"Triggered by `$C`."},
+{"id":"container-event-cwd","partition":"path","cwd":"$C","input":{"command":"cat a.txt"},"expected":"D","wire_text":"Triggered by `$C`."},
+{"id":"ssh-event-cwd","partition":"path","cwd":"$H/.ssh","input":{"command":"cat config"},"expected":"D","wire_text":"Triggered by `$H/.ssh`."},
+{"id":"store-glob","partition":"path","input":{"command":"cat ~/.codex/*.json"},"expected":"D","wire_text":"Triggered by `$H/.codex/*.json`."},
+{"id":"home-search","partition":"broad","input":{"command":"rg foo ~"},"expected":"D","wire_text":"Triggered by `$H`."},
+{"id":"home-link-search","partition":"broad","synthetic_setup":{"links":[["$P/home-link","$H"]]},"input":{"command":"rg foo $P/home-link"},"expected":"D","wire_text":"Triggered by `$P/home-link`."},
+{"id":"home-cwd-search","partition":"broad","input":{"command":"cd ~ && rg foo"},"expected":"D","wire_text":"Triggered by `$H`."},
+{"id":"container-after-file","partition":"priority","input":{"command":"cat $P/.env; ls $C"},"expected":"D","wire_text":"Triggered by `$C`."},
+{"id":"home-after-file","partition":"priority","input":{"command":"cat $P/.env; rg foo ~"},"expected":"D","wire_text":"Triggered by `$H`."},
+{"id":"environment-dump","partition":"program","input":{"command":"env"},"expected":"D","wire_text":"Triggered by `env`."},
+{"id":"hosting-token","partition":"program","input":{"command":"gh auth token"},"expected":"D","wire_text":"Triggered by `gh`."},
+{"id":"netrc-trace","partition":"program","input":{"command":"curl -vn https://example.test"},"expected":"D","wire_text":"Triggered by `curl`."},
+{"id":"credential-variable-printed","partition":"program","input":{"command":"echo \"$API_TOKEN\""},"expected":"D","wire_text":"Triggered by `echo`."},
+{"id":"credential-variable-piped-to-printer","partition":"program","input":{"command":"printf '%s\\n' \"$API_TOKEN\" | head -n 1"},"expected":"D","wire_text":"Triggered by `head`."},
+{"id":"credential-variable-last-stage","partition":"program","input":{"command":"true | printf '%s\\n' \"$API_TOKEN\""},"expected":"D","wire_text":"Triggered by `printf`."}
+]}

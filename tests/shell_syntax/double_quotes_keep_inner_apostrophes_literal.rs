@@ -1,6 +1,6 @@
 use crate::support;
 use agent_guard_rust::{
-    Coverage, CoverageGap, Event, evaluate_with_arm,
+    Event, evaluate_with_arm,
     shell::{
         Arm,
         lexer::{LexError, Lexed, Quote},
@@ -39,19 +39,6 @@ fn regressions(owner: &str) {
                 row["expected"],
                 "{consumer}: {row}"
             );
-            if row["expected"] == "UR" {
-                let Coverage::LimitedPreflight(gaps) = &result.as_ref().unwrap().coverage else {
-                    panic!("D1 coverage missing: {row}");
-                };
-                assert!(
-                    gaps.contains(&if consumer == "pi" {
-                        CoverageGap::UnsupportedDialectConstruct
-                    } else {
-                        CoverageGap::ExecutorDivergence
-                    }),
-                    "D1 must detect the active syntax, independently of parser refusal: {row}"
-                );
-            }
             if row["expected"] == "D" {
                 let agent_guard_rust::Outcome::ProtectedDenial { reason, recovery } =
                     &result.as_ref().unwrap().outcome
@@ -122,7 +109,7 @@ fn literal_data_and_nested_code_keep_d1_masking() {
 }
 
 #[test]
-fn unterminated_quotes_are_blocked() {
+fn unterminated_quotes_proceed_without_a_decision() {
     let fixture = support::Fixture::new();
     let context = fixture.context(&json!({"consumer":"claude","cwd":"$P"}));
     for source in [
@@ -148,10 +135,12 @@ fn unterminated_quotes_are_blocked() {
             },
             Arm::Brush,
         );
-        assert_eq!(support::class(&result), "UR", "{source}");
+        assert_eq!(support::class(&result), "UC", "{source}");
         let wire = agent_guard_rust::adapters::render(context.consumer, &result);
-        assert_eq!(wire.exit, 2);
-        assert!(wire.stdout.is_empty());
+        assert_eq!(
+            (wire.exit, wire.stdout.as_str(), wire.stderr.as_str()),
+            (0, "", "")
+        );
     }
 }
 

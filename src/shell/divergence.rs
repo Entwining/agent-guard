@@ -4,7 +4,6 @@ use std::ops::Range;
 #[derive(Default)]
 pub(super) struct Detection {
     pub divergent: bool,
-    pub executable_qualifier: bool,
     pub masked: String,
     pub code: Vec<String>,
     pub code_regions: Vec<(Range<usize>, String)>,
@@ -145,7 +144,6 @@ mod tests;
 
 fn executable_qualifier(result: &mut Detection, body: &str, range: Range<usize>) {
     result.divergent = true;
-    result.executable_qualifier = true;
     if let Some(code) = body.strip_prefix("e:").and_then(|s| s.strip_suffix(':')) {
         let bytes = code.as_bytes();
         let code = if bytes.len() >= 2

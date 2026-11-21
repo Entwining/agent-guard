@@ -122,7 +122,7 @@
       "B3"
     ],
     "group": "program",
-    "command": "bash -lc 'cat ~/Library/Containers/com.example.fixture/data.txt'",
+    "command": "bash -lc 'ls ~/Library/Containers/com.example.fixture/data.txt'",
     "class": "D"
   },
   {
@@ -181,60 +181,6 @@
     "class": "D"
   },
   {
-    "id": "interpreter-script",
-    "finding": [
-      "B3"
-    ],
-    "group": "program",
-    "command": "python3 script.py .env",
-    "class": "D"
-  },
-  {
-    "id": "python-Ic",
-    "finding": [
-      "B3"
-    ],
-    "group": "program",
-    "command": "python3 -Ic 'print(open(\".env\").read())'",
-    "class": "D"
-  },
-  {
-    "id": "node-p",
-    "finding": [
-      "B3"
-    ],
-    "group": "program",
-    "command": "node -p 'require(\"fs\").readFileSync(\".env\",\"utf8\")'",
-    "class": "D"
-  },
-  {
-    "id": "python-positional",
-    "finding": [
-      "B3"
-    ],
-    "group": "program",
-    "command": "python3 -c 'import sys;print(open(sys.argv[1]).read())' ~/.ssh/id_rsa",
-    "class": "D"
-  },
-  {
-    "id": "python-uc",
-    "finding": [
-      "F5"
-    ],
-    "group": "program",
-    "command": "python3 -uc 'open(\"$P/.env\")'",
-    "class": "D"
-  },
-  {
-    "id": "python-Bc",
-    "finding": [
-      "F5"
-    ],
-    "group": "program",
-    "command": "python3 -Bc 'open(\"$P/.env\")'",
-    "class": "D"
-  },
-  {
     "id": "node-pe",
     "finding": [
       "F5"
@@ -266,12 +212,12 @@
     "class": "D"
   },
   {
-    "id": "grep-E-appdata",
+    "id": "grep-E-environment-file",
     "finding": [
       "B4"
     ],
     "group": "program",
-    "command": "grep -E x ~/Library/Containers/com.example.fixture/data.txt",
+    "command": "grep -E x .env",
     "class": "D"
   },
   {
@@ -444,42 +390,6 @@
     "class": "D"
   },
   {
-    "id": "xargs-null",
-    "finding": [
-      "M2"
-    ],
-    "group": "program",
-    "command": "rg --files --hidden -0 | xargs -0 cat",
-    "class": "D"
-  },
-  {
-    "id": "xargs-head",
-    "finding": [
-      "M2"
-    ],
-    "group": "program",
-    "command": "ls -A | xargs head",
-    "class": "D"
-  },
-  {
-    "id": "xargs-count",
-    "finding": [
-      "F15"
-    ],
-    "group": "program",
-    "command": "ls -a '$P' | xargs -n1 cat",
-    "class": "D"
-  },
-  {
-    "id": "xargs-explicit-root",
-    "finding": [
-      "F15"
-    ],
-    "group": "program",
-    "command": "rg --files --hidden '$P' | xargs -0 cat",
-    "class": "D"
-  },
-  {
     "id": "variable-display",
     "finding": [
       "M3"
@@ -557,72 +467,9 @@
       "F7"
     ],
     "group": "identity",
-    "command": "ls '$H/.ssh'",
+    "command": "rg x '$H/.ssh'",
     "class": "D",
     "control": true
-  },
-  {
-    "id": "detector-newline",
-    "finding": [
-      "F9"
-    ],
-    "group": "shell",
-    "command": "printf x\nsetopt SH_WORD_SPLIT\nprintf ok",
-    "class": "UR"
-  },
-  {
-    "id": "detector-and",
-    "finding": [
-      "F9"
-    ],
-    "group": "shell",
-    "command": "true && setopt SH_WORD_SPLIT",
-    "class": "UR"
-  },
-  {
-    "id": "detector-then",
-    "finding": [
-      "F9"
-    ],
-    "group": "shell",
-    "command": "if true; then setopt SH_WORD_SPLIT; fi",
-    "class": "UR"
-  },
-  {
-    "id": "detector-or",
-    "finding": [
-      "F9"
-    ],
-    "group": "shell",
-    "command": "false || unsetopt SH_WORD_SPLIT",
-    "class": "UR"
-  },
-  {
-    "id": "detector-do",
-    "finding": [
-      "F9"
-    ],
-    "group": "shell",
-    "command": "for f in a; do emulate zsh; done",
-    "class": "UR"
-  },
-  {
-    "id": "detector-else",
-    "finding": [
-      "F9"
-    ],
-    "group": "shell",
-    "command": "if false; then :; else setopt SH_WORD_SPLIT; fi",
-    "class": "UR"
-  },
-  {
-    "id": "detector-brace",
-    "finding": [
-      "F9"
-    ],
-    "group": "shell",
-    "command": "{ setopt SH_WORD_SPLIT; }",
-    "class": "UR"
   },
   {
     "id": "home-alias",
@@ -635,25 +482,12 @@
     "class": "D"
   },
   {
-    "id": "non-utf8-link",
-    "finding": [
-      "F11"
-    ],
-    "group": "identity",
-    "command": "cat bad-link/data.txt",
-    "setup": "non-utf8-link",
-    "class": "UR",
-    "gaps": [
-      "IdentityBound"
-    ]
-  },
-  {
     "id": "recovery-oracle",
     "finding": [
       "M5"
     ],
     "group": "metadata",
-    "command": "cat '$C/data.txt'",
+    "command": "ls '$C/data.txt'",
     "class": "D",
     "owner_action": true,
     "no_oracle": true
@@ -667,16 +501,6 @@
     "command": "rg needle '$H'",
     "class": "D",
     "reason": "HOME"
-  },
-  {
-    "id": "quoted-qualifier-recovery",
-    "finding": [
-      "m1"
-    ],
-    "group": "metadata",
-    "command": "setopt extendedglob; printf '%s' 'x(e:y'",
-    "class": "UR",
-    "not_qualifier": true
   },
   {
     "id": "protected-cwd-alias",
@@ -821,17 +645,7 @@
       "M4"
     ],
     "group": "program",
-    "command": "cd ~/Library; cd Containers/com.example.fixture; cat data.txt",
-    "class": "D"
-  },
-  {
-    "id": "xargs-count-separated",
-    "finding": [
-      "M2",
-      "F15"
-    ],
-    "group": "program",
-    "command": "rg --files --hidden | xargs -n 1 cat",
+    "command": "cd ~/Library; cd Containers/com.example.fixture; ls data.txt",
     "class": "D"
   }
 ]

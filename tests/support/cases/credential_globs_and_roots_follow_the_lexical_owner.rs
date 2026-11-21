@@ -64,7 +64,7 @@ pub fn partition(name: &str) {
                         assert_eq!(reason.rule, agent_guard_rust::DenialRule::AppData);
                         assert_eq!(
                             reason.rule.message(),
-                            "This reads a protected macOS app-data directory. Name a specific non-sensitive file under ~/Library/Application Support instead, or ask the user to inspect the protected file and share the needed fact."
+                            "This reaches more than one file in a protected macOS app-data container, or a path in one known only at run time. Name the one file you need by its literal path instead, or ask the user to inspect the container and share the needed fact."
                         );
                     }
                     assert!(

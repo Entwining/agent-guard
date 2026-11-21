@@ -70,9 +70,11 @@ impl<'a, 'b> Evaluator<'a, 'b> {
                 self.output.statement_visits += 1;
             }
             self.inspected += 1;
+            // Past the budget, loops stop repeating but every later statement
+            // is still checked once, because an exhausted budget lets the call
+            // proceed; the deadline bounds the remaining work.
             if self.inspected > 512 {
                 self.output.gap(CoverageGap::InspectionBudget);
-                return Ok(Output::new());
             }
             let before =
                 scope.returns.len() + scope.loops.iter().map(|states| states.len()).sum::<usize>();

@@ -30,7 +30,7 @@
       "expected": "allow",
       "cwd": "$H/project"
     }
-    ,{"id":"unquoted-tilde","source":"s=$(echo x); E=~/Library/Containers/com.example.syn/Data/$s; cat \"$E\"","expected":"D","cwd":"$H/project"}
-    ,{"id":"expanded-home","source":"s=$(echo x); E=\"$HOME/Library/Containers/com.example.syn/Data/$s\"; cat \"$E\"","expected":"D","cwd":"$H/project"}
+    ,{"id":"unquoted-tilde","source":"s=$(echo x); E=~/Library/Containers/com.example.syn/Data/$s; ls \"$E\"","expected":"D","cwd":"$H/project"}
+    ,{"id":"expanded-home","source":"s=$(echo x); E=\"$HOME/Library/Containers/com.example.syn/Data/$s\"; ls \"$E\"","expected":"D","cwd":"$H/project"}
   ]
 }

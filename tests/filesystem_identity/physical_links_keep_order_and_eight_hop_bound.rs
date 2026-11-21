@@ -121,14 +121,26 @@ fn injected_host_catalog_reaches_all_consumer_boundaries() {
                 config_dirs: Vec::new(),
                 shell_observation_entries: std::cell::Cell::new(0),
             };
+            // A search, unlike a single-file read, is denied under App Data,
+            // and a read keeps public rows clear of the broad-root rule.
+            let (tool, path_key) = match (row["protected"].is_string(), consumer) {
+                (true, _) => ("grep", "path"),
+                (false, Consumer::Pi) => ("read", "path"),
+                (false, _) => ("read", "file_path"),
+            };
+            let mut fields = serde_json::Map::new();
+            fields.insert(path_key.into(), row["path"].clone());
+            if tool == "grep" {
+                fields.insert("pattern".into(), "x".into());
+            }
             let input = if row["operation"] == "shell" {
                 serde_json::json!({"tool_name":if consumer == Consumer::Pi {"bash"} else {"Bash"},"tool_input":{"command":row["source"]}})
             } else if consumer == Consumer::Pi {
-                serde_json::json!({"toolName":"read","input":{"path":row["path"]}})
+                serde_json::json!({"toolName":tool,"input":fields})
             } else if consumer == Consumer::Codex {
-                serde_json::json!({"name":"Read","arguments":{"file_path":row["path"]}})
+                serde_json::json!({"name":tool,"arguments":fields})
             } else {
-                serde_json::json!({"tool_name":"Read","tool_input":{"file_path":row["path"]}})
+                serde_json::json!({"tool_name":tool,"tool_input":fields})
             };
             let mut probe = Mock {
                 links: row

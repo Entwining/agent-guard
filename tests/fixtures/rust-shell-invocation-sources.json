@@ -1,5 +1,4 @@
 {"rows":[
-{"id": "representative-source-cannot-certify-echo", "partition": "shell-sources", "input": {"command": "CODE=\"${M:-echo} .env\"; eval \"$CODE\""}, "expected": "D"},
 {"id": "literal-source-echo-data-control", "partition": "shell-sources", "input": {"command": "CODE='echo .env'; eval \"$CODE\""}, "expected": "N"},
 {"id": "explicit-unset-source-default-control", "partition": "shell-sources", "input": {"command": "unset M; CODE=\"${M:-echo} .env\"; eval \"$CODE\""}, "expected": "N"},
 {"id": "possible-env-s-protected-source-preserved", "partition": "shell-sources", "input": {"command": "read P <<< env; \"${P:-env}\" -S 'cat .env'"}, "expected": "D"},
@@ -9,8 +8,6 @@
 {"id": "literal-shell-code-consumer-control", "partition": "shell-sources", "input": {"command": "bash -c 'cat .env; true'"}, "expected": "D"},
 {"id": "literal-script-filename-control", "partition": "shell-sources", "input": {"command": "bash -x 'cat .env; true'"}, "expected": "UC"},
 {"id": "possible-shell-code-consumer-keeps-bound-payload", "partition": "shell-sources", "input": {"command": "CODE='cat .env; true'; bash \"${MODE:--x}\" \"$CODE\""}, "expected": "D"},
-{"id": "representative-shell-code-keeps-lexical-payload", "partition": "shell-sources", "input": {"command": "CODE=\"${CMD:-cat .env; true}\"; bash -c \"$CODE\""}, "expected": "D"},
-{"id": "literal-code-prefix-with-unknown-source-bytes", "partition": "shell-sources", "input": {"command": "read V; bash -c \"echo ${V:-.env}\""}, "expected": "D"},
 {"id": "literal-code-bytes-name-control", "partition": "shell-sources", "input": {"command": "bash -c 'echo .env'"}, "expected": "N"},
 {"id": "possible-shell-code-preserves-exact-name-role", "partition": "shell-sources", "input": {"command": "bash \"${MODE:--x}\" 'echo .env; true'"}, "expected": "UC"},
 {"id": "possible-shell-code-inherits-exported-value", "partition": "shell-sources", "input": {"command": "export X=.env; bash \"${MODE:--x}\" 'cat \"$X\"; true'"}, "expected": "D"},

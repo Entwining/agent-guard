@@ -125,6 +125,17 @@ impl<'a> Resolver<'a> {
             }))
     }
 
+    /// Whether a target that `target` resolved lies in another app's
+    /// container, whatever other protection it has.
+    pub(crate) fn in_appdata(&mut self, target: &crate::record::Target, cwd: &str) -> bool {
+        let path = normalize(
+            &absolute_input(&target.unresolved, cwd, self.home),
+            cwd,
+            self.home,
+        );
+        self.lexical.appdata(&path, self.home)
+    }
+
     pub(crate) fn target(
         &mut self,
         target: &mut crate::record::Target,
@@ -186,11 +197,11 @@ impl<'a> Resolver<'a> {
         if path.ends_with("/.ssh") {
             return Ok(Identity::Protected(Protection::SshPrivate));
         }
-        if let Some(kind) = self.lexical.check_reach(
+        if let Some(kind) = self.lexical.check(
             &target.pattern_path(),
             self.home,
             target.glob,
-            reach(target),
+            target.glob_hidden,
         )? && !(target.glob
             && kind == Protection::Credential
             && !matches!(target.effect, Effect::Read | Effect::Change))
@@ -263,17 +274,17 @@ impl<'a> Resolver<'a> {
         use crate::record::{Effect, Via, Walk};
         if let Some(kind) = self
             .lexical
-            .check_reach(
+            .check(
                 &target.pattern_path(),
                 self.home,
                 target.glob,
-                reach(target),
+                target.glob_hidden,
             )?
-            .or(self.lexical.check_reach(
+            .or(self.lexical.check(
                 &target.pattern_path(),
                 resolved_home,
                 target.glob,
-                reach(target),
+                target.glob_hidden,
             )?)
         {
             return Ok(Identity::Protected(kind));
@@ -440,15 +451,5 @@ impl Resolver<'_> {
             }
         }
         Ok(Some(false))
-    }
-}
-
-fn reach(target: &crate::record::Target) -> super::Reach {
-    if target.via == crate::record::Via::Narrow {
-        super::Reach::Walk
-    } else if target.glob_hidden {
-        super::Reach::Hidden
-    } else {
-        super::Reach::Visible
     }
 }

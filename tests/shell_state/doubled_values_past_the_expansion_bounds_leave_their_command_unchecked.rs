@@ -1,12 +1,12 @@
 use agent_guard_rust::{CoverageGap, Outcome};
 
 #[test]
-fn brace_alternatives_past_the_bound_refuse() {
+fn doubled_values_past_the_expansion_bounds_leave_their_command_unchecked() {
     crate::program_contract::partition_with(
-        "brace-bound",
-        include_str!("../fixtures/rust-brace-alternative-bound.json"),
+        "value-bounds",
+        include_str!("../fixtures/rust-expansion-value-bounds.json"),
         |row, evaluation| {
-            if row["expected"] == "UR" {
+            if row["expected"] == "UC" {
                 assert!(
                     matches!(
                         &evaluation.outcome,

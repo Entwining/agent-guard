@@ -6,6 +6,10 @@ mod clients;
 mod resource_changes;
 mod secrets;
 const READERS: &str = "cat head tail less more bat sed awk jq yq base64 xxd od strings diff openssl plutil cp tee tar source . sort uniq cut nl fold rev paste comm join iconv hexdump hd zcat gzcat bzcat xzcat ag ack tac column pr vim vi nvim view perl ruby dd scp rsync zip ed ex hg svn sh bash zsh dash ksh wget php zgrep zless zmore";
+/// Readers that can list or recurse into a directory operand (`diff -r`,
+/// `zgrep -r`, `openssl rehash`, an editor's directory listing, `zip -r`, a
+/// version-control status); the other readers read only the files they name.
+const DIRECTORY_READERS: &str = "diff zcat gzcat zgrep openssl vim vi nvim view ex zip hg svn wget";
 const DATA_PROGRAMS: &str =
     "echo printf print : true false export set unset typeset declare local kill";
 
@@ -23,7 +27,8 @@ pub struct Effects {
     pub targets: Vec<Target>,
     pub gaps: Vec<CoverageGap>,
     pub code: Vec<String>,
-    pub inline: Vec<InlineCode>,
+    /// The command runs code text that is not parsed as shell.
+    pub inline: bool,
     pub dump: bool,
     /// The program writes a credential variable's value to its output.
     pub variable: bool,
@@ -36,12 +41,9 @@ pub struct Effects {
     pub keychain: bool,
     pub stored_secret: bool,
     pub trace: bool,
-    pub hidden_content: bool,
     pub replace_advice: bool,
     pub include_advice: bool,
     pub bre_advice: bool,
-    pub hidden_listing: bool,
-    pub consumes_listing: bool,
 }
 
 /// Marks the words after `--` as operands, unless an earlier word could
@@ -116,17 +118,6 @@ fn modelled_program(program: &str) -> bool {
     ).any(|name| name == program)
 }
 
-fn printenv_signature(code: &str) -> bool {
-    let boundary = |c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '-';
-    code.match_indices("printenv").any(|(start, name)| {
-        code[..start].chars().next_back().is_none_or(boundary)
-            && code[start + name.len()..]
-                .chars()
-                .next()
-                .is_none_or(boundary)
-    })
-}
-
 fn secret_name(name: &str) -> bool {
     let name = name.to_ascii_uppercase();
     ["TOKEN", "SECRET", "KEY", "PASSWORD", "CREDENTIAL"]
@@ -139,16 +130,6 @@ fn secret_name(name: &str) -> bool {
 /// own variable, such as a loop's `key`.
 fn secret_variable(name: &str) -> bool {
     name.contains(|c: char| c.is_ascii_uppercase()) && secret_name(name)
-}
-
-pub(crate) fn shows_hidden(args: &[Word]) -> bool {
-    args.iter().any(|w| {
-        ["--hidden", "--unrestricted"].contains(&w.as_str())
-            || w.starts_with('-')
-                && !w.starts_with("--")
-                && w[1..].chars().all(|c| c.is_ascii_alphabetic())
-                && w.contains(['H', 'u'])
-    })
 }
 
 pub(crate) fn list_file_sources(command: &CommandRecord) -> Vec<&crate::record::StreamOutput> {
@@ -273,7 +254,6 @@ fn space(c: char) -> bool {
 }
 
 mod archive;
-mod code;
 mod git;
 mod inference;
 mod interpreters;
@@ -285,14 +265,13 @@ mod tests;
 mod wrappers;
 
 use archive::infer_tar;
-pub use code::{InlineCode, mentions};
 use git::infer_git;
 pub use inference::infer;
 use inference::infer_at;
 use interpreters::{interpreter_code, perl_exec_argv, reads_program_from_stdin};
-use listing::{find_printed_walks, infer_listing};
+use listing::{Printed, infer_listing, printed_walks};
 use search::infer_search;
 pub(crate) use shells::{ShellSource, shell_invocation};
-use wrappers::{at, child, infer_forwarded, xargs_content_consumer};
+use wrappers::{at, child, infer_forwarded};
 
 mod programs;

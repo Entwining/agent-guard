@@ -83,27 +83,35 @@ pub(super) fn cases(home: &Path, cwd: &Path) -> Vec<AcceptanceCase> {
         ADVICE,
     );
     add(
-        "appdata-shell",
-        "Bash",
-        json!({"command":"cat ~/Library/Containers/com.example.canary/file.txt"}),
-        2,
-        "This reads a protected macOS app-data directory.",
+        "appdata-file-read",
+        "Read",
+        json!({"file_path":home.join("Library/Containers/com.example.canary/file.txt")}),
+        0,
+        "",
         "",
     );
     add(
-        "appdata-read",
-        "Read",
-        json!({"file_path":home.join("Library/Containers/com.example.canary/file.txt")}),
+        "appdata-shell",
+        "Bash",
+        json!({"command":"ls ~/Library/Containers/com.example.canary"}),
         2,
-        "This reads a protected macOS app-data directory.",
+        APPDATA_REASON,
+        "",
+    );
+    add(
+        "appdata-search",
+        "Grep",
+        json!({"path":home.join("Library/Containers/com.example.canary"),"pattern":"canary"}),
+        2,
+        APPDATA_REASON,
         "",
     );
     add(
         "appdata-link",
         "Bash",
-        json!({"command":"cat data-link/com.example.canary/file.txt"}),
+        json!({"command":"ls data-link/com.example.canary"}),
         2,
-        "This reads a protected macOS app-data directory.",
+        APPDATA_REASON,
         "",
     );
     add(

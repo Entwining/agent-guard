@@ -1,7 +1,7 @@
 use crate::support;
 
 use agent_guard_rust::{
-    Coverage, CoverageGap, EffectRecord, EffectSource, Event, Outcome, adapters, evaluate_with_arm,
+    Coverage, EffectRecord, EffectSource, Event, Outcome, adapters, evaluate_with_arm,
     filesystem::Protection,
     shell::{self, Arm},
 };
@@ -74,10 +74,9 @@ fn rows(owner: &str, expected: &[&str]) {
                         "body text is not a command: {row}"
                     );
                 }
-                "block" => assert!(matches!(class, "D" | "UR"), "wrong terminator: {row}"),
                 expected => assert_eq!(class, expected, "{consumer}: {row}"),
             }
-            assert_eq!(wire.exit, if class == "N" { 0 } else { 2 });
+            assert_eq!(wire.exit, if matches!(class, "N" | "UC") { 0 } else { 2 });
             if matches!(row["expected"].as_str(), Some("N" | "D")) {
                 assert_eq!(
                     result.as_ref().unwrap().coverage,
@@ -86,7 +85,7 @@ fn rows(owner: &str, expected: &[&str]) {
                 );
             }
             assert!(wire.stdout.is_empty(), "no advice: {row}");
-            assert_blank_outcome(row, owner, consumer, &result);
+            assert_blank_outcome(row, &result);
             assert!(!wire.stderr.contains("checker failed"));
         }
     }
@@ -109,18 +108,12 @@ fn heredoc_delimiter_blanks_observe_protected_code() {
     rows("heredoc-blank", &["D"]);
 }
 #[test]
-fn heredoc_delimiter_blanks_keep_data_and_reject_wrong_terminators() {
-    rows("heredoc-blank", &["data-control", "block"]);
-}
-#[test]
-fn array_closer_blanks_have_the_ruled_cause() {
-    rows("array-blank", &["UR", "N"]);
+fn heredoc_delimiter_blanks_keep_data_and_wrong_terminators_keep_later_lines_in_the_body() {
+    rows("heredoc-blank", &["data-control", "UC"]);
 }
 
 fn assert_blank_outcome(
     row: &Value,
-    owner: &str,
-    consumer: &str,
     result: &Result<agent_guard_rust::Evaluation, agent_guard_rust::CheckError>,
 ) {
     match &result.as_ref().unwrap().outcome {
@@ -144,17 +137,6 @@ fn assert_blank_outcome(
                         },
                     }),
                 "effect provenance: {row}"
-            );
-        }
-        Outcome::CoverageInsufficient { cause, .. } if owner == "array-blank" => {
-            assert_eq!(
-                cause,
-                &if consumer == "pi" {
-                    CoverageGap::UnsupportedDialectConstruct
-                } else {
-                    CoverageGap::ExecutorDivergence
-                },
-                "ruling31 cause: {row}"
             );
         }
         Outcome::CoverageInsufficient { .. } | Outcome::NoObjection => {}

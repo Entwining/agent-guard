@@ -125,12 +125,13 @@ fn cache_domains_preserve_spelling_visibility_and_deadlines() {
     assert_eq!(owner.domain_preparations, 2);
     // Results for hidden candidates and exact SSH spellings cannot leak
     // into the other visibility or case domain.
-    assert_eq!(owner.check("/p/*rc", "/h", true, false).unwrap(), None);
+    let hidden_name = "/p/*.credentials.json";
+    assert_eq!(owner.check(hidden_name, "/h", true, false).unwrap(), None);
     assert_eq!(
-        owner.check("/p/*rc", "/h", true, true).unwrap(),
+        owner.check(hidden_name, "/h", true, true).unwrap(),
         Some(Protection::Credential)
     );
-    assert_eq!(owner.check("/p/*rc", "/h", false, true).unwrap(), None);
+    assert_eq!(owner.check(hidden_name, "/h", false, true).unwrap(), None);
     for (name, expected) in [("config", None), ("CONFIG", Some(Protection::SshPrivate))] {
         assert_eq!(
             owner

@@ -69,10 +69,7 @@ pub(super) fn infer(
             infer_listing(program, args, command, cwd, host, effects, depth)
         }
         "tar" => return unknown_conventions(Walk::Visible, infer_tar(args, cwd, host, effects)),
-        "jq" | "yq" => return unknown_conventions(Walk::Visible, readers::filter(program, args)),
-        "gh" | "aws" | "rex" | "sessidx" => {
-            return unknown_client(program, args, cwd, host, effects);
-        }
+        "jq" | "yq" => return unknown_conventions(Walk::None, readers::filter(program, args)),
         "rm" | "mv" | "ln" => resource_changes::infer(program, args, cwd, host, effects),
         "git" => infer_git(args, cwd, host, effects),
         "ctags" => {
@@ -92,41 +89,35 @@ pub(super) fn infer(
         _ => {
             if !clients::infer(program, args, cwd, host, effects) {
                 readers::unknown(program, args, effects);
-                return Some(readers::options(
-                    program,
-                    args,
-                    Walk::Visible,
-                    cwd,
-                    host,
-                    effects,
-                ));
+                // Only a known reader's operands are files it reads.
+                if READERS.split_whitespace().any(|name| name == program) {
+                    let walk = if DIRECTORY_READERS
+                        .split_whitespace()
+                        .any(|name| name == program)
+                    {
+                        Walk::Visible
+                    } else {
+                        Walk::None
+                    };
+                    return Some(readers::options(program, args, walk, cwd, host, effects));
+                }
+                effects.targets.extend(expanded_names(args, cwd, host));
             }
         }
     }
     None
 }
 
-/// A client that stays an unknown program apart from the slots it names.
-fn unknown_client(
-    program: &str,
-    args: &[Word],
-    cwd: &str,
-    host: HostFacts<'_>,
-    effects: &mut Effects,
-) -> Option<Operands> {
-    readers::unknown(program, args, effects);
-    let claimed = match program {
-        // A modelled gh command binds every role itself.
-        "gh" if clients::infer(program, args, cwd, host, effects) => return None,
-        "rex" => readers::rex_names(args, cwd, host, effects),
-        "sessidx" => readers::sessidx_queries(args),
-        _ => readers::output_query(program, args),
-    };
-    Some(Operands {
-        walk: Walk::Visible,
-        claimed,
-        literal: false,
-    })
+/// The names the shell lists to expand each glob operand, whatever the
+/// program then does with them.
+fn expanded_names<'a>(
+    args: &'a [Word],
+    cwd: &'a str,
+    host: HostFacts<'a>,
+) -> impl Iterator<Item = Target> + 'a {
+    args.iter()
+        .filter(|arg| arg.globs && !arg.starts_with('-'))
+        .map(move |arg| Target::from_word(arg, cwd, host, Effect::Name, Walk::None))
 }
 
 fn read(word: &Word, cwd: &str, host: HostFacts<'_>, recursive: bool) -> Target {

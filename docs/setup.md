@@ -188,7 +188,6 @@ The ID names the checked condition. A condition that can block in more than one 
 | `broad_scan` | policy | A scan rooted at the home directory or `~/Library` |
 | `credential_file` | policy | Reading a credential or environment file |
 | `credential_store` | policy | Reading a directory that holds a client's credential store |
-| `inline_credential_file` | policy | Inline code naming a credential or environment file |
 | `hidden_search` | policy | A recursive search that can reach hidden credential files |
 | `variable_dump` | policy | Dumping environment or shell variables |
 | `credential_variable` | policy | Printing a credential variable, other than into a client's standard input |
@@ -204,11 +203,6 @@ The ID names the checked condition. A condition that can block in more than one 
 | `nesting_limit` | coverage | Shell nesting exceeds 64 levels |
 | `absolute_cwd_required` | coverage | The event has no absolute working directory |
 | `invalid_encoding` | coverage | The event is not valid UTF-8 |
-| `unsupported_shell_syntax` | coverage | Shell syntax the guard cannot inspect |
-| `executor_divergence` | coverage | Syntax or shell options that a shell the consumer may run would read differently from the guard's model |
-| `identity_bound` | coverage | A path reached through bounded or cyclic aliases |
-| `inode_alias` | coverage | An inode-addressed `/.vol` path |
-| `inspection_budget` | coverage | A command that exceeds the inspection budget |
 | `malformed_input` | error | An event that is not a complete JSON event with the documented tool fields |
 | `probe_fault` | error | A filesystem metadata check failed |
 | `guard_fault` | error | An internal checker fault |

@@ -106,15 +106,7 @@ pub(super) fn records(source: &str, parsed: &str) -> Result<Parsed, CheckError> 
             spans,
         });
     };
-    // Brush 0.4's optional final case pattern consumes `esac)` greedily.
-    // A separator before the group closer is equivalent and retains source spans.
-    for index in (1..tokens.len()).rev() {
-        if tokens[index - 1].to_str() == "esac" && tokens[index].to_str() == ")" {
-            let mut span = tokens[index].location().clone();
-            span.end = span.start.clone();
-            tokens.insert(index, brush_parser::Token::Operator("\n".into(), span));
-        }
-    }
+    separate_esac_group_closers(&mut tokens);
     let Ok(program) = brush_parser::parse_tokens(&tokens, &brush_parser::ParserOptions::default())
     else {
         return Ok(Parsed {
@@ -130,6 +122,52 @@ pub(super) fn records(source: &str, parsed: &str) -> Result<Parsed, CheckError> 
         records: Some(output),
         spans,
     })
+}
+
+/// Brush 0.4's optional final case pattern consumes `esac)` greedily.
+/// A separator before the group closer is equivalent and retains source spans.
+fn separate_esac_group_closers(tokens: &mut Vec<brush_parser::Token>) {
+    for index in (1..tokens.len()).rev() {
+        if tokens[index - 1].to_str() == "esac" && tokens[index].to_str() == ")" {
+            let mut span = tokens[index].location().clone();
+            span.end = span.start.clone();
+            tokens.insert(index, brush_parser::Token::Operator("\n".into(), span));
+        }
+    }
+}
+
+/// The 1-based line where brush stops parsing `source`, its last line when
+/// the error carries no position, or `None` when it parses.
+pub(super) fn failure_line(source: &str) -> Option<usize> {
+    use brush_parser::{ParseError, TokenizerError};
+    let last = source.lines().count().max(1);
+    let line = match brush_parser::uncached_tokenize_str(
+        source,
+        &brush_parser::TokenizerOptions::default(),
+    ) {
+        Err(
+            TokenizerError::UnterminatedSingleQuote(at)
+            | TokenizerError::UnterminatedAnsiCQuote(at)
+            | TokenizerError::UnterminatedDoubleQuote(at)
+            | TokenizerError::UnterminatedBackquote(at)
+            | TokenizerError::UnterminatedExtendedGlob(at),
+        ) => at.line,
+        Err(_) => last,
+        Ok(mut tokens) => {
+            separate_esac_group_closers(&mut tokens);
+            match brush_parser::parse_tokens(&tokens, &brush_parser::ParserOptions::default()) {
+                Ok(_) => return None,
+                Err(
+                    ParseError::ParsingNear(at)
+                    | ParseError::Tokenizing {
+                        position: Some(at), ..
+                    },
+                ) => at.line,
+                Err(_) => last,
+            }
+        }
+    };
+    Some(line.clamp(1, last))
 }
 
 fn walk_list(

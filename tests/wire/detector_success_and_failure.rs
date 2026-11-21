@@ -12,7 +12,7 @@ fn gate_a_zero_starts_and_bypass_negative() {
         &ctx,
         &mut probe,
         Arm::Brush,
-        &format!("cat '{}/data.txt'", fixture.container),
+        &format!("ls '{}/data.txt'", fixture.container),
     );
     assert_eq!(support::class(&result), "D");
     let read_count = Cell::new(0);

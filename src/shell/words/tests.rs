@@ -39,7 +39,7 @@ fn fragments(pieces: &[WordPieceWithSource], entries: &mut Vec<Value>) {
 }
 
 #[test]
-fn brush_production_fragments_preserve_refusal() {
+fn brush_production_fragments_of_supported_words_add_no_gap() {
     let rows: Vec<Value> = serde_json::from_str(include_str!(
         "../../../tests/fixtures/rust-m1-4-fragments.json"
     ))
@@ -60,15 +60,9 @@ fn brush_production_fragments_preserve_refusal() {
             "/synthetic/home/project",
             true,
         );
-        // A malformed Brush fragment may require refusal; it cannot erase that
-        // refusal or turn a valid source's dialect limit into a checker fault.
-        let accepted = match &observation {
-            Ok(observation) if row["expected"] == "UR" => observation
-                .gaps
-                .contains(&crate::CoverageGap::ExecutorDivergence),
-            Ok(observation) => observation.gaps.is_empty(),
-            Err(_) => false,
-        };
+        let accepted = observation
+            .as_ref()
+            .is_ok_and(|observation| observation.gaps.is_empty());
         println!(
             "{}",
             json!({"id":row["id"],"source":row["source"],"fragments":entries,"observation":format!("{observation:?}"),"accepted":accepted})

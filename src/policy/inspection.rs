@@ -12,30 +12,18 @@ use crate::{
 };
 
 impl Inspection<'_> {
-    /// A hidden walk reads protected environment files unless name bounds
-    /// narrow it to the files they select.
-    fn hidden_walk(
+    /// Name bounds turn a hidden walk into reads of the files they select; an
+    /// unbounded walk of an unprotected root names no protected file.
+    fn narrowed_reads(
         &mut self,
         target: &Target,
         cwd: &str,
         source: EffectSource,
     ) -> Result<(), CheckError> {
-        match &target.narrowed {
-            Some(reads) => {
-                for read in reads {
-                    self.target(read, cwd, source)?;
-                }
-            }
-            None => self.hidden_search(),
+        for read in target.narrowed.iter().flatten() {
+            self.target(read, cwd, source)?;
         }
         Ok(())
-    }
-    fn hidden_search(&mut self) {
-        self.effect(EffectRecord::HiddenContent);
-        self.denial.get_or_insert_with(|| Reason {
-            effect: "hidden recursive content search reaches protected environment files".into(),
-            rule: DenialRule::HiddenSearch,
-        });
     }
     fn effect(&mut self, effect: EffectRecord) {
         if !self.effects.contains(&effect) {
@@ -69,6 +57,8 @@ impl Inspection<'_> {
         {
             target.effect = Effect::Meta;
         }
+        // A denial names the path before link resolution, which rewrites it below.
+        let written = target.unresolved.clone();
         // Broad traversal is independent of a narrower credential identity.
         // Decide a lexical root before probes, then check resolved aliases below.
         let broad_access = !matches!(target.via, Via::Items | Via::Filter | Via::Narrow)
@@ -88,7 +78,7 @@ impl Inspection<'_> {
             None
         };
         if lexical_broad.as_ref().is_some_and(|(_, matched)| *matched) {
-            self.effect(EffectRecord::BroadRoot);
+            self.broad_root(&written);
         }
         // A literal relative ~/ prefix stays anchored at cwd, including with a
         // runtime-derived suffix. Its link aliases still need normal resolution.
@@ -111,20 +101,21 @@ impl Inspection<'_> {
         };
         match identity {
             Identity::Protected(kind) => {
-                let touches = match kind {
-                    Protection::AppData => target.effect != Effect::Name || target.glob,
-                    Protection::SshPrivate => {
-                        matches!(
-                            target.effect,
-                            Effect::Read | Effect::Write | Effect::Change | Effect::List
-                        )
-                    }
-                    _ => matches!(target.effect, Effect::Read | Effect::Change),
+                // A secret in a container keeps App Data's limits as well as
+                // its own, so listing a container's `.ssh` stays refused.
+                let kind = if kind != Protection::AppData
+                    && !touches(&target, kind)
+                    && self.resolver.in_appdata(&target, cwd)
+                {
+                    Protection::AppData
+                } else {
+                    kind
                 };
-                if touches {
+                if touches(&target, kind) {
                     let rule = target_rule(&target, kind, &self.context.home, &mut self.resolver)?;
                     if kind == Protection::AppData {
-                        self.appdata_reason.get_or_insert(rule);
+                        self.appdata_reason
+                            .get_or_insert_with(|| (rule, written.clone()));
                     }
                     self.effect(EffectRecord::ProtectedTarget {
                         protection: kind,
@@ -140,6 +131,7 @@ impl Inspection<'_> {
                             kind.effect().to_owned()
                         },
                         rule,
+                        trigger: Some(written.clone()),
                     });
                 }
             }
@@ -148,18 +140,24 @@ impl Inspection<'_> {
             Identity::InheritedInput => {
                 self.gap(CoverageGap::UnresolvedTarget);
                 if target.walk == Walk::Hidden && target.effect == Effect::Read {
-                    self.hidden_walk(&target, cwd, source)?;
+                    self.narrowed_reads(&target, cwd, source)?;
                 }
             }
-            Identity::Public(path) => {
-                self.public_target(&target, &path, lexical_broad.as_ref(), cwd, source)?
-            }
+            Identity::Public(path) => self.public_target(
+                &target,
+                &written,
+                &path,
+                lexical_broad.as_ref(),
+                cwd,
+                source,
+            )?,
         }
         Ok(())
     }
     fn public_target(
         &mut self,
         target: &Target,
+        written: &str,
         path: &str,
         lexical_broad: Option<&(String, bool)>,
         cwd: &str,
@@ -197,25 +195,25 @@ impl Inspection<'_> {
             false
         };
         if resolved_broad {
-            self.effect(EffectRecord::BroadRoot);
-            self.denial.get_or_insert_with(|| Reason {
-                effect: format!(
-                    "broad recursive root reaches protected locations; HOME {} is excluded",
-                    self.context.home
-                ),
-                rule: DenialRule::Broad,
-            });
+            self.broad_root(written);
         }
         if !resolved_broad
             && target.walk == Walk::Hidden
             && target.effect == Effect::Read
+            && target.narrowed.is_some()
             && self
                 .resolver
                 .may_traverse(target, &resolved_home, self.probe)?
         {
-            self.hidden_walk(target, cwd, source)?;
+            self.narrowed_reads(target, cwd, source)?;
         }
         Ok(())
+    }
+    /// The denial is decided after inspection, where App Data takes
+    /// precedence over a broad root.
+    fn broad_root(&mut self, written: &str) {
+        self.broad_trigger.get_or_insert_with(|| written.to_owned());
+        self.effect(EffectRecord::BroadRoot);
     }
     pub(super) fn shell(
         &mut self,
@@ -233,7 +231,8 @@ impl Inspection<'_> {
         match self.resolver.target(&mut target, cwd, self.probe)? {
             Identity::Protected(kind) => {
                 if kind == Protection::AppData {
-                    self.appdata_reason.get_or_insert(DenialRule::AppData);
+                    self.appdata_reason
+                        .get_or_insert_with(|| (DenialRule::AppData, cwd.to_owned()));
                 }
                 self.effect(EffectRecord::ProtectedTarget {
                     protection: kind,
@@ -247,6 +246,7 @@ impl Inspection<'_> {
                     } else {
                         DenialRule::Ssh
                     },
+                    trigger: Some(cwd.to_owned()),
                 });
             }
             Identity::Bound => self.gap(CoverageGap::IdentityBound),
@@ -269,7 +269,6 @@ impl Inspection<'_> {
         {
             self.source_entries += observation.source_entries;
         }
-        self.executable_qualifier |= observation.executable_qualifier;
         for value in observation.gaps {
             self.gap(value);
         }
@@ -280,16 +279,21 @@ impl Inspection<'_> {
         }
         // A credential printed by a pipeline's last stage, or into a stage
         // that leaves no command record, reaches the output.
-        if pipes.credential_output.values().any(|consumed| !consumed) {
-            self.credential_variable();
+        if let Some((_, producer)) = pipes
+            .credential_output
+            .values()
+            .find(|(consumed, _)| !consumed)
+        {
+            self.credential_variable(producer.clone());
         }
         Ok(())
     }
-    fn credential_variable(&mut self) {
+    fn credential_variable(&mut self, program: Option<String>) {
         self.effect(EffectRecord::CredentialVariable);
         self.denial.get_or_insert_with(|| Reason {
             effect: "extract protected credential variable".into(),
             rule: DenialRule::Variable,
+            trigger: program,
         });
     }
     fn inspect_command(
@@ -305,11 +309,13 @@ impl Inspection<'_> {
         for value in effects.gaps {
             self.gap(value);
         }
+        let program = || program_name(command);
         if effects.dump {
             self.effect(EffectRecord::EnvironmentDump);
             self.denial.get_or_insert_with(|| Reason {
                 effect: "extract protected environment dump".into(),
                 rule: DenialRule::Dump,
+                trigger: program(),
             });
         }
         let mut stdout = command
@@ -333,9 +339,9 @@ impl Inspection<'_> {
             // is printed or consumed.
             match command.pipeline {
                 Some(stage) if effects.variable_stdout_only && !stdout_redirected => {
-                    pipes.credential_output.insert(stage, false);
+                    pipes.credential_output.insert(stage, (false, program()));
                 }
-                _ => self.credential_variable(),
+                _ => self.credential_variable(program()),
             }
         }
         if effects.token {
@@ -343,25 +349,32 @@ impl Inspection<'_> {
             self.denial.get_or_insert_with(|| Reason {
                 effect: TOKEN.into(),
                 rule: DenialRule::Token,
+                trigger: program(),
             });
         }
         if effects.keychain {
             self.effect(EffectRecord::Keychain);
-            self.denial.get_or_insert_with(|| Reason { effect: "extract a password from the macOS Keychain; run the authorized client that consumes it without printing it".into(), rule: DenialRule::Keychain });
+            self.denial.get_or_insert_with(|| Reason {
+                effect: "extract a password from the macOS Keychain; run the authorized client that consumes it without printing it".into(),
+                rule: DenialRule::Keychain,
+                trigger: program(),
+            });
         }
         if effects.stored_secret {
             self.effect(EffectRecord::StoredSecret);
             self.denial.get_or_insert_with(|| Reason {
                 effect: SECRET_PRINT.into(),
                 rule: DenialRule::StoredSecret,
+                trigger: program(),
             });
         }
         if effects.trace {
             self.effect(EffectRecord::NetworkTrace);
-            self.denial.get_or_insert_with(|| Reason { effect: "curl verbose or trace output can print authentication headers; drop -v and --trace and use a normal request".into(), rule: DenialRule::Trace });
-        }
-        if effects.hidden_content {
-            self.hidden_search();
+            self.denial.get_or_insert_with(|| Reason {
+                effect: "curl trace with a credential input".into(),
+                rule: DenialRule::Trace,
+                trigger: program(),
+            });
         }
         // Advice has shared public wording and cannot override protection.
         for (applies, advice) in [
@@ -387,9 +400,6 @@ impl Inspection<'_> {
                 },
             )?;
         }
-        for code in effects.inline {
-            self.inline_code(&code, cwd)?;
-        }
         for code in effects.code {
             self.shell(&code, cwd, depth + 1)?;
         }
@@ -407,50 +417,40 @@ impl Inspection<'_> {
                 .index
                 .checked_sub(1)
                 .map(|index| PipelineStage { index, ..stage });
-            if let Some(consumed) =
+            if let Some((consumed, _)) =
                 producer.and_then(|producer| pipes.credential_output.get_mut(&producer))
             {
                 if command.stdin == Stdin::Stream && effects.credential_stdin {
                     *consumed = true;
                 } else {
-                    self.credential_variable();
+                    self.credential_variable(program_name(command));
                 }
-            }
-            let pipeline = stage.pipeline;
-            if effects.hidden_listing {
-                pipes.hidden_listings.insert(pipeline);
-            }
-            if effects.consumes_listing && pipes.hidden_listings.contains(&pipeline) {
-                self.effect(EffectRecord::HiddenContent);
-                self.denial.get_or_insert_with(|| Reason {
-                    effect:
-                        "hidden listing with a content consumer reaches protected environment files"
-                            .into(),
-                    rule: DenialRule::HiddenSearch,
-                });
             }
         }
     }
-    fn inline_code(&mut self, code: &targets::InlineCode, cwd: &str) -> Result<(), CheckError> {
-        let previous_denial = self.denial.take();
-        for mention in targets::mentions(code) {
-            let target = mention.target(cwd, self.context.host());
-            self.target(&target, cwd, EffectSource::InlineCode)?;
+}
+
+/// Whether an access to a protected target reaches what its protection keeps.
+fn touches(target: &Target, kind: Protection) -> bool {
+    match kind {
+        // One named path is a single App Data access the user accepts; a
+        // listing, walk, glob or name built at run time can reach the whole
+        // container.
+        Protection::AppData => {
+            let named_file = matches!(
+                target.effect,
+                Effect::Read | Effect::Write | Effect::Change | Effect::Use | Effect::Meta
+            ) && target.walk == Walk::None
+                && !target.glob
+                && !target.expands
+                && !target.runtime_unknown;
+            !named_file && (target.effect != Effect::Name || target.glob)
         }
-        if self.denial.is_some() {
-            self.gaps
-                .retain(|g| *g != CoverageGap::InterpreterChosenRead);
-            if let Some(reason) = self.denial.as_mut() {
-                reason.effect = format!(
-                    "CodeFile: inline interpreter token names a protected path; {} is excluded",
-                    reason.effect
-                );
-                reason.rule = DenialRule::CodeFile;
-            }
-        } else {
-            self.denial = previous_denial;
+        // Names and metadata of keys print none of their contents.
+        Protection::SshPrivate => {
+            matches!(target.effect, Effect::Read | Effect::Write | Effect::Change)
         }
-        Ok(())
+        _ => matches!(target.effect, Effect::Read | Effect::Change),
     }
 }
 
@@ -479,9 +479,7 @@ fn target_rule(
     } else if target.walk == Walk::Hidden && target.effect == Effect::Read {
         DenialRule::HiddenSearch
     } else if target.effect == Effect::Read && resolver.credential(target, home)?.is_some() {
-        if target.via == Via::Code {
-            DenialRule::CodeFile
-        } else if target.sends {
+        if target.sends {
             DenialRule::Upload
         } else {
             DenialRule::File
@@ -500,9 +498,14 @@ fn target_rule(
 /// What one shell source's pipeline stages leave for the stages after them.
 #[derive(Default)]
 struct Pipes {
-    /// Pipelines with a stage that lists hidden files.
-    hidden_listings: std::collections::BTreeSet<(usize, usize)>,
-    /// Stages that write a credential variable to the pipe, and whether the
-    /// next stage has consumed it.
-    credential_output: std::collections::BTreeMap<PipelineStage, bool>,
+    /// Stages that write a credential variable to the pipe, whether the next
+    /// stage has consumed it, and the program that wrote it.
+    credential_output: std::collections::BTreeMap<PipelineStage, (bool, Option<String>)>,
+}
+
+fn program_name(command: &shell::CommandRecord) -> Option<String> {
+    command
+        .argv
+        .get(command.program.unwrap_or(0))
+        .map(|word| word.text.clone())
 }

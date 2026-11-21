@@ -98,31 +98,18 @@ pub(super) fn observe_contract(
     };
     let actual_class = class(&actual);
     let reason_kind = reason_partition(old_reason);
-    let permission_match = actual_class == expected
-        || expected == "N" && ["UC", "A"].contains(&actual_class)
-        || expected == "D" && reason_kind == "syntax" && actual_class == "UR";
+    let permission_match =
+        actual_class == expected || expected == "N" && ["UC", "A"].contains(&actual_class);
     let effect = denial_effect(&actual);
     let rust_rule = denial_rule(&actual);
     let go_rule = go_reason_rule(old_reason);
     let same_denial_rule = go_rule != "None" && rust_rule == go_rule;
-    let expected_text = if consumer == Consumer::Claude {
-        format!("DENIED: {old_reason}\n")
-    } else {
-        format!("{old_reason}\n")
-    };
-    // Legacy rows pin the wording; the reason-marker fixture pins each marker.
-    let consumer_text_match = wire
-        .stderr
-        .strip_prefix('[')
-        .and_then(|rest| rest.split_once("] "))
-        .is_some_and(|(marker, text)| marker.contains(":agent-guard/") && text == expected_text);
-    let reason_match = if same_denial_rule {
-        consumer_text_match
-    } else if expected == "D" && item["verdict"] == "RETAIN" {
-        denial_reason_matches(reason_kind, effect, actual_class, &wire.stderr, old_reason)
-    } else {
-        true
-    };
+    // A legacy row keeps its rule, not the Go wording of that rule; the wire
+    // tests own how each consumer renders it.
+    let reason_match = same_denial_rule
+        || expected != "D"
+        || item["verdict"] != "RETAIN"
+        || denial_reason_matches(reason_kind, effect, &wire.stderr, old_reason);
     let advice_match = if expected == "A" {
         let output: Value = serde_json::from_str(&wire.stdout).unwrap_or(Value::Null);
         let message = output["hookSpecificOutput"]["additionalContext"]
@@ -139,18 +126,17 @@ pub(super) fn observe_contract(
     let recovery = recovery(&actual);
     let changed_contract_match =
         changed_contract_matches(fixture, &context, item, &actual, &wire, name, arm);
-    let category = if let Some(reason) = &outside {
+    let matched = permission_match && reason_match && advice_match && changed_contract_match;
+    let category = if matched && item["verdict"] == "CHANGE" {
+        "intended_change".into()
+    } else if let Some(reason) = &outside {
         format!("out_of_slice: {reason}")
-    } else if permission_match && reason_match && advice_match && changed_contract_match {
-        if item["verdict"] == "CHANGE" {
-            "intended_change".into()
-        } else {
-            "match".into()
-        }
+    } else if matched {
+        "match".into()
     } else {
         "Rust_defect".into()
     };
-    json!({"consumer":name,"expected":expected,"actual":actual_class,"coverage":coverage(&actual),"category":category,"permission_match":permission_match,"reason_match":reason_match,"same_denial_rule":same_denial_rule,"consumer_text_match":consumer_text_match,"go_rule":go_rule,"rust_rule":rust_rule,"advice_match":advice_match,"changed_contract_match":changed_contract_match,"recovery":recovery,"baseline_reason_partition":reason_kind,"go_deny_rust_permit":!old_reason.is_empty() && ["N","A","UC"].contains(&actual_class),"exit":wire.exit,"stdout":wire.stdout,"stderr":wire.stderr,"probe_count":probe.calls.len()})
+    json!({"consumer":name,"expected":expected,"actual":actual_class,"coverage":coverage(&actual),"category":category,"permission_match":permission_match,"reason_match":reason_match,"same_denial_rule":same_denial_rule,"go_rule":go_rule,"rust_rule":rust_rule,"advice_match":advice_match,"changed_contract_match":changed_contract_match,"recovery":recovery,"baseline_reason_partition":reason_kind,"go_deny_rust_permit":!old_reason.is_empty() && ["N","A","UC"].contains(&actual_class),"exit":wire.exit,"stdout":wire.stdout,"stderr":wire.stderr,"probe_count":probe.calls.len()})
 }
 
 fn changed_contract_matches(
@@ -306,24 +292,13 @@ fn denial_rule(
             agent_guard_rust::Outcome::ProtectedDenial { reason, .. } => {
                 format!("{:?}", reason.rule)
             }
-            agent_guard_rust::Outcome::CoverageInsufficient {
-                cause: agent_guard_rust::CoverageGap::UnsupportedShellSyntax,
-                disposition: agent_guard_rust::Disposition::RejectUnsupportedSyntax,
-                ..
-            } => "Syntax".into(),
             _ => "None".into(),
         },
         Err(_) => "Fault".into(),
     }
 }
 
-fn denial_reason_matches(
-    reason_kind: &str,
-    effect: &str,
-    actual_class: &str,
-    stderr: &str,
-    old_reason: &str,
-) -> bool {
+fn denial_reason_matches(reason_kind: &str, effect: &str, stderr: &str, old_reason: &str) -> bool {
     match reason_kind {
         "AppData" => effect.contains("App Data") || effect.contains("broad recursive"),
         "credential_file" => {
@@ -332,11 +307,9 @@ fn denial_reason_matches(
                 || effect.contains("private-key")
         }
         "SSH" => effect.contains("private-key") || effect.contains("broad recursive"),
-        "CodeFile" => effect.contains("CodeFile"),
         "hidden_content" => effect.contains("hidden"),
         "dump" => effect.contains("environment dump"),
         "variable" => effect.contains("credential variable"),
-        "syntax" => actual_class == "UR",
         _ => stderr.contains(old_reason),
     }
 }

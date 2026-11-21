@@ -15,6 +15,8 @@ use crate::public_tools::{ResultOutput, execute, path_error};
 use sha2::{Digest, Sha256};
 
 const USAGE: &str = "usage: agent-guard-verify [absolute-installed-executable]";
+const APPDATA_REASON: &str =
+    "This reaches more than one file in a protected macOS app-data container";
 const ADVICE: &str = "rg -r means --replace. Drop -r; use -n for line numbers, or spell --replace VALUE for an intentional replacement.";
 
 struct Installation {

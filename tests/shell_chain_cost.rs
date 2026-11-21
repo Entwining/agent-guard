@@ -1,10 +1,10 @@
 mod support;
 
-use agent_guard_rust::{Event, adapters, evaluate_with_arm, shell};
+use agent_guard_rust::{CoverageGap, Event, Outcome, adapters, evaluate_with_arm, shell};
 use serde_json::{Value, json};
 
 #[test]
-fn wide_identifier_headers_and_logical_chains_keep_budget_recovery() {
+fn wide_identifier_headers_and_logical_chains_stop_at_the_budget() {
     let fixture = support::Fixture::new();
     let packet: Value =
         serde_json::from_str(include_str!("fixtures/rust-shell-chain-cost.json")).unwrap();
@@ -35,27 +35,28 @@ fn wide_identifier_headers_and_logical_chains_keep_budget_recovery() {
             );
             assert_eq!(
                 support::class(&result),
-                "UR",
+                "UC",
+                "{consumer}: {}: {result:?}",
+                row["id"]
+            );
+            assert!(
+                matches!(
+                    &result.as_ref().unwrap().outcome,
+                    Outcome::CoverageInsufficient {
+                        cause: CoverageGap::InspectionBudget,
+                        ..
+                    }
+                ),
                 "{consumer}: {}: {result:?}",
                 row["id"]
             );
             let output = adapters::render(context.consumer, &result);
             assert_eq!(
-                output.exit,
-                row["exit"].as_i64().unwrap() as i32,
-                "{consumer}: {}: {}",
-                row["id"],
-                output.stderr
+                (output.exit, output.stdout.as_str(), output.stderr.as_str()),
+                (0, "", ""),
+                "{consumer}: {}",
+                row["id"]
             );
-            assert!(output.stdout.is_empty(), "unexpected advice: {}", row["id"]);
-            let stderr = output.stderr;
-            for field in ["reason", "alternative"] {
-                assert!(
-                    stderr.contains(row[field].as_str().unwrap()),
-                    "{consumer}: {}: {stderr}",
-                    row["id"]
-                );
-            }
         }
     }
 }

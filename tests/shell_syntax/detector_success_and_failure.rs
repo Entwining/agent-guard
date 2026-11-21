@@ -24,13 +24,15 @@ fn detector_success_and_failure() {
             result.outcome,
             Outcome::CoverageInsufficient {
                 cause: CoverageGap::ExecutorDivergence,
-                disposition: Disposition::RejectUnsupportedSyntax,
+                disposition: Disposition::ContinueLimitedPreflight,
                 ..
             }
         ));
         let wire = render(ctx.consumer, &Ok(result));
-        assert_eq!(wire.exit, 2);
-        assert!(wire.stdout.is_empty() && wire.stderr.contains("recheck"));
+        assert_eq!(
+            (wire.exit, wire.stdout.as_str(), wire.stderr.as_str()),
+            (0, "", "")
+        );
         let failure =
             shell::observe("setopt SH_WORD_SPLIT; cat >", arm, "/h", "/h/p", true).unwrap();
         assert!(failure.parse_failures > 0);
@@ -48,16 +50,14 @@ fn detector_success_and_failure() {
             result.outcome,
             Outcome::CoverageInsufficient {
                 cause: CoverageGap::UnsupportedShellSyntax,
-                disposition: Disposition::RejectUnsupportedSyntax,
+                disposition: Disposition::ContinueLimitedPreflight,
                 ..
             }
         ));
         let wire = render(ctx.consumer, &Ok(result));
-        assert_eq!(wire.exit, 2);
-        assert!(
-            wire.stdout.is_empty()
-                && wire.stderr.contains("explicit paths")
-                && !wire.stderr.contains("checker failed")
+        assert_eq!(
+            (wire.exit, wire.stdout.as_str(), wire.stderr.as_str()),
+            (0, "", "")
         );
         let inert = shell::observe("printf '%s' '${(f)v}'", arm, "/h", "/h/p", true).unwrap();
         assert!(inert.gaps.is_empty());
@@ -126,21 +126,8 @@ fn glob_group_position_and_body() {
             arm,
             &format!("printf '%s' {}/*(+fixture_filter)", fixture.project),
         );
-        assert_eq!(support::class(&result), "UR");
-        let Outcome::CoverageInsufficient {
-            recovery: Some(recovery),
-            ..
-        } = &result.as_ref().unwrap().outcome
-        else {
-            panic!("missing qualifier recovery")
-        };
-        assert!(
-            recovery
-                .excluded_scope
-                .iter()
-                .any(|scope| scope.contains("Zsh executable qualifier"))
-        );
-        assert!(format!("{:?}", recovery.next_step).contains("qualifier"));
+        assert_eq!(support::class(&result), "UC");
+        assert!(render(ctx.consumer, &result).stderr.is_empty());
     }
 }
 
@@ -158,11 +145,8 @@ fn inspection_budget_bounds_function_expansion() {
         let ctx = context(&fixture);
         let mut probe = support::RecordingProbe::literal_for_quoted_paths(&fixture);
         let result = check(&fixture, &ctx, &mut probe, arm, &source);
-        assert!(
-            render(ctx.consumer, &result)
-                .stderr
-                .contains("explicit public path")
-        );
+        let wire = render(ctx.consumer, &result);
+        assert_eq!((wire.exit, wire.stderr.as_str()), (0, ""));
         let declared = shell::observe(
             "f() { cat /h/Library/Containers/c/data; }; printf ok",
             arm,

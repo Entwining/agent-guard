@@ -1,6 +1,6 @@
 use super::*;
 
-pub(in crate::targets) const CURL_VALUE_LETTERS: &str = "AbcCdDeEFHKmoPQrTtuUwxXyYz";
+const CURL_VALUE_LETTERS: &str = "AbcCdDeEFHKmoPQrTtuUwxXyYz";
 // The options whose value is a file curl uses, such as a certificate or key.
 const CURL_USE: &[&str] = &[
     "cacert",
@@ -197,11 +197,16 @@ const CURL_WRITES: &[&str] = &[
     "ssl-sessions",
 ];
 
-/// Adds curl's targets, and returns whether the request sends standard input
-/// and no other option reads it.
-pub(super) fn curl(context: &mut Context<'_>) -> bool {
+/// Adds curl's targets, and records whether the request sends standard input
+/// that no other option reads, and whether it traces a request that carries
+/// credentials.
+pub(super) fn curl(context: &mut Context<'_>, effects: &mut Effects) {
     let mut sends_stdin = false;
     let mut reads_stdin_otherwise = false;
+    // A trace prints the request's headers, which hold a secret only when the
+    // call sends one: a user, a cookie, a netrc login or an auth header.
+    let mut traces = false;
+    let mut credentials = false;
     let mut index = 0;
     let mut options = true;
     let mut remote_name = false;
@@ -221,6 +226,7 @@ pub(super) fn curl(context: &mut Context<'_>) -> bool {
         }
         let text = word.as_str();
         if !options || text == "-" || !text.starts_with('-') {
+            credentials |= url_has_user(text);
             url(context, index, text);
             index += 1;
             continue;
@@ -233,6 +239,8 @@ pub(super) fn curl(context: &mut Context<'_>) -> bool {
                 .split_once('=')
                 .map_or((option, None), |(key, value)| (key, Some(value)));
             if !CURL_VALUES.contains(&key) {
+                traces |= key == "verbose";
+                credentials |= ["netrc", "netrc-optional", "negotiate", "ntlm"].contains(&key);
                 if attached.is_some()
                     || !CURL_FLAGS.contains(&key.strip_prefix("no-").unwrap_or(key))
                 {
@@ -243,11 +251,14 @@ pub(super) fn curl(context: &mut Context<'_>) -> bool {
             }
             (key, attached)
         } else {
-            match text
+            let found = text
                 .char_indices()
                 .skip(1)
-                .find(|(_, letter)| !CURL_FLAG_LETTERS.contains(*letter))
-            {
+                .find(|(_, letter)| !CURL_FLAG_LETTERS.contains(*letter));
+            let flags = &text[1..found.map_or(text.len(), |(at, _)| at)];
+            traces |= flags.contains('v');
+            credentials |= flags.contains('n');
+            match found {
                 Some((at, letter)) if CURL_VALUE_LETTERS.contains(letter) => {
                     let attached = &text[at + letter.len_utf8()..];
                     (
@@ -271,6 +282,8 @@ pub(super) fn curl(context: &mut Context<'_>) -> bool {
         let value = attached.unwrap_or_else(|| context.text(holder));
         // The value is data of its option even when it looks like one.
         context.claimed[holder] = true;
+        traces |= ["trace", "trace-ascii"].contains(&key);
+        credentials |= sends_credential(key, value);
         if key == "output-dir" {
             output_dir = Some(holder);
         } else {
@@ -291,7 +304,42 @@ pub(super) fn curl(context: &mut Context<'_>) -> bool {
         });
         context.add(path, output_dir, Effect::Write, None).walk = Walk::None;
     }
-    sends_stdin && !reads_stdin_otherwise
+    effects.credential_stdin = sends_stdin && !reads_stdin_otherwise;
+    effects.trace = traces && credentials;
+}
+
+/// Whether an option's value sends a credential with the request.
+fn sends_credential(key: &str, value: &str) -> bool {
+    match key {
+        "u" | "user" | "U" | "proxy-user" | "oauth2-bearer" | "aws-sigv4" | "b" | "cookie"
+        | "netrc-file" => true,
+        "H" | "header" | "proxy-header" => credential_header(value),
+        "url" => url_has_user(value),
+        _ => false,
+    }
+}
+
+/// A header read from a file, or one whose name says it authenticates, such
+/// as `Authorization`, `Cookie` or `X-Api-Key`.
+fn credential_header(header: &str) -> bool {
+    let name = header
+        .split_once(':')
+        .map_or(header, |(name, _)| name)
+        .to_ascii_uppercase();
+    header.starts_with('@')
+        || crate::targets::secret_name(&name)
+        || ["AUTH", "COOKIE", "SESSION"]
+            .iter()
+            .any(|part| name.contains(part))
+}
+
+/// Whether a URL carries a user, as in `https://user:pass@host/`.
+fn url_has_user(url: &str) -> bool {
+    url.split_once("://").is_some_and(|(_, rest)| {
+        rest.split(['/', '?', '#'])
+            .next()
+            .is_some_and(|authority| authority.contains('@'))
+    })
 }
 
 /// The resource a URL names: `@FILE` reads a list of URLs from FILE, and a

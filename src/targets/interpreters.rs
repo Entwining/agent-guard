@@ -1,6 +1,8 @@
 use super::*;
 
-pub(super) fn interpreter_code(program: &str, args: &[Word]) -> (Vec<String>, Vec<usize>) {
+/// The interpreter's inline code, the argument indexes its options claim, and
+/// whether `-n` or `-p` makes Perl or Ruby read its operands as input lines.
+pub(super) fn interpreter_code(program: &str, args: &[Word]) -> (Vec<String>, Vec<usize>, bool) {
     let (code, value, glued) = match program {
         "python" | "python3" => ("c", "WX", true),
         "node" | "tsx" => ("ep", "", false),
@@ -14,6 +16,7 @@ pub(super) fn interpreter_code(program: &str, args: &[Word]) -> (Vec<String>, Ve
     };
     let mut found = Vec::new();
     let mut claimed = Vec::new();
+    let mut line_loop = false;
     let mut index = 0;
     while index < args.len() {
         let arg = &args[index];
@@ -56,6 +59,7 @@ pub(super) fn interpreter_code(program: &str, args: &[Word]) -> (Vec<String>, Ve
                     }
                     break;
                 }
+                line_loop |= matches!(program, "perl" | "ruby") && matches!(ch, 'n' | 'p');
                 if code.contains(ch) {
                     if offset + 1 < arg.len() && !glued {
                         continue;
@@ -75,13 +79,13 @@ pub(super) fn interpreter_code(program: &str, args: &[Word]) -> (Vec<String>, Ve
         }
         index += 1;
     }
-    (found, claimed)
+    (found, claimed, line_loop)
 }
 
 /// Whether the interpreter runs its standard input as its program: it has no
 /// code option, and its first operand, if any, is `-`.
 pub(super) fn reads_program_from_stdin(program: &str, args: &[Word]) -> bool {
-    let (code, claimed) = interpreter_code(program, args);
+    let (code, claimed, _) = interpreter_code(program, args);
     let mut operands = args
         .iter()
         .enumerate()

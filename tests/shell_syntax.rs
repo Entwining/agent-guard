@@ -18,8 +18,8 @@ pub mod heredoc_parentheses_remain_data;
 pub mod long_pipelines_reach_the_command_budget;
 #[path = "shell_syntax/mixed_quote_fields_do_not_turn_filter_data_into_root_operands.rs"]
 pub mod mixed_quote_fields_do_not_turn_filter_data_into_root_operands;
-#[path = "shell_syntax/nested_parameter_flags_refuse_without_checker_faults.rs"]
-pub mod nested_parameter_flags_refuse_without_checker_faults;
+#[path = "shell_syntax/nested_parameter_flags_pass_without_checker_faults.rs"]
+pub mod nested_parameter_flags_pass_without_checker_faults;
 #[path = "shell_syntax/nul_command_bytes_follow_go_lexer.rs"]
 pub mod nul_command_bytes_follow_go_lexer;
 #[path = "shell_syntax/parser_corpus_evaluates_inputs_and_preserves_valid_spans.rs"]
@@ -39,5 +39,7 @@ pub mod shell_word_blanks_keep_benign_permits;
 #[path = "shell_syntax/subshell_case_patterns_are_not_group_closers.rs"]
 pub mod subshell_case_patterns_are_not_group_closers;
 pub(crate) mod support;
+#[path = "shell_syntax/syntax_errors_keep_the_lines_bash_runs.rs"]
+pub mod syntax_errors_keep_the_lines_bash_runs;
 #[path = "shell_syntax/visible_shell_matches_and_literal_search_roots_skip_hidden_credentials.rs"]
 pub mod visible_shell_matches_and_literal_search_roots_skip_hidden_credentials;

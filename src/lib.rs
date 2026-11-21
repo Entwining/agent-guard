@@ -56,14 +56,12 @@ pub enum EffectRecord {
     Keychain,
     StoredSecret,
     NetworkTrace,
-    HiddenContent,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EffectSource {
     Operand,
     Nested,
-    InlineCode,
     Cwd,
 }
 
@@ -109,6 +107,9 @@ impl Advice {
 pub struct Reason {
     pub effect: String,
     pub rule: DenialRule,
+    /// The path or program the rule matched, named in the denial so the
+    /// agent knows which word to change.
+    pub trigger: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,7 +119,6 @@ pub enum DenialRule {
     Broad,
     File,
     Store,
-    CodeFile,
     HiddenSearch,
     Dump,
     Variable,
@@ -143,7 +143,6 @@ impl DenialRule {
             Self::Broad => "broad_scan",
             Self::File => "credential_file",
             Self::Store => "credential_store",
-            Self::CodeFile => "inline_credential_file",
             Self::HiddenSearch => "hidden_search",
             Self::Dump => "variable_dump",
             Self::Variable => "credential_variable",
@@ -229,8 +228,7 @@ impl CoverageGap {
             Self::UnknownProgram { .. } => "unknown_program",
             Self::UnresolvedTarget => "unresolved_target",
             Self::UnsupportedShellSyntax => "unsupported_shell_syntax",
-            // The executor set only selects which name the gap carries; the
-            // refusal and its recovery are the same.
+            // The executor set only selects which name the gap carries.
             Self::ExecutorDivergence | Self::UnsupportedDialectConstruct => "executor_divergence",
             Self::OutsideObservedTool { .. } => "outside_observed_tool",
             Self::ExecutionOwnerUnavailable => "execution_owner_unavailable",
@@ -256,7 +254,7 @@ pub enum CheckErrorKind {
     GuardFault,
     ProbeFault,
     ResourceLimit,
-    /// Policy turns this into an inspection-budget refusal before rendering.
+    /// Policy turns this into an inspection-budget gap before rendering.
     InspectionBudget,
     Deadline,
 }

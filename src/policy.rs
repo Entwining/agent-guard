@@ -173,8 +173,8 @@ fn evaluate_with_catalog_loader(
         gaps: Vec::new(),
         denial: None,
         appdata_reason: None,
+        broad_trigger: None,
         advice: Vec::new(),
-        executable_qualifier: false,
         effects: Vec::new(),
         #[cfg(test)]
         source_entries: 0,
@@ -200,9 +200,10 @@ struct Inspection<'a> {
     arm: Arm,
     gaps: Vec<CoverageGap>,
     denial: Option<Reason>,
-    appdata_reason: Option<DenialRule>,
+    /// The App Data rule and the path that first reached it.
+    appdata_reason: Option<(DenialRule, String)>,
+    broad_trigger: Option<String>,
     advice: Vec<Advice>,
-    executable_qualifier: bool,
     effects: Vec<EffectRecord>,
     #[cfg(test)]
     source_entries: usize,
@@ -233,9 +234,6 @@ fn recovery(context: &Context, cwd: &str, effect: &str) -> Recovery {
             "protected variable values".into(),
         ];
         "Ask the owner to inspect the needed setting without returning protected values, or select an explicit non-secret variable and recheck."
-    } else if effect.starts_with("CodeFile:") {
-        excluded_scope.push("execution of the denied inline interpreter".into());
-        "Select a public input through a covered structured tool and recheck. Keep marker text as literal data when that is the task."
     } else {
         "Select an explicit public target or names-only operation outside the excluded scope, then recheck through the same consumer. The agent owns the continuation and its task equivalence."
     };
@@ -330,48 +328,9 @@ fn finish_inspection(mut inspection: Inspection<'_>, cwd: &str) -> Evaluation {
             effects: inspection.effects,
         };
     }
-    if let Some(cause) = inspection.gaps.iter().find(|g| {
-        matches!(
-            g,
-            CoverageGap::ExecutorDivergence
-                | CoverageGap::UnsupportedDialectConstruct
-                | CoverageGap::UnsupportedShellSyntax
-                | CoverageGap::IdentityBound
-                | CoverageGap::InodeAlias
-                | CoverageGap::InspectionBudget
-        )
-    }) {
-        let mut recovery = recovery(context, cwd, "unsupported");
-        recovery.excluded_scope.push(
-            match cause {
-                CoverageGap::InodeAlias => "unresolved inode-addressed resource identity",
-                CoverageGap::IdentityBound => {
-                    "unresolved resource identity from bounded or cyclic alias traversal"
-                }
-                CoverageGap::InspectionBudget => "over-budget function expansion",
-                CoverageGap::UnsupportedShellSyntax => {
-                    "original unsupported shell syntax/control flow"
-                }
-                _ => "original unsupported executor/dialect constructs",
-            }
-            .into(),
-        );
-        if inspection.executable_qualifier {
-            recovery.next_step = RecoveryStep::OwnerAction {description:"Replace the executable qualifier with explicit public names/results selected by the agent, then recheck through the same consumer. Task equivalence remains unverified.".into()};
-            recovery
-                .excluded_scope
-                .push("Zsh executable qualifier".into());
-        }
-        return Evaluation {
-            outcome: Outcome::CoverageInsufficient {
-                cause: cause.clone(),
-                disposition: Disposition::RejectUnsupportedSyntax,
-                recovery: Some(recovery),
-            },
-            coverage,
-            effects: inspection.effects,
-        };
-    }
+    // A part the guard cannot model is not evidence of a protected access:
+    // only a recognized protected effect denies, and checker faults block
+    // before this point.
     if let Some(cause) = inspection.gaps.first() {
         return Evaluation {
             outcome: Outcome::CoverageInsufficient {
@@ -410,15 +369,19 @@ fn prioritize_protection(inspection: &mut Inspection<'_>) {
         inspection.denial = Some(Reason {
             effect: match source {
                 EffectSource::Cwd => "protected cwd: read protected App Data".into(),
-                EffectSource::InlineCode => {
-                    "CodeFile: inline interpreter token names protected App Data".into()
-                }
                 _ if *write => {
                     "write protected location; read protected App Data is excluded".into()
                 }
                 _ => "read protected App Data".into(),
             },
-            rule: inspection.appdata_reason.unwrap_or(DenialRule::AppData),
+            rule: inspection
+                .appdata_reason
+                .as_ref()
+                .map_or(DenialRule::AppData, |(rule, _)| *rule),
+            trigger: inspection
+                .appdata_reason
+                .as_ref()
+                .map(|(_, trigger)| trigger.clone()),
         });
     } else if inspection.effects.contains(&EffectRecord::BroadRoot) {
         inspection.denial = Some(Reason {
@@ -427,6 +390,7 @@ fn prioritize_protection(inspection: &mut Inspection<'_>) {
                 context.home
             ),
             rule: DenialRule::Broad,
+            trigger: inspection.broad_trigger.clone(),
         });
     }
 }

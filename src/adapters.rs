@@ -216,8 +216,8 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
         stdout: String::new(),
         stderr: String::new(),
     };
-    let (class, id, reason) = match result {
-        Err(error) => ("error", error.kind.id(), error.consumer_message()),
+    let (class, id, reason): (_, _, std::borrow::Cow<'_, str>) = match result {
+        Err(error) => ("error", error.kind.id(), error.consumer_message().into()),
         Ok(evaluation) => match &evaluation.outcome {
             Outcome::NoObjection => return wire,
             Outcome::SoftAdvice(advice) => {
@@ -236,7 +236,15 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
                 return wire;
             }
             Outcome::ProtectedDenial { reason, .. } => {
-                ("policy", reason.rule.id(), reason.rule.message())
+                let message = reason.rule.message();
+                (
+                    "policy",
+                    reason.rule.id(),
+                    match &reason.trigger {
+                        Some(trigger) => format!("{message} Triggered by `{trigger}`.").into(),
+                        None => message.into(),
+                    },
+                )
             }
             Outcome::CoverageInsufficient {
                 disposition: Disposition::ContinueLimitedPreflight,
@@ -245,12 +253,12 @@ pub fn render(consumer: Consumer, result: &Result<Evaluation, CheckError>) -> Wi
             Outcome::CoverageInsufficient { cause, .. } => (
                 "coverage",
                 cause.id(),
-                crate::policy::refusal_message(cause),
+                crate::policy::refusal_message(cause).into(),
             ),
         },
     };
     wire.exit = 2;
-    wire.stderr = denial_text(consumer, class, id, reason);
+    wire.stderr = denial_text(consumer, class, id, &reason);
     wire
 }
 

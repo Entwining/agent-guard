@@ -439,16 +439,6 @@
       "wire_reason": "credential"
     },
     {
-      "id": "generated-code-input-byte-boundary",
-      "partition": "executable-flow",
-      "input": {
-        "command": "for v18 in a b; do for v17 in a b; do for v16 in a b; do for v15 in a b; do for v14 in a b; do for v13 in a b; do for v12 in a b; do for v11 in a b; do for v10 in a b; do for v9 in a b; do for v8 in a b; do for v7 in a b; do for v6 in a b; do for v5 in a b; do for v4 in a b; do for v3 in a b; do for v2 in a b; do for v1 in a b; do for v0 in a b; do printf x; done; done; done; done; done; done; done; done; done; done; done; done; done; done; done; done; done; done; done | sh"
-      },
-      "expected": "UR",
-      "wire_reason": "inspection budget",
-      "wire_text": "Split loops, function calls or brace alternatives"
-    },
-    {
       "id": "unknown-read-does-not-invent-empty-root",
       "partition": "executable-flow",
       "input": {

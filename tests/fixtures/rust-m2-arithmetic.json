@@ -1,5 +1,4 @@
 [
   {"id":"literal-substitution","sink":"literal","source":"echo $(( $(cat .env | wc -l) ))","expected":"D","nested":true,"scope":"command substitution written inside the arithmetic expansion"},
-  {"id":"let-literal-subscript","sink":"let","source":"let 'a[$(cat .env)]'","expected":"D","nested":true,"scope":"command substitution written in a quoted let subscript"},
-  {"id":"modified-parameter","source":"a='b[$(cat .env)]'; printf '%s' $((${~a}))","expected":"UR","nested":false,"scope":"top-level a version 1, unsupported parameter syntax"}
+  {"id":"let-literal-subscript","sink":"let","source":"let 'a[$(cat .env)]'","expected":"D","nested":true,"scope":"command substitution written in a quoted let subscript"}
 ]

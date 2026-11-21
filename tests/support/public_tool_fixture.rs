@@ -36,8 +36,10 @@ fn fixture(args: &[String]) -> Result<u8, Box<dyn std::error::Error>> {
         .collect::<String>();
     let mut reason = if text.starts_with("rg") && text.contains("~/Library") {
         "A scan rooted at the home directory or ~/Library"
-    } else if text.contains("Library/Containers") || text.contains("data-link") {
-        "This reads a protected macOS app-data directory."
+    } else if (text.contains("Library/Containers") || text.contains("data-link"))
+        && !tool.eq_ignore_ascii_case("read")
+    {
+        "This reaches more than one file in a protected macOS app-data container"
     } else if !tool.eq_ignore_ascii_case("write")
         && (text.ends_with(".env") || text.ends_with("id_rsa") && !text.starts_with("ssh"))
     {

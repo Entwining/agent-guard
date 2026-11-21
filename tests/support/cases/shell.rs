@@ -88,7 +88,7 @@ fn case_problems(
     recovery: &Value,
 ) -> Vec<&'static str> {
     let expected_exit = case["exit"].as_i64().unwrap_or(
-        if ["D", "F", "UR", "UO"].contains(&case["class"].as_str().unwrap()) {
+        if ["D", "F", "UO"].contains(&case["class"].as_str().unwrap()) {
             2
         } else {
             0
@@ -122,22 +122,10 @@ fn case_problems(
     if case["no_oracle"] == true && recovery.get("objective").is_some() {
         problems.push("oracle");
     }
-    if case["not_qualifier"] == true && recovery.to_string().contains("Zsh executable qualifier") {
-        problems.push("inert qualifier");
-    }
     if let Some(stdout) = case["stdout"].as_str()
         && wire.stdout != stdout
     {
         problems.push("stdout");
-    }
-    if class == "UR"
-        && coverage["gaps"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|gap| wire.stderr.contains(gap.as_str().unwrap()))
-    {
-        problems.push("Debug gap in wire");
     }
     problems
 }

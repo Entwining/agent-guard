@@ -6,5 +6,5 @@
  {"id":"env-source","partition":"protected","expected":"D","input":{"command":"cp .env public"}},
  {"id":"target-dir-source","partition":"protected","expected":"D","input":{"command":"cp -t public .env"}},
  {"id":"abbreviated-directory-source","partition":"protected","expected":"D","input":{"command":"cp --target=/var/empty .env"}},
- {"id":"appdata-destination","partition":"protected","expected":"D","input":{"command":"cp public $C/x"}}
+ {"id":"appdata-destination","partition":"protected","expected":"N","input":{"command":"cp public $C/x"}}
 ]}

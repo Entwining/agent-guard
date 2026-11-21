@@ -87,11 +87,17 @@ pub(super) fn infer(
         ))
     });
     let relocate = program == "mv" || program == "ln" && !symbolic;
-    let walk = if program == "mv" {
-        Walk::None
-    } else {
-        Walk::Visible
-    };
+    // Only a recursive removal walks below its operands.
+    let recursive = program == "rm"
+        && words
+            .iter()
+            .take_while(|word| *word != "--")
+            .filter(|word| word.role != Role::Path)
+            .any(|word| {
+                word == "--recursive"
+                    || !word.starts_with("--") && word.starts_with('-') && word.contains(['r', 'R'])
+            });
+    let walk = if recursive { Walk::Visible } else { Walk::None };
     effects.targets.extend(operands.iter().map(|word| {
         let mut target = Target::from_word(word, cwd, host, Effect::Meta, walk);
         if relocate && let Some(destination) = &destination {

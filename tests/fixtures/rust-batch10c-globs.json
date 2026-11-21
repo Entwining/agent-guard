@@ -6,7 +6,6 @@
  {"id":"visible-loop-git-log","partition":"visible","expected":"N","input":{"command":"for f in a/*.npmrc; do git log -- \"$f\"; done"}},
  {"id":"explicit-dot","partition":"control","expected":"D","input":{"command":"cat ~/.*/credentials"}},
  {"id":"environment-prefix","partition":"control","expected":"D","input":{"command":"cat .env*"}},
- {"id":"hidden-rg-root","partition":"control","expected":"D","input":{"command":"rg --hidden x 'a/*'"}},
  {"id":"literal-git-pathspec","partition":"control","expected":"D","input":{"command":"git show 'HEAD:a/*.npmrc'"}},
  {"id":"visible-loop-rg-text","partition":"visible","expected":"N","input":{"command":"for d in ~/Code/*.txt/; do rg -n x \"$d\" --glob '*.yml'; done"}}
 ]}

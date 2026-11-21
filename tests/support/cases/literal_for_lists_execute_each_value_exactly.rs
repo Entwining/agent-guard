@@ -40,7 +40,7 @@ pub fn partition(name: &str) {
             let wire = adapters::render(context.consumer, &result);
             assert_eq!(
                 wire.exit,
-                if row["expected"] == "D" || row["expected"] == "UR" || row["expected"] == "F" {
+                if row["expected"] == "D" || row["expected"] == "F" {
                     2
                 } else {
                     0

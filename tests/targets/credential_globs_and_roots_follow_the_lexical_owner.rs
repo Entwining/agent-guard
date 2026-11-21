@@ -23,7 +23,8 @@ fn tar_glued_directory_is_an_extraction_write_root() {
     let fixture = support::Fixture::new();
     for consumer in ["claude", "codex", "pi"] {
         let context = fixture.context(&json!({"consumer":consumer, "cwd":"$P"}));
-        let bytes = br#"{"tool_name":"Bash","tool_input":{"command":"tar -xf x.tar -C$HOME/Library/Containers/com.synthetic"}}"#;
+        let bytes =
+            br#"{"tool_name":"Bash","tool_input":{"command":"tar -xf x.tar -C$HOME/.ssh"}}"#;
         let result = evaluate_with_arm(
             Event {
                 bytes,
@@ -36,12 +37,12 @@ fn tar_glued_directory_is_an_extraction_write_root() {
         let agent_guard_rust::Outcome::ProtectedDenial { reason, .. } = &result.outcome else {
             panic!("missing extraction denial")
         };
-        assert_eq!(reason.rule, agent_guard_rust::DenialRule::AppData);
+        assert_eq!(reason.rule, agent_guard_rust::DenialRule::SshWrite);
         assert!(reason.effect.contains("write protected location"));
         assert!(result.effects.iter().any(|e| matches!(
             e,
             agent_guard_rust::EffectRecord::ProtectedTarget {
-                protection: agent_guard_rust::filesystem::Protection::AppData,
+                protection: agent_guard_rust::filesystem::Protection::SshPrivate,
                 write: true,
                 ..
             }

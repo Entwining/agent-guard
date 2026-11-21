@@ -284,12 +284,13 @@ pub struct Items {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Listed {
     Visible,
-    Hidden,
-    /// What these `find` runs print, which their expressions may bound.
-    Find(Vec<FindRun>),
+    /// What these `find` or `fd` runs print, which their name filters may
+    /// bound.
+    Walks(Vec<WalkRun>),
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FindRun {
+pub struct WalkRun {
+    pub program: String,
     pub cwd: String,
     pub args: Vec<Word>,
 }
@@ -432,7 +433,6 @@ pub enum Via {
     Narrow,
     Items,
     Option,
-    Code,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Target {
@@ -456,9 +456,10 @@ pub struct Target {
     /// For a walk, the basename patterns that bound every file it reads;
     /// `None` when it reads any name.
     pub bounds: Option<Vec<String>>,
-    /// For a hidden walk, the reads checked instead of refusing it, one for
-    /// each name it was narrowed to; `None` refuses it. A consumer that walks
-    /// below those names keeps these reads although its `bounds` are cleared.
+    /// For a hidden walk, the reads checked for it, one for each name it was
+    /// narrowed to; `None` when no name narrows it, so no read is checked. A
+    /// consumer that walks below those names keeps these reads although its
+    /// `bounds` are cleared.
     pub narrowed: Option<Vec<Target>>,
 }
 

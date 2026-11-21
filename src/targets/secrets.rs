@@ -1,4 +1,4 @@
-use super::{Effects, clients::CURL_VALUE_LETTERS, secret_name};
+use super::{Effects, secret_name};
 use crate::record::Word;
 
 pub(super) fn infer(program: &str, args: &[Word], effects: &mut Effects) {
@@ -33,7 +33,6 @@ pub(super) fn infer(program: &str, args: &[Word], effects: &mut Effects) {
                     })
                 });
         }
-        "curl" => effects.trace = curl_traces(args),
         _ => {}
     }
     effects.stored_secret = match program {
@@ -121,52 +120,6 @@ fn gh_shows_token(args: &[Word]) -> bool {
             })
         {
             return true;
-        }
-        index += 1;
-    }
-    false
-}
-
-fn curl_traces(args: &[Word]) -> bool {
-    let mut index = 0;
-    while let Some(arg) = args.get(index) {
-        if arg == "--" {
-            break;
-        }
-        let key = arg.split('=').next().unwrap_or("");
-        if ["--verbose", "--trace", "--trace-ascii"].contains(&key) {
-            return true;
-        }
-        if [
-            "--data",
-            "--data-ascii",
-            "--data-binary",
-            "--data-urlencode",
-            "--json",
-            "--form",
-            "--header",
-            "--upload-file",
-            "--config",
-        ]
-        .contains(&arg.as_str())
-        {
-            index += 1;
-        }
-        if let Some(flags) = arg
-            .strip_prefix('-')
-            .filter(|flags| !flags.starts_with('-'))
-        {
-            for (at, letter) in flags.char_indices() {
-                if letter == 'v' {
-                    return true;
-                }
-                if CURL_VALUE_LETTERS.contains(letter) {
-                    if at + letter.len_utf8() == flags.len() {
-                        index += 1;
-                    }
-                    break;
-                }
-            }
         }
         index += 1;
     }

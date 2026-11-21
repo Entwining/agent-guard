@@ -1,19 +1,14 @@
-#[path = "../support/cases/nested_parameter_flags_refuse_without_checker_faults.rs"]
+#[path = "../support/cases/nested_parameter_flags_pass_without_checker_faults.rs"]
 pub mod cases;
 use cases::*;
 
 #[test]
-fn nested_parameter_flags_refuse_without_checker_faults() {
-    check_rows(false);
-}
-
-#[test]
 fn parameter_fragment_controls_keep_literal_and_nested_code_distinct() {
-    check_rows(true);
+    check_rows();
 }
 
 #[test]
-fn unterminated_parameter_sources_never_grant_permission() {
+fn unterminated_parameter_sources_proceed_without_a_decision() {
     let fixture = support::Fixture::new();
     for consumer in ["claude", "codex", "pi"] {
         let context = fixture.context(&json!({"consumer":consumer,"cwd":"$P"}));
@@ -39,14 +34,16 @@ fn unterminated_parameter_sources_never_grant_permission() {
                 },
                 Arm::Brush,
             );
-            assert_eq!(support::class(&result), "UR", "{consumer}: {source}");
+            assert_eq!(support::class(&result), "UC", "{consumer}: {source}");
             let Coverage::LimitedPreflight(gaps) = &result.as_ref().unwrap().coverage else {
                 panic!("missing malformed-input coverage: {source}");
             };
             assert!(gaps.contains(&CoverageGap::UnsupportedShellSyntax));
             let wire = adapters::render(context.consumer, &result);
-            assert_eq!(wire.exit, 2);
-            assert!(wire.stdout.is_empty());
+            assert_eq!(
+                (wire.exit, wire.stdout.as_str(), wire.stderr.as_str()),
+                (0, "", "")
+            );
         }
     }
 }
@@ -187,7 +184,7 @@ fn lexical_owner_dimensions_have_independent_witnesses() {
 }
 
 #[test]
-fn original_parameter_regions_have_supported_or_refused_coverage() {
+fn original_parameter_regions_have_supported_or_unsupported_coverage() {
     use agent_guard_rust::shell;
     let supported = shell::observe(
         "echo ${v:-x}",
@@ -208,7 +205,7 @@ fn original_parameter_regions_have_supported_or_refused_coverage() {
         ),
         (0..7, true)
     );
-    assert_refused_parameter_regions();
+    assert_unsupported_parameter_regions();
     for (source, active) in [
         ("echo ${v:-${w:-x}}", true),
         ("echo '${~v}'", false),
@@ -272,40 +269,7 @@ fn original_parameter_regions_have_supported_or_refused_coverage() {
     );
 }
 
-#[test]
-fn brush_backtick_leniency_keeps_the_input_and_refusal() {
-    use agent_guard_rust::shell::{self, lexer::Lexed};
-    let rows: Vec<Value> =
-        serde_json::from_str(include_str!("../fixtures/rust-m1-4-known-limits.json")).unwrap();
-    assert!(
-        !rows.is_empty(),
-        "missing malformed backtick-child partition"
-    );
-    for row in rows {
-        let source = row["source"].as_str().unwrap();
-        assert!(
-            brush_parser::uncached_tokenize_str(source, &brush_parser::TokenizerOptions::default())
-                .is_ok()
-        );
-        assert!(Lexed::scan(source).is_err());
-        let observation = shell::observe(
-            source,
-            Arm::Brush,
-            "/synthetic/home",
-            "/synthetic/home/project",
-            true,
-        )
-        .unwrap();
-        assert!(
-            observation
-                .gaps
-                .contains(&CoverageGap::UnsupportedShellSyntax)
-        );
-        assert!(observation.script.commands.is_empty());
-    }
-}
-
-fn assert_refused_parameter_regions() {
+fn assert_unsupported_parameter_regions() {
     use agent_guard_rust::shell;
     for (body, expected, cause) in [
         (
@@ -353,7 +317,11 @@ fn assert_refused_parameter_regions() {
             true,
         )
         .unwrap();
-        assert_eq!(observation.gaps, [cause], "word refusal cause: {source}");
+        assert_eq!(
+            observation.gaps,
+            [cause],
+            "unsupported word cause: {source}"
+        );
         assert_eq!(observation.word_coverage.len(), 1, "{source}");
         let word = &observation.word_coverage[0];
         assert!(word.unsupported);

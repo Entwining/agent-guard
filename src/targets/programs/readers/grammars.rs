@@ -11,9 +11,10 @@ pub(super) const SED: Grammar = Grammar {
     syntax: Syntax::Getopt,
     short: "EaHnrsuz",
     flags: "--quiet --silent --debug --follow-symlinks --posix --regexp-extended --separate --sandbox --unbuffered --null-data --zero-terminated --help --version",
-    // A script, like the script operand, keeps the read role.
+    // Script text is data; a script file is read.
     values: &[
-        ("-e --expression -f --file", Read),
+        ("-e --expression", Name),
+        ("-f --file", Read),
         ("-I --line-length", Name),
     ],
     attached: &[("-i --in-place -l", Name)],
