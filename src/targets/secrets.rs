@@ -72,7 +72,10 @@ pub(super) fn infer(program: &str, args: &[Word], effects: &mut Effects) {
         "gh" => {
             arg(0) == "auth" && arg(1) == "login" && args.iter().any(|arg| arg == "--with-token")
         }
-        "mk" => arg(0) == "set" && args.iter().any(|arg| arg == "--stdin"),
+        // Maskey gives `--stdin` one meaning on every command that takes it:
+        // read one secret value from standard input. `mk run` passes its
+        // standard input to the command it runs, whose word this would be.
+        "mk" => arg(0) != "run" && args.iter().any(|arg| arg == "--stdin"),
         _ => false,
     };
 }
